@@ -3,3 +3,6 @@
 ### Commit 1: docs: khoi tao tai lieu dac ta yeu cau he thong DATN OnlineFEA (2026-06-22 09:30:15 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 2: docs: thiet ke so do kien truc tong quan va mo hinh du lieu (2026-06-23 14:15:20 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
