@@ -9,3 +9,6 @@
 ### Commit 3: docs: cap nhat so do usecase va phan quyen vai tro he thong (2026-06-24 10:45:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 4: docs: bo sung quy trinh nghiep vu quan ly khoa hoc va bai giang (2026-06-25 16:20:35 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
