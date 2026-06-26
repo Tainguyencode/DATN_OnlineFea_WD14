@@ -12,3 +12,6 @@
 ### Commit 4: docs: bo sung quy trinh nghiep vu quan ly khoa hoc va bai giang (2026-06-25 16:20:35 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 5: docs: tong hop dac ta API va chuan giao tiep he thong (2026-06-26 11:10:45 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
