@@ -32,7 +32,7 @@
                     <td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs font-medium {{ $statusClass }}">{{ $statusLabel }}</span></td>
                     <td class="px-6 py-4 text-right space-x-2">
                         <a href="{{ route('instructor.courses.edit', $course) }}" class="text-emerald-600 hover:underline text-xs font-medium">Sửa</a>
-                        <a href="{{ route('instructor.courses.students', $course) }}" class="text-indigo-600 hover:underline text-xs font-medium">Học viên</a>
+                        <a href="{{ route('instructor.courses.students', $course) }}" class="text-[#0056D2] hover:underline text-xs font-medium">Học viên</a>
                     </td>
                 </tr>
             @empty
