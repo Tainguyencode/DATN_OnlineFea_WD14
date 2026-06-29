@@ -15,3 +15,6 @@
 ### Commit 5: docs: tong hop dac ta API va chuan giao tiep he thong (2026-06-26 11:10:45 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 6: feat: khoi tao giao dien trang chu va banner slider (2026-06-29 15:30:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
