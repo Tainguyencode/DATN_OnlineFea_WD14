@@ -3,41 +3,37 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Welcome to Fea</title>
+        <title>Website học online FEA</title>
         <!-- Google Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
-        <!-- Glowing background blobs -->
-        <div class="absolute -top-20 -left-20 w-80 h-80 bg-indigo-600/20 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-20 -right-20 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl"></div>
-
+    <body class="bg-white text-slate-900 font-sans min-h-screen flex flex-col items-center justify-center relative">
         <div class="relative text-center max-w-xl px-6">
-            <span class="inline-flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider">
-                ⚡ Fea LMS Platform
+            <span class="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-100 text-[#0056D2] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider">
+                Website học online FEA
             </span>
             
-            <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
-                Chào mừng bạn đến với Fea
+            <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight mb-4 text-slate-950">
+                Chào mừng bạn đến với Website học online FEA
             </h1>
             
-            <p class="text-slate-300 text-base sm:text-lg mb-8 font-light leading-relaxed">
+            <p class="text-slate-600 text-base sm:text-lg mb-8 leading-relaxed">
                 Hệ thống quản lý học tập thông minh & hỗ trợ thực hiện đồ án tốt nghiệp trực quan, hiện đại.
             </p>
 
             <div class="flex flex-col sm:flex-row justify-center gap-4">
-                <a href="{{ route('home') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-7 py-3 rounded-xl transition shadow-lg shadow-indigo-600/35 hover:scale-[1.02]">
+                <a href="{{ route('home') }}" class="bg-[#0056D2] hover:bg-[#0046B8] text-white font-semibold px-7 py-3 rounded-xl transition">
                     Vào trang chủ
                 </a>
                 @guest
-                    <a href="{{ route('login') }}" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-7 py-3 rounded-xl transition hover:scale-[1.02]">
+                    <a href="{{ route('login') }}" class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold px-7 py-3 rounded-xl transition">
                         Đăng nhập
                     </a>
                 @else
-                    <a href="{{ auth()->user()->dashboardUrl() }}" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-7 py-3 rounded-xl transition hover:scale-[1.02]">
+                    <a href="{{ auth()->user()->dashboardUrl() }}" class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold px-7 py-3 rounded-xl transition">
                         Bảng điều khiển
                     </a>
                 @endguest
@@ -45,7 +41,7 @@
         </div>
 
         <footer class="absolute bottom-6 text-slate-500 text-xs tracking-wider">
-            &copy; {{ date('Y') }} Fea Platform. All rights reserved.
+            &copy; {{ date('Y') }} Website học online FEA. All rights reserved.
         </footer>
     </body>
 </html>
