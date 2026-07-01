@@ -113,13 +113,18 @@ class PaymentController extends Controller
             ]);
 
             foreach ($order->items as $item) {
-                Enrollment::firstOrCreate(
+                $enrollment = Enrollment::firstOrCreate(
                     ['user_id' => $order->user_id, 'course_id' => $item['course_id']],
-                    ['order_id' => $order->id]
+                    [
+                        'order_id' => $order->id,
+                        'status' => 'active',
+                        'progress_percent' => 0,
+                        'enrolled_at' => now(),
+                    ]
                 );
 
                 $course = \App\Models\Course::find($item['course_id']);
-                if ($course) {
+                if ($course && $enrollment->wasRecentlyCreated) {
                     $course->increment('enrollment_count');
                 }
             }

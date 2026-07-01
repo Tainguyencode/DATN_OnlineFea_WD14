@@ -7,7 +7,9 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Review;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class CourseController extends Controller
@@ -101,7 +103,14 @@ class CourseController extends Controller
         $previewLessons = $curriculumSections->flatMap->lessons->where('is_preview', true)->count();
         $totalSections = $curriculumSections->count();
         $isEnrolled = auth()->check()
-            && Enrollment::where('user_id', auth()->id())->where('course_id', $course->id)->exists();
+            && Enrollment::where('user_id', auth()->id())
+                ->where('course_id', $course->id)
+                ->where('status', 'active')
+                ->exists();
+        $canManageCourse = auth()->check()
+            && auth()->user()->isInstructor()
+            && $course->isOwnedBy(auth()->user());
+        $canAccessFullCourse = $isEnrolled || $canManageCourse;
 
         return view('courses.show', compact(
             'course',
@@ -111,8 +120,54 @@ class CourseController extends Controller
             'totalLessons',
             'previewLessons',
             'totalSections',
-            'isEnrolled'
+            'isEnrolled',
+            'canManageCourse',
+            'canAccessFullCourse'
         ));
+    }
+
+    public function enroll(Course $course): RedirectResponse
+    {
+        if ($course->status !== Course::STATUS_PUBLISHED || ! $course->is_published) {
+            abort(404);
+        }
+
+        $user = auth()->user();
+
+        if ($user->isInstructor() && $course->isOwnedBy($user)) {
+            return redirect()->route('instructor.courses.curriculum', $course);
+        }
+
+        if (! $user->isStudent()) {
+            return back()->with('error', 'Chỉ tài khoản học viên mới có thể đăng ký khóa học.');
+        }
+
+        $created = false;
+
+        DB::transaction(function () use ($course, $user, &$created) {
+            $enrollment = Enrollment::firstOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'course_id' => $course->id,
+                ],
+                [
+                    'status' => 'active',
+                    'progress_percent' => 0,
+                    'enrolled_at' => now(),
+                ]
+            );
+
+            if ($enrollment->wasRecentlyCreated) {
+                $course->increment('enrollment_count');
+                $created = true;
+            }
+        });
+
+        return redirect()
+            ->route('my-courses')
+            ->with('success', $created
+                ? 'Đăng ký khóa học thành công. Bạn có thể bắt đầu học ngay.'
+                : 'Bạn đã đăng ký khóa học này trước đó.');
     }
 
     private function publishedCoursesQuery()
