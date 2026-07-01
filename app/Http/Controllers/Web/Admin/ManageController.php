@@ -27,7 +27,12 @@ class ManageController extends Controller
 
     public function approve(Request $request, Course $course): RedirectResponse
     {
-        $course->update(['status' => 'published', 'published_at' => now(), 'rejection_reason' => null]);
+        $course->update([
+            'status' => 'published',
+            'is_published' => true,
+            'published_at' => now(),
+            'rejection_reason' => null,
+        ]);
         ActivityLogService::log(auth()->id(), 'approve_course', Course::class, $course->id, null, $request);
 
         return back()->with('success', "Đã duyệt khóa học \"{$course->title}\".");
@@ -36,7 +41,11 @@ class ManageController extends Controller
     public function reject(Request $request, Course $course): RedirectResponse
     {
         $validated = $request->validate(['reason' => 'required|string|max:1000']);
-        $course->update(['status' => 'rejected', 'rejection_reason' => $validated['reason']]);
+        $course->update([
+            'status' => 'rejected',
+            'is_published' => false,
+            'rejection_reason' => $validated['reason'],
+        ]);
         ActivityLogService::log(auth()->id(), 'reject_course', Course::class, $course->id, null, $request);
 
         return back()->with('success', 'Đã từ chối khóa học.');

@@ -64,8 +64,8 @@ class HomeController extends Controller
 
         $sort = $request->get('sort', 'newest');
         match ($sort) {
-            'price_asc' => $query->orderByRaw('COALESCE(sale_price, price) ASC'),
-            'price_desc' => $query->orderByRaw('COALESCE(sale_price, price) DESC'),
+            'price_asc' => $query->orderByRaw('COALESCE(discount_price, sale_price, price) ASC'),
+            'price_desc' => $query->orderByRaw('COALESCE(discount_price, sale_price, price) DESC'),
             'rating' => $query->orderByDesc('rating_avg'),
             'popular' => $query->orderByDesc('enrollment_count'),
             default => $query->orderByDesc('published_at'),

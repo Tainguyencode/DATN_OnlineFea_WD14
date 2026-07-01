@@ -57,6 +57,7 @@ Route::middleware(['auth', 'role:instructor'])->prefix('instructor')->name('inst
     Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
     Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
     Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
+    Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
     Route::post('/courses/{course}/chapters', [InstructorCourseController::class, 'addChapter'])->name('courses.chapters.store');
     Route::post('/courses/{course}/submit', [InstructorCourseController::class, 'submit'])->name('courses.submit');
     Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
