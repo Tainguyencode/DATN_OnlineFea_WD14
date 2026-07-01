@@ -116,7 +116,7 @@
             <section>
                 <h2 class="text-2xl font-bold text-slate-900 mb-4">Nội dung khóa học</h2>
                 <div class="space-y-3">
-                    @foreach($course->chapters as $chapter)
+                    @foreach($curriculumSections as $chapter)
                         <div class="border border-slate-200 rounded-xl overflow-hidden">
                             <div class="bg-slate-50 px-5 py-3 font-semibold text-slate-900 flex justify-between">
                                 <span>{{ $chapter->title }}</span>
@@ -132,7 +132,7 @@
                                                 <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Học thử</span>
                                             @endif
                                         </div>
-                                        <span class="text-slate-400">{{ gmdate('i:s', $lesson->duration_seconds) }}</span>
+                                        <span class="text-slate-400">{{ gmdate('i:s', $lesson->duration ?? $lesson->duration_seconds) }}</span>
                                     </li>
                                 @endforeach
                             </ul>

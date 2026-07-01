@@ -76,7 +76,7 @@ class CourseController extends Controller
     {
         $this->authorize($course);
 
-        $course->load(['chapters.lessons', 'category']);
+        $course->load(['courseSections.lessons', 'category']);
         $categories = Category::orderBy('name')->get(['id', 'name']);
         $statusOptions = $this->statusOptions();
 
@@ -124,6 +124,23 @@ class CourseController extends Controller
             ->with('success', 'Đã xóa khóa học.');
     }
 
+    public function archive(Course $course): RedirectResponse
+    {
+        $this->authorize($course);
+
+        if ($course->status !== Course::STATUS_PUBLISHED) {
+            return back()->with('error', 'Chỉ có thể ẩn khóa học đang được xuất bản.');
+        }
+
+        $course->update([
+            'status' => Course::STATUS_ARCHIVED,
+            'is_published' => false,
+            'published_at' => null,
+        ]);
+
+        return back()->with('success', 'Đã ẩn khóa học khỏi trang học viên.');
+    }
+
     public function addChapter(Request $request, Course $course): RedirectResponse
     {
         $this->authorize($course);
@@ -164,13 +181,21 @@ class CourseController extends Controller
     {
         $this->authorize($course);
 
-        if ($course->chapters()->count() === 0) {
-            return back()->with('error', 'Cần ít nhất 1 chương trước khi gửi duyệt.');
+        if (! in_array($course->status, [Course::STATUS_DRAFT, Course::STATUS_REJECTED], true)) {
+            return back()->with('error', 'Chỉ khóa học nháp hoặc bị từ chối mới có thể gửi duyệt.');
+        }
+
+        $missing = $this->publicationMissingRequirements($course);
+
+        if ($missing !== []) {
+            return back()->with('error', 'Chưa thể gửi duyệt: '.implode('; ', $missing).'.');
         }
 
         $course->update([
             'status' => Course::STATUS_PENDING,
             'is_published' => false,
+            'submitted_at' => now(),
+            'reject_reason' => null,
         ]);
 
         return back()->with('success', 'Đã gửi khóa học để admin duyệt.');
@@ -271,14 +296,49 @@ class CourseController extends Controller
             || DB::table('order_items')->where('course_id', $course->id)->exists();
     }
 
+    private function publicationMissingRequirements(Course $course): array
+    {
+        $missing = [];
+
+        if (blank($course->title)) {
+            $missing[] = 'thiếu tên khóa học';
+        }
+
+        if (blank($course->short_description)) {
+            $missing[] = 'thiếu mô tả ngắn';
+        }
+
+        if (blank($course->description)) {
+            $missing[] = 'thiếu mô tả chi tiết';
+        }
+
+        if (blank($course->thumbnail)) {
+            $missing[] = 'thiếu ảnh thumbnail';
+        }
+
+        $hasSection = $course->courseSections()->exists() || $course->chapters()->exists();
+        if (! $hasSection) {
+            $missing[] = 'thiếu ít nhất 1 chương học';
+        }
+
+        $hasLesson = $course->lessons()->exists()
+            || Lesson::whereHas('chapter', fn ($query) => $query->where('course_id', $course->id))->exists();
+
+        if (! $hasLesson) {
+            $missing[] = 'thiếu ít nhất 1 bài học';
+        }
+
+        return $missing;
+    }
+
     private function statusOptions(): array
     {
         return [
             Course::STATUS_DRAFT => 'Nháp',
-            Course::STATUS_PENDING => 'Chờ duyệt',
+            Course::STATUS_PENDING => 'Đang chờ duyệt',
             Course::STATUS_PUBLISHED => 'Đã xuất bản',
             Course::STATUS_REJECTED => 'Bị từ chối',
-            Course::STATUS_ARCHIVED => 'Lưu trữ',
+            Course::STATUS_ARCHIVED => 'Đã ẩn',
         ];
     }
 }

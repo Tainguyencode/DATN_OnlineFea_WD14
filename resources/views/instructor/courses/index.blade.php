@@ -128,6 +128,9 @@
                                         <div class="min-w-0">
                                             <p class="truncate font-bold text-slate-950">{{ $course->title }}</p>
                                             <p class="mt-1 truncate text-xs text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }} · {{ $levelLabels[$course->level] ?? 'Chưa chọn trình độ' }}</p>
+                                            @if($course->status === 'rejected' && $course->rejectionReasonText())
+                                                <p class="mt-2 line-clamp-2 text-xs font-semibold text-rose-600">Lý do: {{ $course->rejectionReasonText() }}</p>
+                                            @endif
                                         </div>
                                     </div>
                                 </td>
@@ -148,13 +151,31 @@
                                     <div class="flex items-center justify-end gap-2">
                                         <a href="{{ route('instructor.courses.edit', $course) }}"
                                            class="rounded-lg px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">Sửa</a>
-                                        <a href="{{ route('instructor.courses.edit', $course) }}#course-content"
+                                        <a href="{{ route('instructor.courses.curriculum', $course) }}"
                                            class="rounded-lg px-3 py-2 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">Quản lý nội dung</a>
                                         @if($course->status === 'published')
                                             <a href="{{ route('courses.show', $course) }}" target="_blank"
                                                class="rounded-lg px-3 py-2 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">Xem trước</a>
                                         @else
                                             <span class="rounded-lg px-3 py-2 text-xs font-bold text-slate-400" title="Chỉ xem trước công khai sau khi khóa học được xuất bản">Xem trước</span>
+                                        @endif
+                                        @if(in_array($course->status, ['draft', 'rejected'], true))
+                                            <form method="POST" action="{{ route('instructor.courses.submit', $course) }}">
+                                                @csrf
+                                                <button type="submit"
+                                                        class="rounded-lg px-3 py-2 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
+                                                    {{ $course->status === 'rejected' ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                                </button>
+                                            </form>
+                                        @endif
+                                        @if($course->status === 'published')
+                                            <form method="POST" action="{{ route('instructor.courses.archive', $course) }}" onsubmit="return confirm('Ẩn khóa học này khỏi trang học viên?')">
+                                                @csrf
+                                                <button type="submit"
+                                                        class="rounded-lg px-3 py-2 text-xs font-bold text-zinc-700 transition-colors duration-200 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 cursor-pointer">
+                                                    Ẩn khóa học
+                                                </button>
+                                            </form>
                                         @endif
                                         <form method="POST" action="{{ route('instructor.courses.destroy', $course) }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
                                             @csrf
@@ -196,6 +217,9 @@
                                 </span>
                             </div>
                             <p class="mt-1 text-xs text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }} · {{ $course->created_at?->format('d/m/Y') }}</p>
+                            @if($course->status === 'rejected' && $course->rejectionReasonText())
+                                <p class="mt-2 rounded-lg bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-700">Lý do: {{ $course->rejectionReasonText() }}</p>
+                            @endif
                         </div>
 
                         <div class="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
@@ -211,11 +235,25 @@
 
                         <div class="grid grid-cols-2 gap-2">
                             <a href="{{ route('instructor.courses.edit', $course) }}" class="rounded-lg bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">Sửa</a>
-                            <a href="{{ route('instructor.courses.edit', $course) }}#course-content" class="rounded-lg bg-indigo-600 px-3 py-2 text-center text-xs font-bold text-white">Nội dung</a>
+                            <a href="{{ route('instructor.courses.curriculum', $course) }}" class="rounded-lg bg-indigo-600 px-3 py-2 text-center text-xs font-bold text-white">Nội dung</a>
                             @if($course->status === 'published')
                                 <a href="{{ route('courses.show', $course) }}" target="_blank" class="rounded-lg border border-slate-300 px-3 py-2 text-center text-xs font-bold text-slate-700">Xem trước</a>
                             @else
                                 <span class="rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">Xem trước</span>
+                            @endif
+                            @if(in_array($course->status, ['draft', 'rejected'], true))
+                                <form method="POST" action="{{ route('instructor.courses.submit', $course) }}">
+                                    @csrf
+                                    <button type="submit" class="w-full rounded-lg border border-amber-200 px-3 py-2 text-center text-xs font-bold text-amber-700">
+                                        {{ $course->status === 'rejected' ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                    </button>
+                                </form>
+                            @endif
+                            @if($course->status === 'published')
+                                <form method="POST" action="{{ route('instructor.courses.archive', $course) }}" onsubmit="return confirm('Ẩn khóa học này khỏi trang học viên?')">
+                                    @csrf
+                                    <button type="submit" class="w-full rounded-lg border border-zinc-200 px-3 py-2 text-center text-xs font-bold text-zinc-700">Ẩn khóa học</button>
+                                </form>
                             @endif
                             <form method="POST" action="{{ route('instructor.courses.destroy', $course) }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
                                 @csrf
