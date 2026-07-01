@@ -25,14 +25,14 @@ class CartController extends Controller
     public function index(): View
     {
         $cart = $this->getCart()->load(['items.course.instructor:id,name']);
-        $total = $cart->items->sum(fn ($i) => $i->course->sale_price ?? $i->course->price);
+        $total = $cart->items->sum(fn ($i) => $i->course->discount_price ?? $i->course->sale_price ?? $i->course->price);
 
         return view('student.cart.index', compact('cart', 'total'));
     }
 
     public function add(Course $course): RedirectResponse
     {
-        if ($course->status !== 'published') {
+        if ($course->status !== Course::STATUS_PUBLISHED || ! $course->is_published) {
             return back()->with('error', 'Khóa học chưa được xuất bản.');
         }
 
@@ -66,7 +66,7 @@ class CartController extends Controller
             return back()->with('error', 'Giỏ hàng trống.');
         }
 
-        $subtotal = $cart->items->sum(fn ($i) => $i->course->sale_price ?? $i->course->price);
+        $subtotal = $cart->items->sum(fn ($i) => $i->course->discount_price ?? $i->course->sale_price ?? $i->course->price);
         $discount = 0;
         $coupon = null;
 
@@ -85,7 +85,7 @@ class CartController extends Controller
             $items = $cart->items->map(function ($item) {
                 return [
                     'course_id' => $item->course_id,
-                    'price' => $item->course->sale_price ?? $item->course->price,
+                    'price' => $item->course->discount_price ?? $item->course->sale_price ?? $item->course->price,
                     'title' => $item->course->title,
                 ];
             })->toArray();
@@ -104,12 +104,19 @@ class CartController extends Controller
             ]);
 
             foreach ($cart->items as $item) {
-                Enrollment::firstOrCreate(
+                $enrollment = Enrollment::firstOrCreate(
                     ['user_id' => auth()->id(), 'course_id' => $item->course_id],
-                    ['order_id' => $order->id]
+                    [
+                        'order_id' => $order->id,
+                        'status' => 'active',
+                        'progress_percent' => 0,
+                        'enrolled_at' => now(),
+                    ]
                 );
 
-                $item->course->increment('enrollment_count');
+                if ($enrollment->wasRecentlyCreated) {
+                    $item->course->increment('enrollment_count');
+                }
             }
 
             if ($coupon) {

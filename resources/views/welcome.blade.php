@@ -3,49 +3,192 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Welcome to Fea</title>
-        <!-- Google Fonts -->
+        <meta name="description" content="Fea LMS Platform hỗ trợ sinh viên học online, quản lý khóa học, theo dõi tiến độ, nộp bài tập và kết nối giảng viên.">
+        <title>Fea LMS Platform</title>
+
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+        @vite(['resources/css/app.css', 'resources/css/welcome.css', 'resources/js/app.js'])
     </head>
-    <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
-        <!-- Glowing background blobs -->
-        <div class="absolute -top-20 -left-20 w-80 h-80 bg-indigo-600/20 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-20 -right-20 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl"></div>
-
-        <div class="relative text-center max-w-xl px-6">
-            <span class="inline-flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider">
-                ⚡ Fea LMS Platform
-            </span>
-            
-            <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
-                Chào mừng bạn đến với Fea
-            </h1>
-            
-            <p class="text-slate-300 text-base sm:text-lg mb-8 font-light leading-relaxed">
-                Hệ thống quản lý học tập thông minh & hỗ trợ thực hiện đồ án tốt nghiệp trực quan, hiện đại.
-            </p>
-
-            <div class="flex flex-col sm:flex-row justify-center gap-4">
-                <a href="{{ route('home') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-7 py-3 rounded-xl transition shadow-lg shadow-indigo-600/35 hover:scale-[1.02]">
-                    Vào trang chủ
+    <body class="fea-welcome-page">
+        <div class="landing-shell">
+            <header class="landing-nav" aria-label="Điều hướng chính">
+                <a href="{{ route('home') }}" class="brand-link" aria-label="Fea LMS Platform">
+                    <span class="brand-mark">Fea</span>
+                    <span class="brand-text">
+                        <strong>Fea</strong>
+                        <small>LMS Platform</small>
+                    </span>
                 </a>
-                @guest
-                    <a href="{{ route('login') }}" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-7 py-3 rounded-xl transition hover:scale-[1.02]">
-                        Đăng nhập
-                    </a>
-                @else
-                    <a href="{{ auth()->user()->dashboardUrl() }}" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-7 py-3 rounded-xl transition hover:scale-[1.02]">
-                        Bảng điều khiển
-                    </a>
-                @endguest
-            </div>
-        </div>
 
-        <footer class="absolute bottom-6 text-slate-500 text-xs tracking-wider">
-            &copy; {{ date('Y') }} Fea Platform. All rights reserved.
-        </footer>
+                <nav class="nav-links" aria-label="Liên kết nhanh">
+                    <a href="{{ route('courses.index') }}">Khóa học</a>
+                    <a href="#features">Tính năng</a>
+                    @guest
+                        <a href="{{ route('login') }}">Đăng nhập</a>
+                    @else
+                        <a href="{{ auth()->user()->dashboardUrl() }}">Dashboard</a>
+                    @endguest
+                </nav>
+            </header>
+
+            <main>
+                <section class="hero-section" aria-labelledby="welcome-title">
+                    <div class="hero-content">
+                        <span class="hero-badge">
+                            <span class="badge-dot" aria-hidden="true"></span>
+                            FEA LMS PLATFORM
+                        </span>
+
+                        <h1 id="welcome-title">Học tập trực tuyến thông minh cùng Fea</h1>
+
+                        <p class="hero-description">
+                            Nền tảng hỗ trợ sinh viên quản lý khóa học, theo dõi tiến độ,
+                            nộp bài tập và kết nối với giảng viên một cách dễ dàng.
+                        </p>
+
+                        <div class="hero-actions">
+                            <a href="{{ route('home') }}" class="btn-primary">Bắt đầu học ngay</a>
+                            @guest
+                                <a href="{{ route('login') }}" class="btn-secondary">Đăng nhập</a>
+                            @else
+                                <a href="{{ auth()->user()->dashboardUrl() }}" class="btn-secondary">Bảng điều khiển</a>
+                            @endguest
+                        </div>
+
+                        <div class="hero-metrics" aria-label="Tổng quan nhanh">
+                            <div>
+                                <strong>24/7</strong>
+                                <span>Truy cập bài học</span>
+                            </div>
+                            <div>
+                                <strong>4</strong>
+                                <span>Vai trò quản lý</span>
+                            </div>
+                            <div>
+                                <strong>100%</strong>
+                                <span>Theo dõi tiến độ</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hero-visual" aria-label="Mockup dashboard học tập">
+                        <div class="dashboard-surface">
+                            <div class="dashboard-header">
+                                <div>
+                                    <span class="eyebrow">Student workspace</span>
+                                    <h2>Bảng học tập hôm nay</h2>
+                                </div>
+                                <span class="status-pill">Đang học</span>
+                            </div>
+
+                            <div class="dashboard-grid">
+                                <article class="dashboard-card progress-card">
+                                    <div class="card-heading">
+                                        <span>Tiến độ học tập</span>
+                                        <strong>72%</strong>
+                                    </div>
+                                    <div class="progress-track" aria-hidden="true">
+                                        <span style="width: 72%"></span>
+                                    </div>
+                                    <p>Hoàn thành 18/25 bài học trong lộ trình Laravel cơ bản.</p>
+                                </article>
+
+                                <article class="dashboard-card course-card">
+                                    <span class="card-kicker">Khóa học đang học</span>
+                                    <h3>Laravel từ Zero đến Hero</h3>
+                                    <p>Chương 5: Eloquent Relationships</p>
+                                    <div class="mini-tags">
+                                        <span>12 bài</span>
+                                        <span>3 quiz</span>
+                                    </div>
+                                </article>
+
+                                <article class="dashboard-card assignment-card">
+                                    <span class="card-kicker">Bài tập sắp đến hạn</span>
+                                    <h3>Xây dựng module đăng nhập</h3>
+                                    <p>Nộp trước 22:00 hôm nay</p>
+                                    <span class="deadline-chip">Còn 6 giờ</span>
+                                </article>
+
+                                <article class="dashboard-card schedule-card">
+                                    <span class="card-kicker">Lịch học hôm nay</span>
+                                    <div class="schedule-row">
+                                        <span>08:30</span>
+                                        <strong>Backend API</strong>
+                                    </div>
+                                    <div class="schedule-row">
+                                        <span>14:00</span>
+                                        <strong>Review đồ án</strong>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="features" class="features-section" aria-labelledby="features-title">
+                    <div class="section-heading">
+                        <span class="section-kicker">Hệ sinh thái học tập</span>
+                        <h2 id="features-title">Mọi hoạt động học online được gom về một nơi</h2>
+                    </div>
+
+                    <div class="features-grid">
+                        <article class="feature-card">
+                            <span class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H20v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M5 5.5A2.5 2.5 0 0 0 2.5 3H2v16h.5A2.5 2.5 0 0 1 5 21.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <h3>Quản lý khóa học</h3>
+                            <p>Theo dõi danh sách môn học, chương bài và tài liệu trong cùng một không gian rõ ràng.</p>
+                        </article>
+
+                        <article class="feature-card">
+                            <span class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M4 19V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    <path d="M4 19h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    <path d="M8 15l3-3 3 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <h3>Theo dõi tiến độ</h3>
+                            <p>Nắm được bài đã học, điểm quiz, tiến trình hoàn thành và các mốc cần ưu tiên.</p>
+                        </article>
+
+                        <article class="feature-card">
+                            <span class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 15V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    <path d="M8 8l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <h3>Nộp bài tập online</h3>
+                            <p>Gửi bài, kiểm tra hạn nộp và nhận phản hồi từ giảng viên ngay trong hệ thống.</p>
+                        </article>
+
+                        <article class="feature-card">
+                            <span class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M6 10.5A4.5 4.5 0 0 1 10.5 6H17a4 4 0 0 1 0 8h-4l-4 3v-3H6.5A3.5 3.5 0 0 1 3 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M14 14.5A4.5 4.5 0 0 0 18.5 19H20l-2.5-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <h3>Kết nối giảng viên</h3>
+                            <p>Trao đổi lớp học, nhận thông báo và phối hợp xử lý bài tập nhanh hơn.</p>
+                        </article>
+                    </div>
+                </section>
+            </main>
+
+            <footer class="landing-footer">
+                <span>&copy; {{ date('Y') }} Fea LMS Platform.</span>
+                <span>Nền tảng học online cho sinh viên và giảng viên.</span>
+            </footer>
+        </div>
     </body>
 </html>
