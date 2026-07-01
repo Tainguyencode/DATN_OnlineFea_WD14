@@ -19,6 +19,9 @@ class CourseController extends Controller
         $course->load([
             'instructor:id,name,avatar,bio',
             'category:id,name,slug',
+            'courseSections.lessons' => fn ($q) => $q
+                ->select('id', 'course_id', 'section_id', 'title', 'type', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->orderBy('sort_order'),
             'chapters.lessons' => fn ($q) => $q->select('id', 'chapter_id', 'title', 'type', 'duration_seconds', 'is_preview', 'sort_order'),
         ]);
 
@@ -30,9 +33,19 @@ class CourseController extends Controller
             ->limit(6)
             ->get();
 
-        $totalLessons = $course->chapters->sum(fn ($c) => $c->lessons->count());
-        $previewLessons = $course->chapters->flatMap->lessons->where('is_preview', true)->count();
+        $curriculumSections = $course->courseSections->isNotEmpty()
+            ? $course->courseSections
+            : $course->chapters;
+        $totalLessons = $curriculumSections->sum(fn ($section) => $section->lessons->count());
+        $previewLessons = $curriculumSections->flatMap->lessons->where('is_preview', true)->count();
 
-        return view('courses.show', compact('course', 'relatedCourses', 'reviews', 'totalLessons', 'previewLessons'));
+        return view('courses.show', compact(
+            'course',
+            'curriculumSections',
+            'relatedCourses',
+            'reviews',
+            'totalLessons',
+            'previewLessons'
+        ));
     }
 }

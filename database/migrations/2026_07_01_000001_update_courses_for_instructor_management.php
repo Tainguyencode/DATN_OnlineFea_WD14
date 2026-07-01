@@ -29,6 +29,14 @@ return new class extends Migration
             if (! Schema::hasColumn('courses', 'is_published')) {
                 $table->boolean('is_published')->default(false)->after('status');
             }
+
+            if (! Schema::hasColumn('courses', 'reject_reason')) {
+                $table->text('reject_reason')->nullable()->after('is_published');
+            }
+
+            if (! Schema::hasColumn('courses', 'submitted_at')) {
+                $table->timestamp('submitted_at')->nullable()->after('published_at');
+            }
         });
 
         if (DB::connection()->getDriverName() === 'mysql') {
@@ -45,6 +53,9 @@ return new class extends Migration
         DB::statement('UPDATE courses SET discount_price = sale_price WHERE discount_price IS NULL AND sale_price IS NOT NULL');
         DB::statement("UPDATE courses SET language = 'vi' WHERE language IS NULL OR language = ''");
         DB::statement("UPDATE courses SET is_published = CASE WHEN status = 'published' THEN 1 ELSE 0 END");
+        if (Schema::hasColumn('courses', 'rejection_reason') && Schema::hasColumn('courses', 'reject_reason')) {
+            DB::statement('UPDATE courses SET reject_reason = rejection_reason WHERE reject_reason IS NULL AND rejection_reason IS NOT NULL');
+        }
     }
 
     public function down(): void

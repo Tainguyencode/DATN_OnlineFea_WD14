@@ -26,8 +26,9 @@ class Course extends Model
         'instructor_id', 'category_id', 'title', 'slug', 'short_description',
         'description', 'objectives', 'thumbnail', 'preview_video', 'price',
         'discount_price', 'sale_price', 'level', 'language', 'status', 'is_published',
-        'rejection_reason', 'rating_avg', 'rating_count', 'enrollment_count',
-        'duration_minutes', 'tags', 'is_featured', 'published_at',
+        'reject_reason', 'rejection_reason', 'rating_avg', 'rating_count',
+        'enrollment_count', 'duration_minutes', 'tags', 'is_featured',
+        'published_at', 'submitted_at',
     ];
 
     protected function casts(): array
@@ -41,6 +42,7 @@ class Course extends Model
             'is_featured' => 'boolean',
             'is_published' => 'boolean',
             'published_at' => 'datetime',
+            'submitted_at' => 'datetime',
         ];
     }
 
@@ -57,6 +59,16 @@ class Course extends Model
     public function chapters(): HasMany
     {
         return $this->hasMany(Chapter::class)->orderBy('sort_order');
+    }
+
+    public function courseSections(): HasMany
+    {
+        return $this->hasMany(CourseSection::class)->orderBy('sort_order');
+    }
+
+    public function lessons(): HasMany
+    {
+        return $this->hasMany(Lesson::class)->orderBy('sort_order');
     }
 
     public function enrollments(): HasMany
@@ -77,5 +89,10 @@ class Course extends Model
     public function isOwnedBy(User $user): bool
     {
         return (int) $this->instructor_id === (int) $user->id;
+    }
+
+    public function rejectionReasonText(): ?string
+    {
+        return $this->reject_reason ?: $this->rejection_reason;
     }
 }

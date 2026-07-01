@@ -18,20 +18,48 @@ class ManageController extends Controller
     public function pendingCourses(): View
     {
         $courses = Course::where('status', 'pending')
-            ->with(['instructor:id,name,email', 'category:id,name', 'chapters'])
+            ->with([
+                'instructor:id,name,email',
+                'category:id,name',
+                'courseSections.lessons',
+                'chapters.lessons',
+            ])
+            ->orderByDesc('submitted_at')
             ->orderBy('created_at')
             ->paginate(10);
 
         return view('admin.courses.pending', compact('courses'));
     }
 
+    public function review(Course $course): View
+    {
+        $course->load([
+            'instructor:id,name,email,avatar,bio',
+            'category:id,name',
+            'courseSections.lessons',
+            'chapters.lessons',
+        ]);
+
+        $curriculumSections = $course->courseSections->isNotEmpty()
+            ? $course->courseSections
+            : $course->chapters;
+
+        $totalLessons = $curriculumSections->sum(fn ($section) => $section->lessons->count());
+
+        return view('admin.courses.review', compact('course', 'curriculumSections', 'totalLessons'));
+    }
+
     public function approve(Request $request, Course $course): RedirectResponse
     {
+        if ($course->status !== Course::STATUS_PENDING) {
+            return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được duyệt.');
+        }
+
         $course->update([
-            'status' => 'published',
+            'status' => Course::STATUS_PUBLISHED,
             'is_published' => true,
             'published_at' => now(),
-            'rejection_reason' => null,
+            'reject_reason' => null,
         ]);
         ActivityLogService::log(auth()->id(), 'approve_course', Course::class, $course->id, null, $request);
 
@@ -41,10 +69,15 @@ class ManageController extends Controller
     public function reject(Request $request, Course $course): RedirectResponse
     {
         $validated = $request->validate(['reason' => 'required|string|max:1000']);
+
+        if ($course->status !== Course::STATUS_PENDING) {
+            return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.');
+        }
+
         $course->update([
-            'status' => 'rejected',
+            'status' => Course::STATUS_REJECTED,
             'is_published' => false,
-            'rejection_reason' => $validated['reason'],
+            'reject_reason' => $validated['reason'],
         ]);
         ActivityLogService::log(auth()->id(), 'reject_course', Course::class, $course->id, null, $request);
 

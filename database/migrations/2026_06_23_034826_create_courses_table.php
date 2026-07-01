@@ -29,6 +29,7 @@ return new class extends Migration
             $table->decimal('sale_price', 12, 2)->nullable();
             $table->enum('status', ['draft', 'pending', 'published', 'rejected', 'archived'])->default('draft');
             $table->boolean('is_published')->default(false);
+            $table->text('reject_reason')->nullable();
             $table->text('rejection_reason')->nullable();
             $table->decimal('rating_avg', 3, 2)->default(0.00);
             $table->unsignedInteger('rating_count')->default(0);
@@ -37,6 +38,7 @@ return new class extends Migration
             $table->json('tags')->nullable();
             $table->boolean('is_featured')->default(false);
             $table->timestamp('published_at')->nullable();
+            $table->timestamp('submitted_at')->nullable();
             $table->timestamps();
         });
     }
