@@ -20,6 +20,10 @@ Route::get('/', function () {
 });
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+Route::middleware('auth')->group(function () {
+    Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
+    Route::get('/my-courses', [StudentCourseController::class, 'index'])->name('my-courses');
+});
 Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');
 
 Route::middleware('guest')->group(function () {

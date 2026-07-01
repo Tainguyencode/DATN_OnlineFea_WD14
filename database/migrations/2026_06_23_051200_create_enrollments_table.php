@@ -26,8 +26,14 @@ return new class extends Migration
                   ->constrained('orders')
                   ->nullOnDelete();
 
+            $table->string('status')
+                  ->default('active');
+
             $table->decimal('progress_percent', 5, 2)
                   ->default(0.00);
+
+            $table->timestamp('enrolled_at')
+                  ->nullable();
 
             $table->timestamp('completed_at')
                   ->nullable();

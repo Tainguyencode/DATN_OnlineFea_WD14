@@ -100,17 +100,22 @@
                     </div>
 
                     <div class="mt-5">
-                        @if($isEnrolled)
-                            <a href="{{ route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700">
-                                Vào khóa học
+                        @if($canManageCourse)
+                            <a href="{{ route('instructor.courses.curriculum', $course) }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
+                                Quản lý khóa học
+                            </a>
+                            <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn là giảng viên sở hữu khóa học này.</p>
+                        @elseif($isEnrolled)
+                            <a href="{{ route('my-courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
+                                Vào học
                             </a>
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
                         @elseif(auth()->check())
                             @if(auth()->user()->isStudent())
-                                <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                                <form method="POST" action="{{ route('courses.enroll', $course) }}">
                                     @csrf
-                                    <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700">
-                                        {{ $isFree ? 'Đăng ký học' : 'Mua khóa học' }}
+                                    <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
+                                        Đăng ký học
                                     </button>
                                 </form>
                                 <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bài học không preview sẽ mở sau khi bạn đăng ký.</p>
@@ -120,8 +125,8 @@
                                 </a>
                             @endif
                         @else
-                            <a href="{{ route('register') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700">
-                                {{ $isFree ? 'Đăng ký học' : 'Mua khóa học' }}
+                            <a href="{{ route('login') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
+                                Đăng ký học
                             </a>
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
                                 Đã có tài khoản?
@@ -149,7 +154,7 @@
                         <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">Nội dung khóa học</h2>
                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $totalSections }} chương • {{ $totalLessons }} bài học</p>
                     </div>
-                    @unless($isEnrolled)
+                    @unless($canAccessFullCourse)
                         <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">
                             Chưa đăng ký: chỉ mở bài xem thử
                         </span>
@@ -172,7 +177,7 @@
                             <div class="divide-y divide-slate-100 dark:divide-slate-800">
                                 @forelse($section->lessons as $lesson)
                                     @php
-                                        $canAccessLesson = $isEnrolled || $lesson->is_preview;
+                                        $canAccessLesson = $canAccessFullCourse || $lesson->is_preview;
                                         $duration = $formatDuration($lesson->duration ?? $lesson->duration_seconds);
                                     @endphp
                                     <div class="px-4 py-4">

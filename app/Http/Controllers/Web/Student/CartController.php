@@ -104,12 +104,19 @@ class CartController extends Controller
             ]);
 
             foreach ($cart->items as $item) {
-                Enrollment::firstOrCreate(
+                $enrollment = Enrollment::firstOrCreate(
                     ['user_id' => auth()->id(), 'course_id' => $item->course_id],
-                    ['order_id' => $order->id]
+                    [
+                        'order_id' => $order->id,
+                        'status' => 'active',
+                        'progress_percent' => 0,
+                        'enrolled_at' => now(),
+                    ]
                 );
 
-                $item->course->increment('enrollment_count');
+                if ($enrollment->wasRecentlyCreated) {
+                    $item->course->increment('enrollment_count');
+                }
             }
 
             if ($coupon) {
