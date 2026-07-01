@@ -10,7 +10,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="lg:col-span-2 space-y-4">
             @foreach($cart->items as $item)
-                @php $course = $item->course; $price = $course->sale_price ?? $course->price; @endphp
+                @php $course = $item->course; $price = $course->discount_price ?? $course->sale_price ?? $course->price; @endphp
                 <div class="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4">
                     <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0">
                         {{ strtoupper(substr($course->title, 0, 1)) }}

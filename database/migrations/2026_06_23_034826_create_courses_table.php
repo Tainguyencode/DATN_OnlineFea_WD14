@@ -13,18 +13,22 @@ return new class extends Migration
     {
         Schema::create('courses', function (Blueprint $table) {
             $table->id();
-             $table->foreignId('instructor_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('category_id')->constrained('categories')->cascadeOnDelete();
+            $table->foreignId('instructor_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('category_id')->nullable()->constrained('categories')->nullOnDelete();
             $table->string('title');
             $table->string('slug')->unique();
-            $table->text('description');
+            $table->text('short_description')->nullable();
+            $table->text('description')->nullable();
             $table->text('objectives')->nullable();
             $table->string('thumbnail')->nullable();
             $table->string('preview_video')->nullable();
-            $table->enum('level', ['beginner', 'intermediate', 'advanced'])->default('beginner');
+            $table->enum('level', ['beginner', 'intermediate', 'advanced'])->nullable();
+            $table->string('language', 10)->default('vi');
             $table->decimal('price', 12, 2)->default(0.00);
+            $table->decimal('discount_price', 12, 2)->nullable();
             $table->decimal('sale_price', 12, 2)->nullable();
-            $table->enum('status', ['draft', 'pending', 'published', 'rejected'])->default('draft');
+            $table->enum('status', ['draft', 'pending', 'published', 'rejected', 'archived'])->default('draft');
+            $table->boolean('is_published')->default(false);
             $table->text('rejection_reason')->nullable();
             $table->decimal('rating_avg', 3, 2)->default(0.00);
             $table->unsignedInteger('rating_count')->default(0);

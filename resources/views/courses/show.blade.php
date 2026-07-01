@@ -4,8 +4,9 @@
 
 @section('content')
 @php
-    $price = $course->sale_price ?? $course->price;
-    $originalPrice = $course->sale_price ? $course->price : null;
+    $discountPrice = $course->discount_price ?? $course->sale_price;
+    $price = $discountPrice ?? $course->price;
+    $originalPrice = $discountPrice ? $course->price : null;
     $levelLabels = ['beginner' => 'Cơ bản', 'intermediate' => 'Trung cấp', 'advanced' => 'Nâng cao'];
 @endphp
 

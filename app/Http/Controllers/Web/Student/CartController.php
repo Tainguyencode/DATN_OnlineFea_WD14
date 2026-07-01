@@ -25,7 +25,7 @@ class CartController extends Controller
     public function index(): View
     {
         $cart = $this->getCart()->load(['items.course.instructor:id,name']);
-        $total = $cart->items->sum(fn ($i) => $i->course->sale_price ?? $i->course->price);
+        $total = $cart->items->sum(fn ($i) => $i->course->discount_price ?? $i->course->sale_price ?? $i->course->price);
 
         return view('student.cart.index', compact('cart', 'total'));
     }
@@ -66,7 +66,7 @@ class CartController extends Controller
             return back()->with('error', 'Giỏ hàng trống.');
         }
 
-        $subtotal = $cart->items->sum(fn ($i) => $i->course->sale_price ?? $i->course->price);
+        $subtotal = $cart->items->sum(fn ($i) => $i->course->discount_price ?? $i->course->sale_price ?? $i->course->price);
         $discount = 0;
         $coupon = null;
 
@@ -85,7 +85,7 @@ class CartController extends Controller
             $items = $cart->items->map(function ($item) {
                 return [
                     'course_id' => $item->course_id,
-                    'price' => $item->course->sale_price ?? $item->course->price,
+                    'price' => $item->course->discount_price ?? $item->course->sale_price ?? $item->course->price,
                     'title' => $item->course->title,
                 ];
             })->toArray();
