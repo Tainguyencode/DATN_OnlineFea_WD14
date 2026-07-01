@@ -8,13 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Enrollment extends Model
 {
     protected $fillable = [
-        'user_id', 'course_id', 'order_id', 'progress_percent', 'completed_at',
+        'user_id', 'course_id', 'order_id', 'status', 'progress_percent',
+        'enrolled_at', 'completed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'progress_percent' => 'decimal:2',
+            'enrolled_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }

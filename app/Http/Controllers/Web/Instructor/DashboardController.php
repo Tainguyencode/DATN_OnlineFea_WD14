@@ -26,20 +26,22 @@ class DashboardController extends Controller
 
         $stats = [
             'courses' => $courseIds->count(),
-            'published' => Course::where('instructor_id', $user->id)->where('status', 'published')->count(),
-            'students' => Enrollment::whereIn('course_id', $courseIds)->distinct('user_id')->count('user_id'),
+            'published' => Course::where('instructor_id', $user->id)->where('status', Course::STATUS_PUBLISHED)->count(),
+            'students' => Enrollment::whereIn('course_id', $courseIds)->where('status', 'active')->distinct('user_id')->count('user_id'),
             'revenue' => $revenue,
         ];
 
         $recentCourses = Course::where('instructor_id', $user->id)
             ->with('category:id,name')
-            ->withCount('enrollments')
+            ->withCount(['enrollments' => fn ($query) => $query->where('status', 'active')])
             ->orderByDesc('updated_at')
             ->limit(5)
             ->get();
 
         $recentStudents = Enrollment::whereIn('course_id', $courseIds)
+            ->where('status', 'active')
             ->with(['user:id,name,email', 'course:id,title'])
+            ->orderByDesc('enrolled_at')
             ->orderByDesc('created_at')
             ->limit(5)
             ->get();

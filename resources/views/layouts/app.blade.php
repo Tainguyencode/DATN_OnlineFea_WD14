@@ -27,7 +27,7 @@
 
                 <!-- Nav Links -->
                 <div class="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600 dark:text-slate-400">
-                    <a href="{{ route('home') }}#courses" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Khóa học</a>
+                    <a href="{{ route('courses.index') }}" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Khóa học</a>
                     <a href="{{ route('home') }}#categories" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Danh mục</a>
                     <a href="{{ route('home') }}#paths" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Lộ trình</a>
                     <a href="{{ route('home') }}#faq" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">FAQ</a>
@@ -91,7 +91,7 @@
                 <div>
                     <h4 class="text-white font-bold mb-4">Liên kết</h4>
                     <ul class="space-y-2.5 text-sm">
-                        <li><a href="{{ route('home') }}#courses" class="hover:text-white transition">Khóa học</a></li>
+                        <li><a href="{{ route('courses.index') }}" class="hover:text-white transition">Khóa học</a></li>
                         <li><a href="{{ route('home') }}#faq" class="hover:text-white transition">Câu hỏi thường gặp</a></li>
                         <li><a href="{{ route('register') }}" class="hover:text-white transition">Đăng ký thành viên</a></li>
                     </ul>

@@ -10,8 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Lesson extends Model
 {
     protected $fillable = [
-        'chapter_id', 'title', 'content', 'type', 'video_url',
-        'duration_seconds', 'is_preview', 'sort_order',
+        'course_id', 'section_id', 'chapter_id', 'title', 'type',
+        'video_url', 'content', 'document_file', 'duration',
+        'duration_seconds', 'is_preview', 'sort_order', 'status',
         'attachments', 'subtitles', 'ai_summary',
     ];
 
@@ -27,6 +28,16 @@ class Lesson extends Model
     public function chapter(): BelongsTo
     {
         return $this->belongsTo(Chapter::class);
+    }
+
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
+    }
+
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(CourseSection::class, 'section_id');
     }
 
     public function quiz(): HasOne

@@ -1,109 +1,87 @@
 <x-instructor-layout :title="$course->title" page-title="Chỉnh sửa khóa học" :breadcrumb="$course->title">
 
 @php
-    $statusMap = ['draft' => 'Nháp', 'pending' => 'Chờ duyệt', 'published' => 'Đã xuất bản', 'rejected' => 'Từ chối'];
+    $statusStyles = [
+        'draft' => 'bg-slate-100 text-slate-700 border-slate-200',
+        'pending' => 'bg-amber-50 text-amber-700 border-amber-200',
+        'published' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'rejected' => 'bg-rose-50 text-rose-700 border-rose-200',
+        'archived' => 'bg-zinc-100 text-zinc-700 border-zinc-200',
+    ];
+
+    $sectionCount = $course->courseSections->count();
+    $lessonCount = $course->courseSections->sum(fn ($section) => $section->lessons->count());
 @endphp
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <div class="lg:col-span-2 space-y-6">
-        {{-- Edit form --}}
-        <form method="POST" action="{{ route('instructor.courses.update', $course) }}" class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
-            @csrf @method('PUT')
-            <h2 class="font-bold text-slate-900 text-lg">Thông tin khóa học</h2>
+<div class="space-y-6">
+    <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Tên khóa học</label>
-                <input type="text" name="title" value="{{ old('title', $course->title) }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Danh mục</label>
-                    <select name="category_id" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white">
-                        @foreach($categories as $cat)
-                            <option value="{{ $cat->id }}" @selected($course->category_id == $cat->id)>{{ $cat->name }}</option>
-                        @endforeach
-                    </select>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusStyles[$course->status] ?? $statusStyles['draft'] }}">
+                        {{ $statusOptions[$course->status] ?? $course->status }}
+                    </span>
+                    <span class="text-xs font-semibold text-slate-500">Tạo ngày {{ $course->created_at?->format('d/m/Y') }}</span>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Trình độ</label>
-                    <select name="level" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white">
-                        <option value="beginner" @selected($course->level == 'beginner')>Cơ bản</option>
-                        <option value="intermediate" @selected($course->level == 'intermediate')>Trung cấp</option>
-                        <option value="advanced" @selected($course->level == 'advanced')>Nâng cao</option>
-                    </select>
-                </div>
+                <h2 class="mt-3 text-xl font-bold text-slate-950">{{ $course->title }}</h2>
+                <p class="mt-1 text-sm text-slate-500">{{ $course->short_description ?: 'Bổ sung mô tả ngắn để học viên hiểu nhanh giá trị khóa học.' }}</p>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Mô tả</label>
-                <textarea name="description" rows="4" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl resize-none">{{ old('description', $course->description) }}</textarea>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Giá</label>
-                    <input type="number" name="price" value="{{ $course->price }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Giá KM</label>
-                    <input type="number" name="sale_price" value="{{ $course->sale_price }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl">
-                </div>
-            </div>
-            <button type="submit" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition">Lưu thay đổi</button>
-        </form>
 
-        {{-- Chapters & Lessons --}}
-        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 class="font-bold text-slate-900 text-lg mb-4">Nội dung khóa học</h2>
-            @foreach($course->chapters as $chapter)
-                <div class="mb-4 border border-slate-200 rounded-xl overflow-hidden">
-                    <div class="bg-slate-50 px-4 py-3 font-semibold text-slate-800">{{ $chapter->title }}</div>
-                    <ul class="divide-y divide-slate-100">
-                        @foreach($chapter->lessons as $lesson)
-                            <li class="px-4 py-2 text-sm text-slate-600 flex justify-between">
-                                <span>{{ $lesson->title }}</span>
-                                <span class="text-xs text-slate-400">{{ $lesson->type }}</span>
-                            </li>
-                        @endforeach
-                    </ul>
-                    <form method="POST" action="{{ route('instructor.chapters.lessons.store', $chapter) }}" class="p-4 border-t border-slate-100 flex gap-2 flex-wrap">
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('instructor.courses.index') }}"
+                   class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">
+                    Quay lại
+                </a>
+                <a href="{{ route('instructor.courses.curriculum', $course) }}"
+                   class="inline-flex min-h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">
+                    Quản lý nội dung
+                </a>
+                @if($course->status === 'published')
+                    <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
+                       class="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 cursor-pointer">
+                        Xem trước
+                    </a>
+                @endif
+                @if(in_array($course->status, ['draft', 'rejected'], true))
+                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}">
                         @csrf
-                        <input type="text" name="title" placeholder="Tên bài giảng" required class="flex-1 min-w-[150px] px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                        <select name="type" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="video">Video</option>
-                            <option value="document">Tài liệu</option>
-                            <option value="quiz">Quiz</option>
-                        </select>
-                        <label class="flex items-center gap-1 text-sm text-slate-600"><input type="checkbox" name="is_preview" value="1"> Học thử</label>
-                        <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm">+ Bài</button>
+                        <button type="submit"
+                                class="inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
+                            Gửi duyệt
+                        </button>
                     </form>
-                </div>
-            @endforeach
-
-            <form method="POST" action="{{ route('instructor.courses.chapters.store', $course) }}" class="flex gap-2 mt-4">
-                @csrf
-                <input type="text" name="title" placeholder="Tên chương mới" required class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm">
-                <button type="submit" class="bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-medium">+ Thêm chương</button>
-            </form>
+                @endif
+            </div>
         </div>
+
+        @if($course->status === 'rejected' && $course->rejectionReasonText())
+            <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                <strong>Lý do từ chối:</strong> {{ $course->rejectionReasonText() }}
+            </div>
+        @endif
     </div>
 
-    <div class="space-y-4">
-        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h3 class="font-bold text-slate-900 mb-3">Trạng thái</h3>
-            <p class="text-2xl font-bold text-emerald-600 mb-4">{{ $statusMap[$course->status] ?? $course->status }}</p>
-            @if($course->status === 'rejected' && $course->rejection_reason)
-                <p class="text-sm text-red-600 bg-red-50 p-3 rounded-lg mb-4">{{ $course->rejection_reason }}</p>
-            @endif
-            @if(in_array($course->status, ['draft', 'rejected']))
-                <form method="POST" action="{{ route('instructor.courses.submit', $course) }}">
-                    @csrf
-                    <button type="submit" class="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-amber-600 transition">Gửi duyệt</button>
-                </form>
-            @endif
+    @include('instructor.courses._form', [
+        'course' => $course,
+        'categories' => $categories,
+        'action' => route('instructor.courses.update', $course),
+        'method' => 'PUT',
+        'submitLabel' => 'Lưu nháp',
+    ])
+
+    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600">Curriculum builder</p>
+                <h2 class="mt-1 text-lg font-bold text-slate-950">Nội dung khóa học</h2>
+                <p class="mt-1 text-sm text-slate-500">{{ $sectionCount }} chương · {{ $lessonCount }} bài học</p>
+            </div>
+            <a href="{{ route('instructor.courses.curriculum', $course) }}"
+               class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
+                Mở trình quản lý nội dung
+            </a>
         </div>
-        <a href="{{ route('instructor.courses.students', $course) }}" class="block bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-emerald-300 transition text-center">
-            <div class="text-2xl font-bold text-slate-900">{{ $course->enrollments()->count() }}</div>
-            <div class="text-sm text-slate-500">Học viên đăng ký</div>
-        </a>
-    </div>
+    </section>
 </div>
 
 </x-instructor-layout>

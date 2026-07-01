@@ -1,6 +1,7 @@
 @php
-    $price = $course->sale_price ?? $course->price;
-    $originalPrice = $course->sale_price ? $course->price : null;
+    $discountPrice = $course->discount_price ?? $course->sale_price;
+    $price = $discountPrice ?? $course->price;
+    $originalPrice = $discountPrice ? $course->price : null;
     $levelLabels = ['beginner' => 'Cơ bản', 'intermediate' => 'Trung cấp', 'advanced' => 'Nâng cao'];
     $gradients = [
         'from-indigo-500 to-purple-600',
@@ -10,9 +11,10 @@
         'from-pink-500 to-rose-500',
     ];
     $gradient = $gradients[$course->id % count($gradients)];
+    $lessonCount = $course->lessons_count ?? 0;
 @endphp
 
-<a href="{{ route('courses.show', $course) }}" class="group bg-white dark:bg-[#161615] rounded-2xl border border-slate-200/60 dark:border-slate-800/80 overflow-hidden hover:shadow-xl hover:shadow-indigo-500/5 dark:hover:shadow-none hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all duration-300 flex flex-col">
+<a href="{{ route('courses.show', $course->slug) }}" class="group bg-white dark:bg-[#161615] rounded-2xl border border-slate-200/60 dark:border-slate-800/80 overflow-hidden hover:shadow-xl hover:shadow-indigo-500/5 dark:hover:shadow-none hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all duration-300 flex flex-col">
     <!-- Thumbnail / Gradient Placeholder -->
     <div class="aspect-video bg-gradient-to-br {{ $gradient }} relative overflow-hidden">
         @if($course->thumbnail)
@@ -39,6 +41,10 @@
         <h3 class="font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors duration-200 line-clamp-2 mb-2 leading-snug">
             {{ $course->title }}
         </h3>
+
+        <p class="text-sm text-slate-500 dark:text-slate-400 mb-3 line-clamp-2 leading-6">
+            {{ $course->short_description ?: Str::limit($course->description, 110) }}
+        </p>
         
         <p class="text-sm text-slate-500 dark:text-slate-400 mb-3.5 flex items-center gap-1">
             <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -69,8 +75,12 @@
             </div>
             <span class="text-xs text-slate-400 dark:text-slate-400 flex items-center gap-1 font-medium">
                 <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                {{ $course->enrollment_count }}
+                {{ $lessonCount }} bài
             </span>
         </div>
+
+        <span class="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition group-hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:group-hover:bg-indigo-200">
+            Xem chi tiết
+        </span>
     </div>
 </a >
