@@ -154,7 +154,7 @@
                                         <a href="{{ route('instructor.courses.curriculum', $course) }}"
                                            class="rounded-lg px-3 py-2 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">Quản lý nội dung</a>
                                         @if($course->status === 'published')
-                                            <a href="{{ route('courses.show', $course) }}" target="_blank"
+                                            <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
                                                class="rounded-lg px-3 py-2 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">Xem trước</a>
                                         @else
                                             <span class="rounded-lg px-3 py-2 text-xs font-bold text-slate-400" title="Chỉ xem trước công khai sau khi khóa học được xuất bản">Xem trước</span>
@@ -237,7 +237,7 @@
                             <a href="{{ route('instructor.courses.edit', $course) }}" class="rounded-lg bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">Sửa</a>
                             <a href="{{ route('instructor.courses.curriculum', $course) }}" class="rounded-lg bg-indigo-600 px-3 py-2 text-center text-xs font-bold text-white">Nội dung</a>
                             @if($course->status === 'published')
-                                <a href="{{ route('courses.show', $course) }}" target="_blank" class="rounded-lg border border-slate-300 px-3 py-2 text-center text-xs font-bold text-slate-700">Xem trước</a>
+                                <a href="{{ route('courses.show', $course->slug) }}" target="_blank" class="rounded-lg border border-slate-300 px-3 py-2 text-center text-xs font-bold text-slate-700">Xem trước</a>
                             @else
                                 <span class="rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">Xem trước</span>
                             @endif

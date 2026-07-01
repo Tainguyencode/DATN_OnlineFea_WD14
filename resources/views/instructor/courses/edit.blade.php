@@ -37,7 +37,7 @@
                     Quản lý nội dung
                 </a>
                 @if($course->status === 'published')
-                    <a href="{{ route('courses.show', $course) }}" target="_blank"
+                    <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
                        class="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 cursor-pointer">
                         Xem trước
                     </a>
