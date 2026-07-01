@@ -32,7 +32,7 @@ class CartController extends Controller
 
     public function add(Course $course): RedirectResponse
     {
-        if ($course->status !== 'published') {
+        if ($course->status !== Course::STATUS_PUBLISHED || ! $course->is_published) {
             return back()->with('error', 'Khóa học chưa được xuất bản.');
         }
 

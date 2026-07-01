@@ -21,26 +21,32 @@ class HomeController extends Controller
 
         $featuredIds = [];
 
-        $featuredCourses = Course::where('status', 'published')
+        $featuredCourses = Course::where('status', Course::STATUS_PUBLISHED)
+            ->where('is_published', true)
             ->when(! empty($featuredIds), fn ($q) => $q->whereIn('id', $featuredIds))
             ->when(empty($featuredIds), fn ($q) => $q->where('is_featured', true))
             ->with(['instructor:id,name,avatar', 'category:id,name'])
+            ->withCount('lessons')
             ->limit(4)
             ->get();
 
         if ($featuredCourses->isEmpty()) {
-            $featuredCourses = Course::where('status', 'published')
+            $featuredCourses = Course::where('status', Course::STATUS_PUBLISHED)
+                ->where('is_published', true)
                 ->with(['instructor:id,name,avatar', 'category:id,name'])
+                ->withCount('lessons')
                 ->orderByDesc('rating_avg')
                 ->limit(4)
                 ->get();
         }
 
-        $categories = Category::withCount(['courses' => fn ($q) => $q->where('status', 'published')])
+        $categories = Category::withCount(['courses' => fn ($q) => $q->where('status', Course::STATUS_PUBLISHED)->where('is_published', true)])
             ->get();
 
         $query = Course::with(['instructor:id,name,avatar', 'category:id,name'])
-            ->where('status', 'published');
+            ->withCount('lessons')
+            ->where('status', Course::STATUS_PUBLISHED)
+            ->where('is_published', true);
 
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
@@ -78,7 +84,7 @@ class HomeController extends Controller
         $faqs = Faq::where('is_active', true)->orderBy('sort_order')->limit(5)->get();
 
         $stats = [
-            'courses' => Course::where('status', 'published')->count(),
+            'courses' => Course::where('status', Course::STATUS_PUBLISHED)->where('is_published', true)->count(),
             'students' => \App\Models\Enrollment::distinct('user_id')->count('user_id'),
             'instructors' => \App\Models\User::where('role', 'instructor')->count(),
         ];

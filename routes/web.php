@@ -19,7 +19,8 @@ Route::get('/', function () {
     return view('welcome');
 });
 Route::get('/home', [HomeController::class, 'index'])->name('home');
-Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
+Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');

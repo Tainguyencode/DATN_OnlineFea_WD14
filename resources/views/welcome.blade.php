@@ -24,7 +24,7 @@
                 </a>
 
                 <nav class="nav-links" aria-label="Liên kết nhanh">
-                    <a href="{{ route('home') }}#courses">Khóa học</a>
+                    <a href="{{ route('courses.index') }}">Khóa học</a>
                     <a href="#features">Tính năng</a>
                     @guest
                         <a href="{{ route('login') }}">Đăng nhập</a>
