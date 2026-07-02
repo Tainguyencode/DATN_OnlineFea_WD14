@@ -68,7 +68,9 @@ Route::middleware(['auth', 'role:instructor'])->prefix('instructor')->name('inst
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('/users', [UserController::class, 'index'])->name('users');
+    Route::post('/users', [UserController::class, 'store'])->name('users.store');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::get('/courses/pending', [ManageController::class, 'pendingCourses'])->name('courses.pending');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
     Route::post('/courses/{course}/reject', [ManageController::class, 'reject'])->name('courses.reject');
