@@ -65,7 +65,7 @@ class CurriculumController extends Controller
     {
         $this->authorizeSection($course, $section);
 
-        $section->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonDocument($lesson));
+        $section->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
         $section->delete();
 
         return back()->with('success', 'Đã xóa chương học.');
@@ -81,6 +81,8 @@ class CurriculumController extends Controller
             $validated['document_file'] = $request->file('document_file')->store('lesson-documents', 'public');
         }
 
+        $validated = $this->storeLessonVideo($request, $validated);
+
         Lesson::create([
             ...$validated,
             'course_id' => $course->id,
@@ -88,7 +90,7 @@ class CurriculumController extends Controller
             'chapter_id' => null,
             'duration_seconds' => $validated['duration'] ?? 0,
             'is_preview' => $request->boolean('is_preview'),
-            'sort_order' => $section->lessons()->count(),
+            'sort_order' => $validated['sort_order'] ?? $section->lessons()->count(),
             'status' => $validated['status'] ?? 'draft',
         ]);
 
@@ -106,10 +108,13 @@ class CurriculumController extends Controller
             $validated['document_file'] = $request->file('document_file')->store('lesson-documents', 'public');
         }
 
+        $validated = $this->storeLessonVideo($request, $validated, $lesson);
+
         $lesson->update([
             ...$validated,
             'duration_seconds' => $validated['duration'] ?? 0,
             'is_preview' => $request->boolean('is_preview'),
+            'sort_order' => $validated['sort_order'] ?? $lesson->sort_order,
             'status' => $validated['status'] ?? 'draft',
         ]);
 
@@ -120,7 +125,7 @@ class CurriculumController extends Controller
     {
         $this->authorizeLesson($course, $lesson);
 
-        $this->deleteLessonDocument($lesson);
+        $this->deleteLessonFiles($lesson);
         $lesson->delete();
 
         return back()->with('success', 'Đã xóa bài học.');
@@ -131,12 +136,20 @@ class CurriculumController extends Controller
         return $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in(array_keys($this->lessonTypes()))],
+            'video_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,webm', 'max:204800', 'prohibited_unless:type,video'],
             'video_url' => ['nullable', 'string', 'max:2048'],
             'content' => ['nullable', 'string'],
             'document_file' => ['nullable', 'file', 'max:10240'],
             'duration' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'is_preview' => ['sometimes', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'status' => ['nullable', Rule::in(array_keys($this->lessonStatuses()))],
+        ], [
+            'video_file.mimes' => 'Video bài giảng chỉ cho phép định dạng mp4, mov, avi hoặc webm.',
+            'video_file.max' => 'Dung lượng video bài giảng tối đa là 200MB.',
+            'video_file.prohibited_unless' => 'Chỉ upload video khi loại bài học là Video.',
+            'duration.integer' => 'Thời lượng phải là số nguyên.',
+            'sort_order.integer' => 'Thứ tự sắp xếp phải là số nguyên.',
         ]);
     }
 
@@ -161,6 +174,43 @@ class CurriculumController extends Controller
     {
         if ($lesson->document_file) {
             Storage::disk('public')->delete($lesson->document_file);
+        }
+    }
+
+    private function storeLessonVideo(Request $request, array $validated, ?Lesson $lesson = null): array
+    {
+        unset($validated['video_file']);
+
+        if (! $request->hasFile('video_file')) {
+            return $validated;
+        }
+
+        $file = $request->file('video_file');
+        $path = $file->store('lesson-videos', 'public');
+
+        if ($lesson) {
+            $this->deleteLessonVideo($lesson);
+        }
+
+        return [
+            ...$validated,
+            'video_path' => $path,
+            'video_original_name' => $file->getClientOriginalName(),
+            'video_mime' => $file->getClientMimeType(),
+            'video_size' => $file->getSize(),
+        ];
+    }
+
+    private function deleteLessonFiles(Lesson $lesson): void
+    {
+        $this->deleteLessonDocument($lesson);
+        $this->deleteLessonVideo($lesson);
+    }
+
+    private function deleteLessonVideo(Lesson $lesson): void
+    {
+        if ($lesson->video_path) {
+            Storage::disk('public')->delete($lesson->video_path);
         }
     }
 
