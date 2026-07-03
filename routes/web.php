@@ -120,18 +120,8 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('/users', [UserController::class, 'index'])->name('users');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
-    Route::post('/users/bulk', [UserController::class, 'bulk'])->name('users.bulk');
-    Route::get('/users/export/csv', [UserController::class, 'exportCsv'])->name('users.export.csv');
-    Route::get('/users/export/pdf', [UserController::class, 'exportPdf'])->name('users.export.pdf');
-    Route::post('/users/import', [UserController::class, 'import'])->name('users.import');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
-    Route::post('/users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
-    Route::delete('/users/{user}/force', [UserController::class, 'forceDelete'])->name('users.force-delete');
-    Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
-    Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
-    Route::put('/roles/{role}', [RoleController::class, 'update'])->name('roles.update');
-    Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
     Route::get('/courses/pending', [ManageController::class, 'pendingCourses'])->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
