@@ -159,11 +159,19 @@
                                         @if($lesson->is_preview)
                                             <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>
                                         @endif
+                                        @if($lesson->type === 'video')
+                                            <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $lesson->video_path ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
+                                                {{ $lesson->video_path ? 'Đã có video' : 'Chưa có video' }}
+                                            </span>
+                                        @endif
                                     </div>
                                     <h4 class="mt-2 font-bold text-slate-950">{{ $lesson->title }}</h4>
                                     <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
                                         <span>Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
                                         <span>sort_order: {{ $lesson->sort_order }}</span>
+                                        @if($lesson->type === 'video' && $lesson->video_path)
+                                            <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($lesson->video_path) }}" target="_blank" class="font-semibold text-emerald-600 hover:underline">Video file</a>
+                                        @endif
                                         @if($lesson->video_url)
                                             <a href="{{ $lesson->video_url }}" target="_blank" class="font-semibold text-indigo-600 hover:underline">Video URL</a>
                                         @endif
@@ -216,6 +224,7 @@
                             'action' => route('instructor.courses.sections.lessons.store', [$course, $section]),
                             'method' => 'POST',
                             'lesson' => null,
+                            'nextSortOrder' => $section->lessons->count(),
                             'lessonTypes' => $lessonTypes,
                             'lessonStatuses' => $lessonStatuses,
                             'submitLabel' => 'Thêm bài học',

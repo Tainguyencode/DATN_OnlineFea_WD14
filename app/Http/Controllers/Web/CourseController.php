@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Lesson;
 use App\Models\Review;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class CourseController extends Controller
@@ -65,18 +67,21 @@ class CourseController extends Controller
 
     public function show(string $slug): View
     {
-        $course = $this->publishedCoursesQuery()
+        $course = Course::query()
             ->where('slug', $slug)
             ->firstOrFail();
+
+        $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
+        abort_unless($this->isPublished($course) || $canBypassCourseVisibility, 404);
 
         $course->load([
             'instructor:id,name,avatar,bio',
             'category:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
-                ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->orderBy('sort_order'),
             'chapters.lessons' => fn ($q) => $q
-                ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->orderBy('sort_order'),
         ]);
 
@@ -102,15 +107,11 @@ class CourseController extends Controller
         $totalLessons = $curriculumSections->sum(fn ($section) => $section->lessons->count());
         $previewLessons = $curriculumSections->flatMap->lessons->where('is_preview', true)->count();
         $totalSections = $curriculumSections->count();
-        $isEnrolled = auth()->check()
-            && Enrollment::where('user_id', auth()->id())
-                ->where('course_id', $course->id)
-                ->where('status', 'active')
-                ->exists();
+        $isEnrolled = $this->isEnrolled($course);
         $canManageCourse = auth()->check()
             && auth()->user()->isInstructor()
             && $course->isOwnedBy(auth()->user());
-        $canAccessFullCourse = $isEnrolled || $canManageCourse;
+        $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
 
         return view('courses.show', compact(
             'course',
@@ -123,6 +124,35 @@ class CourseController extends Controller
             'isEnrolled',
             'canManageCourse',
             'canAccessFullCourse'
+        ));
+    }
+
+    public function lesson(Course $course, Lesson $lesson): View
+    {
+        abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
+
+        $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
+        abort_unless($this->isPublished($course) || $canBypassCourseVisibility, 404);
+
+        $course->load(['instructor:id,name,avatar,bio', 'category:id,name,slug']);
+        $lesson->loadMissing(['section:id,course_id,title,sort_order', 'chapter:id,course_id,title,sort_order']);
+
+        $isEnrolled = $this->isEnrolled($course);
+        $canAccessLesson = $canBypassCourseVisibility || $isEnrolled || $lesson->is_preview;
+        $videoSource = null;
+
+        if ($canAccessLesson && $lesson->type === 'video') {
+            $videoSource = $lesson->video_path
+                ? Storage::disk('public')->url($lesson->video_path)
+                : $lesson->video_url;
+        }
+
+        return view('courses.lesson', compact(
+            'course',
+            'lesson',
+            'isEnrolled',
+            'canAccessLesson',
+            'videoSource'
         ));
     }
 
@@ -175,5 +205,43 @@ class CourseController extends Controller
         return Course::query()
             ->where('status', Course::STATUS_PUBLISHED)
             ->where('is_published', true);
+    }
+
+    private function isPublished(Course $course): bool
+    {
+        return $course->status === Course::STATUS_PUBLISHED && (bool) $course->is_published;
+    }
+
+    private function canBypassCourseVisibility(Course $course): bool
+    {
+        if (! auth()->check()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        return $user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user));
+    }
+
+    private function isEnrolled(Course $course): bool
+    {
+        return auth()->check()
+            && Enrollment::where('user_id', auth()->id())
+                ->where('course_id', $course->id)
+                ->where('status', 'active')
+                ->exists();
+    }
+
+    private function lessonBelongsToCourse(Course $course, Lesson $lesson): bool
+    {
+        if ((int) $lesson->course_id === (int) $course->id) {
+            return true;
+        }
+
+        if ($lesson->section_id && $lesson->section()->where('course_id', $course->id)->exists()) {
+            return true;
+        }
+
+        return $lesson->chapter_id && $lesson->chapter()->where('course_id', $course->id)->exists();
     }
 }
