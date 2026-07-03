@@ -361,6 +361,22 @@ class ManageController extends Controller
 
     private function courseRevenue(Course $course): float
     {
+        if (Schema::hasTable('order_items')) {
+            $revenue = (float) DB::table('order_items')
+                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->where('orders.status', 'paid')
+                ->where('order_items.course_id', $course->id)
+                ->sum('order_items.price');
+
+            if ($revenue > 0 || ! Schema::hasColumn('orders', 'items')) {
+                return $revenue;
+            }
+        }
+
+        if (! Schema::hasColumn('orders', 'items')) {
+            return 0.0;
+        }
+
         return (float) Order::where('status', 'paid')
             ->get(['items'])
             ->sum(function (Order $order) use ($course) {
