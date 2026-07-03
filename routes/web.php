@@ -85,10 +85,15 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('/users', [UserController::class, 'index'])->name('users');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/courses/pending', [ManageController::class, 'pendingCourses'])->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
+    Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
     Route::post('/courses/{course}/reject', [ManageController::class, 'reject'])->name('courses.reject');
+    Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
+    Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
+    Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');

@@ -41,7 +41,10 @@
 
             <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
                 @foreach($menu as $item)
-                    @php $active = request()->routeIs($item['route']) || request()->routeIs($item['route'].'.*'); @endphp
+                    @php
+                        $activePatterns = $item['active'] ?? [$item['route'], $item['route'].'.*'];
+                        $active = collect((array) $activePatterns)->contains(fn ($pattern) => request()->routeIs($pattern));
+                    @endphp
                     <a href="{{ route($item['route']) }}"
                        class="group flex items-center gap-3 px-3.5 py-2.5 rounded-[11px] text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30
                               {{ $active ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
@@ -107,7 +110,11 @@
 
     <nav class="lg:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200/70 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] z-30 flex justify-around py-2">
         @foreach(array_slice($menu, 0, 4) as $item)
-            <a href="{{ route($item['route']) }}" class="flex flex-col items-center gap-0.5 px-3 py-1 text-xs {{ request()->routeIs($item['route']) || request()->routeIs($item['route'].'.*') ? $c['text'] : 'text-slate-400' }}">
+            @php
+                $activePatterns = $item['active'] ?? [$item['route'], $item['route'].'.*'];
+                $active = collect((array) $activePatterns)->contains(fn ($pattern) => request()->routeIs($pattern));
+            @endphp
+            <a href="{{ route($item['route']) }}" class="flex flex-col items-center gap-0.5 px-3 py-1 text-xs {{ $active ? $c['text'] : 'text-slate-400' }}">
                 <span class="w-5 h-5">{!! $item['icon'] !!}</span>
                 <span class="truncate max-w-[60px]">{{ Str::before($item['label'], ' ') }}</span>
             </a>
