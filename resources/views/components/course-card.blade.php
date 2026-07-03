@@ -18,27 +18,26 @@
     <!-- Thumbnail / Gradient Placeholder -->
     <div class="aspect-video bg-gradient-to-br {{ $gradient }} relative overflow-hidden">
         @if($course->thumbnail)
-            <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
         @else
             <div class="absolute inset-0 flex items-center justify-center">
-                <svg class="w-16 h-16 text-white/30" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824 2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+                <svg class="h-14 w-14 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824 2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg>
             </div>
         @endif
         @if($course->is_featured)
-            <span class="absolute top-3 left-3 bg-amber-400 text-amber-950 text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full shadow-sm">Nổi bật</span>
+            <span class="absolute left-2 top-2 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Best Seller</span>
         @endif
-        <span class="absolute top-3 right-3 bg-black/45 text-white text-xs font-semibold px-2.5 py-1 rounded-full backdrop-blur-md">
+        <span class="absolute right-2 top-2 rounded bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">
             {{ $levelLabels[$course->level] ?? $course->level }}
         </span>
     </div>
 
-    <!-- Details -->
-    <div class="p-5 flex flex-col flex-1">
+    <div class="flex flex-1 flex-col pt-3">
         @if($course->category)
-            <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1.5 uppercase tracking-wider">{{ $course->category->name }}</span>
+            <span class="mb-1 text-xs font-semibold uppercase tracking-wide text-[#0056D2] dark:text-blue-300">{{ $course->category->name }}</span>
         @endif
         
-        <h3 class="font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors duration-200 line-clamp-2 mb-2 leading-snug">
+        <h3 class="mb-1.5 line-clamp-2 min-h-10 text-base font-bold leading-snug text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">
             {{ $course->title }}
         </h3>
 
@@ -46,30 +45,30 @@
             {{ $course->short_description ?: Str::limit($course->description, 110) }}
         </p>
         
-        <p class="text-sm text-slate-500 dark:text-slate-400 mb-3.5 flex items-center gap-1">
-            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-            {{ $course->instructor?->name ?? 'Giảng viên Fea' }}
+        <p class="mb-1.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+            {{ $course->instructor?->name ?? 'Giảng viên FEA' }}
         </p>
 
-        <!-- Star Rating -->
-        <div class="flex items-center gap-1 mb-4">
+        <div class="mb-1.5 flex items-center gap-1">
+            <span class="text-sm font-bold text-amber-600 dark:text-amber-400">{{ number_format((float) $course->rating_avg, 1) }}</span>
             @for($i = 1; $i <= 5; $i++)
-                <svg class="w-4 h-4 {{ $i <= round($course->rating_avg) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-700' }}" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="h-3.5 w-3.5 {{ $i <= round($course->rating_avg) ? 'fill-amber-500 text-amber-500' : 'text-slate-300 dark:text-slate-700' }}" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
             @endfor
-            <span class="text-xs text-slate-500 dark:text-slate-400 ml-1 font-semibold">({{ $course->rating_count }})</span>
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">({{ $course->rating_count }})</span>
         </div>
 
-        <!-- Price and Enrollments -->
-        <div class="mt-auto flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80">
+        <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">{{ $course->enrollment_count }} học viên • {{ $levelLabels[$course->level] ?? $course->level }}</p>
+
+        <div class="mt-auto">
             <div>
                 @if($price == 0)
                     <span class="text-base font-bold text-emerald-600 dark:text-emerald-400">Miễn phí</span>
                 @else
-                    <span class="text-base font-bold text-indigo-600 dark:text-indigo-400">{{ number_format($price, 0, ',', '.') }}đ</span>
+                    <span class="text-base font-bold text-slate-900 dark:text-white">{{ number_format($price, 0, ',', '.') }}đ</span>
                     @if($originalPrice)
-                        <span class="text-xs text-slate-400 line-through ml-1">{{ number_format($originalPrice, 0, ',', '.') }}đ</span>
+                        <span class="ml-1 text-sm text-slate-500 line-through dark:text-slate-400">{{ number_format($originalPrice, 0, ',', '.') }}đ</span>
                     @endif
                 @endif
             </div>
@@ -83,4 +82,4 @@
             Xem chi tiết
         </span>
     </div>
-</a >
+</a>
