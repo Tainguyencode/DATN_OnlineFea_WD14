@@ -53,6 +53,13 @@ class QuizController extends Controller
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
+        $quiz = $lesson->quiz()->with('questions.options')->first();
+        if (! $quiz || ! $this->quizHasCorrectAnswers($quiz)) {
+            return back()
+                ->withErrors(['quiz' => 'Moi cau hoi can co it nhat 1 dap an dung truoc khi luu quiz.'])
+                ->withInput();
+        }
+
         DB::transaction(function () use ($lesson, $validated, $request) {
             Quiz::updateOrCreate(
                 ['lesson_id' => $lesson->id],
@@ -150,6 +157,80 @@ class QuizController extends Controller
         });
 
         return back()->with('success', 'Da them dap an.');
+    }
+
+    public function updateAnswers(Request $request, QuizQuestion $question): RedirectResponse
+    {
+        $this->authorizeQuestion($question);
+        $question->loadMissing('options');
+
+        $validated = $request->validate([
+            'answers' => ['required', 'array'],
+            'answers.*.answer_text' => ['required', 'string', 'max:5000'],
+            'answers.*.sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'correct_answer' => ['nullable', 'integer'],
+            'correct_answers' => ['nullable', 'array'],
+            'correct_answers.*' => ['integer'],
+            'delete_answers' => ['nullable', 'array'],
+            'delete_answers.*' => ['integer'],
+        ]);
+
+        $answerIds = $question->options->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $deleteIds = collect($request->input('delete_answers', []))
+            ->map(fn ($id) => (int) $id)
+            ->intersect($answerIds)
+            ->values()
+            ->all();
+        $remainingIds = array_values(array_diff($answerIds, $deleteIds));
+
+        if ($remainingIds === []) {
+            return back()
+                ->withErrors(['answers' => 'Cau hoi can giu lai it nhat 1 dap an.'])
+                ->withInput();
+        }
+
+        $selectedCorrectIds = $question->type === QuizQuestion::TYPE_MULTIPLE
+            ? collect($request->input('correct_answers', []))->map(fn ($id) => (int) $id)
+            : collect([$request->input('correct_answer')])->map(fn ($id) => (int) $id);
+
+        $selectedCorrectIds = $selectedCorrectIds
+            ->intersect($remainingIds)
+            ->values()
+            ->all();
+
+        if ($selectedCorrectIds === []) {
+            return back()
+                ->withErrors(['answers' => 'Hay chon it nhat 1 dap an dung cho cau hoi nay.'])
+                ->withInput();
+        }
+
+        if ($question->type !== QuizQuestion::TYPE_MULTIPLE && count($selectedCorrectIds) !== 1) {
+            return back()
+                ->withErrors(['answers' => 'Cau hoi mot lua chon chi duoc co 1 dap an dung.'])
+                ->withInput();
+        }
+
+        DB::transaction(function () use ($question, $validated, $deleteIds, $remainingIds, $selectedCorrectIds) {
+            if ($deleteIds !== []) {
+                $question->options()->whereIn('id', $deleteIds)->delete();
+            }
+
+            foreach ($validated['answers'] as $answerId => $answerData) {
+                $answerId = (int) $answerId;
+
+                if (! in_array($answerId, $remainingIds, true)) {
+                    continue;
+                }
+
+                $question->options()->whereKey($answerId)->update([
+                    'option_text' => $answerData['answer_text'],
+                    'sort_order' => $answerData['sort_order'] ?? 0,
+                    'is_correct' => in_array($answerId, $selectedCorrectIds, true),
+                ]);
+            }
+        });
+
+        return back()->with('success', 'Da luu dap an cho cau hoi.');
     }
 
     public function updateAnswer(Request $request, QuizOption $answer): RedirectResponse
@@ -273,6 +354,19 @@ class QuizController extends Controller
         $question->options()
             ->where('id', '!=', $correctAnswer->id)
             ->update(['is_correct' => false]);
+    }
+
+    private function quizHasCorrectAnswers(Quiz $quiz): bool
+    {
+        $quiz->loadMissing('questions.options');
+
+        if ($quiz->questions->isEmpty()) {
+            return false;
+        }
+
+        return $quiz->questions->every(
+            fn (QuizQuestion $question) => $question->options->where('is_correct', true)->isNotEmpty()
+        );
     }
 
     private function questionTypes(): array
