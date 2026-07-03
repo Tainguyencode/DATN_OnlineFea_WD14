@@ -220,6 +220,12 @@
                                                     </a>
                                                 @endif
 
+                                                @if($canAccessLesson && $lesson->type === 'quiz')
+                                                    <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="rounded-lg border border-violet-200 px-3 py-2 font-bold text-violet-700 transition hover:bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:hover:bg-violet-500/10">
+                                                        Lam quiz
+                                                    </a>
+                                                @endif
+
                                                 @if($canAccessLesson && $lesson->document_file)
                                                     <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="rounded-lg border border-sky-200 px-3 py-2 font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-500/30 dark:text-sky-300 dark:hover:bg-sky-500/10">
                                                         Tài liệu

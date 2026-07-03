@@ -8,12 +8,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Quiz extends Model
 {
-    protected $fillable = ['lesson_id', 'title', 'pass_score', 'time_limit_minutes', 'questions'];
+    protected $fillable = [
+        'lesson_id',
+        'title',
+        'description',
+        'pass_score',
+        'time_limit_minutes',
+        'max_attempts',
+        'is_active',
+    ];
 
     protected function casts(): array
     {
         return [
-            'questions' => 'array',
+            'pass_score' => 'integer',
+            'time_limit_minutes' => 'integer',
+            'max_attempts' => 'integer',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -25,5 +36,10 @@ class Quiz extends Model
     public function attempts(): HasMany
     {
         return $this->hasMany(QuizAttempt::class);
+    }
+
+    public function questions(): HasMany
+    {
+        return $this->hasMany(QuizQuestion::class)->orderBy('sort_order')->orderBy('id');
     }
 }
