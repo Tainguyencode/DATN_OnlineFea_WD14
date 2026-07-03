@@ -185,6 +185,12 @@
                                 </div>
 
                                 <div class="flex shrink-0 flex-wrap gap-2">
+                                    @if($lesson->type === 'quiz')
+                                        <a href="{{ route('instructor.courses.lessons.quiz.show', [$course, $lesson]) }}"
+                                           class="inline-flex min-h-10 items-center justify-center rounded-lg border border-violet-200 px-4 py-2 text-sm font-bold text-violet-700 transition-colors duration-200 hover:bg-violet-50 cursor-pointer">
+                                            Quan ly cau hoi
+                                        </a>
+                                    @endif
                                     <details>
                                         <summary class="inline-flex min-h-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50">
                                             Sửa bài học

@@ -9,10 +9,12 @@ use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
+use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Web\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
+use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -25,6 +27,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/my-courses', [StudentCourseController::class, 'index'])->name('my-courses');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
+Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
+Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
 Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');
 
 Route::middleware('guest')->group(function () {
@@ -69,6 +73,14 @@ Route::middleware(['auth', 'role:instructor'])->prefix('instructor')->name('inst
     Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
     Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
     Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
+    Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
+    Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
+    Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
+    Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
+    Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
+    Route::put('/quiz-answers/{answer}', [InstructorQuizController::class, 'updateAnswer'])->name('quiz-answers.update');
+    Route::delete('/quiz-answers/{answer}', [InstructorQuizController::class, 'destroyAnswer'])->name('quiz-answers.destroy');
     Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
     Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
     Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
@@ -85,10 +97,15 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('/users', [UserController::class, 'index'])->name('users');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/courses/pending', [ManageController::class, 'pendingCourses'])->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
+    Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
     Route::post('/courses/{course}/reject', [ManageController::class, 'reject'])->name('courses.reject');
+    Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
+    Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
+    Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');

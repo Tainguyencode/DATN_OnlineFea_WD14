@@ -53,7 +53,7 @@
                     Quay lại
                 </a>
                 @if($course->status === 'pending')
-                    <form method="POST" action="{{ route('admin.courses.approve', $course) }}">
+                    <form method="POST" action="{{ route('admin.courses.approve', $course) }}" onsubmit="return confirm('Duyệt khóa học này?')">
                         @csrf
                         <button type="submit" class="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 cursor-pointer">
                             Duyệt khóa học
@@ -129,10 +129,10 @@
     @if($course->status === 'pending')
         <section class="rounded-lg border border-rose-200 bg-rose-50 p-5 shadow-sm sm:p-6">
             <h3 class="text-lg font-bold text-rose-900">Từ chối khóa học</h3>
-            <form method="POST" action="{{ route('admin.courses.reject', $course) }}" class="mt-4 space-y-3">
+            <form method="POST" action="{{ route('admin.courses.reject', $course) }}" class="mt-4 space-y-3" onsubmit="return confirm('Từ chối khóa học này?')">
                 @csrf
                 <label for="review-reason" class="block text-sm font-bold text-rose-900">Lý do từ chối</label>
-                <textarea id="review-reason" name="reason" rows="4" required maxlength="1000"
+                <textarea id="review-reason" name="reject_reason" rows="4" required maxlength="1000"
                           class="w-full resize-none rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm outline-none focus:border-rose-500 focus-visible:ring-2 focus-visible:ring-rose-500/20"
                           placeholder="Nêu rõ phần cần giảng viên bổ sung hoặc chỉnh sửa..."></textarea>
                 <button type="submit" class="inline-flex min-h-10 items-center justify-center rounded-lg bg-rose-600 px-5 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-rose-700 cursor-pointer">
