@@ -161,7 +161,7 @@
                                 <details>
                                     <summary
                                         class="inline-flex min-h-10 cursor-pointer list-none items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                                        Sua cau hoi
+                                        Sửa câu hỏi
                                     </summary>
                                     <form method="POST"
                                         action="{{ route('instructor.quiz-questions.update', $question) }}"
@@ -218,7 +218,7 @@
                                     @method('DELETE')
                                     <button type="submit"
                                         class="inline-flex min-h-10 items-center rounded-lg border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50">
-                                        Xoa
+                                        Xóa
                                     </button>
                                 </form>
                             </div>
@@ -249,23 +249,23 @@
                                                 @checked($answer->is_correct)
                                                 class="border-slate-300 text-emerald-600 focus:ring-emerald-500">
                                         @endif
-                                        Dap an dung
+                                        Đáp án đúng
                                     </label>
                                     @if ($isTrueFalse)
-                                        <span class="text-xs font-semibold text-slate-500">Co dinh</span>
+                                        <span class="text-xs font-semibold text-slate-500">Có định</span>
                                     @else
                                         <label class="inline-flex items-center gap-2 text-sm font-bold text-rose-700">
                                             <input type="checkbox" name="delete_answers[]"
                                                 value="{{ $answer->id }}"
                                                 class="rounded border-rose-300 text-rose-600 focus:ring-rose-500">
-                                            Xoa
+                                            Xóa
                                         </label>
                                     @endif
                                 </div>
                             @empty
                                 <div
                                     class="rounded-lg border border-dashed border-slate-300 p-4 text-sm font-semibold text-slate-500">
-                                    Cau hoi nay chua co dap an.
+                                    Câu hỏi này chưa có đáp án.
                                 </div>
                             @endforelse
 
@@ -307,7 +307,7 @@
 
             <button type="button" data-open-question-panel
                 class="fixed bottom-6 right-6 z-40 inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-bold text-white shadow-2xl shadow-slate-900/25 transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
-                + Them cau hoi
+                Thêm câu hỏi
             </button>
 
             <div data-question-panel class="fixed inset-0 z-50 hidden">
