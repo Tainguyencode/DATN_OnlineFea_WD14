@@ -1,54 +1,82 @@
 @extends('layouts.app')
 
-@section('title', 'Đăng nhập - EduPlatform')
+@section('title', 'Đăng nhập - Website học online FEA')
 
 @section('content')
-<div class="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4">
-    <div class="w-full max-w-md">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-slate-900">Đăng nhập</h1>
-            <p class="text-slate-500 mt-2">Chào mừng trở lại! Đăng nhập để tiếp tục học.</p>
-        </div>
+<x-auth.layout>
+    <x-auth.card x-data="{ showPassword: false, loading: false }">
+        <x-auth.header
+            title="Đăng nhập"
+            subtitle="Đăng nhập để tiếp tục hành trình học tập của bạn."
+        />
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-            @if($errors->any())
-                <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4 mb-6">
-                    @foreach($errors->all() as $error)
-                        <p>{{ $error }}</p>
-                    @endforeach
-                </div>
-            @endif
+        <x-auth.errors />
 
-            <form method="POST" action="{{ route('login') }}" class="space-y-5">
-                @csrf
-                <div>
-                    <label for="email" class="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-                    <input type="email" id="email" name="email" value="{{ old('email') }}" required autofocus
-                           class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
-                           placeholder="email@example.com">
-                </div>
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1.5">Mật khẩu</label>
-                    <input type="password" id="password" name="password" required
-                           class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
-                           placeholder="••••••••">
-                </div>
-                <div class="flex items-center justify-between">
-                    <label class="flex items-center gap-2 text-sm text-slate-600">
-                        <input type="checkbox" name="remember" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                        Ghi nhớ đăng nhập
-                    </label>
-                </div>
-                <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition">
-                    Đăng nhập
-                </button>
-            </form>
+        <x-auth.social-buttons />
 
-            <div class="mt-6 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
-                Chưa có tài khoản?
-                <a href="{{ route('register') }}" class="text-indigo-600 font-medium hover:underline">Đăng ký ngay</a>
+        <x-auth.divider />
+
+        <form method="POST" action="{{ route('login') }}" class="space-y-4" x-on:submit="loading = true">
+            @csrf
+            <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
+
+            <x-auth.input
+                label="Email hoặc username"
+                name="identifier"
+                :value="old('identifier')"
+                placeholder="you@example.com hoặc username"
+                required
+                autofocus
+            />
+
+            <x-auth.input
+                label="Mật khẩu"
+                name="password"
+                x-bind:type="showPassword ? 'text' : 'password'"
+                placeholder="Nhập mật khẩu"
+                required
+                inputClass="pr-14"
+            >
+                <x-slot:labelAction>
+                    <a href="{{ route('password.request') }}" class="text-sm font-semibold text-[#0056D2] transition duration-200 hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">
+                        Quên mật khẩu?
+                    </a>
+                </x-slot:labelAction>
+                <x-slot:trailing>
+                    <x-auth.password-toggle />
+                </x-slot:trailing>
+            </x-auth.input>
+
+            <x-auth.captcha :question="$captcha['question']" />
+
+            <label class="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+                <input type="checkbox" name="remember" value="1" class="rounded border-slate-300 text-[#0056D2] transition duration-200 focus:ring-[#0056D2] dark:border-slate-700">
+                Ghi nhớ đăng nhập
+            </label>
+
+            <x-auth.button x-bind:disabled="loading" loading-text="Đang xác thực...">
+                Đăng nhập
+            </x-auth.button>
+        </form>
+
+        @if(! app()->environment('production'))
+            <div class="mt-5 grid grid-cols-3 gap-2">
+                @foreach(['student' => 'Student', 'instructor' => 'Instructor', 'admin' => 'Admin'] as $role => $label)
+                    <form method="POST" action="{{ route('quick-login', $role) }}">
+                        @csrf
+                        <button type="submit" class="auth-social-btn w-full text-xs">
+                            {{ $label }}
+                        </button>
+                    </form>
+                @endforeach
             </div>
-        </div>
-    </div>
-</div>
+        @endif
+
+        <x-auth.footer-link
+            text="Chưa có tài khoản?"
+            link-text="Đăng ký ngay"
+            :href="route('register')"
+        />
+    </x-auth.card>
+</x-auth.layout>
 @endsection
