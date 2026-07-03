@@ -179,6 +179,7 @@
                                     @php
                                         $canAccessLesson = $canAccessFullCourse || $lesson->is_preview;
                                         $duration = $formatDuration($lesson->duration ?? $lesson->duration_seconds);
+                                        $hasVideoSource = $lesson->type === 'video' && ($lesson->video_path || $lesson->video_url);
                                     @endphp
                                     <div class="px-4 py-4">
                                         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -204,7 +205,7 @@
                                                 @if($canAccessLesson && $lesson->content)
                                                     <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $lesson->content }}</p>
                                                 @elseif(! $canAccessLesson)
-                                                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Đăng ký khóa học để xem toàn bộ nội dung bài học này.</p>
+                                                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Bạn cần đăng ký khóa học để xem bài học này.</p>
                                                 @endif
                                             </div>
 
@@ -213,8 +214,8 @@
                                                     <span class="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{{ $duration }}</span>
                                                 @endif
 
-                                                @if($canAccessLesson && $lesson->video_url)
-                                                    <a href="{{ $lesson->video_url }}" target="_blank" class="rounded-lg border border-indigo-200 px-3 py-2 font-bold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-500/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10">
+                                                @if($canAccessLesson && $hasVideoSource)
+                                                    <a href="{{ route('courses.lessons.show', [$course, $lesson]) }}" class="rounded-lg border border-indigo-200 px-3 py-2 font-bold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-500/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10">
                                                         Xem video
                                                     </a>
                                                 @endif
