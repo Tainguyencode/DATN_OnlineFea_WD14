@@ -73,6 +73,17 @@
                     @endif
                 @endif
 
+                @if($lesson->type === 'quiz')
+                    <div class="p-6 sm:p-8">
+                        <div class="rounded-xl border border-violet-200 bg-violet-50 p-5 text-sm text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100">
+                            <div class="font-extrabold">Quiz</div>
+                            <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="mt-3 inline-flex h-11 items-center rounded-xl bg-violet-600 px-5 text-sm font-extrabold text-white transition hover:bg-violet-700">
+                                Lam quiz
+                            </a>
+                        </div>
+                    </div>
+                @endif
+
                 @if($lesson->content)
                     <div class="p-6 sm:p-8">
                         <h2 class="text-lg font-extrabold text-slate-950 dark:text-white">Nội dung bài học</h2>

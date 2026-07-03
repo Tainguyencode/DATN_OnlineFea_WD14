@@ -12,14 +12,14 @@
     $gradient = $colors[$color] ?? $colors['indigo'];
 @endphp
 
-<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-    <div class="flex items-start justify-between">
-        <div>
-            <p class="text-sm text-slate-500 font-medium">{{ $label }}</p>
-            <p class="text-3xl font-bold text-slate-900 mt-2">{{ $value }}</p>
+<div class="bg-white rounded-2xl border border-slate-200/70 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition-shadow duration-200 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+    <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+            <p class="text-sm text-slate-500 font-medium truncate">{{ $label }}</p>
+            <p class="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 tracking-normal">{{ $value }}</p>
         </div>
         @if($icon)
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br {{ $gradient }} flex items-center justify-center text-white shadow-lg">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-br {{ $gradient }} flex shrink-0 items-center justify-center text-white shadow-lg shadow-slate-900/10">
                 {!! $icon !!}
             </div>
         @endif

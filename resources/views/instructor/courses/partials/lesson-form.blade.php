@@ -33,6 +33,7 @@
                         <option value="{{ $value }}" @selected($selectedType === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
+                <span class="mt-1 block text-xs font-medium text-violet-600">Chọn Quiz rồi bấm lưu bài học, hệ thống sẽ mở trang thêm câu hỏi.</span>
             </label>
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Thời lượng</span>
