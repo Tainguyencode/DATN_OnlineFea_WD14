@@ -20,6 +20,16 @@ class QuizController extends Controller
     {
         $this->authorizeLesson($course, $lesson);
 
+        if ($lesson->type === 'quiz' && ! $lesson->quiz()->exists()) {
+            $lesson->quiz()->create([
+                'title' => $lesson->title,
+                'pass_score' => 70,
+                'time_limit_minutes' => null,
+                'max_attempts' => null,
+                'is_active' => true,
+            ]);
+        }
+
         $lesson->loadMissing(['quiz.questions.options']);
 
         return view('instructor.quizzes.show', [
