@@ -18,7 +18,7 @@
                 <tbody class="divide-y divide-slate-100">
                     @foreach($orders as $order)
                         <tr class="hover:bg-slate-50">
-                            <td class="px-6 py-4 font-mono text-indigo-600">{{ $order->order_code }}</td>
+                            <td class="px-6 py-4 font-mono text-[#0056D2]">{{ $order->order_code }}</td>
                             <td class="px-6 py-4">{{ $order->items->pluck('course.title')->join(', ') }}</td>
                             <td class="px-6 py-4 font-semibold">{{ number_format($order->total_amount, 0, ',', '.') }}đ</td>
                             <td class="px-6 py-4">
