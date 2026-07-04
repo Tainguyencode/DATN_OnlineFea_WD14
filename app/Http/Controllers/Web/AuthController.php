@@ -149,8 +149,12 @@ class AuthController extends Controller
             : back()->withErrors(['email' => __($status)]);
     }
 
-    public function verificationNotice(): View
+    public function verificationNotice(): View|RedirectResponse
     {
+        if (request()->user()?->hasVerifiedEmail()) {
+            return redirect()->intended(request()->user()->dashboardUrl());
+        }
+
         return view('auth.verify-email');
     }
 
