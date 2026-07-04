@@ -106,19 +106,35 @@
                             </a>
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn là giảng viên sở hữu khóa học này.</p>
                         @elseif($isEnrolled)
-                            <a href="{{ route('my-courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
+                            <a href="{{ route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
                                 Vào học
                             </a>
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
                         @elseif(auth()->check())
                             @if(auth()->user()->isStudent())
-                                <form method="POST" action="{{ route('courses.enroll', $course) }}">
-                                    @csrf
-                                    <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
-                                        Đăng ký học
-                                    </button>
-                                </form>
-                                <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bài học không preview sẽ mở sau khi bạn đăng ký.</p>
+                                @if($isFree)
+                                    <form method="POST" action="{{ route('courses.enroll', $course) }}">
+                                        @csrf
+                                        <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
+                                            Đăng ký học miễn phí
+                                        </button>
+                                    </form>
+                                    <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bài học không preview sẽ mở sau khi bạn đăng ký.</p>
+                                @else
+                                    <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                                        @csrf
+                                        <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
+                                            Thêm vào giỏ hàng
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}" class="mt-3">
+                                        @csrf
+                                        <button type="submit" class="flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
+                                            Yêu thích
+                                        </button>
+                                    </form>
+                                    <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Thanh toán trong giỏ hàng để mở toàn bộ khóa học.</p>
+                                @endif
                             @else
                                 <a href="{{ auth()->user()->dashboardUrl() }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700">
                                     Vào Dashboard
@@ -270,6 +286,20 @@
                     </div>
                 </article>
             @endif
+
+            <section>
+                <h2 class="mb-6 text-2xl font-bold text-slate-900 dark:text-white">Hỏi đáp khóa học</h2>
+                <div class="space-y-3">
+                    @foreach(['Khóa học này phù hợp với ai?', 'Tôi có thể học thử trước khi đăng ký không?', 'Sau khi hoàn thành có chứng chỉ không?'] as $question)
+                        <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                            <summary class="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-slate-900 dark:text-white">{{ $question }}</summary>
+                            <div class="px-5 pb-4 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                                Thông tin chi tiết được hiển thị theo nội dung khóa học và chính sách học tập hiện có trên hệ thống.
+                            </div>
+                        </details>
+                    @endforeach
+                </div>
+            </section>
         </div>
 
         <aside class="space-y-6">
@@ -283,6 +313,59 @@
                         <div class="font-bold text-slate-950 dark:text-white">{{ $course->instructor?->name ?? 'Fea Instructor' }}</div>
                         <div class="text-sm text-slate-500 dark:text-slate-400">Instructor</div>
                     </div>
+
+                    @auth
+                        @if(auth()->user()->isStudent())
+                            <div class="mb-6 space-y-3">
+                                <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                                    @csrf
+                                    <button type="submit" class="ui-button-primary w-full">
+                                        Thêm vào giỏ hàng
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}">
+                                    @csrf
+                                    <button type="submit" class="ui-button-secondary flex w-full items-center justify-center gap-2">
+                                        <svg class="h-5 w-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 0 0 0 6.364L12 20.364l7.682-7.682a4.5 4.5 0 0 0-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 0 0-6.364 0Z"></path></svg>
+                                        Yêu thích
+                                    </button>
+                                </form>
+                            </div>
+                        @else
+                            <a href="{{ auth()->user()->dashboardUrl() }}" class="ui-button-primary mb-6 w-full">
+                                Vào Dashboard
+                            </a>
+                        @endif
+                    @else
+                        <div class="mb-6 space-y-3">
+                            <a href="{{ route('register') }}" class="ui-button-primary w-full">
+                                Đăng ký để học ngay
+                            </a>
+                            <p class="text-center text-sm text-slate-500 dark:text-slate-400">Đã có tài khoản? <a href="{{ route('login') }}" class="font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">Đăng nhập</a></p>
+                        </div>
+                    @endauth
+
+                    <hr class="mb-5 border-slate-200 dark:border-slate-800">
+
+                    <h4 class="mb-3 text-sm font-bold text-slate-900 dark:text-white">Khóa học này bao gồm:</h4>
+                    <ul class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+                        <li class="flex items-center gap-3">
+                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z"></path></svg>
+                            {{ $totalLessons }} bài giảng chất lượng cao
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14.752 11.168-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z"></path></svg>
+                            {{ $previewLessons }} bài học thử miễn phí
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 12 2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138Z"></path></svg>
+                            Cấp chứng chỉ hoàn thành
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path></svg>
+                            Sở hữu khóa học trọn đời
+                        </li>
+                    </ul>
                 </div>
                 @if($course->instructor?->bio)
                     <p class="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $course->instructor->bio }}</p>

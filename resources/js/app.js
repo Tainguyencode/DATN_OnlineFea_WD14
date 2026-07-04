@@ -1,3 +1,12 @@
+import './bootstrap';
+import Alpine from 'alpinejs';
+import Chart from 'chart.js/auto';
+
+window.Alpine = Alpine;
+window.Chart = Chart;
+
+Alpine.start();
+
 // Initialize Theme on Load
 (function () {
     const savedTheme = localStorage.getItem('theme');
@@ -108,16 +117,16 @@ function escapeHtml(unsafe) {
 function getAiResponse(msg) {
     const text = msg.toLowerCase();
     if (text.includes('lộ trình') || text.includes('roadmap') || text.includes('học')) {
-        return 'Để học tập hiệu quả trên **Fea**, bạn nên bắt đầu từ các danh mục cơ bản như **Lập trình Web** với khóa học *Laravel từ Zero đến Hero*. Sau đó nâng cao lên *React.js Masterclass* và *Data Science*.';
+        return 'Để học tập hiệu quả trên **Website học online FEA**, bạn nên bắt đầu từ các danh mục cơ bản như **Lập trình Web** với khóa học *Laravel từ Zero đến Hero*. Sau đó nâng cao lên *React.js Masterclass* và *Data Science*.';
     }
     if (text.includes('đồ án') || text.includes('datn') || text.includes('tốt nghiệp')) {
-        return 'Chào bạn! Hệ thống Fea này hỗ trợ đầy đủ quản lý đề tài đồ án tốt nghiệp, tương tác giữa Giảng viên hướng dẫn và Sinh viên, báo cáo tiến độ trực tuyến, và tích hợp AI đánh giá tiến độ tự động.';
+        return 'Chào bạn! Website học online FEA hỗ trợ đầy đủ quản lý học trực tuyến, tương tác giữa giảng viên và học viên, báo cáo tiến độ trực tuyến, và tích hợp AI hỗ trợ học tập.';
     }
     if (text.includes('chào') || text.includes('hello') || text.includes('hi')) {
-        return 'Xin chào! Mình là **Fea AI Assistant**. Mình có thể giúp gì cho quá trình học tập hoặc làm đồ án tốt nghiệp của bạn hôm nay?';
+        return 'Xin chào! Mình là **FEA AI Assistant**. Mình có thể giúp gì cho quá trình học tập online của bạn hôm nay?';
     }
     if (text.includes('giảng viên') || text.includes('admin') || text.includes('giáo viên')) {
-        return 'Giảng viên trên Fea có quyền tạo chương mục, tải tài liệu học tập, soạn bài tập, chấm điểm và trao đổi trực tiếp với sinh viên. Quản trị viên (Admin) sẽ phê duyệt các khóa học chất lượng trước khi phát hành.';
+        return 'Giảng viên trên Website học online FEA có quyền tạo chương mục, tải tài liệu học tập, soạn bài tập, chấm điểm và trao đổi trực tiếp với học viên. Quản trị viên sẽ phê duyệt các khóa học chất lượng trước khi phát hành.';
     }
     return 'Cảm ơn bạn đã trò chuyện! Mình ghi nhận câu hỏi. Bạn có thể tham khảo lộ trình học lập trình Web, quản lý đồ án tốt nghiệp, hoặc liên hệ giảng viên hướng dẫn để được giải đáp chuyên sâu.';
 }

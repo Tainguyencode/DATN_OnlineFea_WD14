@@ -56,6 +56,9 @@
                             <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style="width: {{ min(100, $progress) }}%"></div>
                         </div>
                     </div>
+                    @if($enrollment->completed_at)
+                        <span class="ui-badge-success mt-3">Hoàn thành</span>
+                    @endif
 
                     <a href="{{ route('courses.show', $course->slug) }}" class="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition-colors duration-200 hover:bg-indigo-600 cursor-pointer">
                         Tiếp tục học
