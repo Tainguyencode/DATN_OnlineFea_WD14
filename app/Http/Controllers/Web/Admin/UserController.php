@@ -89,6 +89,74 @@ class UserController extends Controller
         return view('admin.users.index', compact('users', 'stats', 'registrationGrowth', 'loginGrowth'));
     }
 
+    public function show(int $user): View
+    {
+        Gate::authorize('users.view');
+
+        $user = User::withTrashed()
+            ->with('roles.permissions')
+            ->findOrFail($user);
+
+        $isOnline = DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->where('last_activity', '>=', now()->subMinutes(5)->timestamp)
+            ->exists();
+
+        $stats = [
+            'teaching_courses' => $user->courses()->count(),
+            'enrollments' => $user->enrollments()->count(),
+            'active_enrollments' => $user->enrollments()->where('status', 'active')->count(),
+            'orders' => $user->orders()->count(),
+            'paid_revenue' => (float) $user->orders()->where('status', 'paid')->sum('total_amount'),
+            'certificates' => $user->certificates()->count(),
+            'reviews' => $user->reviews()->count(),
+            'quiz_attempts' => $user->quizAttempts()->count(),
+        ];
+
+        $recentEnrollments = $user->enrollments()
+            ->with('course:id,title,slug,status')
+            ->orderByDesc('enrolled_at')
+            ->orderByDesc('created_at')
+            ->limit(6)
+            ->get();
+
+        $recentTeachingCourses = $user->courses()
+            ->select(['id', 'instructor_id', 'title', 'slug', 'status', 'price', 'sale_price', 'discount_price', 'created_at'])
+            ->withCount([
+                'enrollments as active_enrollments_count' => fn ($query) => $query->where('status', 'active'),
+            ])
+            ->orderByDesc('created_at')
+            ->limit(6)
+            ->get();
+
+        $recentOrders = $user->orders()
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get(['id', 'order_code', 'status', 'total_amount', 'payment_method', 'created_at']);
+
+        $recentCertificates = $user->certificates()
+            ->with('course:id,title,slug')
+            ->orderByDesc('issued_at')
+            ->limit(5)
+            ->get(['id', 'user_id', 'course_id', 'certificate_code', 'issued_at']);
+
+        $recentActivityLogs = $user->activityLogs()
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get(['id', 'action', 'description', 'ip_address', 'created_at']);
+
+        return view('admin.users.show', compact(
+            'user',
+            'isOnline',
+            'stats',
+            'recentEnrollments',
+            'recentTeachingCourses',
+            'recentOrders',
+            'recentCertificates',
+            'recentActivityLogs'
+        ));
+    }
+
     public function store(Request $request): RedirectResponse
     {
         Gate::authorize('users.create');
