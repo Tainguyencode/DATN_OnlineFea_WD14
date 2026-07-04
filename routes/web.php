@@ -29,6 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/my-courses', [StudentCourseController::class, 'index'])->name('my-courses');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
+Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
 Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
 Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');

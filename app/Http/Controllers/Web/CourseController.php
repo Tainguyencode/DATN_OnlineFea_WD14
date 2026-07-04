@@ -8,6 +8,8 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Review;
+use App\Services\LearningProgressService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -137,9 +139,16 @@ class CourseController extends Controller
         $course->load(['instructor:id,name,avatar,bio', 'category:id,name,slug']);
         $lesson->loadMissing(['section:id,course_id,title,sort_order', 'chapter:id,course_id,title,sort_order']);
 
-        $isEnrolled = $this->isEnrolled($course);
+        $enrollment = auth()->check()
+            ? Enrollment::where('user_id', auth()->id())
+                ->where('course_id', $course->id)
+                ->where('status', 'active')
+                ->first()
+            : null;
+        $isEnrolled = (bool) $enrollment;
         $canAccessLesson = $canBypassCourseVisibility || $isEnrolled || $lesson->is_preview;
         $videoSource = null;
+        $lessonProgress = null;
 
         if ($canAccessLesson && $lesson->type === 'video') {
             $videoSource = $lesson->video_path
@@ -147,13 +156,63 @@ class CourseController extends Controller
                 : $lesson->video_url;
         }
 
+        if (auth()->check()) {
+            $lessonProgress = DB::table('lesson_progress')
+                ->where('user_id', auth()->id())
+                ->where('lesson_id', $lesson->id)
+                ->first();
+        }
+
         return view('courses.lesson', compact(
             'course',
             'lesson',
+            'enrollment',
+            'lessonProgress',
             'isEnrolled',
             'canAccessLesson',
             'videoSource'
         ));
+    }
+
+    public function updateLessonProgress(
+        Request $request,
+        Course $course,
+        Lesson $lesson,
+        LearningProgressService $progressService
+    ): JsonResponse {
+        abort_unless($request->user()?->isStudent(), 403);
+        abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
+        abort_unless($this->isPublished($course), 404);
+
+        $enrollmentExists = Enrollment::where('user_id', $request->user()->id)
+            ->where('course_id', $course->id)
+            ->where('status', 'active')
+            ->exists();
+
+        abort_unless($enrollmentExists, 403);
+
+        $validated = $request->validate([
+            'watched_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
+            'completed' => ['nullable', 'boolean'],
+        ]);
+
+        $watchedSeconds = (int) ($validated['watched_seconds'] ?? 0);
+        $durationSeconds = $this->lessonDurationSeconds($lesson);
+        $completed = $request->boolean('completed');
+
+        if ($lesson->type === 'video' && $durationSeconds > 0) {
+            $completed = $completed || $watchedSeconds >= (int) ceil($durationSeconds * 0.9);
+        }
+
+        $progress = $progressService->recordLessonProgress(
+            $request->user()->id,
+            $course,
+            $lesson,
+            $watchedSeconds,
+            $completed
+        );
+
+        return response()->json($progress);
     }
 
     public function enroll(Course $course): RedirectResponse
@@ -243,5 +302,12 @@ class CourseController extends Controller
         }
 
         return $lesson->chapter_id && $lesson->chapter()->where('course_id', $course->id)->exists();
+    }
+
+    private function lessonDurationSeconds(Lesson $lesson): int
+    {
+        $duration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+
+        return max($duration, 0);
     }
 }
