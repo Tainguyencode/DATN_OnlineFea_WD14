@@ -7,7 +7,12 @@ use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Models\Cart;
+use App\Models\Certificate;
+use App\Models\Enrollment;
+use App\Models\Order;
 use App\Models\User;
+use App\Models\Wishlist;
 use App\Services\AuthService;
 use App\Services\CaptchaService;
 use App\Services\TwoFactorService;
@@ -149,10 +154,16 @@ class AuthController extends Controller
             : back()->withErrors(['email' => __($status)]);
     }
 
-    public function verificationNotice(): View|RedirectResponse
+    public function verificationNotice(Request $request): View|RedirectResponse
     {
-        if (request()->user()?->hasVerifiedEmail()) {
-            return redirect()->intended(request()->user()->dashboardUrl());
+        $user = $request->user();
+
+        if ($user?->isStudent()) {
+            return view('auth.verify-email', $this->studentHubData($user));
+        }
+
+        if ($user?->hasVerifiedEmail()) {
+            return redirect()->intended($user->dashboardUrl());
         }
 
         return view('auth.verify-email');
@@ -331,5 +342,73 @@ class AuthController extends Controller
         }
 
         return $username;
+    }
+
+    private function studentHubData(User $user): array
+    {
+        $activeEnrollments = Enrollment::where('user_id', $user->id)
+            ->where('status', 'active');
+
+        $enrollments = (clone $activeEnrollments)
+            ->with(['course.instructor:id,name', 'course.category:id,name'])
+            ->orderByDesc('updated_at')
+            ->limit(4)
+            ->get();
+
+        $courseEnrollments = (clone $activeEnrollments)
+            ->with(['course.instructor:id,name,avatar', 'course.category:id,name'])
+            ->orderByDesc('enrolled_at')
+            ->orderByDesc('created_at')
+            ->limit(9)
+            ->get();
+
+        $cart = Cart::firstOrCreate(['user_id' => $user->id])
+            ->load(['items.course.instructor:id,name']);
+
+        $cartTotal = $cart->items->sum(
+            fn ($item) => (float) ($item->course->discount_price ?? $item->course->sale_price ?? $item->course->price ?? 0)
+        );
+
+        $wishlistItems = Wishlist::where('user_id', $user->id)
+            ->with(['course.instructor:id,name', 'course.category:id,name'])
+            ->orderByDesc('created_at')
+            ->limit(6)
+            ->get();
+
+        $certificates = Certificate::where('user_id', $user->id)
+            ->with('course:id,title,slug,thumbnail')
+            ->orderByDesc('issued_at')
+            ->limit(6)
+            ->get();
+
+        $orders = Order::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get();
+
+        $stats = [
+            'enrolled' => (clone $activeEnrollments)->count(),
+            'in_progress' => (clone $activeEnrollments)->where('progress_percent', '<', 100)->whereNull('completed_at')->count(),
+            'completed' => (clone $activeEnrollments)->whereNotNull('completed_at')->count(),
+            'certificates' => Certificate::where('user_id', $user->id)->count(),
+            'cart_items' => $cart->items->count(),
+            'wishlist' => Wishlist::where('user_id', $user->id)->count(),
+            'orders' => Order::where('user_id', $user->id)->count(),
+        ];
+
+        return [
+            'studentHub' => true,
+            'emailVerified' => $user->hasVerifiedEmail(),
+            'user' => $user,
+            'enrollments' => $enrollments,
+            'courseEnrollments' => $courseEnrollments,
+            'stats' => $stats,
+            'avgProgress' => (clone $activeEnrollments)->avg('progress_percent') ?? 0,
+            'cart' => $cart,
+            'cartTotal' => $cartTotal,
+            'wishlistItems' => $wishlistItems,
+            'certificates' => $certificates,
+            'orders' => $orders,
+        ];
     }
 }
