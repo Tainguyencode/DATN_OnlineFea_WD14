@@ -137,6 +137,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/users/export/csv', [UserController::class, 'exportCsv'])->name('users.export.csv');
     Route::get('/users/export/pdf', [UserController::class, 'exportPdf'])->name('users.export.pdf');
     Route::post('/users/import', [UserController::class, 'import'])->name('users.import');
+    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
