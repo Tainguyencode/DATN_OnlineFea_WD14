@@ -13,8 +13,6 @@ use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurric
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Student\CartController;
-use App\Http\Controllers\Web\Student\CourseController as StudentCourseController;
-use App\Http\Controllers\Web\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use Illuminate\Support\Facades\Route;
@@ -26,7 +24,7 @@ Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
 Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
-    Route::get('/my-courses', [StudentCourseController::class, 'index'])->name('my-courses');
+    Route::get('/my-courses', fn () => redirect(route('verification.notice').'#courses'))->name('my-courses');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
@@ -81,17 +79,17 @@ Route::get('/dashboard', function () {
 
 // ─── HỌC VIÊN ───
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
-    Route::get('/dashboard', [StudentDashboardController::class, 'index'])->name('dashboard');
-    Route::get('/courses', [StudentCourseController::class, 'index'])->name('courses');
-    Route::get('/cart', [CartController::class, 'index'])->name('cart');
+    Route::get('/dashboard', fn () => redirect(route('verification.notice').'#overview'))->name('dashboard');
+    Route::get('/courses', fn () => redirect(route('verification.notice').'#courses'))->name('courses');
+    Route::get('/cart', fn () => redirect(route('verification.notice').'#cart'))->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
-    Route::get('/wishlist', [StudentMiscController::class, 'wishlist'])->name('wishlist');
+    Route::get('/wishlist', fn () => redirect(route('verification.notice').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
-    Route::get('/certificates', [StudentMiscController::class, 'certificates'])->name('certificates');
-    Route::get('/orders', [StudentMiscController::class, 'orders'])->name('orders');
-    Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::get('/certificates', fn () => redirect(route('verification.notice').'#certificates'))->name('certificates');
+    Route::get('/orders', fn () => redirect(route('verification.notice').'#orders'))->name('orders');
+    Route::get('/profile', fn () => redirect(route('verification.notice').'#profile'))->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
