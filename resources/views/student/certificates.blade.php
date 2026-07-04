@@ -7,7 +7,7 @@
 @else
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         @foreach($certificates as $cert)
-            <div class="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-6 relative overflow-hidden">
+            <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-900/60 rounded-xl p-6 relative overflow-hidden">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-amber-200/30 rounded-full -translate-y-1/2 translate-x-1/2"></div>
                 <div class="relative">
                     <div class="text-amber-600 text-sm font-bold uppercase tracking-wider mb-2">Chứng chỉ hoàn thành</div>
