@@ -25,24 +25,14 @@
                     <span class="hidden sm:inline">FEA Learning</span>
                 </a>
 
-<<<<<<< HEAD
-                <!-- Nav Links -->
-                <div class="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600 dark:text-slate-400">
-                    <a href="{{ route('courses.index') }}" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Khóa học</a>
-                    <a href="{{ route('home') }}#categories" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Danh mục</a>
-                    <a href="{{ route('home') }}#paths" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Lộ trình</a>
-                    <a href="{{ route('home') }}#faq" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">FAQ</a>
-                </div>
-=======
                 <nav class="hidden items-center gap-5 text-sm font-semibold text-slate-700 dark:text-slate-300 lg:flex">
                     <a href="{{ route('home') }}#categories" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khám phá</a>
-                    <a href="{{ route('home') }}#courses" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khóa học</a>
+                    <a href="{{ route('courses.index') }}" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khóa học</a>
                     <a href="{{ route('home') }}#paths" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Lộ trình</a>
                     <a href="{{ route('home') }}#instructors" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Giảng viên</a>
                     <a href="{{ route('home') }}#business" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Doanh nghiệp</a>
                     <a href="{{ route('home') }}#faq" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">FAQ</a>
                 </nav>
->>>>>>> origin/TuanTu_Dev
 
                 <form method="GET" action="{{ route('home') }}" class="hidden min-w-0 flex-1 items-center lg:flex">
                     <label class="relative w-full">
@@ -103,7 +93,7 @@
             </div>
             <nav class="flex flex-col gap-1 p-5 text-base font-semibold text-slate-700 dark:text-slate-300">
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khám phá</a>
-                <a href="{{ route('home') }}#courses" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
+                <a href="{{ route('courses.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Danh mục</a>
                 <a href="{{ route('home') }}#paths" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Lộ trình</a>
                 <a href="{{ route('home') }}#instructors" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>
@@ -149,19 +139,11 @@
                     <p class="leading-6 text-slate-400">Nền tảng học trực tuyến giúp học viên, giảng viên và nhà quản trị vận hành khóa học chuyên nghiệp.</p>
                 </div>
                 <div>
-<<<<<<< HEAD
-                    <h4 class="text-white font-bold mb-4">Liên kết</h4>
-                    <ul class="space-y-2.5 text-sm">
-                        <li><a href="{{ route('courses.index') }}" class="hover:text-white transition">Khóa học</a></li>
-                        <li><a href="{{ route('home') }}#faq" class="hover:text-white transition">Câu hỏi thường gặp</a></li>
-                        <li><a href="{{ route('register') }}" class="hover:text-white transition">Đăng ký thành viên</a></li>
-=======
                     <h4 class="mb-4 font-bold">Giới thiệu</h4>
                     <ul class="space-y-3 text-slate-400">
-                        <li><a href="{{ route('home') }}#courses" class="hover:text-white">Khóa học</a></li>
+                        <li><a href="{{ route('courses.index') }}" class="hover:text-white">Khóa học</a></li>
                         <li><a href="{{ route('home') }}#categories" class="hover:text-white">Danh mục</a></li>
                         <li><a href="{{ route('home') }}#paths" class="hover:text-white">Lộ trình học</a></li>
->>>>>>> origin/TuanTu_Dev
                     </ul>
                 </div>
                 <div>

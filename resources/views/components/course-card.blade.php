@@ -3,7 +3,6 @@
     $price = $discountPrice ?? $course->price;
     $originalPrice = $discountPrice ? $course->price : null;
     $levelLabels = ['beginner' => 'Cơ bản', 'intermediate' => 'Trung cấp', 'advanced' => 'Nâng cao'];
-<<<<<<< HEAD
     $gradients = [
         'from-indigo-500 to-purple-600',
         'from-emerald-500 to-teal-600',
@@ -18,12 +17,6 @@
 <a href="{{ route('courses.show', $course->slug) }}" class="group bg-white dark:bg-[#161615] rounded-2xl border border-slate-200/60 dark:border-slate-800/80 overflow-hidden hover:shadow-xl hover:shadow-indigo-500/5 dark:hover:shadow-none hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all duration-300 flex flex-col">
     <!-- Thumbnail / Gradient Placeholder -->
     <div class="aspect-video bg-gradient-to-br {{ $gradient }} relative overflow-hidden">
-=======
-@endphp
-
-<a href="{{ route('courses.show', $course) }}" class="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
-    <div class="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
->>>>>>> origin/TuanTu_Dev
         @if($course->thumbnail)
             <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
         @else
@@ -79,13 +72,10 @@
                     @endif
                 @endif
             </div>
-<<<<<<< HEAD
             <span class="text-xs text-slate-400 dark:text-slate-400 flex items-center gap-1 font-medium">
                 <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                 {{ $lessonCount }} bài
             </span>
-=======
->>>>>>> origin/TuanTu_Dev
         </div>
 
         <span class="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition group-hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:group-hover:bg-indigo-200">

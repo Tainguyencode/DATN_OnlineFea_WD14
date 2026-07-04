@@ -24,30 +24,18 @@
 </div>
 
 {{-- Recent courses --}}
-<<<<<<< HEAD
-<div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
-    <div class="flex items-center justify-between p-6 border-b border-slate-100">
-        <h2 class="text-lg font-bold text-slate-900">Khóa học gần đây</h2>
-        <a href="{{ route('my-courses') }}" class="text-sm text-indigo-600 hover:underline font-medium">Xem tất cả</a>
-=======
 <div class="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
     <div class="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-800">
         <h2 class="text-lg font-bold text-slate-900 dark:text-white">Khóa học gần đây</h2>
         <a href="{{ route('student.courses') }}" class="text-sm font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300">Xem tất cả</a>
->>>>>>> origin/TuanTu_Dev
     </div>
     @if($enrollments->isEmpty())
         <div class="p-12 text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40">
                 <svg class="h-8 w-8 text-[#0056D2] dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
             </div>
-<<<<<<< HEAD
-            <p class="text-slate-600 font-medium">Bạn chưa đăng ký khóa học nào</p>
-            <a href="{{ route('courses.index') }}" class="inline-block mt-4 bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition">Khám phá khóa học</a>
-=======
             <p class="font-medium text-slate-500 dark:text-slate-400">Bạn chưa đăng ký khóa học nào</p>
-            <a href="{{ route('home') }}#courses" class="ui-button-primary mt-4">Khám phá khóa học</a>
->>>>>>> origin/TuanTu_Dev
+            <a href="{{ route('courses.index') }}" class="ui-button-primary mt-4">Khám phá khóa học</a>
         </div>
     @else
         <div class="divide-y divide-slate-200 dark:divide-slate-800">
