@@ -28,9 +28,7 @@
                     <td class="px-6 py-4 text-slate-500">{{ $enrollment->user->email }}</td>
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-2">
-                            <div class="w-20 bg-slate-100 rounded-full h-2">
-                                <div class="bg-emerald-500 rounded-full h-2" style="width: {{ $enrollment->progress_percent }}%"></div>
-                            </div>
+                            <progress class="h-2 w-20 overflow-hidden rounded-full [&::-moz-progress-bar]:bg-emerald-500 [&::-webkit-progress-bar]:bg-slate-100 [&::-webkit-progress-value]:bg-emerald-500" max="100" value="{{ $enrollment->progress_percent }}"></progress>
                             <span class="text-xs">{{ number_format($enrollment->progress_percent, 0) }}%</span>
                         </div>
                     </td>
