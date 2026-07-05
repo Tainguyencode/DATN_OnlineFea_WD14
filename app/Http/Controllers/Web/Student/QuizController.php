@@ -9,6 +9,7 @@ use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizQuestion;
+use App\Services\LearningProgressService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +47,7 @@ class QuizController extends Controller
         ));
     }
 
-    public function submit(Request $request, Course $course, Lesson $lesson): View|RedirectResponse
+    public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse
     {
         $this->authorizePublishedLesson($course, $lesson);
 
@@ -108,6 +109,10 @@ class QuizController extends Controller
 
             return $attempt;
         });
+
+        if ($attempt->passed) {
+            $progressService->recordLessonProgress($request->user()->id, $course, $lesson, 0, true);
+        }
 
         return view('courses.quiz-result', [
             'course' => $course,

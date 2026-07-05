@@ -1,6 +1,6 @@
 <x-instructor-layout title="Doanh thu" page-title="Báo cáo doanh thu">
 
-<div class="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-8 text-white mb-8 shadow-lg">
+<div class="bg-emerald-600 rounded-xl p-8 text-white mb-8 shadow-sm">
     <p class="text-emerald-100 text-sm">Tổng doanh thu</p>
     <p class="text-4xl font-bold mt-2">{{ number_format($totalRevenue, 0, ',', '.') }}đ</p>
 </div>

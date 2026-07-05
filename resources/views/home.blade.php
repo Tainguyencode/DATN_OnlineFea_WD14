@@ -1,122 +1,129 @@
 @extends('layouts.app')
 
-@section('title', 'Fea - Nền Tảng Học Tập Thông Minh')
+@section('title', 'Website học online FEA')
 
 @section('content')
-<!-- Hero Section -->
-<section class="relative bg-slate-950 text-white overflow-hidden py-24 lg:py-32">
-    <!-- Glowing background blobs -->
-    <div class="absolute -top-20 -left-20 w-80 h-80 bg-indigo-600/30 rounded-full glow-blob animate-blob-1"></div>
-    <div class="absolute -bottom-20 -right-20 w-96 h-96 bg-purple-600/30 rounded-full glow-blob animate-blob-2"></div>
-    
-    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <!-- Hero Text -->
-            <div class="lg:col-span-7">
-                <span class="inline-flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider">
-                    ⚡ Hệ thống quản lý học tập & đồ án tốt nghiệp
-                </span>
-                <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight tracking-tight mb-6">
-                    {{ $banner['title'] ?? 'Học mọi lúc, mọi nơi' }}
-                </h1>
-                <p class="text-lg sm:text-xl text-slate-300 mb-8 max-w-2xl font-light leading-relaxed">
-                    {{ $banner['subtitle'] ?? 'Nền tảng e-learning thông minh kết hợp quản lý dự án, theo dõi tiến trình và tích hợp trợ lý ảo AI hỗ trợ giảng dạy.' }}
-                </p>
-                <div class="flex flex-wrap gap-4">
-                    <a href="#courses" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-7 py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/35 dark:shadow-none hover:scale-102">
-                        Bắt đầu học ngay
-                    </a>
-                    <a href="#paths" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-7 py-3.5 rounded-xl transition hover:scale-102">
-                        Xem lộ trình học
-                    </a>
+<section class="bg-white py-4 dark:bg-slate-950">
+    <div class="ui-container">
+        <div class="relative min-h-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-blue-50 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:min-h-[390px]">
+            <img src="{{ asset('images/learning-hero-banner.png') }}" alt="Học trực tuyến cùng Website học online FEA" class="absolute inset-0 h-full w-full object-cover">
+
+            <button type="button" class="absolute left-4 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition duration-200 hover:text-[#0056D2] md:flex" aria-label="Banner trước">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 19-7-7 7-7"/></svg>
+            </button>
+            <button type="button" class="absolute right-4 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition duration-200 hover:text-[#0056D2] md:flex" aria-label="Banner tiếp theo">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 5 7 7-7 7"/></svg>
+            </button>
+
+            <div class="relative z-10 flex min-h-[360px] items-center px-6 py-10 sm:px-10 lg:min-h-[390px] lg:px-24">
+                <div class="max-w-xl">
+                    <h1 class="mb-5 text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl">
+                        {{ $banner['title'] ?? 'Nền tảng học tập chuyên nghiệp, đột phá tương lai' }}
+                    </h1>
+                    <p class="mb-6 max-w-lg text-base leading-7 text-slate-700">
+                        {{ $banner['subtitle'] ?? 'Phát triển kỹ năng thế kỷ 21 cùng chương trình học trực tuyến hiện đại, rõ ràng và dễ theo dõi.' }}
+                    </p>
+
+                    <form method="GET" action="{{ route('home') }}#courses" class="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_112px]">
+                        <label class="relative">
+                            <span class="sr-only">Tìm khóa học</span>
+                            <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>
+                            <input type="search" name="search" value="{{ request('search') }}" placeholder="Bạn muốn học gì hôm nay?" class="h-12 w-full rounded-lg border border-slate-300 bg-white pl-12 pr-4 text-sm text-slate-900 outline-none transition duration-200 focus:border-[#0056D2] focus:ring-2 focus:ring-[#0056D2]">
+                        </label>
+                        <button type="submit" class="ui-button-primary h-12 px-5">Tìm kiếm</button>
+                    </form>
+
+                    <div class="flex flex-col gap-3 sm:flex-row">
+                        <a href="#courses" class="ui-button-primary">Khám phá khóa học</a>
+                        <a href="{{ route('register') }}" class="ui-button-secondary bg-white">Bắt đầu học</a>
+                    </div>
                 </div>
             </div>
-            
-            <!-- Workspace Mockup -->
-            <div class="lg:col-span-5 relative hidden lg:block">
-                <div class="relative bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                    <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-                        <div class="flex gap-1.5">
-                            <span class="w-3 h-3 bg-rose-500 rounded-full"></span>
-                            <span class="w-3 h-3 bg-amber-500 rounded-full"></span>
-                            <span class="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                        </div>
-                        <span class="text-xs text-slate-500 font-semibold tracking-wider uppercase">Sinh viên: Trần Thị Học</span>
+
+            <div class="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full bg-[#0056D2]"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="border-b border-slate-200 bg-white py-8 dark:border-slate-800 dark:bg-slate-950">
+    <div class="ui-container">
+        <p class="mb-5 text-center text-sm font-medium text-slate-500 dark:text-slate-400">Được thiết kế cho sinh viên, giảng viên và đội ngũ đào tạo hiện đại</p>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            @foreach([
+                ['title' => 'FEA Academy', 'desc' => 'Chương trình đào tạo chuyên sâu'],
+                ['title' => 'Innovation Lab', 'desc' => 'Thực hành dự án công nghệ mới'],
+                ['title' => 'Career Accelerator', 'desc' => 'Hỗ trợ định hướng và kết nối việc làm'],
+                ['title' => 'Corporate Training', 'desc' => 'Giải pháp đào tạo cho doanh nghiệp'],
+            ] as $partner)
+                <div class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-950/50 dark:text-blue-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
                     </div>
-                    <!-- Mockup content -->
-                    <div class="space-y-4">
-                        <div class="p-3.5 bg-slate-950 border border-slate-800/80 rounded-xl">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-xs font-bold text-indigo-400">Đồ Án Tốt Nghiệp: Fea LMS</span>
-                                <span class="text-xs text-emerald-400 font-bold">85% hoàn thành</span>
-                            </div>
-                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div class="bg-indigo-500 h-full rounded-full" style="width: 85%"></div>
-                            </div>
-                        </div>
-                        <div class="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <span class="w-8 h-8 bg-indigo-500/10 text-indigo-400 rounded-lg flex items-center justify-center text-xs">01</span>
-                                <span class="text-xs font-semibold text-slate-300">Nghiên cứu Schema cơ sở dữ liệu</span>
-                            </div>
-                            <span class="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-2 py-0.5 rounded font-bold uppercase">Đạt</span>
-                        </div>
-                        <div class="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <span class="w-8 h-8 bg-indigo-500/10 text-indigo-400 rounded-lg flex items-center justify-center text-xs">02</span>
-                                <span class="text-xs font-semibold text-slate-300">Tách nhỏ file Migrations & Seeders</span>
-                            </div>
-                            <span class="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-2 py-0.5 rounded font-bold uppercase">Đạt</span>
-                        </div>
-                        <div class="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <span class="w-8 h-8 bg-indigo-500/10 text-indigo-400 rounded-lg flex items-center justify-center text-xs">03</span>
-                                <span class="text-xs font-semibold text-slate-300">Tích hợp AI Trợ Lý & Chatbot Drawer</span>
-                            </div>
-                            <span class="text-[10px] bg-indigo-950 text-indigo-400 border border-indigo-900 px-2 py-0.5 rounded font-bold uppercase">Đang làm</span>
-                        </div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">{{ $partner['title'] }}</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $partner['desc'] }}</p>
                     </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+</section>
+
+<section class="border-b border-slate-200 bg-slate-50 py-8 dark:border-slate-800 dark:bg-slate-900">
+    <div class="ui-container">
+        <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div class="flex items-center justify-center gap-4 border-r border-slate-200 px-4 dark:border-slate-800">
+                <div class="hidden h-12 w-12 items-center justify-center rounded-xl bg-white text-[#0056D2] shadow-sm sm:flex dark:bg-slate-950">
+                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ $stats['courses'] }}+</div>
+                    <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">Khóa học</div>
+                </div>
+            </div>
+            <div class="flex items-center justify-center gap-4 border-r border-slate-200 px-4 dark:border-slate-800">
+                <div class="hidden h-12 w-12 items-center justify-center rounded-xl bg-white text-[#0056D2] shadow-sm sm:flex dark:bg-slate-950">
+                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ $stats['students'] }}+</div>
+                    <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">Học viên</div>
+                </div>
+            </div>
+            <div class="flex items-center justify-center gap-4 border-r border-slate-200 px-4 dark:border-slate-800">
+                <div class="hidden h-12 w-12 items-center justify-center rounded-xl bg-white text-[#0056D2] shadow-sm sm:flex dark:bg-slate-950">
+                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 14l9-5-9-5-9 5 9 5Zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824-2.998 12.078 12.078 0 0 1 .665-6.479L12 14Z"/></svg>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ $stats['instructors'] }}+</div>
+                    <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">Giảng viên</div>
+                </div>
+            </div>
+            <div class="flex items-center justify-center gap-4 px-4">
+                <div class="hidden h-12 w-12 items-center justify-center rounded-xl bg-white text-[#0056D2] shadow-sm sm:flex dark:bg-slate-950">
+                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z"/></svg>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ $categories->count() }}+</div>
+                    <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">Danh mục</div>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Stats Banner Section -->
-<section class="bg-white dark:bg-[#161615] border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div class="text-center p-4 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-100 dark:border-slate-800/40">
-                <div class="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">{{ $stats['courses'] }}</div>
-                <div class="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium">Khóa học đăng tải</div>
-            </div>
-            <div class="text-center p-4 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-100 dark:border-slate-800/40">
-                <div class="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">{{ $stats['students'] }}</div>
-                <div class="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium">Học viên tham gia</div>
-            </div>
-            <div class="text-center p-4 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-100 dark:border-slate-800/40">
-                <div class="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">{{ $stats['instructors'] }}</div>
-                <div class="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium">Giảng viên hướng dẫn</div>
-            </div>
-            <div class="text-center p-4 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-100 dark:border-slate-800/40">
-                <div class="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">{{ $categories->count() }}</div>
-                <div class="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium">Danh mục đa dạng</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Featured Courses Section -->
 @if($featuredCourses->isNotEmpty())
-<section class="py-20 bg-slate-50 dark:bg-[#0a0a0a] transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex flex-col sm:flex-row sm:items-end justify-between mb-12">
-            <div>
-                <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">Khóa học nổi bật</h2>
-                <p class="text-slate-500 dark:text-slate-400 mt-2">Tuyển chọn các khóa học được đánh giá cao nhất trên Fea.</p>
-            </div>
+<section class="ui-section">
+    <div class="ui-container">
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Khóa học nổi bật</h2>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">Tuyển chọn các khóa học được đánh giá cao nhất trên hệ thống.</p>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             @foreach($featuredCourses as $course)
                 <x-course-card :course="$course" />
             @endforeach
@@ -125,122 +132,126 @@
 </section>
 @endif
 
-<!-- Categories Grid Section -->
-<section id="categories" class="py-20 bg-white dark:bg-[#161615] transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-16">
-            <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">Danh mục môn học</h2>
-            <p class="text-slate-500 dark:text-slate-400 mt-3 max-w-xl mx-auto">Khám phá các môn học đa dạng giúp bạn phát triển các kỹ năng chuyên môn từ cơ bản đến nâng cao.</p>
+<section id="categories" class="bg-white py-16 dark:bg-slate-950">
+    <div class="ui-container">
+        <div class="mb-10">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Danh mục môn học</h2>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">Khám phá các môn học giúp bạn phát triển kỹ năng chuyên môn.</p>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             @foreach($categories as $category)
-                @php
-                    $colors = [
-                        'bg-indigo-500/10 border-indigo-200 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400',
-                        'bg-emerald-500/10 border-emerald-200 dark:border-emerald-900/40 text-emerald-600 dark:text-emerald-400',
-                        'bg-orange-500/10 border-orange-200 dark:border-orange-900/40 text-orange-600 dark:text-orange-400',
-                        'bg-cyan-500/10 border-cyan-200 dark:border-cyan-900/40 text-cyan-600 dark:text-cyan-400'
-                    ];
-                    $color = $colors[$category->id % count($colors)];
-                @endphp
                 <a href="{{ route('home', ['category' => $category->id]) }}#courses"
-                   class="group p-6 rounded-2xl border transition-all duration-300 hover:-translate-y-1 {{ $color }}">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                   class="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:border-blue-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-700">
+                    <div class="mb-3 flex items-center gap-4">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-950/50 dark:text-blue-300">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                        </div>
+                        <h3 class="font-bold text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">{{ $category->name }}</h3>
                     </div>
-                    <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 group-hover:underline">{{ $category->name }}</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">{{ $category->description ?? 'Khóa học chất lượng do đội ngũ giảng viên biên soạn.' }}</p>
-                    <div class="text-xs font-bold mt-4 flex items-center gap-1">
-                        Xem khóa học
-                        <svg class="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-                    </div>
+                    <p class="flex-grow text-sm leading-6 text-slate-500 dark:text-slate-400">{{ $category->description ?? 'Khóa học chất lượng do đội ngũ giảng viên biên soạn.' }}</p>
                 </a>
             @endforeach
         </div>
     </div>
 </section>
 
-<!-- All Courses Section with Search & Filtering -->
-<section id="courses" class="py-20 bg-slate-50 dark:bg-[#0a0a0a] transition-colors duration-300 border-t border-slate-200/50 dark:border-slate-800/40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-12">
-            <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">Tất cả khóa học</h2>
-            <p class="text-slate-500 dark:text-slate-400 mt-3">Tìm kiếm, lọc và phân loại các khóa học phù hợp nhất với trình độ của bạn.</p>
+<section id="courses" class="ui-section border-t border-slate-200 dark:border-slate-800">
+    <div class="ui-container">
+        <div class="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Tất cả khóa học</h2>
+                <p class="mt-1 text-slate-500 dark:text-slate-400">Tìm kiếm và phân loại khóa học phù hợp với bạn.</p>
+            </div>
         </div>
 
-        <!-- Filter Form -->
-        <form method="GET" action="{{ route('home') }}#courses" class="bg-white dark:bg-[#161615] rounded-2xl border border-slate-200/60 dark:border-slate-800/80 p-6 mb-10 shadow-sm transition-colors duration-300">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div class="lg:col-span-2">
+        <form method="GET" action="{{ route('home') }}#courses" class="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div class="lg:col-span-1">
+                    <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tìm kiếm</label>
                     <input type="text" name="search" value="{{ request('search') }}"
-                           placeholder="Tìm tên khóa học, giảng viên..."
-                           class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none text-sm text-slate-900 dark:text-white transition">
+                           placeholder="Tên khóa học..."
+                           class="ui-input">
                 </div>
-                <select name="category" class="px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none text-sm text-slate-900 dark:text-white transition cursor-pointer">
-                    <option value="">Tất cả danh mục</option>
-                    @foreach($categories as $cat)
-                        <option value="{{ $cat->id }}" @selected(request('category') == $cat->id)>{{ $cat->name }}</option>
-                    @endforeach
-                </select>
-                <select name="level" class="px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none text-sm text-slate-900 dark:text-white transition cursor-pointer">
-                    <option value="">Tất cả trình độ</option>
-                    <option value="beginner" @selected(request('level') == 'beginner')>Cơ bản</option>
-                    <option value="intermediate" @selected(request('level') == 'intermediate')>Trung cấp</option>
-                    <option value="advanced" @selected(request('level') == 'advanced')>Nâng cao</option>
-                </select>
-                <select name="sort" class="px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none text-sm text-slate-900 dark:text-white transition cursor-pointer">
-                    <option value="newest" @selected(request('sort', 'newest') == 'newest')>Mới nhất</option>
-                    <option value="rating" @selected(request('sort') == 'rating')>Đánh giá cao</option>
-                    <option value="popular" @selected(request('sort') == 'popular')>Phổ biến</option>
-                    <option value="price_asc" @selected(request('sort') == 'price_asc')>Giá từ thấp → cao</option>
-                    <option value="price_desc" @selected(request('sort') == 'price_desc')>Giá từ cao → thấp</option>
-                </select>
+                <div>
+                    <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Danh mục</label>
+                    <select name="category" class="ui-select cursor-pointer">
+                        <option value="">Tất cả</option>
+                        @foreach($categories as $cat)
+                            <option value="{{ $cat->id }}" @selected(request('category') == $cat->id)>{{ $cat->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Trình độ</label>
+                    <select name="level" class="ui-select cursor-pointer">
+                        <option value="">Tất cả</option>
+                        <option value="beginner" @selected(request('level') == 'beginner')>Cơ bản</option>
+                        <option value="intermediate" @selected(request('level') == 'intermediate')>Trung cấp</option>
+                        <option value="advanced" @selected(request('level') == 'advanced')>Nâng cao</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Sắp xếp theo</label>
+                    <select name="sort" class="ui-select cursor-pointer">
+                        <option value="newest" @selected(request('sort', 'newest') == 'newest')>Mới nhất</option>
+                        <option value="rating" @selected(request('sort') == 'rating')>Đánh giá cao</option>
+                        <option value="popular" @selected(request('sort') == 'popular')>Phổ biến</option>
+                        <option value="price_asc" @selected(request('sort') == 'price_asc')>Giá tăng dần</option>
+                        <option value="price_desc" @selected(request('sort') == 'price_desc')>Giá giảm dần</option>
+                    </select>
+                </div>
             </div>
-            <div class="flex gap-3 mt-6">
-                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer shadow-md shadow-indigo-600/10">
-                    Áp dụng bộ lọc
-                </button>
-                <a href="{{ route('home') }}#courses" class="px-6 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950 transition">
-                    Xóa lọc
+
+            <div class="mt-4 flex items-center justify-end gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+                <a href="{{ route('home') }}#courses" class="text-sm font-medium text-slate-500 transition duration-200 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                    Xóa bộ lọc
                 </a>
+                <button type="submit" class="ui-button-primary">
+                    Áp dụng lọc
+                </button>
             </div>
         </form>
 
-        <!-- Course Cards -->
         @if($courses->isEmpty())
-            <div class="text-center py-20 text-slate-500 dark:text-slate-400">
-                <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-700 mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <p class="text-lg font-bold">Không tìm thấy khóa học nào</p>
-                <p class="text-sm mt-1">Hãy thử sử dụng từ khóa hoặc thay đổi các tiêu chí bộ lọc khác.</p>
+            <div class="ui-empty">
+                <svg class="mx-auto mb-3 h-12 w-12 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                <p class="text-base font-bold text-slate-900 dark:text-white">Không tìm thấy khóa học nào</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Vui lòng thay đổi tiêu chí tìm kiếm và thử lại.</p>
             </div>
         @else
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 @foreach($courses as $course)
                     <x-course-card :course="$course" />
                 @endforeach
             </div>
-            <div class="mt-12">
+            <div class="mt-10">
                 {{ $courses->links() }}
             </div>
         @endif
     </div>
 </section>
 
-<!-- Learning Paths Section -->
 @if($learningPaths->isNotEmpty())
-<section id="paths" class="py-20 bg-white dark:bg-[#161615] transition-colors duration-300 border-t border-slate-200/50 dark:border-slate-800/40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-16">
-            <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">Lộ trình học tập chuyên biệt</h2>
-            <p class="text-slate-500 dark:text-slate-400 mt-3">Học theo tuần tự có lộ trình rõ ràng giúp định hướng công việc và rút ngắn tiến độ nghiên cứu tốt nghiệp.</p>
+<section id="paths" class="border-t border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
+    <div class="ui-container">
+        <div class="mb-10 max-w-2xl">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Lộ trình học tập chuyên biệt</h2>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">Học theo trình tự bài bản, giúp tiết kiệm thời gian và định hướng rõ ràng mục tiêu công việc hoặc đồ án.</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
             @foreach($learningPaths as $path)
-                <div class="p-8 bg-gradient-to-br from-indigo-50/70 to-purple-50/70 dark:from-indigo-950/20 dark:to-purple-950/20 rounded-2xl border border-indigo-100/60 dark:border-indigo-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-12 -right-12 w-24 h-24 bg-indigo-500/10 rounded-full group-hover:scale-125 transition-transform duration-500"></div>
-                    <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950 px-3 py-1.5 rounded-full uppercase tracking-wider">{{ is_array($path->course_ids) ? count($path->course_ids) : 0 }} khóa học</span>
-                    <h3 class="text-xl font-bold text-slate-950 dark:text-white mt-4 mb-3 leading-snug">{{ $path->title }}</h3>
-                    <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{{ $path->description ?? 'Lộ trình được khuyên dùng để có lượng kiến thức toàn diện cho sinh viên khoa Công nghệ thông tin.' }}</p>
+                <div class="flex flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
+                    <div class="mb-4">
+                        <span class="ui-badge-primary">
+                            {{ is_array($path->course_ids) ? count($path->course_ids) : 0 }} khóa học
+                        </span>
+                    </div>
+                    <h3 class="mb-2 text-lg font-bold text-slate-900 dark:text-white">{{ $path->title }}</h3>
+                    <p class="flex-grow text-sm leading-6 text-slate-500 dark:text-slate-400">{{ $path->description ?? 'Lộ trình bài bản giúp sinh viên củng cố kiến thức từ nền tảng đến chuyên sâu.' }}</p>
+                    <a href="#" class="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">
+                        Xem chi tiết lộ trình
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m17 8 4 4m0 0-4 4m4-4H3"></path></svg>
+                    </a>
                 </div>
             @endforeach
         </div>
@@ -248,61 +259,61 @@
 </section>
 @endif
 
-<!-- Gamification (Badges) & Leaderboard Section -->
-<section class="py-20 bg-slate-50 dark:bg-[#0a0a0a] transition-colors duration-300 border-t border-slate-200/50 dark:border-slate-800/40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
-            <!-- Gamification Badges -->
-            <div class="lg:col-span-7">
-                <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight mb-3">Hệ thống vinh danh & Huy chương</h2>
-                <p class="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">Fea vinh danh những nỗ lực học tập của bạn thông qua việc tích điểm tích lũy và mở khóa huy chương học thuật danh giá.</p>
-                
-                <div class="space-y-4">
+<section id="instructors" class="ui-section border-t border-slate-200 dark:border-slate-800">
+    <div class="ui-container">
+        <div class="grid grid-cols-1 gap-12 lg:grid-cols-2">
+            <div>
+                <h2 class="mb-2 text-2xl font-bold text-slate-900 dark:text-white">Hệ thống vinh danh</h2>
+                <p class="mb-6 text-slate-500 dark:text-slate-400">Tích lũy điểm số và mở khóa các danh hiệu học tập.</p>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     @foreach($badges as $badge)
-                        <div class="p-5 bg-white dark:bg-[#161615] border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex items-center gap-5 hover:border-indigo-300 dark:hover:border-indigo-500/50 transition duration-300">
-                            <div class="w-14 h-14 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center text-2xl shadow-sm shrink-0">
-                                🏅
+                        <div class="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.5 8.5 18l1.2-4.1-3.3-2.5 4.2-.1L12 7.2l1.4 4.1 4.2.1-3.3 2.5 1.2 4.1-3.5-2.5Z"/></svg>
                             </div>
                             <div>
-                                <h3 class="font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">
                                     {{ $badge->name }}
-                                    <span class="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full uppercase tracking-wider">{{ $badge->points_required }} pts</span>
                                 </h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ $badge->description }}</p>
+                                <p class="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{{ $badge->description }}</p>
+                                <span class="mt-2 inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                    {{ $badge->points_required }} điểm
+                                </span>
                             </div>
                         </div>
                     @endforeach
                 </div>
             </div>
-            
-            <!-- Mockup Leaderboard -->
-            <div class="lg:col-span-5">
-                <div class="bg-white dark:bg-[#161615] border border-slate-200/60 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm">
-                    <h3 class="text-lg font-bold text-slate-950 dark:text-white mb-6 flex items-center gap-2">
-                        🏆 Bảng xếp hạng học thuật
-                    </h3>
-                    
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between p-3.5 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-xl border border-indigo-100/50 dark:border-indigo-900/30">
+
+            <div>
+                <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                    <div class="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-800/60">
+                        <h3 class="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+                            Bảng xếp hạng tuần
+                        </h3>
+                    </div>
+                    <div class="divide-y divide-slate-200 p-2 dark:divide-slate-800">
+                        <div class="flex items-center justify-between rounded-lg bg-amber-50 p-3 dark:bg-amber-900/30">
                             <div class="flex items-center gap-3">
-                                <span class="w-6 h-6 rounded-full bg-amber-400 text-amber-950 text-xs font-extrabold flex items-center justify-center">1</span>
-                                <span class="text-sm font-bold text-slate-950 dark:text-white">Nguyễn Hoàng Nam</span>
+                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-white">1</span>
+                                <span class="text-sm font-bold text-slate-900 dark:text-white">Nguyễn Hoàng Nam</span>
                             </div>
-                            <span class="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">450 pts</span>
+                            <span class="text-sm font-bold text-amber-600 dark:text-amber-300">450 pts</span>
                         </div>
-                        <div class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                        <div class="flex items-center justify-between p-3">
                             <div class="flex items-center gap-3">
-                                <span class="w-6 h-6 rounded-full bg-slate-300 text-slate-700 text-xs font-extrabold flex items-center justify-center">2</span>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-200">Trần Thị Lan</span>
+                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200">2</span>
+                                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Trần Thị Lan</span>
                             </div>
-                            <span class="text-sm font-bold text-slate-500 dark:text-slate-400">380 pts</span>
+                            <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">380 pts</span>
                         </div>
-                        <div class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                        <div class="flex items-center justify-between p-3">
                             <div class="flex items-center gap-3">
-                                <span class="w-6 h-6 rounded-full bg-orange-300 text-orange-950 text-xs font-extrabold flex items-center justify-center">3</span>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-200">Vũ Hoàng Long</span>
+                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200">3</span>
+                                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Vũ Hoàng Long</span>
                             </div>
-                            <span class="text-sm font-bold text-slate-500 dark:text-slate-400">320 pts</span>
+                            <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">320 pts</span>
                         </div>
                     </div>
                 </div>
@@ -311,22 +322,55 @@
     </div>
 </section>
 
-<!-- FAQ Section -->
-@if($faqs->isNotEmpty())
-<section id="faq" class="py-20 bg-white dark:bg-[#161615] transition-colors duration-300 border-t border-slate-200/50 dark:border-slate-800/40">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-12">
-            <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">Câu hỏi thường gặp</h2>
-            <p class="text-slate-500 dark:text-slate-400 mt-2">Giải đáp nhanh các thắc mắc về lớp học trực tuyến và nộp đồ án tốt nghiệp.</p>
+<section id="business" class="border-t border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
+    <div class="ui-container">
+        <div class="grid items-center gap-8 rounded-2xl border border-slate-200 bg-slate-50 p-8 dark:border-slate-700 dark:bg-slate-900 lg:grid-cols-[1fr_360px]">
+            <div>
+                <p class="mb-2 text-sm font-semibold uppercase tracking-wide text-[#0056D2] dark:text-blue-300">Doanh nghiệp</p>
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Nâng cao năng lực đội ngũ với lộ trình học tập có cấu trúc</h2>
+                <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">Tổ chức khóa học, quản lý tiến độ và theo dõi kết quả học tập trong một nền tảng thống nhất.</p>
+            </div>
+            <a href="{{ route('register') }}" class="ui-button-primary justify-center">Bắt đầu triển khai</a>
         </div>
-        <div class="space-y-4">
+    </div>
+</section>
+
+<section class="bg-slate-50 py-16 dark:bg-slate-900">
+    <div class="ui-container">
+        <div class="mb-8 max-w-2xl">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Học viên nói gì về FEA Learning</h2>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">Các phản hồi ngắn giúp bạn hình dung trải nghiệm học tập trên nền tảng.</p>
+        </div>
+        <div class="grid gap-6 md:grid-cols-3">
+            @foreach([
+                ['name' => 'Minh Anh', 'text' => 'Nội dung rõ ràng, dễ theo dõi và giúp mình biết nên học gì tiếp theo.'],
+                ['name' => 'Quốc Huy', 'text' => 'Dashboard tiến độ rất hữu ích khi học nhiều khóa cùng lúc.'],
+                ['name' => 'Lan Phương', 'text' => 'Giao diện gọn, tập trung vào bài học và không gây rối mắt.'],
+            ] as $testimonial)
+                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-950">
+                    <p class="text-sm leading-6 text-slate-600 dark:text-slate-400">“{{ $testimonial['text'] }}”</p>
+                    <p class="mt-4 text-sm font-semibold text-slate-900 dark:text-white">{{ $testimonial['name'] }}</p>
+                </div>
+            @endforeach
+        </div>
+    </div>
+</section>
+
+@if($faqs->isNotEmpty())
+<section id="faq" class="border-t border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+        <div class="mb-10 text-center">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Câu hỏi thường gặp</h2>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">Giải đáp nhanh các thắc mắc về lớp học trực tuyến.</p>
+        </div>
+        <div class="space-y-3">
             @foreach($faqs as $faq)
-                <details class="bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 group">
-                    <summary class="px-6 py-4.5 cursor-pointer font-bold text-slate-900 dark:text-slate-100 flex items-center justify-between list-none select-none">
+                <details class="group rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+                    <summary class="flex cursor-pointer list-none items-center justify-between px-5 py-4 font-bold text-slate-900 dark:text-white">
                         {{ $faq->question }}
-                        <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        <svg class="h-5 w-5 text-slate-500 transition-transform group-open:rotate-180 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 9-7 7-7-7"/></svg>
                     </summary>
-                    <div class="px-6 pb-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed border-t border-slate-200/30 dark:border-slate-800/30 pt-4">
+                    <div class="px-5 pb-4 text-sm leading-6 text-slate-600 dark:text-slate-400">
                         {{ $faq->answer }}
                     </div>
                 </details>
@@ -336,17 +380,13 @@
 </section>
 @endif
 
-<!-- Call to Action Section -->
 @guest
-<section class="py-20 bg-indigo-600 text-white relative overflow-hidden">
-    <div class="absolute -top-12 -left-12 w-64 h-64 bg-indigo-500 rounded-full glow-blob"></div>
-    <div class="absolute -bottom-12 -right-12 w-64 h-64 bg-purple-500 rounded-full glow-blob"></div>
-    
-    <div class="relative max-w-4xl mx-auto px-4 text-center">
-        <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight">Sẵn sàng nâng tầm kiến thức của bạn?</h2>
-        <p class="text-indigo-100 mb-8 max-w-xl mx-auto font-light">Đăng ký tài khoản sinh viên miễn phí trên Fea ngay hôm nay để trải nghiệm môi trường học tập và làm đồ án tốt nghiệp hiện đại nhất.</p>
-        <a href="{{ route('register') }}" class="inline-block bg-white text-indigo-700 font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-50 transition shadow-lg hover:scale-102">
-            Đăng ký tài khoản ngay
+<section class="bg-[#0056D2] py-16 text-white dark:bg-blue-800">
+    <div class="mx-auto max-w-4xl px-4 text-center">
+        <h2 class="mb-4 text-3xl font-bold">Sẵn sàng nâng tầm kiến thức của bạn?</h2>
+        <p class="mx-auto mb-8 max-w-xl text-white/85">Đăng ký tài khoản sinh viên miễn phí trên nền tảng của chúng tôi ngay hôm nay để trải nghiệm môi trường học tập hiện đại.</p>
+        <a href="{{ route('register') }}" class="inline-flex items-center justify-center rounded-lg border border-white bg-white px-8 py-3 font-medium text-[#0056D2] transition duration-200 hover:bg-blue-50">
+            Tạo tài khoản miễn phí
         </a>
     </div>
 </section>
