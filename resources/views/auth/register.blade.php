@@ -1,68 +1,170 @@
 @extends('layouts.app')
 
-@section('title', 'Đăng ký - EduPlatform')
+@section('title', 'Đăng ký - Website học online FEA')
 
 @section('content')
-<div class="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4">
-    <div class="w-full max-w-md">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-slate-900">Đăng ký tài khoản</h1>
-            <p class="text-slate-500 mt-2">Tạo tài khoản miễn phí và bắt đầu học ngay hôm nay.</p>
-        </div>
+<x-auth.layout>
+    <x-auth.card
+        x-data="{
+            showPassword: false,
+            showConfirm: false,
+            loading: false,
+            avatarPreview: null,
+            password: '',
+            usernameMessage: '',
+            emailMessage: '',
+            usernameOk: null,
+            emailOk: null,
+            availabilityUrl: @js(route('auth.availability')),
+            get strength() {
+                let score = 0;
+                if (this.password.length >= 8) score++;
+                if (/[a-z]/.test(this.password) && /[A-Z]/.test(this.password)) score++;
+                if (/[0-9]/.test(this.password)) score++;
+                if (/[^A-Za-z0-9]/.test(this.password)) score++;
+                return score;
+            },
+            async check(field, value) {
+                if (!value || value.length < 3) return;
+                const response = await fetch(`${this.availabilityUrl}?field=${field}&value=${encodeURIComponent(value)}`, { headers: { 'Accept': 'application/json' }});
+                const data = await response.json();
+                this[`${field}Ok`] = data.available;
+                this[`${field}Message`] = data.message;
+            }
+        }"
+    >
+        <x-auth.header
+            title="Đăng ký tài khoản"
+            subtitle="Tạo tài khoản miễn phí và bắt đầu học ngay hôm nay."
+        />
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-            @if($errors->any())
-                <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4 mb-6">
-                    @foreach($errors->all() as $error)
-                        <p>{{ $error }}</p>
-                    @endforeach
-                </div>
-            @endif
+        <x-auth.errors />
 
-            <form method="POST" action="{{ route('register') }}" class="space-y-5">
-                @csrf
-                <div>
-                    <label for="name" class="block text-sm font-medium text-slate-700 mb-1.5">Họ và tên</label>
-                    <input type="text" id="name" name="name" value="{{ old('name') }}" required autofocus
-                           class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
-                           placeholder="Nguyễn Văn A">
-                </div>
-                <div>
-                    <label for="email" class="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-                    <input type="email" id="email" name="email" value="{{ old('email') }}" required
-                           class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
-                           placeholder="email@example.com">
-                </div>
-                <div>
-                    <label for="role" class="block text-sm font-medium text-slate-700 mb-1.5">Bạn là</label>
-                    <select id="role" name="role" required
-                            class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white">
-                        <option value="student" @selected(old('role') == 'student')>Học viên</option>
-                        <option value="instructor" @selected(old('role') == 'instructor')>Giảng viên</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1.5">Mật khẩu</label>
-                    <input type="password" id="password" name="password" required
-                           class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
-                           placeholder="Tối thiểu 8 ký tự">
-                </div>
-                <div>
-                    <label for="password_confirmation" class="block text-sm font-medium text-slate-700 mb-1.5">Xác nhận mật khẩu</label>
-                    <input type="password" id="password_confirmation" name="password_confirmation" required
-                           class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
-                           placeholder="Nhập lại mật khẩu">
-                </div>
-                <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition">
-                    Đăng ký
-                </button>
-            </form>
+        <form method="POST" action="{{ route('register') }}" enctype="multipart/form-data" class="space-y-4" x-on:submit="loading = true">
+            @csrf
+            <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
 
-            <div class="mt-6 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
-                Đã có tài khoản?
-                <a href="{{ route('login') }}" class="text-indigo-600 font-medium hover:underline">Đăng nhập</a>
+            <div class="flex flex-col items-center gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60 sm:flex-row sm:items-center">
+                <div class="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+                    <template x-if="avatarPreview">
+                        <img :src="avatarPreview" alt="Avatar preview" class="h-full w-full object-cover">
+                    </template>
+                    <img x-show="!avatarPreview" src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-full w-full object-contain p-2">
+                </div>
+                <div class="text-center sm:text-left">
+                    <label class="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+                        Chọn avatar
+                        <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="sr-only" x-on:change="avatarPreview = URL.createObjectURL($event.target.files[0])">
+                    </label>
+                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">PNG, JPG hoặc WebP tối đa 2MB.</p>
+                </div>
             </div>
-        </div>
-    </div>
-</div>
+
+            <x-auth.input
+                label="Họ và tên"
+                name="name"
+                :value="old('name')"
+                placeholder="Nguyễn Văn A"
+                required
+                autofocus
+            />
+
+            <x-auth.input
+                label="Username"
+                name="username"
+                :value="old('username')"
+                placeholder="nguyenvana"
+                required
+                x-on:input.debounce.500ms="check('username', $event.target.value)"
+            >
+                <x-slot:hint>
+                    <p x-show="usernameMessage" x-text="usernameMessage" class="text-xs font-semibold" :class="usernameOk ? 'text-emerald-600' : 'text-red-600'"></p>
+                </x-slot:hint>
+            </x-auth.input>
+
+            <x-auth.input
+                label="Email"
+                name="email"
+                type="email"
+                :value="old('email')"
+                placeholder="email@example.com"
+                required
+                x-on:input.debounce.500ms="check('email', $event.target.value)"
+            >
+                <x-slot:hint>
+                    <p x-show="emailMessage" x-text="emailMessage" class="text-xs font-semibold" :class="emailOk ? 'text-emerald-600' : 'text-red-600'"></p>
+                </x-slot:hint>
+            </x-auth.input>
+
+            <x-auth.input
+                label="Số điện thoại"
+                name="phone"
+                :value="old('phone')"
+                placeholder="0912345678"
+                required
+            />
+
+            <x-auth.select label="Bạn là" name="role" required>
+                <option value="student" @selected(old('role') == 'student')>Học viên</option>
+                <option value="instructor" @selected(old('role') == 'instructor')>Giảng viên</option>
+            </x-auth.select>
+
+            <x-auth.input
+                label="Mật khẩu"
+                name="password"
+                x-bind:type="showPassword ? 'text' : 'password'"
+                x-model="password"
+                placeholder="Tối thiểu 8 ký tự"
+                required
+                inputClass="pr-14"
+            >
+                <x-slot:trailing>
+                    <x-auth.password-toggle />
+                </x-slot:trailing>
+            </x-auth.input>
+
+            <x-auth.input
+                label="Xác nhận mật khẩu"
+                name="password_confirmation"
+                x-bind:type="showConfirm ? 'text' : 'password'"
+                placeholder="Nhập lại mật khẩu"
+                required
+                inputClass="pr-14"
+            >
+                <x-slot:trailing>
+                    <x-auth.password-toggle toggle="showConfirm = !showConfirm" visible="showConfirm" />
+                </x-slot:trailing>
+            </x-auth.input>
+
+            <div>
+                <div class="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span>Độ mạnh mật khẩu</span>
+                    <span x-text="['Yếu','Trung bình','Khá','Mạnh','Rất mạnh'][strength]"></span>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <template x-for="i in 4" :key="i">
+                        <div class="h-2 rounded-full transition duration-200" :class="strength >= i ? 'bg-[#0056D2]' : 'bg-slate-200 dark:bg-slate-800'"></div>
+                    </template>
+                </div>
+            </div>
+
+            <x-auth.captcha :question="$captcha['question']" />
+
+            <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                <input type="checkbox" name="terms" value="1" required class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700">
+                <span>Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.</span>
+            </label>
+
+            <x-auth.button x-bind:disabled="loading" loading-text="Đang tạo tài khoản...">
+                Tạo tài khoản
+            </x-auth.button>
+        </form>
+
+        <x-auth.footer-link
+            text="Đã có tài khoản?"
+            link-text="Đăng nhập"
+            :href="route('login')"
+        />
+    </x-auth.card>
+</x-auth.layout>
 @endsection
