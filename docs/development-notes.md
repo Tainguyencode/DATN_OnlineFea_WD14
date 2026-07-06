@@ -18,3 +18,6 @@
 ### Commit 6: feat: khoi tao giao dien trang chu va banner slider (2026-06-29 15:30:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 7: feat: xay dung module dang nhap va phan quyen nguoi dung (2026-07-06 10:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
