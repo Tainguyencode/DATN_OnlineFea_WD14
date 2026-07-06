@@ -9,6 +9,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Models\Cart;
 use App\Models\Certificate;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\User;
@@ -32,8 +33,14 @@ use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
 {
-    public function showLogin(): View
+    public function showLogin(Request $request): View
     {
+        $redirect = $request->query('redirect');
+
+        if (is_string($redirect) && $this->isSafeRedirect($redirect)) {
+            $request->session()->put('url.intended', $redirect);
+        }
+
         return view('auth.login', [
             'captcha' => CaptchaService::generate('login'),
         ]);
@@ -331,6 +338,19 @@ class AuthController extends Controller
         }
     }
 
+    private function isSafeRedirect(string $redirect): bool
+    {
+        if ($redirect === '') {
+            return false;
+        }
+
+        if (Str::startsWith($redirect, '/') && ! Str::startsWith($redirect, '//')) {
+            return true;
+        }
+
+        return Str::startsWith($redirect, url('/'));
+    }
+
     private function uniqueUsername(string $base): string
     {
         $base = Str::of($base)->ascii()->lower()->replaceMatches('/[^a-z0-9_]+/', '_')->trim('_')->limit(24, '')->toString() ?: 'user';
@@ -369,8 +389,17 @@ class AuthController extends Controller
             fn ($item) => (float) ($item->course->discount_price ?? $item->course->sale_price ?? $item->course->price ?? 0)
         );
 
-        $wishlistItems = Wishlist::where('user_id', $user->id)
-            ->with(['course.instructor:id,name', 'course.category:id,name'])
+        $publishedCourse = fn ($query) => $query
+            ->where('status', Course::STATUS_PUBLISHED)
+            ->where('is_published', true);
+
+        $wishlistQuery = Wishlist::where('user_id', $user->id)
+            ->whereHas('course', $publishedCourse);
+
+        $wishlistItems = (clone $wishlistQuery)
+            ->with(['course' => fn ($query) => $query
+                ->with(['instructor:id,name', 'category:id,name'])
+                ->withCount('lessons')])
             ->orderByDesc('created_at')
             ->limit(6)
             ->get();
@@ -392,7 +421,7 @@ class AuthController extends Controller
             'completed' => (clone $activeEnrollments)->whereNotNull('completed_at')->count(),
             'certificates' => Certificate::where('user_id', $user->id)->count(),
             'cart_items' => $cart->items->count(),
-            'wishlist' => Wishlist::where('user_id', $user->id)->count(),
+            'wishlist' => (clone $wishlistQuery)->count(),
             'orders' => Order::where('user_id', $user->id)->count(),
         ];
 
