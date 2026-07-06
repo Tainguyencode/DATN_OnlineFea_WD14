@@ -130,20 +130,22 @@
                         $originalPrice = $discountPrice ? $course->price : null;
                         $lessonCount = $course->lessons_count ?? 0;
                         $levelLabel = $levelOptions[$course->level] ?? 'Mọi trình độ';
+                        $isFavorited = (bool) ($course->is_favorited ?? false);
                     @endphp
                     <article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:border-slate-800 dark:bg-[#161615] dark:hover:border-indigo-500/50">
-                        <a href="{{ route('courses.show', $course->slug) }}" class="block">
-                            <div class="relative aspect-video overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-800">
+                        <div class="relative aspect-video overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-800">
+                            <a href="{{ route('courses.show', $course->slug) }}" class="block h-full" aria-label="Xem chi tiết {{ $course->title }}">
                                 @if($course->thumbnail)
                                     <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                                 @else
                                     <div class="flex h-full w-full items-center justify-center text-3xl font-extrabold text-white/80">Fea</div>
                                 @endif
-                                <span class="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-slate-900 backdrop-blur">
-                                    {{ $levelLabel }}
-                                </span>
-                            </div>
-                        </a>
+                            </a>
+                            <span class="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-slate-900 backdrop-blur">
+                                {{ $levelLabel }}
+                            </span>
+                            <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-3 top-3 z-10" />
+                        </div>
 
                         <div class="flex flex-1 flex-col p-5">
                             @if($course->category)

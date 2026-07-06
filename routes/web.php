@@ -26,6 +26,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('verification.notice').'#courses'))->name('my-courses');
 });
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->group(function () {
+    Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
+    Route::post('/courses/{course}/favorite', [StudentMiscController::class, 'storeFavorite'])->name('courses.favorite.store');
+    Route::delete('/courses/{course}/favorite', [StudentMiscController::class, 'destroyFavorite'])->name('courses.favorite.destroy');
+});
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
@@ -85,7 +90,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
-    Route::get('/wishlist', fn () => redirect(route('verification.notice').'#wishlist'))->name('wishlist');
+    Route::get('/wishlist', fn () => redirect()->route('favorites.index'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::get('/certificates', fn () => redirect(route('verification.notice').'#certificates'))->name('certificates');
     Route::get('/orders', fn () => redirect(route('verification.notice').'#orders'))->name('orders');
