@@ -83,7 +83,7 @@ class CurriculumController extends Controller
 
         $validated = $this->storeLessonVideo($request, $validated);
 
-        Lesson::create([
+        $lesson = Lesson::create([
             ...$validated,
             'course_id' => $course->id,
             'section_id' => $section->id,
@@ -93,6 +93,12 @@ class CurriculumController extends Controller
             'sort_order' => $validated['sort_order'] ?? $section->lessons()->count(),
             'status' => $validated['status'] ?? 'draft',
         ]);
+
+        if ($lesson->type === 'quiz') {
+            return redirect()
+                ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
+                ->with('success', 'Da tao bai quiz. Ban co the them cau hoi ngay ben duoi.');
+        }
 
         return back()->with('success', 'Đã thêm bài học.');
     }
@@ -117,6 +123,12 @@ class CurriculumController extends Controller
             'sort_order' => $validated['sort_order'] ?? $lesson->sort_order,
             'status' => $validated['status'] ?? 'draft',
         ]);
+
+        if ($lesson->type === 'quiz') {
+            return redirect()
+                ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
+                ->with('success', 'Da cap nhat bai quiz. Ban co the quan ly cau hoi tai day.');
+        }
 
         return back()->with('success', 'Đã cập nhật bài học.');
     }

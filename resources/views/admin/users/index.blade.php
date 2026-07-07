@@ -128,7 +128,7 @@
                                 <div class="flex items-center gap-3">
                                     <img src="{{ $user->avatarUrl() }}" class="h-11 w-11 rounded-2xl object-cover" alt="{{ $user->name }}">
                                     <div>
-                                        <div class="font-bold text-slate-900">{{ $user->name }}</div>
+                                        <a href="{{ route('admin.users.show', $user->id) }}" class="font-bold text-slate-900 transition hover:text-rose-600">{{ $user->name }}</a>
                                         <div class="text-xs text-slate-500">{{ '@'.$user->username }} · {{ $user->email }}</div>
                                     </div>
                                 </div>
@@ -143,9 +143,12 @@
                             </td>
                             <td class="px-5 py-4 text-slate-500">{{ $user->last_login_at?->diffForHumans() ?? 'Chưa có' }}</td>
                             <td class="px-5 py-4 text-right">
-                                <div x-data="{ open: false }" class="relative inline-block text-left">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a href="{{ route('admin.users.show', $user->id) }}" class="inline-flex h-9 items-center justify-center rounded-xl bg-blue-50 px-3 text-xs font-bold text-[#0056D2] ring-1 ring-blue-100 transition hover:bg-blue-100">Xem</a>
+                                    <div x-data="{ open: false }" class="relative inline-block text-left">
                                     <button type="button" x-on:click="open = !open" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">Actions</button>
                                     <div x-show="open" x-on:click.outside="open = false" class="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-md dark:border-slate-700 dark:bg-slate-900" x-cloak>
+                                        <a href="{{ route('admin.users.show', $user->id) }}" class="block rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Xem chi tiết</a>
                                         @if(! $user->trashed())
                                             <form method="POST" action="{{ route('admin.users.update', $user) }}" class="p-2">
                                                 @csrf @method('PUT')
@@ -175,6 +178,7 @@
                                                 <button class="w-full rounded-xl bg-red-700 px-3 py-2 text-xs font-bold text-white">Force Delete</button>
                                             </form>
                                         @endif
+                                    </div>
                                     </div>
                                 </div>
                             </td>

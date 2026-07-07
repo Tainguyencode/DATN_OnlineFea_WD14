@@ -11,10 +11,10 @@ use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
+use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Student\CartController;
-use App\Http\Controllers\Web\Student\CourseController as StudentCourseController;
-use App\Http\Controllers\Web\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
+use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -24,9 +24,17 @@ Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
 Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
-    Route::get('/my-courses', [StudentCourseController::class, 'index'])->name('my-courses');
+    Route::get('/my-courses', fn () => redirect(route('verification.notice').'#courses'))->name('my-courses');
+});
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->group(function () {
+    Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
+    Route::post('/courses/{course}/favorite', [StudentMiscController::class, 'storeFavorite'])->name('courses.favorite.store');
+    Route::delete('/courses/{course}/favorite', [StudentMiscController::class, 'destroyFavorite'])->name('courses.favorite.destroy');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
+Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
+Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
+Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
 Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');
 
 Route::middleware('guest')->group(function () {
@@ -76,17 +84,17 @@ Route::get('/dashboard', function () {
 
 // ─── HỌC VIÊN ───
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
-    Route::get('/dashboard', [StudentDashboardController::class, 'index'])->name('dashboard');
-    Route::get('/courses', [StudentCourseController::class, 'index'])->name('courses');
-    Route::get('/cart', [CartController::class, 'index'])->name('cart');
+    Route::get('/dashboard', fn () => redirect(route('verification.notice').'#overview'))->name('dashboard');
+    Route::get('/courses', fn () => redirect(route('verification.notice').'#courses'))->name('courses');
+    Route::get('/cart', fn () => redirect(route('verification.notice').'#cart'))->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
-    Route::get('/wishlist', [StudentMiscController::class, 'wishlist'])->name('wishlist');
+    Route::get('/wishlist', fn () => redirect()->route('favorites.index'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
-    Route::get('/certificates', [StudentMiscController::class, 'certificates'])->name('certificates');
-    Route::get('/orders', [StudentMiscController::class, 'orders'])->name('orders');
-    Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::get('/certificates', fn () => redirect(route('verification.notice').'#certificates'))->name('certificates');
+    Route::get('/orders', fn () => redirect(route('verification.notice').'#orders'))->name('orders');
+    Route::get('/profile', fn () => redirect(route('verification.notice').'#profile'))->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
@@ -103,6 +111,15 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:instructor'])->pre
     Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
     Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
     Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
+    Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
+    Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
+    Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
+    Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
+    Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
+    Route::put('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'updateAnswers'])->name('quiz-questions.answers.update');
+    Route::put('/quiz-answers/{answer}', [InstructorQuizController::class, 'updateAnswer'])->name('quiz-answers.update');
+    Route::delete('/quiz-answers/{answer}', [InstructorQuizController::class, 'destroyAnswer'])->name('quiz-answers.destroy');
     Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
     Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
     Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
@@ -120,12 +137,28 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('/users', [UserController::class, 'index'])->name('users');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::post('/users/bulk', [UserController::class, 'bulk'])->name('users.bulk');
+    Route::get('/users/export/csv', [UserController::class, 'exportCsv'])->name('users.export.csv');
+    Route::get('/users/export/pdf', [UserController::class, 'exportPdf'])->name('users.export.pdf');
+    Route::post('/users/import', [UserController::class, 'import'])->name('users.import');
+    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::post('/users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
+    Route::delete('/users/{user}/force', [UserController::class, 'forceDelete'])->name('users.force-delete');
+    Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+    Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
+    Route::put('/roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+    Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+    Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/courses/pending', [ManageController::class, 'pendingCourses'])->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
+    Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
     Route::post('/courses/{course}/reject', [ManageController::class, 'reject'])->name('courses.reject');
+    Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
+    Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
+    Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');

@@ -36,6 +36,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Enrollment::class);
     }
 
+    public function quizAttempts(): HasMany
+    {
+        return $this->hasMany(QuizAttempt::class);
+    }
+
     public function cart(): HasMany
     {
         return $this->hasMany(Cart::class);
@@ -49,6 +54,20 @@ class User extends Authenticatable implements MustVerifyEmail
     public function wishlists(): HasMany
     {
         return $this->hasMany(Wishlist::class);
+    }
+
+    public function favoriteCourses(): BelongsToMany
+    {
+        return $this->belongsToMany(Course::class, 'wishlists')->withTimestamps();
+    }
+
+    public function hasFavoritedCourse(Course|int $course): bool
+    {
+        $courseId = $course instanceof Course ? $course->id : $course;
+
+        return $this->wishlists()
+            ->where('course_id', $courseId)
+            ->exists();
     }
 
     public function reviews(): HasMany
@@ -126,7 +145,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return match ($this->role) {
             'admin' => route('admin.dashboard'),
             'instructor' => route('instructor.dashboard'),
-            default => route('student.dashboard'),
+            default => route('verification.notice'),
         };
     }
 

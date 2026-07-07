@@ -27,7 +27,7 @@
 
                 <nav class="hidden items-center gap-5 text-sm font-semibold text-slate-700 dark:text-slate-300 lg:flex">
                     <a href="{{ route('home') }}#categories" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khám phá</a>
-                    <a href="{{ route('home') }}#courses" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khóa học</a>
+                    <a href="{{ route('courses.index') }}" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khóa học</a>
                     <a href="{{ route('home') }}#paths" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Lộ trình</a>
                     <a href="{{ route('home') }}#instructors" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Giảng viên</a>
                     <a href="{{ route('home') }}#business" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Doanh nghiệp</a>
@@ -93,7 +93,7 @@
             </div>
             <nav class="flex flex-col gap-1 p-5 text-base font-semibold text-slate-700 dark:text-slate-300">
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khám phá</a>
-                <a href="{{ route('home') }}#courses" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
+                <a href="{{ route('courses.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Danh mục</a>
                 <a href="{{ route('home') }}#paths" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Lộ trình</a>
                 <a href="{{ route('home') }}#instructors" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>
@@ -141,7 +141,7 @@
                 <div>
                     <h4 class="mb-4 font-bold">Giới thiệu</h4>
                     <ul class="space-y-3 text-slate-400">
-                        <li><a href="{{ route('home') }}#courses" class="hover:text-white">Khóa học</a></li>
+                        <li><a href="{{ route('courses.index') }}" class="hover:text-white">Khóa học</a></li>
                         <li><a href="{{ route('home') }}#categories" class="hover:text-white">Danh mục</a></li>
                         <li><a href="{{ route('home') }}#paths" class="hover:text-white">Lộ trình học</a></li>
                     </ul>

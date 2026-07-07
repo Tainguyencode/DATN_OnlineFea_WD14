@@ -8,6 +8,8 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Review;
+use App\Services\LearningProgressService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +25,9 @@ class CourseController extends Controller
         $level = $request->query('level');
         $pricing = $request->query('pricing');
 
-        $courses = $this->publishedCoursesQuery()
+        $courses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->with(['instructor:id,name,avatar', 'category:id,name,slug'])
-            ->withCount(['lessons', 'courseSections'])
+            ->withCount(['lessons', 'courseSections']))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where('title', 'like', "%{$search}%");
             })
@@ -85,11 +87,11 @@ class CourseController extends Controller
                 ->orderBy('sort_order'),
         ]);
 
-        $relatedCourses = $this->publishedCoursesQuery()
+        $relatedCourses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->where('id', '!=', $course->id)
             ->when($course->category_id, fn ($query) => $query->where('category_id', $course->category_id))
             ->with(['instructor:id,name,avatar', 'category:id,name'])
-            ->withCount('lessons')
+            ->withCount('lessons'))
             ->orderByDesc('rating_avg')
             ->orderByDesc('published_at')
             ->limit(4)
@@ -112,6 +114,9 @@ class CourseController extends Controller
             && auth()->user()->isInstructor()
             && $course->isOwnedBy(auth()->user());
         $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
+        $isFavorited = auth()->check()
+            && auth()->user()->isStudent()
+            && $course->isFavoritedBy(auth()->user());
 
         return view('courses.show', compact(
             'course',
@@ -123,7 +128,8 @@ class CourseController extends Controller
             'totalSections',
             'isEnrolled',
             'canManageCourse',
-            'canAccessFullCourse'
+            'canAccessFullCourse',
+            'isFavorited'
         ));
     }
 
@@ -137,9 +143,16 @@ class CourseController extends Controller
         $course->load(['instructor:id,name,avatar,bio', 'category:id,name,slug']);
         $lesson->loadMissing(['section:id,course_id,title,sort_order', 'chapter:id,course_id,title,sort_order']);
 
-        $isEnrolled = $this->isEnrolled($course);
+        $enrollment = auth()->check()
+            ? Enrollment::where('user_id', auth()->id())
+                ->where('course_id', $course->id)
+                ->where('status', 'active')
+                ->first()
+            : null;
+        $isEnrolled = (bool) $enrollment;
         $canAccessLesson = $canBypassCourseVisibility || $isEnrolled || $lesson->is_preview;
         $videoSource = null;
+        $lessonProgress = null;
 
         if ($canAccessLesson && $lesson->type === 'video') {
             $videoSource = $lesson->video_path
@@ -147,13 +160,63 @@ class CourseController extends Controller
                 : $lesson->video_url;
         }
 
+        if (auth()->check()) {
+            $lessonProgress = DB::table('lesson_progress')
+                ->where('user_id', auth()->id())
+                ->where('lesson_id', $lesson->id)
+                ->first();
+        }
+
         return view('courses.lesson', compact(
             'course',
             'lesson',
+            'enrollment',
+            'lessonProgress',
             'isEnrolled',
             'canAccessLesson',
             'videoSource'
         ));
+    }
+
+    public function updateLessonProgress(
+        Request $request,
+        Course $course,
+        Lesson $lesson,
+        LearningProgressService $progressService
+    ): JsonResponse {
+        abort_unless($request->user()?->isStudent(), 403);
+        abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
+        abort_unless($this->isPublished($course), 404);
+
+        $enrollmentExists = Enrollment::where('user_id', $request->user()->id)
+            ->where('course_id', $course->id)
+            ->where('status', 'active')
+            ->exists();
+
+        abort_unless($enrollmentExists, 403);
+
+        $validated = $request->validate([
+            'watched_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
+            'completed' => ['nullable', 'boolean'],
+        ]);
+
+        $watchedSeconds = (int) ($validated['watched_seconds'] ?? 0);
+        $durationSeconds = $this->lessonDurationSeconds($lesson);
+        $completed = $request->boolean('completed');
+
+        if ($lesson->type === 'video' && $durationSeconds > 0) {
+            $completed = $completed || $watchedSeconds >= (int) ceil($durationSeconds * 0.9);
+        }
+
+        $progress = $progressService->recordLessonProgress(
+            $request->user()->id,
+            $course,
+            $lesson,
+            $watchedSeconds,
+            $completed
+        );
+
+        return response()->json($progress);
     }
 
     public function enroll(Course $course): RedirectResponse
@@ -209,7 +272,18 @@ class CourseController extends Controller
 
     private function isPublished(Course $course): bool
     {
-        return $course->status === Course::STATUS_PUBLISHED && (bool) $course->is_published;
+        return $course->isPublished();
+    }
+
+    private function withFavoriteState($query)
+    {
+        if (! auth()->check() || ! auth()->user()->isStudent()) {
+            return $query;
+        }
+
+        return $query->withExists([
+            'wishlists as is_favorited' => fn ($favoriteQuery) => $favoriteQuery->where('user_id', auth()->id()),
+        ]);
     }
 
     private function canBypassCourseVisibility(Course $course): bool
@@ -243,5 +317,12 @@ class CourseController extends Controller
         }
 
         return $lesson->chapter_id && $lesson->chapter()->where('course_id', $course->id)->exists();
+    }
+
+    private function lessonDurationSeconds(Lesson $lesson): int
+    {
+        $duration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+
+        return max($duration, 0);
     }
 }

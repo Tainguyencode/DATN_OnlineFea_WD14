@@ -21,20 +21,20 @@ class HomeController extends Controller
 
         $featuredIds = [];
 
-        $featuredCourses = Course::where('status', Course::STATUS_PUBLISHED)
+        $featuredCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
             ->where('is_published', true)
             ->when(! empty($featuredIds), fn ($q) => $q->whereIn('id', $featuredIds))
             ->when(empty($featuredIds), fn ($q) => $q->where('is_featured', true))
             ->with(['instructor:id,name,avatar', 'category:id,name'])
-            ->withCount('lessons')
+            ->withCount('lessons'))
             ->limit(4)
             ->get();
 
         if ($featuredCourses->isEmpty()) {
-            $featuredCourses = Course::where('status', Course::STATUS_PUBLISHED)
+            $featuredCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
                 ->where('is_published', true)
                 ->with(['instructor:id,name,avatar', 'category:id,name'])
-                ->withCount('lessons')
+                ->withCount('lessons'))
                 ->orderByDesc('rating_avg')
                 ->limit(4)
                 ->get();
@@ -43,10 +43,10 @@ class HomeController extends Controller
         $categories = Category::withCount(['courses' => fn ($q) => $q->where('status', Course::STATUS_PUBLISHED)->where('is_published', true)])
             ->get();
 
-        $query = Course::with(['instructor:id,name,avatar', 'category:id,name'])
+        $query = $this->withFavoriteState(Course::with(['instructor:id,name,avatar', 'category:id,name'])
             ->withCount('lessons')
             ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true);
+            ->where('is_published', true));
 
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
@@ -95,5 +95,16 @@ class HomeController extends Controller
             'banner', 'featuredCourses', 'categories', 'courses',
             'learningPaths', 'faqs', 'stats', 'badges'
         ));
+    }
+
+    private function withFavoriteState($query)
+    {
+        if (! auth()->check() || ! auth()->user()->isStudent()) {
+            return $query;
+        }
+
+        return $query->withExists([
+            'wishlists as is_favorited' => fn ($favoriteQuery) => $favoriteQuery->where('user_id', auth()->id()),
+        ]);
     }
 }

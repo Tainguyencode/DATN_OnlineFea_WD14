@@ -67,17 +67,17 @@
                            class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">
                             Xem chi tiết
                         </a>
-                        <form method="POST" action="{{ route('admin.courses.approve', $course) }}">
+                        <form method="POST" action="{{ route('admin.courses.approve', $course) }}" onsubmit="return confirm('Duyệt khóa học này?')">
                             @csrf
                             <button type="submit"
                                     class="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
                                 Duyệt
                             </button>
                         </form>
-                        <form method="POST" action="{{ route('admin.courses.reject', $course) }}" class="space-y-2">
+                        <form method="POST" action="{{ route('admin.courses.reject', $course) }}" class="space-y-2" onsubmit="return confirm('Từ chối khóa học này?')">
                             @csrf
                             <label class="sr-only" for="reason-{{ $course->id }}">Lý do từ chối</label>
-                            <textarea id="reason-{{ $course->id }}" name="reason" rows="3" required maxlength="1000"
+                            <textarea id="reason-{{ $course->id }}" name="reject_reason" rows="3" required maxlength="1000"
                                       placeholder="Lý do từ chối..."
                                       class="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors duration-200 focus:border-rose-500 focus-visible:ring-2 focus-visible:ring-rose-500/20"></textarea>
                             <button type="submit"

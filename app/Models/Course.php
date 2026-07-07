@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Course extends Model
@@ -76,6 +77,16 @@ class Course extends Model
         return $this->hasMany(Enrollment::class);
     }
 
+    public function wishlists(): HasMany
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
+    public function favoritedByUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'wishlists')->withTimestamps();
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
@@ -89,6 +100,22 @@ class Course extends Model
     public function isOwnedBy(User $user): bool
     {
         return (int) $this->instructor_id === (int) $user->id;
+    }
+
+    public function isPublished(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHED && (bool) $this->is_published;
+    }
+
+    public function isFavoritedBy(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $this->wishlists()
+            ->where('user_id', $user->id)
+            ->exists();
     }
 
     public function rejectionReasonText(): ?string
