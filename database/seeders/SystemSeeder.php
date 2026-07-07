@@ -201,7 +201,29 @@ class SystemSeeder extends Seeder
                 'read_at' => null,
                 'created_at' => now()->subDays(4)->addHours(2),
                 'updated_at' => now()->subDays(4)->addHours(2),
-            ]
+            ],
+            [
+                'user_id' => 2, // Nguyễn Văn Giảng
+                'title' => 'Có học viên mới ghi danh',
+                'message' => 'Học viên Trần Thị Học vừa ghi danh khóa học Laravel từ Zero đến Hero.',
+                'type' => 'new_enrollment',
+                'url' => '/instructor/courses',
+                'is_read' => false,
+                'read_at' => null,
+                'created_at' => now()->subDay(),
+                'updated_at' => now()->subDay(),
+            ],
+            [
+                'user_id' => 2,
+                'title' => 'Thông báo từ quản trị viên',
+                'message' => 'Hệ thống sẽ bảo trì vào 22:00 tối nay. Vui lòng hoàn tất upload bài giảng trước thời gian này.',
+                'type' => 'announcement',
+                'url' => null,
+                'is_read' => false,
+                'read_at' => null,
+                'created_at' => now()->subHours(3),
+                'updated_at' => now()->subHours(3),
+            ],
         ];
 
         DB::table('push_notifications')->insert($pushNotifications);
