@@ -23,6 +23,7 @@
     <progress class="mt-4 h-3 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-[#0056D2] [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:bg-[#0056D2] dark:[&::-webkit-progress-bar]:bg-slate-800" max="100" value="{{ min(100, $avgProgress) }}"></progress>
 </div>
 
+{{-- Recent courses --}}
 <div class="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
     <div class="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-800">
         <h2 class="text-lg font-bold text-slate-900 dark:text-white">Khóa học gần đây</h2>
