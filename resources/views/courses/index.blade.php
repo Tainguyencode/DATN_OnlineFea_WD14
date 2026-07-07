@@ -144,7 +144,7 @@
                             <span class="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-slate-900 backdrop-blur">
                                 {{ $levelLabel }}
                             </span>
-                            <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-3 top-3 z-10" />
+                            <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-3 top-3 z-20" />
                         </div>
 
                         <div class="flex flex-1 flex-col p-5">

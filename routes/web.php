@@ -26,7 +26,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('verification.notice').'#courses'))->name('my-courses');
 });
-Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->group(function () {
+Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
     Route::post('/courses/{course}/favorite', [StudentMiscController::class, 'storeFavorite'])->name('courses.favorite.store');
     Route::delete('/courses/{course}/favorite', [StudentMiscController::class, 'destroyFavorite'])->name('courses.favorite.destroy');

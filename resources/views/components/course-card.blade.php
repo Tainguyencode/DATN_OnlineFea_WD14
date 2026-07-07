@@ -32,7 +32,7 @@
             @endif
         </a>
 
-        <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-10" />
+        <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-20" />
 
         @if($course->is_featured)
             <span class="absolute left-2 top-2 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Best Seller</span>
