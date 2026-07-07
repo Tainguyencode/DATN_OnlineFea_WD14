@@ -7,7 +7,6 @@
     <input
         type="text"
         name="captcha_answer"
-        required
         inputmode="numeric"
         placeholder="Kết quả"
         class="auth-input"

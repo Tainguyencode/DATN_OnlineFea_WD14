@@ -21,11 +21,10 @@
             <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
 
             <x-auth.input
-                label="Email hoặc username"
+                label="Email"
                 name="identifier"
                 :value="old('identifier')"
-                placeholder="you@example.com hoặc username"
-                required
+                placeholder="you@example.com"
                 autofocus
             />
 
@@ -34,7 +33,6 @@
                 name="password"
                 x-bind:type="showPassword ? 'text' : 'password'"
                 placeholder="Nhập mật khẩu"
-                required
                 inputClass="pr-14"
             >
                 <x-slot:labelAction>

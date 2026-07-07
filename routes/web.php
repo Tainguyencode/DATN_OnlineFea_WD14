@@ -24,7 +24,7 @@ Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
 Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
-    Route::get('/my-courses', fn () => redirect(route('verification.notice').'#courses'))->name('my-courses');
+    Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
@@ -36,7 +36,8 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
+    Route::get('/register/{role}', [AuthController::class, 'showRegisterRole'])->where('role', 'student|instructor')->name('register.role');
+    Route::post('/register/{role}', [AuthController::class, 'register'])->where('role', 'student|instructor')->middleware('throttle:6,1');
     Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
     Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])->middleware('throttle:3,1')->name('password.email');
     Route::get('/reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
@@ -78,19 +79,19 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'active', 'verified', '2fa'])->name('dashboard');
 
 // ─── HỌC VIÊN ───
-Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
-    Route::get('/dashboard', fn () => redirect(route('verification.notice').'#overview'))->name('dashboard');
-    Route::get('/courses', fn () => redirect(route('verification.notice').'#courses'))->name('courses');
-    Route::get('/cart', fn () => redirect(route('verification.notice').'#cart'))->name('cart');
+Route::middleware(['auth', 'active', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
+    Route::get('/dashboard', [\App\Http\Controllers\Web\AuthController::class, 'studentDashboard'])->name('dashboard');
+    Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
+    Route::get('/cart', fn () => redirect(route('student.dashboard').'#cart'))->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
-    Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
-    Route::get('/wishlist', fn () => redirect(route('verification.notice').'#wishlist'))->name('wishlist');
-    Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
-    Route::get('/certificates', fn () => redirect(route('verification.notice').'#certificates'))->name('certificates');
-    Route::get('/orders', fn () => redirect(route('verification.notice').'#orders'))->name('orders');
-    Route::get('/profile', fn () => redirect(route('verification.notice').'#profile'))->name('profile');
-    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/cart/checkout', [CartController::class, 'checkout'])->middleware('verified')->name('cart.checkout');
+    Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
+    Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->middleware('verified')->name('wishlist.toggle');
+    Route::get('/certificates', fn () => redirect(route('student.dashboard').'#certificates'))->name('certificates');
+    Route::get('/orders', fn () => redirect(route('student.dashboard').'#orders'))->name('orders');
+    Route::get('/profile', fn () => redirect(route('student.dashboard').'#profile'))->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->middleware('verified')->name('profile.update');
 });
 
 // ─── GIẢNG VIÊN ───
