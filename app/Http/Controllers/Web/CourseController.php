@@ -25,9 +25,9 @@ class CourseController extends Controller
         $level = $request->query('level');
         $pricing = $request->query('pricing');
 
-        $courses = $this->publishedCoursesQuery()
+        $courses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->with(['instructor:id,name,avatar', 'category:id,name,slug'])
-            ->withCount(['lessons', 'courseSections'])
+            ->withCount(['lessons', 'courseSections']))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where('title', 'like', "%{$search}%");
             })
@@ -87,11 +87,11 @@ class CourseController extends Controller
                 ->orderBy('sort_order'),
         ]);
 
-        $relatedCourses = $this->publishedCoursesQuery()
+        $relatedCourses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->where('id', '!=', $course->id)
             ->when($course->category_id, fn ($query) => $query->where('category_id', $course->category_id))
             ->with(['instructor:id,name,avatar', 'category:id,name'])
-            ->withCount('lessons')
+            ->withCount('lessons'))
             ->orderByDesc('rating_avg')
             ->orderByDesc('published_at')
             ->limit(4)
@@ -114,6 +114,9 @@ class CourseController extends Controller
             && auth()->user()->isInstructor()
             && $course->isOwnedBy(auth()->user());
         $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
+        $isFavorited = auth()->check()
+            && auth()->user()->isStudent()
+            && $course->isFavoritedBy(auth()->user());
 
         return view('courses.show', compact(
             'course',
@@ -125,7 +128,8 @@ class CourseController extends Controller
             'totalSections',
             'isEnrolled',
             'canManageCourse',
-            'canAccessFullCourse'
+            'canAccessFullCourse',
+            'isFavorited'
         ));
     }
 
@@ -268,7 +272,18 @@ class CourseController extends Controller
 
     private function isPublished(Course $course): bool
     {
-        return $course->status === Course::STATUS_PUBLISHED && (bool) $course->is_published;
+        return $course->isPublished();
+    }
+
+    private function withFavoriteState($query)
+    {
+        if (! auth()->check() || ! auth()->user()->isStudent()) {
+            return $query;
+        }
+
+        return $query->withExists([
+            'wishlists as is_favorited' => fn ($favoriteQuery) => $favoriteQuery->where('user_id', auth()->id()),
+        ]);
     }
 
     private function canBypassCourseVisibility(Course $course): bool

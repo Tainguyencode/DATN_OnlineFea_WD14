@@ -1,3 +1,8 @@
+@props([
+    'course',
+    'favorited' => null,
+])
+
 @php
     $discountPrice = $course->discount_price ?? $course->sale_price;
     $price = $discountPrice ?? $course->price;
@@ -12,39 +17,44 @@
     ];
     $gradient = $gradients[$course->id % count($gradients)];
     $lessonCount = $course->lessons_count ?? 0;
+    $isFavorited = (bool) ($favorited ?? ($course->is_favorited ?? false));
 @endphp
 
-<a href="{{ route('courses.show', $course->slug) }}" class="group bg-white dark:bg-[#161615] rounded-2xl border border-slate-200/60 dark:border-slate-800/80 overflow-hidden hover:shadow-xl hover:shadow-indigo-500/5 dark:hover:shadow-none hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all duration-300 flex flex-col">
-    <!-- Thumbnail / Gradient Placeholder -->
-    <div class="aspect-video bg-gradient-to-br {{ $gradient }} relative overflow-hidden">
-        @if($course->thumbnail)
-            <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
-        @else
-            <div class="absolute inset-0 flex items-center justify-center">
-                <svg class="h-14 w-14 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824 2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg>
-            </div>
-        @endif
+<article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white transition-all duration-300 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 dark:border-slate-800/80 dark:bg-[#161615] dark:hover:border-indigo-500/50 dark:hover:shadow-none">
+    <div class="relative aspect-video overflow-hidden bg-gradient-to-br {{ $gradient }}">
+        <a href="{{ route('courses.show', $course->slug) }}" class="block h-full" aria-label="Xem chi tiết {{ $course->title }}">
+            @if($course->thumbnail)
+                <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+            @else
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <svg class="h-14 w-14 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824 2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg>
+                </div>
+            @endif
+        </a>
+
+        <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-10" />
+
         @if($course->is_featured)
             <span class="absolute left-2 top-2 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Best Seller</span>
         @endif
-        <span class="absolute right-2 top-2 rounded bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">
+        <span class="absolute bottom-2 right-2 rounded bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">
             {{ $levelLabels[$course->level] ?? $course->level }}
         </span>
     </div>
 
-    <div class="flex flex-1 flex-col pt-3">
+    <div class="flex flex-1 flex-col p-4">
         @if($course->category)
             <span class="mb-1 text-xs font-semibold uppercase tracking-wide text-[#0056D2] dark:text-blue-300">{{ $course->category->name }}</span>
         @endif
-        
+
         <h3 class="mb-1.5 line-clamp-2 min-h-10 text-base font-bold leading-snug text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">
-            {{ $course->title }}
+            <a href="{{ route('courses.show', $course->slug) }}">{{ $course->title }}</a>
         </h3>
 
-        <p class="text-sm text-slate-500 dark:text-slate-400 mb-3 line-clamp-2 leading-6">
+        <p class="mb-3 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
             {{ $course->short_description ?: Str::limit($course->description, 110) }}
         </p>
-        
+
         <p class="mb-1.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
             {{ $course->instructor?->name ?? 'Giảng viên FEA' }}
         </p>
@@ -72,14 +82,14 @@
                     @endif
                 @endif
             </div>
-            <span class="text-xs text-slate-400 dark:text-slate-400 flex items-center gap-1 font-medium">
-                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            <span class="flex items-center gap-1 text-xs font-medium text-slate-400 dark:text-slate-400">
+                <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 1 1 0 5.292M15 21H3v-1a6 6 0 0 1 12 0v1zm0 0h6v-1a6 6 0 0 0-9-5.197M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
                 {{ $lessonCount }} bài
             </span>
         </div>
 
-        <span class="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition group-hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:group-hover:bg-indigo-200">
+        <a href="{{ route('courses.show', $course->slug) }}" class="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200">
             Xem chi tiết
-        </span>
+        </a>
     </div>
-</a>
+</article>

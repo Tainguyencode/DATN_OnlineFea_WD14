@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $course->title . ' - Fea LMS')
+@section('title', $course->title . ' - Website học online FEA')
 
 @section('content')
 @php
@@ -109,6 +109,7 @@
                             <a href="{{ route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
                                 Vào học
                             </a>
+                            <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
                         @elseif(auth()->check())
                             @if(auth()->user()->isStudent())
@@ -119,6 +120,7 @@
                                             Đăng ký học miễn phí
                                         </button>
                                     </form>
+                                    <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
                                     <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bài học không preview sẽ mở sau khi bạn đăng ký.</p>
                                 @else
                                     <form method="POST" action="{{ route('student.cart.add', $course) }}">
@@ -127,12 +129,7 @@
                                             Thêm vào giỏ hàng
                                         </button>
                                     </form>
-                                    <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}" class="mt-3">
-                                        @csrf
-                                        <button type="submit" class="flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
-                                            Yêu thích
-                                        </button>
-                                    </form>
+                                    <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
                                     <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Thanh toán trong giỏ hàng để mở toàn bộ khóa học.</p>
                                 @endif
                             @else
@@ -144,6 +141,7 @@
                             <a href="{{ route('login') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
                                 Đăng ký học
                             </a>
+                            <x-favorite-button :course="$course" :favorited="false" :label="true" :block="true" class="mt-3" />
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
                                 Đã có tài khoản?
                                 <a href="{{ route('login') }}" class="font-bold text-indigo-600 hover:underline dark:text-indigo-300">Đăng nhập</a>
@@ -238,7 +236,7 @@
 
                                                 @if($canAccessLesson && $lesson->type === 'quiz')
                                                     <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="rounded-lg border border-violet-200 px-3 py-2 font-bold text-violet-700 transition hover:bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:hover:bg-violet-500/10">
-                                                        Lam quiz
+                                                        Làm quiz
                                                     </a>
                                                 @endif
 

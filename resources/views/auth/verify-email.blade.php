@@ -276,8 +276,9 @@
                                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ $course->instructor?->name ?? 'FEA Instructor' }}</p>
                                 <div class="mt-5 flex gap-3">
                                     <a href="{{ route('courses.show', $course->slug) }}" class="flex h-10 flex-1 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-[#0056D2] dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100">Chi tiết</a>
-                                    <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}">
+                                    <form method="POST" action="{{ route('courses.favorite.destroy', $course) }}">
                                         @csrf
+                                        @method('DELETE')
                                         <button type="submit" @if(! $canUseStudentActions) disabled @endif class="h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Bỏ lưu</button>
                                     </form>
                                 </div>

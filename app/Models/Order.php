@@ -11,7 +11,7 @@ class Order extends Model
 {
     protected $fillable = [
         'order_code', 'user_id', 'coupon_id', 'subtotal', 'discount_amount',
-        'total_amount', 'status', 'payment_method', 'transaction_id', 'items',
+        'total_amount', 'status', 'payment_method',
     ];
 
     protected function casts(): array
@@ -20,7 +20,6 @@ class Order extends Model
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'total_amount' => 'decimal:2',
-            'items' => 'array',
         ];
     }
 
@@ -32,5 +31,15 @@ class Order extends Model
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(Coupon::class);
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function payment(): HasOne
+    {
+        return $this->hasOne(Payment::class);
     }
 }
