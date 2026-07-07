@@ -190,16 +190,15 @@
                     </div>
                 </div>
 
-                @if($cart->items->isEmpty())
+                @if($cart->courses->isEmpty())
                     <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
                         Giỏ hàng trống.
                     </div>
                 @else
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                         <div class="space-y-4 lg:col-span-2">
-                            @foreach($cart->items as $item)
+                            @foreach($cart->courses as $course)
                                 @php
-                                    $course = $item->course;
                                     $price = $course ? ($course->discount_price ?? $course->sale_price ?? $course->price) : 0;
                                 @endphp
                                 @continue(! $course)

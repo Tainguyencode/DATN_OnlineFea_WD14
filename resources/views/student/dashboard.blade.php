@@ -35,7 +35,7 @@
                 <svg class="h-8 w-8 text-[#0056D2] dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
             </div>
             <p class="font-medium text-slate-500 dark:text-slate-400">Bạn chưa đăng ký khóa học nào</p>
-            <a href="{{ route('courses.index') }}" class="ui-button-primary mt-4">Khám phá khóa học</a>
+            <a href="{{ route('courses.index') }}" class="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200 mt-4 px-6">Khám phá khóa học</a>
         </div>
     @else
         <div class="divide-y divide-slate-200 dark:divide-slate-800">
