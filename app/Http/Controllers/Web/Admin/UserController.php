@@ -22,19 +22,16 @@ class UserController extends Controller
 {
     public function index(Request $request): View
     {
-        $users = User::query()
-            ->when($request->filled('role'), fn ($query) => $query->where('role', $request->string('role')))
-            ->when($request->filled('search'), function ($query) use ($request) {
+        $query = User::query()
+            ->when($request->filled('role'), fn ($q) => $q->where('role', $request->string('role')))
+            ->when($request->filled('search'), function ($q) use ($request) {
                 $search = $request->string('search');
 
-                $query->where(function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
+                $q->where(function ($innerQuery) use ($search) {
+                    $innerQuery->where('name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%");
                 });
-            })
-            ->orderByDesc('created_at')
-            ->paginate(15)
-            ->withQueryString();
+            });
 
         $sort = $request->get('sort', 'created_at');
         $direction = $request->get('direction') === 'asc' ? 'asc' : 'desc';
@@ -148,32 +145,6 @@ class UserController extends Controller
         ));
     }
 
-    public function store(Request $request): RedirectResponse
-    {
-        Gate::authorize('users.create');
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', 'unique:users,username'],
-            'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
-            'phone' => ['nullable', 'string', 'max:20'],
-            'role' => ['required', 'in:student,instructor,admin'],
-            'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
-        unset($validated['password_confirmation']);
-
-        $user = User::create([
-            ...$validated,
-            'is_active' => $request->boolean('is_active', true),
-            'email_verified_at' => now(),
-            'password_changed_at' => now(),
-        ]);
-
-        ActivityLogService::log(auth()->id(), 'create_user', User::class, $user->id, ['role' => $user->role], $request);
-
-        return back()->with('success', 'Tạo người dùng thành công.');
-    }
 
     public function store(StoreUserRequest $request): RedirectResponse
     {
