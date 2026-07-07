@@ -72,22 +72,36 @@ class AuthController extends Controller
 
     public function showRegister(): View
     {
-        return view('auth.register', [
+        return view('auth.register');
+    }
+
+    public function showRegisterRole(string $role): View
+    {
+        abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
+
+        return view('auth.register-role', [
+            'role' => $role,
             'captcha' => CaptchaService::generate('register'),
         ]);
     }
 
-    public function register(RegisterRequest $request, AuthService $authService): RedirectResponse
+    public function register(string $role, RegisterRequest $request, AuthService $authService): RedirectResponse
     {
+        abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
+
         $request->validateCaptcha();
-        $user = $authService->register($request->validated(), $request);
+
+        $data = $request->validated();
+        $data['role'] = $role;
+
+        $user = $authService->register($data, $request);
 
         event(new Registered($user));
 
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('verification.notice')
+        return redirect()->intended($user->dashboardUrl())
             ->with('success', 'Đăng ký thành công. Vui lòng xác thực email để mở khóa đầy đủ tính năng.');
     }
 
@@ -165,15 +179,16 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user?->isStudent()) {
-            return view('auth.verify-email', $this->studentHubData($user));
-        }
-
         if ($user?->hasVerifiedEmail()) {
             return redirect()->intended($user->dashboardUrl());
         }
 
-        return view('auth.verify-email');
+        return view('auth.verify-email', ['currentUser' => $user]);
+    }
+
+    public function studentDashboard(Request $request): View
+    {
+        return view('auth.verify-email', $this->studentHubData($request->user()));
     }
 
     public function verifyEmail(EmailVerificationRequest $request): RedirectResponse
@@ -264,7 +279,7 @@ class AuthController extends Controller
         if (! $user) {
             $user = User::create([
                 'name' => $socialUser->getName() ?: Str::headline(Str::before($email, '@')),
-                'username' => $this->uniqueUsername($socialUser->getNickname() ?: Str::before($email, '@')),
+                'username' => AuthService::generateUniqueUsername($socialUser->getName() ?: Str::before($email, '@')),
                 'email' => $email,
                 'email_verified_at' => now(),
                 'password' => Str::password(24),
@@ -383,10 +398,10 @@ class AuthController extends Controller
             ->get();
 
         $cart = Cart::firstOrCreate(['user_id' => $user->id])
-            ->load(['items.course.instructor:id,name']);
+            ->load(['courses.instructor:id,name']);
 
-        $cartTotal = $cart->items->sum(
-            fn ($item) => (float) ($item->course->discount_price ?? $item->course->sale_price ?? $item->course->price ?? 0)
+        $cartTotal = $cart->courses->sum(
+            fn ($course) => (float) ($course->discount_price ?? $course->sale_price ?? $course->price ?? 0)
         );
 
         $publishedCourse = fn ($query) => $query
@@ -420,7 +435,7 @@ class AuthController extends Controller
             'in_progress' => (clone $activeEnrollments)->where('progress_percent', '<', 100)->whereNull('completed_at')->count(),
             'completed' => (clone $activeEnrollments)->whereNotNull('completed_at')->count(),
             'certificates' => Certificate::where('user_id', $user->id)->count(),
-            'cart_items' => $cart->items->count(),
+            'cart_items' => $cart->courses->count(),
             'wishlist' => (clone $wishlistQuery)->count(),
             'orders' => Order::where('user_id', $user->id)->count(),
         ];

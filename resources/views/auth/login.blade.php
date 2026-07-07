@@ -21,11 +21,10 @@
             <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
 
             <x-auth.input
-                label="Email hoặc username"
+                label="Email"
                 name="identifier"
                 :value="old('identifier')"
-                placeholder="you@example.com hoặc username"
-                required
+                placeholder="you@example.com"
                 autofocus
             />
 
@@ -34,7 +33,6 @@
                 name="password"
                 x-bind:type="showPassword ? 'text' : 'password'"
                 placeholder="Nhập mật khẩu"
-                required
                 inputClass="pr-14"
             >
                 <x-slot:labelAction>
@@ -69,6 +67,13 @@
                         </button>
                     </form>
                 @endforeach
+            </div>
+
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+                <p class="font-semibold">Tài khoản demo mặc định</p>
+                <p class="mt-1">Admin: <span class="font-mono">admin@example.com</span> / <span class="font-mono">password</span></p>
+                <p class="mt-1">Giảng viên: <span class="font-mono">instructor@example.com</span> / <span class="font-mono">password</span></p>
+                <p class="mt-1">Học viên: <span class="font-mono">student@example.com</span> / <span class="font-mono">password</span></p>
             </div>
         @endif
 

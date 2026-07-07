@@ -33,7 +33,7 @@ class ProfileController extends Controller
             ->limit(12)
             ->get();
 
-        return view('profile.show', compact('user', 'sessions', 'activityLogs'));
+        return view('admin.profile.show', compact('user', 'sessions', 'activityLogs'));
     }
 
     public function update(Request $request, AuthService $authService): RedirectResponse

@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Web\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
-use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Coupon;
 use App\Models\Enrollment;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Payment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +25,8 @@ class CartController extends Controller
 
     public function index(): View
     {
-        $cart = $this->getCart()->load(['items.course.instructor:id,name']);
-        $total = $cart->items->sum(fn ($i) => $i->course->discount_price ?? $i->course->sale_price ?? $i->course->price);
+        $cart = $this->getCart()->load(['courses.instructor:id,name']);
+        $total = $cart->courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
 
         return view('student.cart.index', compact('cart', 'total'));
     }
@@ -41,7 +42,7 @@ class CartController extends Controller
         }
 
         $cart = $this->getCart();
-        CartItem::firstOrCreate(['cart_id' => $cart->id, 'course_id' => $course->id]);
+        $cart->courses()->syncWithoutDetaching([$course->id]);
 
         return back()->with('success', 'Đã thêm vào giỏ hàng!');
     }
@@ -49,7 +50,7 @@ class CartController extends Controller
     public function remove(int $courseId): RedirectResponse
     {
         $cart = $this->getCart();
-        CartItem::where('cart_id', $cart->id)->where('course_id', $courseId)->delete();
+        $cart->courses()->detach($courseId);
 
         return back()->with('success', 'Đã xóa khỏi giỏ hàng.');
     }
@@ -61,12 +62,12 @@ class CartController extends Controller
             'coupon_code' => 'nullable|string',
         ]);
 
-        $cart = $this->getCart()->load('items.course');
-        if ($cart->items->isEmpty()) {
+        $cart = $this->getCart()->load('courses');
+        if ($cart->courses->isEmpty()) {
             return back()->with('error', 'Giỏ hàng trống.');
         }
 
-        $subtotal = $cart->items->sum(fn ($i) => $i->course->discount_price ?? $i->course->sale_price ?? $i->course->price);
+        $subtotal = $cart->courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
         $discount = 0;
         $coupon = null;
 
@@ -82,14 +83,6 @@ class CartController extends Controller
         $total = max(0, $subtotal - $discount);
 
         DB::transaction(function () use ($cart, $subtotal, $discount, $total, $coupon, $validated) {
-            $items = $cart->items->map(function ($item) {
-                return [
-                    'course_id' => $item->course_id,
-                    'price' => $item->course->discount_price ?? $item->course->sale_price ?? $item->course->price,
-                    'title' => $item->course->title,
-                ];
-            })->toArray();
-
             $order = Order::create([
                 'order_code' => 'ORD-'.strtoupper(Str::random(8)),
                 'user_id' => auth()->id(),
@@ -99,13 +92,28 @@ class CartController extends Controller
                 'total_amount' => $total,
                 'status' => 'paid',
                 'payment_method' => $validated['payment_method'],
-                'transaction_id' => 'TXN-'.strtoupper(Str::random(10)),
-                'items' => $items,
             ]);
 
-            foreach ($cart->items as $item) {
+            Payment::create([
+                'order_id' => $order->id,
+                'gateway' => $validated['payment_method'],
+                'transaction_id' => 'TXN-'.strtoupper(Str::random(10)),
+                'amount' => $total,
+                'status' => 'success',
+                'paid_at' => now(),
+            ]);
+
+            foreach ($cart->courses as $course) {
+                $price = $course->discount_price ?? $course->sale_price ?? $course->price;
+
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'course_id' => $course->id,
+                    'price' => $price,
+                ]);
+
                 $enrollment = Enrollment::firstOrCreate(
-                    ['user_id' => auth()->id(), 'course_id' => $item->course_id],
+                    ['user_id' => auth()->id(), 'course_id' => $course->id],
                     [
                         'order_id' => $order->id,
                         'status' => 'active',
@@ -115,7 +123,7 @@ class CartController extends Controller
                 );
 
                 if ($enrollment->wasRecentlyCreated) {
-                    $item->course->increment('enrollment_count');
+                    $course->increment('enrollment_count');
                 }
             }
 
@@ -123,7 +131,7 @@ class CartController extends Controller
                 $coupon->increment('used_count');
             }
 
-            $cart->items()->delete();
+            $cart->courses()->detach();
         });
 
         return redirect()->route('student.courses')->with('success', 'Thanh toán thành công! Bạn có thể bắt đầu học ngay.');
