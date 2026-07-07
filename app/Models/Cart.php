@@ -15,8 +15,8 @@ class Cart extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function items(): HasMany
+    public function courses(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->hasMany(CartItem::class);
+        return $this->belongsToMany(Course::class, 'cart_items', 'cart_id', 'course_id')->withTimestamps();
     }
 }

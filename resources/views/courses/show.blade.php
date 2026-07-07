@@ -306,70 +306,70 @@
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
                 <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Giảng viên</h3>
                 <div class="mt-4 flex items-center gap-4">
-                    <div class="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-xl font-extrabold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xl font-extrabold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
                         {{ strtoupper(substr($course->instructor?->name ?? 'F', 0, 1)) }}
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <div class="font-bold text-slate-950 dark:text-white">{{ $course->instructor?->name ?? 'Fea Instructor' }}</div>
                         <div class="text-sm text-slate-500 dark:text-slate-400">Instructor</div>
                     </div>
-
-                    @auth
-                        @if(auth()->user()->isStudent())
-                            <div class="mb-6 space-y-3">
-                                <form method="POST" action="{{ route('student.cart.add', $course) }}">
-                                    @csrf
-                                    <button type="submit" class="ui-button-primary w-full">
-                                        Thêm vào giỏ hàng
-                                    </button>
-                                </form>
-                                <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}">
-                                    @csrf
-                                    <button type="submit" class="ui-button-secondary flex w-full items-center justify-center gap-2">
-                                        <svg class="h-5 w-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 0 0 0 6.364L12 20.364l7.682-7.682a4.5 4.5 0 0 0-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 0 0-6.364 0Z"></path></svg>
-                                        Yêu thích
-                                    </button>
-                                </form>
-                            </div>
-                        @else
-                            <a href="{{ auth()->user()->dashboardUrl() }}" class="ui-button-primary mb-6 w-full">
-                                Vào Dashboard
-                            </a>
-                        @endif
-                    @else
-                        <div class="mb-6 space-y-3">
-                            <a href="{{ route('register') }}" class="ui-button-primary w-full">
-                                Đăng ký để học ngay
-                            </a>
-                            <p class="text-center text-sm text-slate-500 dark:text-slate-400">Đã có tài khoản? <a href="{{ route('login') }}" class="font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">Đăng nhập</a></p>
-                        </div>
-                    @endauth
-
-                    <hr class="mb-5 border-slate-200 dark:border-slate-800">
-
-                    <h4 class="mb-3 text-sm font-bold text-slate-900 dark:text-white">Khóa học này bao gồm:</h4>
-                    <ul class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-                        <li class="flex items-center gap-3">
-                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z"></path></svg>
-                            {{ $totalLessons }} bài giảng chất lượng cao
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14.752 11.168-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z"></path></svg>
-                            {{ $previewLessons }} bài học thử miễn phí
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 12 2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138Z"></path></svg>
-                            Cấp chứng chỉ hoàn thành
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path></svg>
-                            Sở hữu khóa học trọn đời
-                        </li>
-                    </ul>
                 </div>
                 @if($course->instructor?->bio)
                     <p class="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $course->instructor->bio }}</p>
                 @endif
+
+                @auth
+                    @if(auth()->user()->isStudent())
+                        <div class="mt-6 space-y-3">
+                            <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                                @csrf
+                                <button type="submit" class="ui-button-primary w-full">
+                                    Thêm vào giỏ hàng
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}">
+                                @csrf
+                                <button type="submit" class="ui-button-secondary flex w-full items-center justify-center gap-2">
+                                    <svg class="h-5 w-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 0 0 0 6.364L12 20.364l7.682-7.682a4.5 4.5 0 0 0-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 0 0-6.364 0Z"></path></svg>
+                                    Yêu thích
+                                </button>
+                            </form>
+                        </div>
+                    @else
+                        <a href="{{ auth()->user()->dashboardUrl() }}" class="ui-button-primary mt-6 w-full">
+                            Vào Dashboard
+                        </a>
+                    @endif
+                @else
+                    <div class="mt-6 space-y-3">
+                        <a href="{{ route('register.role', 'student') }}" class="ui-button-primary w-full">
+                            Đăng ký để học ngay
+                        </a>
+                        <p class="text-center text-sm text-slate-500 dark:text-slate-400">Đã có tài khoản? <a href="{{ route('login') }}" class="font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">Đăng nhập</a></p>
+                    </div>
+                @endauth
+
+                <hr class="my-5 border-slate-200 dark:border-slate-800">
+
+                <h4 class="mb-3 text-sm font-bold text-slate-900 dark:text-white">Khóa học này bao gồm:</h4>
+                <ul class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+                    <li class="flex items-center gap-3">
+                        <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z"></path></svg>
+                        {{ $totalLessons }} bài giảng chất lượng cao
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14.752 11.168-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z"></path></svg>
+                        {{ $previewLessons }} bài học thử miễn phí
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 12 2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138Z"></path></svg>
+                        Cấp chứng chỉ hoàn thành
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <svg class="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path></svg>
+                        Sở hữu khóa học trọn đời
+                    </li>
+                </ul>
             </div>
 
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#161615]">

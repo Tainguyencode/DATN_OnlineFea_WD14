@@ -35,7 +35,7 @@
 
                     <div class="flex flex-col gap-3 sm:flex-row">
                         <a href="#courses" class="ui-button-primary">Khám phá khóa học</a>
-                        <a href="{{ route('register') }}" class="ui-button-secondary bg-white">Bắt đầu học</a>
+                        <a href="{{ route('register.role', 'student') }}" class="ui-button-secondary bg-white">Bắt đầu học</a>
                     </div>
                 </div>
             </div>
@@ -330,7 +330,7 @@
                 <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Nâng cao năng lực đội ngũ với lộ trình học tập có cấu trúc</h2>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">Tổ chức khóa học, quản lý tiến độ và theo dõi kết quả học tập trong một nền tảng thống nhất.</p>
             </div>
-            <a href="{{ route('register') }}" class="ui-button-primary justify-center">Bắt đầu triển khai</a>
+            <a href="{{ route('register.role', 'instructor') }}" class="ui-button-primary justify-center">Bắt đầu triển khai</a>
         </div>
     </div>
 </section>
@@ -385,7 +385,7 @@
     <div class="mx-auto max-w-4xl px-4 text-center">
         <h2 class="mb-4 text-3xl font-bold">Sẵn sàng nâng tầm kiến thức của bạn?</h2>
         <p class="mx-auto mb-8 max-w-xl text-white/85">Đăng ký tài khoản sinh viên miễn phí trên nền tảng của chúng tôi ngay hôm nay để trải nghiệm môi trường học tập hiện đại.</p>
-        <a href="{{ route('register') }}" class="inline-flex items-center justify-center rounded-lg border border-white bg-white px-8 py-3 font-medium text-[#0056D2] transition duration-200 hover:bg-blue-50">
+        <a href="{{ route('register.role', 'student') }}" class="inline-flex items-center justify-center rounded-lg border border-white bg-white px-8 py-3 font-medium text-[#0056D2] transition duration-200 hover:bg-blue-50">
             Tạo tài khoản miễn phí
         </a>
     </div>
