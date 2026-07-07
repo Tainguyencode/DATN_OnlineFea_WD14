@@ -59,6 +59,8 @@ class DatabaseSeeder extends Seeder
             'ai_chat_messages',
             'support_tickets',
             'support_ticket_messages',
+            'reviews',
+            'lesson_progress',
         ];
 
         foreach ($tables as $table) {

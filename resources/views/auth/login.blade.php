@@ -68,6 +68,13 @@
                     </form>
                 @endforeach
             </div>
+
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+                <p class="font-semibold">Tài khoản demo mặc định</p>
+                <p class="mt-1">Admin: <span class="font-mono">admin@example.com</span> / <span class="font-mono">password</span></p>
+                <p class="mt-1">Giảng viên: <span class="font-mono">instructor@example.com</span> / <span class="font-mono">password</span></p>
+                <p class="mt-1">Học viên: <span class="font-mono">student@example.com</span> / <span class="font-mono">password</span></p>
+            </div>
         @endif
 
         <x-auth.footer-link

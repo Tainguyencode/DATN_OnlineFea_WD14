@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\ManageController;
+use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\HomeController;
+use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
@@ -25,6 +27,11 @@ Route::get('/courses', [CourseController::class, 'index'])->name('courses.index'
 Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
+});
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->group(function () {
+    Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
+    Route::post('/courses/{course}/favorite', [StudentMiscController::class, 'storeFavorite'])->name('courses.favorite.store');
+    Route::delete('/courses/{course}/favorite', [StudentMiscController::class, 'destroyFavorite'])->name('courses.favorite.destroy');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
@@ -72,6 +79,10 @@ Route::middleware(['auth', 'active', 'verified', '2fa'])->group(function () {
     Route::post('/profile/two-factor/enable', [ProfileController::class, 'enableTwoFactor'])->name('profile.two-factor.enable');
     Route::delete('/profile/two-factor', [ProfileController::class, 'disableTwoFactor'])->name('profile.two-factor.disable');
     Route::delete('/profile/sessions/others', [ProfileController::class, 'destroyOtherSessions'])->name('profile.sessions.destroy-others');
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
 });
 
 Route::get('/dashboard', function () {
@@ -157,6 +168,8 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
+    Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications', [AdminNotificationController::class, 'store'])->name('notifications.store');
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
