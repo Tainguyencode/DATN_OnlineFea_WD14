@@ -9,6 +9,8 @@ use App\Models\Course;
 use App\Models\Coupon;
 use App\Models\Enrollment;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Payment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -82,14 +84,6 @@ class CartController extends Controller
         $total = max(0, $subtotal - $discount);
 
         DB::transaction(function () use ($cart, $subtotal, $discount, $total, $coupon, $validated) {
-            $items = $cart->items->map(function ($item) {
-                return [
-                    'course_id' => $item->course_id,
-                    'price' => $item->course->discount_price ?? $item->course->sale_price ?? $item->course->price,
-                    'title' => $item->course->title,
-                ];
-            })->toArray();
-
             $order = Order::create([
                 'order_code' => 'ORD-'.strtoupper(Str::random(8)),
                 'user_id' => auth()->id(),
@@ -99,11 +93,26 @@ class CartController extends Controller
                 'total_amount' => $total,
                 'status' => 'paid',
                 'payment_method' => $validated['payment_method'],
+            ]);
+
+            Payment::create([
+                'order_id' => $order->id,
+                'gateway' => $validated['payment_method'],
                 'transaction_id' => 'TXN-'.strtoupper(Str::random(10)),
-                'items' => $items,
+                'amount' => $total,
+                'status' => 'success',
+                'paid_at' => now(),
             ]);
 
             foreach ($cart->items as $item) {
+                $price = $item->course->discount_price ?? $item->course->sale_price ?? $item->course->price;
+                
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'course_id' => $item->course_id,
+                    'price' => $price,
+                ]);
+
                 $enrollment = Enrollment::firstOrCreate(
                     ['user_id' => auth()->id(), 'course_id' => $item->course_id],
                     [
