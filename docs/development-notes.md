@@ -21,3 +21,6 @@
 ### Commit 7: feat: xay dung module dang nhap va phan quyen nguoi dung (2026-07-06 10:00:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 8: feat: thiet ke layout responsive cho trang dashboard (2026-07-08 14:20:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
