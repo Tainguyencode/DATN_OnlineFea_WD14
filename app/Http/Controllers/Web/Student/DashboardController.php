@@ -17,19 +17,20 @@ class DashboardController extends Controller
         $user = auth()->user();
 
         $enrollments = Enrollment::where('user_id', $user->id)
+            ->withLearningAccess()
             ->with(['course.instructor:id,name', 'course.category:id,name'])
             ->orderByDesc('updated_at')
             ->limit(4)
             ->get();
 
         $stats = [
-            'enrolled' => Enrollment::where('user_id', $user->id)->count(),
-            'in_progress' => Enrollment::where('user_id', $user->id)->where('progress_percent', '<', 100)->whereNull('completed_at')->count(),
-            'completed' => Enrollment::where('user_id', $user->id)->whereNotNull('completed_at')->count(),
+            'enrolled' => Enrollment::where('user_id', $user->id)->withLearningAccess()->count(),
+            'in_progress' => Enrollment::where('user_id', $user->id)->withLearningAccess()->where('progress_percent', '<', 100)->whereNull('completed_at')->count(),
+            'completed' => Enrollment::where('user_id', $user->id)->withLearningAccess()->whereNotNull('completed_at')->count(),
             'certificates' => Certificate::where('user_id', $user->id)->count(),
         ];
 
-        $avgProgress = Enrollment::where('user_id', $user->id)->avg('progress_percent') ?? 0;
+        $avgProgress = Enrollment::where('user_id', $user->id)->withLearningAccess()->avg('progress_percent') ?? 0;
 
         return view('student.dashboard', compact('enrollments', 'stats', 'avgProgress'));
     }

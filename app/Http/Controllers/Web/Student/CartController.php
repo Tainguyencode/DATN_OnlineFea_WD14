@@ -32,11 +32,14 @@ class CartController extends Controller
 
     public function add(Course $course): RedirectResponse
     {
-        if ($course->status !== 'published') {
+        if (! $course->isPublished()) {
             return back()->with('error', 'Khóa học chưa được xuất bản.');
         }
 
-        if (Enrollment::where('user_id', auth()->id())->where('course_id', $course->id)->exists()) {
+        if (Enrollment::where('user_id', auth()->id())
+            ->where('course_id', $course->id)
+            ->withLearningAccess()
+            ->exists()) {
             return back()->with('error', 'Bạn đã đăng ký khóa học này.');
         }
 
@@ -104,12 +107,18 @@ class CartController extends Controller
             ]);
 
             foreach ($cart->items as $item) {
-                Enrollment::firstOrCreate(
+                $enrollment = Enrollment::updateOrCreate(
                     ['user_id' => auth()->id(), 'course_id' => $item->course_id],
-                    ['order_id' => $order->id]
+                    [
+                        'order_id' => $order->id,
+                        'status' => Enrollment::STATUS_ACTIVE,
+                        'enrolled_at' => now(),
+                    ]
                 );
 
-                $item->course->increment('enrollment_count');
+                if ($enrollment->wasRecentlyCreated) {
+                    $item->course->increment('enrollment_count');
+                }
             }
 
             if ($coupon) {
