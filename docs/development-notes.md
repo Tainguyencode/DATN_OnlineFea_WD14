@@ -24,3 +24,6 @@
 ### Commit 8: feat: thiet ke layout responsive cho trang dashboard (2026-07-08 14:20:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 9: feat: hoan thien quy trinh duyet khoa hoc va tien do bai hoc (2026-07-10 09:15:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
