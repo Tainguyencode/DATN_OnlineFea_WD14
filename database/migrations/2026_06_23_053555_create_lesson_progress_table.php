@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('lesson_progress', function (Blueprint $table) {
             $table->id();
-             $table->foreignId('user_id')
+            
+            $table->foreignId('user_id')
                 ->constrained('users')
                 ->cascadeOnDelete();
 
@@ -29,7 +30,16 @@ return new class extends Migration
 
             $table->timestamp('completed_at')
                 ->nullable();
+            
             $table->timestamps();
+
+            // Unique constraint: Một user chỉ có một progress record cho mỗi lesson
+            $table->unique(['user_id', 'lesson_id']);
+
+            // Index cho các query thường dùng
+            $table->index('user_id');
+            $table->index('lesson_id');
+            $table->index('is_completed');
         });
     }
 

@@ -61,4 +61,13 @@ class Lesson extends Model
     {
         return $this->hasMany(VideoNote::class);
     }
+
+    /**
+     * Relationship: Lesson có nhiều LessonProgress records
+     * (Mỗi user học lesson này sẽ có một progress record)
+     */
+    public function progress(): HasMany
+    {
+        return $this->hasMany(LessonProgress::class);
+    }
 }
