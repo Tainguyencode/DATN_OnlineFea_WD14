@@ -134,13 +134,34 @@
     @endif
 
     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <p class="text-sm font-semibold uppercase tracking-wide text-rose-600">Nội dung kiểm duyệt</p>
                 <h3 class="mt-1 text-lg font-bold text-slate-950">Chương và bài học</h3>
             </div>
-            <span class="text-sm font-semibold text-slate-500">{{ $curriculumSections->count() }} chương · {{ $totalLessons }} bài · {{ $formatDuration($totalVideoDurationSeconds) }}</span>
+            <div class="flex flex-col items-stretch gap-2 sm:items-end">
+                <span class="text-sm font-semibold text-slate-500">{{ $curriculumSections->count() }} chương · {{ $totalLessons }} bài · {{ $formatDuration($totalVideoDurationSeconds) }}</span>
+                @if($videoLessons->isNotEmpty())
+                    <button type="button"
+                            id="btn-scan-course-ai"
+                            data-video-lessons='@json($videoLessons)'
+                            class="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        <span>🔍 Quét AI toàn bộ khóa học ({{ $videoLessons->count() }} video)</span>
+                    </button>
+                @endif
+            </div>
         </div>
+
+        @if($videoLessons->isNotEmpty())
+            <div id="course-ai-progress-panel" class="mt-4 hidden rounded-lg border border-violet-200 bg-violet-50 p-4">
+                <p id="course-ai-status-text" class="text-sm font-semibold text-violet-800">Đang khởi tạo...</p>
+                <p id="course-ai-frame-text" class="mt-1 text-xs font-medium text-violet-700"></p>
+                <div class="mt-3 h-3 w-full overflow-hidden rounded-full bg-violet-200">
+                    <div id="course-ai-progress-bar" class="h-full bg-violet-600 transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="course-ai-percent-text" class="mt-2 text-xs font-bold text-violet-700">0%</p>
+            </div>
+        @endif
 
         <div class="mt-5 space-y-4">
             @forelse($curriculumSections as $section)
@@ -180,6 +201,67 @@
                                         @if($lesson->type === 'video' && $lesson->video_path)
                                             <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
                                                 <video src="{{ asset('storage/'.$lesson->video_path) }}" controls class="h-full w-full"></video>
+                                            </div>
+                                            
+                                            {{-- Nút và khu vực hiển thị quét AI --}}
+                                            <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $lesson->id }}">
+                                                <button type="button" class="btn-scan-ai inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                                                    <span>Quét nội dung</span>
+                                                </button>
+                                                
+                                                <div class="ai-progress-area hidden mt-3 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+                                                    <p class="ai-status-text text-sm font-semibold text-indigo-700">Đang khởi tạo...</p>
+                                                    <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-indigo-200">
+                                                        <div class="ai-progress-bar h-full bg-indigo-600 transition-all duration-300" style="width: 0%"></div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="ai-result-area mt-4 {{ $lesson->videoModeration ? '' : 'hidden' }}">
+                                                    @if($lesson->videoModeration)
+                                                        @php $mod = $lesson->videoModeration; @endphp
+                                                        <div class="rounded-lg border {{ ($mod->violence || $mod->adult || $mod->weapon || $mod->copyright_risk === 'high') ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50' }} p-4 shadow-sm">
+                                                            <h6 class="font-bold text-slate-900 mb-2">Kết quả quét xong</h6>
+                                                            <div class="flex flex-wrap gap-2 mb-3">
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->violence ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Bạo lực: {{ $mod->violence ? 'Có' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->adult ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">18+: {{ $mod->adult ? 'Có' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->weapon ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Vũ khí: {{ $mod->weapon ? 'Có' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->watermark ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">Watermark: {{ $mod->watermark ? 'Có' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->tiktok_logo ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">TikTok: {{ $mod->tiktok_logo ? 'Có' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->youtube_logo ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">YouTube: {{ $mod->youtube_logo ? 'Có' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->copyright_risk === 'high' ? 'bg-rose-100 text-rose-700' : ($mod->copyright_risk === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700') }}">Bản quyền: {{ strtoupper($mod->copyright_risk) }}</span>
+                                                            </div>
+                                                            @if($mod->summary)
+                                                                <p class="text-sm text-slate-700 mb-3"><span class="font-semibold">Tóm tắt:</span> {{ $mod->summary }}</p>
+                                                            @endif
+                                                            
+                                                            @if(is_array($mod->details) && count($mod->details) > 0)
+                                                                <div class="text-xs text-slate-600 bg-white rounded border border-slate-200 p-2 max-h-32 overflow-y-auto">
+                                                                    <p class="font-semibold mb-1">Chi tiết lỗi các khung hình:</p>
+                                                                    <ul class="list-disc pl-4">
+                                                                    @foreach($mod->details as $d)
+                                                                        @php
+                                                                            $violations = [];
+                                                                            if(!empty($d['violence'])) $violations[] = 'Bạo lực';
+                                                                            if(!empty($d['adult'])) $violations[] = 'Nội dung 18+';
+                                                                            if(!empty($d['weapon'])) $violations[] = 'Vũ khí';
+                                                                            if(!empty($d['tiktok_logo'])) $violations[] = 'TikTok';
+                                                                            if(!empty($d['youtube_logo'])) $violations[] = 'YouTube';
+                                                                            if(!empty($d['watermark'])) $violations[] = 'Watermark';
+                                                                            if(isset($d['copyright_risk']) && $d['copyright_risk'] === 'high') $violations[] = 'Nguy cơ bản quyền Cao';
+                                                                        @endphp
+                                                                        @if(count($violations) > 0)
+                                                                            <li>
+                                                                                <span class="font-bold">{{ gmdate("H:i:s", $d['timestamp'] ?? 0) }}</span>: {{ implode(', ', $violations) }}
+                                                                                @if(!empty($d['reason'])) - {{ $d['reason'] }} @endif
+                                                                            </li>
+                                                                        @endif
+                                                                    @endforeach
+                                                                    </ul>
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+                                                </div>
                                             </div>
                                         @endif
                                     </div>
@@ -382,7 +464,8 @@
     </section>
 
 <script>
-(function () {
+document.addEventListener('DOMContentLoaded', function () {
+    // 1. Logic duyệt khóa học
     var form     = document.getElementById('course-review-form');
     var actionInput = document.getElementById('review-action-input');
     var buttons  = document.querySelectorAll('.review-action-btn');
@@ -400,7 +483,259 @@
             form.submit();
         });
     });
-})();
+
+    // 2. Logic Quét AI
+    async function parseJsonResponse(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            if (response.status === 419) {
+                throw new Error('Phiên làm việc đã hết hạn. Vui lòng tải lại trang và thử lại.');
+            }
+            throw new Error(`Máy chủ trả về phản hồi không hợp lệ (HTTP ${response.status}).`);
+        }
+        return response.json();
+    }
+
+    function aiFetchHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'X-Requested-With': 'XMLHttpRequest',
+        };
+    }
+
+    function setAiScanBusy(busy) {
+        document.querySelectorAll('.btn-scan-ai, #btn-scan-course-ai').forEach(function (btn) {
+            btn.disabled = busy;
+        });
+    }
+
+    function calcCourseProgressPercent(videoIndex, totalVideos, phase, frameIndex, frameTotal) {
+        if (totalVideos === 0) {
+            return 0;
+        }
+
+        var withinVideo = 0;
+        if (phase === 'extract') {
+            withinVideo = 0.05;
+        } else if (phase === 'analyze' && frameTotal > 0) {
+            withinVideo = 0.05 + (0.85 * (frameIndex / frameTotal));
+        } else if (phase === 'save') {
+            withinVideo = 0.95;
+        } else if (phase === 'done') {
+            withinVideo = 1;
+        }
+
+        return Math.min(100, Math.round(((videoIndex + withinVideo) / totalVideos) * 100));
+    }
+
+    function updateCourseProgress(videoIndex, totalVideos, lessonTitle, phase, frameIndex, frameTotal) {
+        var panel = document.getElementById('course-ai-progress-panel');
+        var statusText = document.getElementById('course-ai-status-text');
+        var frameText = document.getElementById('course-ai-frame-text');
+        var progressBar = document.getElementById('course-ai-progress-bar');
+        var percentText = document.getElementById('course-ai-percent-text');
+
+        if (!panel || !statusText || !frameText || !progressBar || !percentText) {
+            return;
+        }
+
+        panel.classList.remove('hidden');
+
+        var percent = calcCourseProgressPercent(videoIndex, totalVideos, phase, frameIndex, frameTotal);
+        statusText.innerText = 'Đang quét video ' + (videoIndex + 1) + ' / ' + totalVideos + ': ' + lessonTitle;
+
+        if (phase === 'extract') {
+            frameText.innerText = 'Đang cắt frame (mỗi 30s)...';
+        } else if (phase === 'analyze') {
+            frameText.innerText = 'Frame ' + frameIndex + ' / ' + frameTotal;
+        } else if (phase === 'save') {
+            frameText.innerText = 'Đang lưu kết quả...';
+        } else if (phase === 'done') {
+            frameText.innerText = 'Hoàn thành video này.';
+        } else {
+            frameText.innerText = '';
+        }
+
+        progressBar.style.width = percent + '%';
+        percentText.innerText = percent + '%';
+    }
+
+    async function scanLesson(lessonId, onProgress) {
+        onProgress({ phase: 'extract', frameIndex: 0, frameTotal: 0 });
+
+        var extRes = await fetch('/admin/ai-moderation/' + lessonId + '/extract', {
+            method: 'POST',
+            headers: aiFetchHeaders(),
+        });
+
+        var extData = await parseJsonResponse(extRes);
+        if (!extRes.ok) {
+            throw new Error(extData.error || 'Lỗi cắt frame');
+        }
+
+        var frames = extData.frames;
+        var total = extData.total;
+
+        if (total === 0) {
+            throw new Error('Không cắt được frame nào');
+        }
+
+        var aiResults = [];
+        var lastApiError = '';
+
+        for (var i = 0; i < total; i++) {
+            var framePath = frames[i];
+            var match = framePath.match(/frame_(\d+)\.jpg$/);
+            var timestamp = match ? parseInt(match[1], 10) : i * 30;
+
+            onProgress({ phase: 'analyze', frameIndex: i + 1, frameTotal: total });
+
+            var anRes = await fetch('/admin/ai-moderation/analyze-frame', {
+                method: 'POST',
+                headers: aiFetchHeaders(),
+                body: JSON.stringify({ frame_path: framePath, timestamp: timestamp }),
+            });
+
+            var anData = await parseJsonResponse(anRes);
+            if (anRes.ok && !anData.error) {
+                aiResults.push(anData);
+            } else if (anData.error) {
+                lastApiError = anData.error;
+            }
+        }
+
+        if (aiResults.length === 0) {
+            throw new Error(
+                lastApiError
+                    ? 'Không phân tích được frame nào: ' + lastApiError
+                    : 'Không phân tích được frame nào. Kiểm tra lại API key OpenRouter hoặc quota.'
+            );
+        }
+
+        onProgress({ phase: 'save', frameIndex: total, frameTotal: total });
+
+        var saveRes = await fetch('/admin/ai-moderation/' + lessonId + '/save', {
+            method: 'POST',
+            headers: aiFetchHeaders(),
+            body: JSON.stringify({ results: aiResults }),
+        });
+
+        var saveData = await parseJsonResponse(saveRes);
+        if (!saveRes.ok) {
+            throw new Error(saveData.error || saveData.message || 'Lỗi lưu DB');
+        }
+
+        onProgress({ phase: 'done', frameIndex: total, frameTotal: total });
+
+        return saveData;
+    }
+
+    document.querySelectorAll('.btn-scan-ai').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            var container = this.closest('.ai-moderation-container');
+            var lessonId = container.dataset.lessonId;
+            var progressArea = container.querySelector('.ai-progress-area');
+            var statusText = container.querySelector('.ai-status-text');
+            var progressBar = container.querySelector('.ai-progress-bar');
+            var scanBtn = this;
+            var labelSpan = scanBtn.querySelector('span');
+            var defaultLabel = labelSpan.innerText;
+
+            setAiScanBusy(true);
+            labelSpan.innerText = 'Đang kiểm duyệt...';
+            progressArea.classList.remove('hidden');
+
+            try {
+                await scanLesson(lessonId, function (state) {
+                    if (state.phase === 'extract') {
+                        statusText.innerText = 'Đang cắt frame (mỗi 30s)...';
+                        progressBar.style.width = '10%';
+                    } else if (state.phase === 'analyze') {
+                        statusText.innerText = 'Đang phân tích ' + state.frameIndex + '/' + state.frameTotal + ' frame...';
+                        progressBar.style.width = (10 + (90 * state.frameIndex / state.frameTotal)) + '%';
+                    } else if (state.phase === 'save') {
+                        statusText.innerText = 'Đang lưu kết quả...';
+                        progressBar.style.width = '98%';
+                    }
+                });
+
+                window.location.reload();
+            } catch (err) {
+                alert('Lỗi quét AI: ' + err.message);
+                labelSpan.innerText = defaultLabel;
+                progressArea.classList.add('hidden');
+                setAiScanBusy(false);
+            }
+        });
+    });
+
+    var courseScanBtn = document.getElementById('btn-scan-course-ai');
+    if (courseScanBtn) {
+        courseScanBtn.addEventListener('click', async function () {
+            var videoLessons = JSON.parse(courseScanBtn.dataset.videoLessons || '[]');
+            var totalVideos = videoLessons.length;
+
+            if (totalVideos === 0) {
+                alert('Khóa học không có video để quét.');
+                return;
+            }
+
+            if (!confirm('Quét AI toàn bộ ' + totalVideos + ' video của khóa học?\nQuá trình có thể mất nhiều thời gian và chạy tuần tự từng video.')) {
+                return;
+            }
+
+            var labelSpan = courseScanBtn.querySelector('span');
+            var defaultLabel = labelSpan.innerText;
+            var stats = {
+                total: totalVideos,
+                success: 0,
+                failed: 0,
+                errors: [],
+            };
+
+            setAiScanBusy(true);
+            labelSpan.innerText = 'Đang quét toàn bộ khóa học...';
+
+            for (var i = 0; i < totalVideos; i++) {
+                var lesson = videoLessons[i];
+
+                try {
+                    await scanLesson(lesson.id, function (state) {
+                        updateCourseProgress(i, totalVideos, lesson.title, state.phase, state.frameIndex, state.frameTotal);
+                    });
+                    stats.success++;
+                } catch (err) {
+                    stats.failed++;
+                    stats.errors.push({ title: lesson.title, message: err.message });
+                    console.error('[AI Moderation] Lỗi quét video "' + lesson.title + '" (ID: ' + lesson.id + '):', err);
+                }
+            }
+
+            updateCourseProgress(totalVideos - 1, totalVideos, '', 'done', 1, 1);
+            document.getElementById('course-ai-status-text').innerText = 'Đã quét xong ' + totalVideos + '/' + totalVideos + ' video';
+            document.getElementById('course-ai-frame-text').innerText =
+                'Thành công: ' + stats.success + ' · Lỗi: ' + stats.failed;
+            document.getElementById('course-ai-progress-bar').style.width = '100%';
+            document.getElementById('course-ai-percent-text').innerText = '100%';
+
+            var summary = 'Đã quét xong ' + totalVideos + '/' + totalVideos + ' video\n\n'
+                + 'Tổng số video: ' + stats.total + '\n'
+                + 'Quét thành công: ' + stats.success + '\n'
+                + 'Lỗi: ' + stats.failed;
+
+            if (stats.errors.length > 0) {
+                summary += '\n\nVideo lỗi:\n' + stats.errors.map(function (item) {
+                    return '- ' + item.title + ': ' + item.message;
+                }).join('\n');
+            }
+
+            alert(summary);
+            window.location.reload();
+        });
+    }
+});
 </script>
 </div>
 

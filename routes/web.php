@@ -8,6 +8,8 @@ use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\ProfileController;
+use App\Services\GeminiService;
+use App\Services\VideoFrameExtractor;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
@@ -20,6 +22,24 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+
+    $frames = $extractor->extract(
+        storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
+    );
+
+    return $frames;
+});
+
+Route::get('/test-gemini', function (GeminiService $gemini) {
+    $framePath = storage_path('app' . DIRECTORY_SEPARATOR . 'temp_frames' . DIRECTORY_SEPARATOR . 'frame_0.jpg');
+
+    $result = $gemini->analyzeImage($framePath);
+
+    return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+});
+
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
 Route::middleware('auth')->group(function () {
@@ -151,8 +171,13 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
-    Route::post('/courses/{course}/reject', [ManageController::class, 'reject'])->name('courses.reject');
+    Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::post('/courses/{course}/review', [ManageController::class, 'submitReview'])->name('courses.submitReview');
+    
+    // Quét AI Video Moderation
+    Route::post('/ai-moderation/{lesson}/extract', [\App\Http\Controllers\Web\Admin\AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
+    Route::post('/ai-moderation/analyze-frame', [\App\Http\Controllers\Web\Admin\AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
+    Route::post('/ai-moderation/{lesson}/save', [\App\Http\Controllers\Web\Admin\AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
     Route::post('/courses/{course}/publish', [ManageController::class, 'publish'])->name('courses.publish');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');

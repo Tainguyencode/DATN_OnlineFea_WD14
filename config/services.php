@@ -58,5 +58,11 @@ return [
         'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
         'redirect' => env('MICROSOFT_REDIRECT_URI', env('APP_URL').'/auth/microsoft/callback'),
     ],
+    'gemini' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+    ],
+        'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+    ],
 
 ];

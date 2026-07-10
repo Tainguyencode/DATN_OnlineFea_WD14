@@ -19,7 +19,8 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
 
         $course->load([
-            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
         ]);
 
         return view('instructor.courses.curriculum', [

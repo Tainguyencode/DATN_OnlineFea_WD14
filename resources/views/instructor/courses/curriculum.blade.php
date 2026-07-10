@@ -65,6 +65,10 @@
         </div>
     </div>
 
+    @if(in_array($course->status, ['need_revision', 'rejected'], true))
+        @include('instructor.courses.partials.ai-moderation-results', ['course' => $course])
+    @endif
+
     @if ($errors->any())
         <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
             <p class="font-bold">Vui lòng kiểm tra lại thông tin.</p>

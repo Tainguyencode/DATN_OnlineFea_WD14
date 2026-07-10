@@ -164,6 +164,12 @@
                                                     <p class="mt-2 line-clamp-2 text-xs font-semibold text-rose-600">Lý
                                                         do: {{ $course->rejectionReasonText() }}</p>
                                                 @endif
+                                                @if (in_array($course->status, ['rejected', 'need_revision'], true))
+                                                    <a href="{{ route('instructor.courses.edit', $course) }}#ai-moderation-results"
+                                                       class="mt-1 inline-flex text-xs font-bold text-indigo-700 transition-colors hover:text-indigo-900">
+                                                        Xem kết quả kiểm duyệt AI →
+                                                    </a>
+                                                @endif
                                                 @if ($canSubmit && $check && ! $isReady)
                                                     <ul class="mt-2 space-y-0.5 text-xs text-amber-700">
                                                         @foreach ($check->errorMessages() as $message)
@@ -287,6 +293,12 @@
                                     <p
                                         class="mt-2 rounded-lg bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-700">
                                         Lý do: {{ $course->rejectionReasonText() }}</p>
+                                @endif
+                                @if (in_array($course->status, ['rejected', 'need_revision'], true))
+                                    <a href="{{ route('instructor.courses.edit', $course) }}#ai-moderation-results"
+                                       class="mt-2 inline-flex text-xs font-bold text-indigo-700 transition-colors hover:text-indigo-900">
+                                        Xem kết quả kiểm duyệt AI →
+                                    </a>
                                 @endif
                                 @if ($canSubmit && $check && ! $isReady)
                                     <ul class="mt-2 space-y-1 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
