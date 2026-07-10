@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Web\Instructor;
 
 use App\Data\CourseSubmissionCheckResult;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Instructor\StoreChapterRequest;
+use App\Http\Requests\Instructor\StoreCourseRequest;
+use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Http\Requests\Instructor\SubmitCourseForReviewRequest;
 use App\Models\Category;
 use App\Models\Chapter;
@@ -16,7 +19,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CourseController extends Controller
@@ -54,9 +56,9 @@ class CourseController extends Controller
         return view('instructor.courses.create', compact('categories'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreCourseRequest $request): RedirectResponse
     {
-        $validated = $this->validatedCourseData($request);
+        $validated = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
             $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
@@ -96,11 +98,9 @@ class CourseController extends Controller
         return view('instructor.courses.edit', compact('course', 'categories', 'statusOptions', 'submissionCheck', 'courseReviews'));
     }
 
-    public function update(Request $request, Course $course): RedirectResponse
+    public function update(StoreCourseRequest $request, Course $course): RedirectResponse
     {
-        $this->authorize($course);
-
-        $validated = $this->validatedCourseData($request);
+        $validated = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
             $this->deleteThumbnail($course);
@@ -154,11 +154,9 @@ class CourseController extends Controller
         return back()->with('success', 'Đã ẩn khóa học khỏi trang học viên.');
     }
 
-    public function addChapter(Request $request, Course $course): RedirectResponse
+    public function addChapter(StoreChapterRequest $request, Course $course): RedirectResponse
     {
-        $this->authorize($course);
-
-        $validated = $request->validate(['title' => 'required|string|max:255']);
+        $validated = $request->validated();
 
         Chapter::create([
             'course_id' => $course->id,
@@ -169,16 +167,9 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm chương mới.');
     }
 
-    public function addLesson(Request $request, Chapter $chapter): RedirectResponse
+    public function addLesson(StoreLessonRequest $request, Chapter $chapter): RedirectResponse
     {
-        $this->authorize($chapter->course);
-
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'type' => 'required|in:video,document,quiz,assignment',
-            'video_url' => 'nullable|string|max:2048',
-            'is_preview' => 'sometimes|boolean',
-        ]);
+        $validated = $request->validated();
 
         Lesson::create([
             ...$validated,
@@ -259,22 +250,7 @@ class CourseController extends Controller
         abort_unless($course->isOwnedBy(auth()->user()), 403);
     }
 
-    private function validatedCourseData(Request $request): array
-    {
-        return $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'category_id' => ['nullable', Rule::exists('categories', 'id')],
-            'short_description' => ['nullable', 'string', 'max:500'],
-            'description' => ['nullable', 'string'],
-            'objectives' => ['nullable', 'string'],
-            'thumbnail' => ['nullable', 'image', 'max:2048'],
-            'preview_video' => ['nullable', 'string', 'max:2048'],
-            'price' => ['required', 'numeric', 'min:0', 'max:999999999'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'lte:price'],
-            'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
-            'language' => ['required', 'string', 'max:10'],
-        ]);
-    }
+
 
     private function uniqueSlug(string $title): string
     {

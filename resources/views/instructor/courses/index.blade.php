@@ -164,12 +164,7 @@
                                                     <p class="mt-2 line-clamp-2 text-xs font-semibold text-rose-600">Lý
                                                         do: {{ $course->rejectionReasonText() }}</p>
                                                 @endif
-                                                @if (in_array($course->status, ['rejected', 'need_revision'], true))
-                                                    <a href="{{ route('instructor.courses.edit', $course) }}#ai-moderation-results"
-                                                       class="mt-1 inline-flex text-xs font-bold text-indigo-700 transition-colors hover:text-indigo-900">
-                                                        Xem kết quả kiểm duyệt AI →
-                                                    </a>
-                                                @endif
+
                                                 @if ($canSubmit && $check && ! $isReady)
                                                     <ul class="mt-2 space-y-0.5 text-xs text-amber-700">
                                                         @foreach ($check->errorMessages() as $message)
@@ -200,7 +195,7 @@
                                     <td class="px-5 py-4">
                                         <div class="flex items-center justify-end gap-2">
                                             <a href="{{ route('instructor.courses.edit', $course) }}"
-                                                class="rounded-lg px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">Sửa</a>
+                                                class="rounded-lg px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">Kết quả kiểm duyệt</a>
                                             <a href="{{ route('instructor.courses.curriculum', $course) }}"
                                                 class="rounded-lg px-3 py-2 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">Quản
                                                 lý nội dung</a>
@@ -294,12 +289,7 @@
                                         class="mt-2 rounded-lg bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-700">
                                         Lý do: {{ $course->rejectionReasonText() }}</p>
                                 @endif
-                                @if (in_array($course->status, ['rejected', 'need_revision'], true))
-                                    <a href="{{ route('instructor.courses.edit', $course) }}#ai-moderation-results"
-                                       class="mt-2 inline-flex text-xs font-bold text-indigo-700 transition-colors hover:text-indigo-900">
-                                        Xem kết quả kiểm duyệt AI →
-                                    </a>
-                                @endif
+
                                 @if ($canSubmit && $check && ! $isReady)
                                     <ul class="mt-2 space-y-1 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
                                         @foreach ($check->errorMessages() as $message)
@@ -323,7 +313,7 @@
 
                             <div class="grid grid-cols-2 gap-2">
                                 <a href="{{ route('instructor.courses.edit', $course) }}"
-                                    class="rounded-lg bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">Sửa</a>
+                                    class="rounded-lg bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">Kết quả kiểm duyệt</a>
                                 <a href="{{ route('instructor.courses.curriculum', $course) }}"
                                     class="rounded-lg bg-indigo-600 px-3 py-2 text-center text-xs font-bold text-white">Nội
                                     dung</a>
