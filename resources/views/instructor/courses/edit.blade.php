@@ -75,6 +75,10 @@
         @endif
     </div>
 
+    @if(in_array($course->status, ['need_revision', 'rejected'], true))
+        @include('instructor.courses.partials.ai-moderation-results', ['course' => $course])
+    @endif
+
     @if($course->canBeSubmittedForReview())
         @include('instructor.courses.partials.submission-readiness', [
             'course' => $course,

@@ -81,7 +81,8 @@ class CourseController extends Controller
         $this->authorize($course);
 
         $course->load([
-            'courseSections.lessons',
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'category',
             'courseReviews' => fn ($q) => $q->orderByDesc('reviewed_at')->orderByDesc('id'),
             'courseReviews.reviewer:id,name,email',

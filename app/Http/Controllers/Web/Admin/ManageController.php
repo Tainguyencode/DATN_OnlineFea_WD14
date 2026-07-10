@@ -161,8 +161,8 @@ class ManageController extends Controller
         $course->load([
             'instructor:id,name,email,avatar,bio',
             'category:id,name',
-            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
-            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
         ]);
 
         $curriculumSections = $course->courseSections->isNotEmpty()
@@ -173,6 +173,14 @@ class ManageController extends Controller
         $totalLessons = $allLessons->count();
         $totalVideoDurationSeconds = $course->totalVideoDurationSeconds();
         $totalVideoDurationMinutes = $course->totalVideoDurationMinutes();
+
+        $videoLessons = $allLessons
+            ->filter(fn ($lesson) => $lesson->type === 'video' && filled($lesson->video_path))
+            ->map(fn ($lesson) => [
+                'id' => $lesson->id,
+                'title' => $lesson->title,
+            ])
+            ->values();
 
         $attachments = $allLessons
             ->flatMap(function ($lesson) {
@@ -218,6 +226,7 @@ class ManageController extends Controller
             'totalVideoDurationSeconds' => $totalVideoDurationSeconds,
             'totalVideoDurationMinutes' => $totalVideoDurationMinutes,
             'attachments' => $attachments,
+            'videoLessons' => $videoLessons,
             'checklistKeys' => CourseReviewItem::ADMIN_CHECKLIST_KEYS,
             'checklistLabels' => CourseReviewItem::ITEM_LABELS,
         ]);
