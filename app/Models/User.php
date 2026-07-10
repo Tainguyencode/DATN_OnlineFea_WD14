@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use App\Services\EmailVerificationService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -71,9 +72,43 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(TwoFactorCode::class);
     }
 
+    public function emailVerificationCodes(): HasMany
+    {
+        return $this->hasMany(EmailVerificationCode::class);
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        app(EmailVerificationService::class)->sendCode($this);
+    }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class);
+    }
+
+    public function syncPrimaryRole(?string $roleSlug = null): void
+    {
+        app(\App\Services\RoleSyncService::class)->syncPrimaryRole($this, $roleSlug);
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (User $user): void {
+            if ($user->wasRecentlyCreated || $user->wasChanged('role')) {
+                $user->syncPrimaryRole();
+            }
+        });
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    public function instructorApplication(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(InstructorApplication::class);
     }
 
     /**

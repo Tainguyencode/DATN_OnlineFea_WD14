@@ -93,7 +93,7 @@
     }
 
     .auth-social-btn {
-        @apply inline-flex h-[44px] items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+        @apply inline-flex h-[46px] w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700;
     }
 }
 
@@ -136,4 +136,71 @@ html {
 }
 .dark .chat-scroll::-webkit-scrollbar-thumb {
     background: rgb(75 85 99);
+}
+
+/* Learning player (Udemy-style) */
+.learning-player-body {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.learning-player .learning-player-body {
+    min-height: calc(100vh - 3.5rem);
+}
+
+.learning-main {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+}
+
+.learning-sidebar {
+    width: 100%;
+    max-width: 400px;
+}
+
+@media (min-width: 1024px) {
+    .learning-sidebar {
+        width: 380px;
+        flex-shrink: 0;
+    }
+
+    .learning-sidebar.learning-sidebar--closed {
+        display: none;
+    }
+
+    .learning-main--expanded {
+        flex: 1 1 auto;
+    }
+}
+
+@media (max-width: 1023px) {
+    .learning-sidebar {
+        transform: translateX(0);
+    }
+
+    .learning-sidebar.learning-sidebar--closed {
+        transform: translateX(100%);
+    }
+}
+
+.learning-toast {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 60;
+    max-width: 20rem;
+    border-radius: 6px;
+    border: 1px solid #d1d7dc;
+    background: #fff;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1c1d1f;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.learning-toast--error {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
 }

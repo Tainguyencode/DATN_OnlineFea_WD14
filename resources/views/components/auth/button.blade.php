@@ -3,10 +3,13 @@
     'loadingText' => 'Đang xử lý...',
 ])
 
+@php
+    $label = trim((string) $slot);
+@endphp
+
 <button
     type="{{ $type }}"
     {{ $attributes->merge(['class' => 'auth-btn-primary']) }}
 >
-    <span x-show="!loading">{{ $slot }}</span>
-    <span x-show="loading" x-cloak>{{ $loadingText }}</span>
+    <span x-text="loading ? @js($loadingText) : @js($label)">{{ $label }}</span>
 </button>

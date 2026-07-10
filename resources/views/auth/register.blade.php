@@ -3,168 +3,56 @@
 @section('title', 'Đăng ký - Website học online FEA')
 
 @section('content')
-<x-auth.layout>
-    <x-auth.card
-        x-data="{
-            showPassword: false,
-            showConfirm: false,
-            loading: false,
-            avatarPreview: null,
-            password: '',
-            usernameMessage: '',
-            emailMessage: '',
-            usernameOk: null,
-            emailOk: null,
-            availabilityUrl: @js(route('auth.availability')),
-            get strength() {
-                let score = 0;
-                if (this.password.length >= 8) score++;
-                if (/[a-z]/.test(this.password) && /[A-Z]/.test(this.password)) score++;
-                if (/[0-9]/.test(this.password)) score++;
-                if (/[^A-Za-z0-9]/.test(this.password)) score++;
-                return score;
-            },
-            async check(field, value) {
-                if (!value || value.length < 3) return;
-                const response = await fetch(`${this.availabilityUrl}?field=${field}&value=${encodeURIComponent(value)}`, { headers: { 'Accept': 'application/json' }});
-                const data = await response.json();
-                this[`${field}Ok`] = data.available;
-                this[`${field}Message`] = data.message;
-            }
-        }"
-    >
-        <x-auth.header
-            title="Đăng ký tài khoản"
-            subtitle="Tạo tài khoản miễn phí và bắt đầu học ngay hôm nay."
-        />
+<div class="bg-white dark:bg-slate-950">
+    <div class="flex min-h-[calc(100vh-16rem)] items-center justify-center px-5 py-10 sm:py-14">
+        <div class="mx-auto w-full max-w-2xl">
+            <x-auth.card>
+                <x-auth.header
+                    title="Đăng ký tài khoản"
+                    subtitle="Chọn loại tài khoản phù hợp với mục tiêu của bạn."
+                />
 
-        <x-auth.errors />
+                <x-auth.errors />
 
-        <form method="POST" action="{{ route('register') }}" enctype="multipart/form-data" class="space-y-4" x-on:submit="loading = true">
-            @csrf
-            <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
+                @if(\App\Enums\SocialProvider::anyConfigured())
+                    <x-auth.social-buttons />
 
-            <div class="flex flex-col items-center gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60 sm:flex-row sm:items-center">
-                <div class="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
-                    <template x-if="avatarPreview">
-                        <img :src="avatarPreview" alt="Avatar preview" class="h-full w-full object-cover">
-                    </template>
-                    <img x-show="!avatarPreview" src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-full w-full object-contain p-2">
+                    <x-auth.divider>Hoặc tiếp tục bằng email</x-auth.divider>
+
+                    <p class="mb-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                        Đăng ký bằng Google hoặc Facebook sẽ tạo tài khoản học viên mặc định.
+                    </p>
+                @endif
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <a href="{{ route('register.role', 'student') }}"
+                       class="group flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-5 transition duration-200 hover:border-[#0056D2] hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-400 dark:hover:bg-slate-800">
+                        <span class="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#0056D2]/10 text-[#0056D2] dark:bg-blue-500/10 dark:text-blue-300">
+                            <svg class="h-6 w-6 text-current stroke-current" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                        </span>
+                        <span class="text-lg font-bold text-slate-900 dark:text-white">Học viên</span>
+                        <span class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">Đăng ký để tham gia khóa học, theo dõi tiến độ và nhận chứng chỉ.</span>
+                        <span class="mt-4 text-sm font-semibold text-[#0056D2] dark:text-blue-300">Đăng ký học viên →</span>
+                    </a>
+
+                    <a href="{{ route('register.role', 'instructor') }}"
+                       class="group flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-5 transition duration-200 hover:border-[#0056D2] hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-400 dark:hover:bg-slate-800">
+                        <span class="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+                            <svg class="h-6 w-6 text-current stroke-current" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342"/></svg>
+                        </span>
+                        <span class="text-lg font-bold text-slate-900 dark:text-white">Giảng viên</span>
+                        <span class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">Tạo và quản lý khóa học, chia sẻ kiến thức với cộng đồng học viên.</span>
+                        <span class="mt-4 text-sm font-semibold text-[#0056D2] dark:text-blue-300">Đăng ký giảng viên →</span>
+                    </a>
                 </div>
-                <div class="text-center sm:text-left">
-                    <label class="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
-                        Chọn avatar
-                        <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="sr-only" x-on:change="avatarPreview = URL.createObjectURL($event.target.files[0])">
-                    </label>
-                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">PNG, JPG hoặc WebP tối đa 2MB.</p>
-                </div>
-            </div>
 
-            <x-auth.input
-                label="Họ và tên"
-                name="name"
-                :value="old('name')"
-                placeholder="Nguyễn Văn A"
-                required
-                autofocus
-            />
-
-            <x-auth.input
-                label="Username"
-                name="username"
-                :value="old('username')"
-                placeholder="nguyenvana"
-                required
-                x-on:input.debounce.500ms="check('username', $event.target.value)"
-            >
-                <x-slot:hint>
-                    <p x-show="usernameMessage" x-text="usernameMessage" class="text-xs font-semibold" :class="usernameOk ? 'text-emerald-600' : 'text-red-600'"></p>
-                </x-slot:hint>
-            </x-auth.input>
-
-            <x-auth.input
-                label="Email"
-                name="email"
-                type="email"
-                :value="old('email')"
-                placeholder="email@example.com"
-                required
-                x-on:input.debounce.500ms="check('email', $event.target.value)"
-            >
-                <x-slot:hint>
-                    <p x-show="emailMessage" x-text="emailMessage" class="text-xs font-semibold" :class="emailOk ? 'text-emerald-600' : 'text-red-600'"></p>
-                </x-slot:hint>
-            </x-auth.input>
-
-            <x-auth.input
-                label="Số điện thoại"
-                name="phone"
-                :value="old('phone')"
-                placeholder="0912345678"
-                required
-            />
-
-            <x-auth.select label="Bạn là" name="role" required>
-                <option value="student" @selected(old('role') == 'student')>Học viên</option>
-                <option value="instructor" @selected(old('role') == 'instructor')>Giảng viên</option>
-            </x-auth.select>
-
-            <x-auth.input
-                label="Mật khẩu"
-                name="password"
-                x-bind:type="showPassword ? 'text' : 'password'"
-                x-model="password"
-                placeholder="Tối thiểu 8 ký tự"
-                required
-                inputClass="pr-14"
-            >
-                <x-slot:trailing>
-                    <x-auth.password-toggle />
-                </x-slot:trailing>
-            </x-auth.input>
-
-            <x-auth.input
-                label="Xác nhận mật khẩu"
-                name="password_confirmation"
-                x-bind:type="showConfirm ? 'text' : 'password'"
-                placeholder="Nhập lại mật khẩu"
-                required
-                inputClass="pr-14"
-            >
-                <x-slot:trailing>
-                    <x-auth.password-toggle toggle="showConfirm = !showConfirm" visible="showConfirm" />
-                </x-slot:trailing>
-            </x-auth.input>
-
-            <div>
-                <div class="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    <span>Độ mạnh mật khẩu</span>
-                    <span x-text="['Yếu','Trung bình','Khá','Mạnh','Rất mạnh'][strength]"></span>
-                </div>
-                <div class="grid grid-cols-4 gap-2">
-                    <template x-for="i in 4" :key="i">
-                        <div class="h-2 rounded-full transition duration-200" :class="strength >= i ? 'bg-[#0056D2]' : 'bg-slate-200 dark:bg-slate-800'"></div>
-                    </template>
-                </div>
-            </div>
-
-            <x-auth.captcha :question="$captcha['question']" />
-
-            <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                <input type="checkbox" name="terms" value="1" required class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700">
-                <span>Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.</span>
-            </label>
-
-            <x-auth.button x-bind:disabled="loading" loading-text="Đang tạo tài khoản...">
-                Tạo tài khoản
-            </x-auth.button>
-        </form>
-
-        <x-auth.footer-link
-            text="Đã có tài khoản?"
-            link-text="Đăng nhập"
-            :href="route('login')"
-        />
-    </x-auth.card>
-</x-auth.layout>
+                <x-auth.footer-link
+                    text="Đã có tài khoản?"
+                    link-text="Đăng nhập"
+                    :href="route('login')"
+                />
+            </x-auth.card>
+        </div>
+    </div>
+</div>
 @endsection

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthService
@@ -63,12 +64,13 @@ class AuthService
 
         $user = User::create([
             'name' => $validated['name'],
-            'username' => $validated['username'],
+            'username' => self::generateUniqueUsername($validated['name']),
             'email' => $validated['email'],
             'phone' => $validated['phone'],
             'password' => $validated['password'],
             'role' => $validated['role'],
             'avatar' => $avatarPath,
+            'is_active' => true,
             'password_changed_at' => now(),
         ]);
 
@@ -84,5 +86,25 @@ class AuthService
         if ($path && ! str_starts_with($path, 'http')) {
             Storage::disk('public')->delete($path);
         }
+    }
+
+    public static function generateUniqueUsername(string $name): string
+    {
+        $base = Str::of($name)
+            ->ascii()
+            ->lower()
+            ->replaceMatches('/[^a-z0-9_]+/', '_')
+            ->trim('_')
+            ->limit(24, '')
+            ->toString() ?: 'user';
+
+        $username = $base;
+        $suffix = 1;
+
+        while (User::where('username', $username)->exists()) {
+            $username = $base.$suffix++;
+        }
+
+        return $username;
     }
 }

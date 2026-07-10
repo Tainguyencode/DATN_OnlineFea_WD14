@@ -131,8 +131,12 @@ class UserController extends Controller
             'toggle_active' => ['nullable', 'boolean'],
         ]);
 
-        if ($user->id === auth()->id() && (($request->filled('role') && $request->role !== 'admin') || $request->has('toggle_active'))) {
-            return back()->withErrors(['user' => 'Bạn không thể tự hạ quyền hoặc khóa chính tài khoản admin đang dùng.']);
+        if ($user->id === auth()->id() && $request->has('toggle_active')) {
+            return back()->withErrors(['error' => 'Bạn không thể tự khóa chính tài khoản admin đang dùng.']);
+        }
+
+        if ($user->id === auth()->id() && $request->filled('role') && $request->string('role')->toString() !== 'admin') {
+            return back()->withErrors(['role' => 'Bạn không thể tự hạ quyền admin của chính mình.']);
         }
 
         if ($request->has('toggle_active')) {

@@ -88,27 +88,35 @@
             <section>
                 <div class="mb-6 flex items-center justify-between">
                     <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Nội dung khóa học</h2>
-                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $course->chapters->count() }} chương • {{ $totalLessons }} bài học</span>
+                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $totalSections }} chương • {{ $totalLessons }} bài học</span>
                 </div>
                 
                 <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                    @foreach($course->chapters as $chapter)
+                    @foreach($curriculumSections as $section)
                         <div class="border-b border-slate-200 last:border-b-0 dark:border-slate-800">
                             <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4 font-bold text-slate-900 dark:border-slate-800 dark:bg-slate-800/60 dark:text-white">
-                                <span>{{ $chapter->title }}</span>
-                                <span class="rounded border border-slate-200 bg-white px-2.5 py-1 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">{{ $chapter->lessons->count() }} bài</span>
+                                <span>{{ $section->title }}</span>
+                                <span class="rounded border border-slate-200 bg-white px-2.5 py-1 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">{{ $section->lessons->count() }} bài</span>
                             </div>
                             <ul class="divide-y divide-slate-200 dark:divide-slate-800">
-                                @foreach($chapter->lessons as $lesson)
+                                @foreach($section->lessons as $lesson)
+                                    @php
+                                        $canOpenLesson = $canAccessFullCourse || $lesson->is_preview;
+                                        $lessonUrl = $canOpenLesson ? route('courses.lessons.show', [$course, $lesson]) : null;
+                                    @endphp
                                     <li class="flex items-center justify-between px-5 py-3.5 text-sm transition duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                                        <div class="flex items-center gap-3">
+                                        <div class="flex min-w-0 flex-1 items-center gap-3">
                                             <svg class="h-5 w-5 flex-shrink-0 text-[#0056D2] dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14.752 11.168-3.197-2.132A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664Z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-                                            <span class="font-medium text-slate-700 dark:text-slate-300">{{ $lesson->title }}</span>
+                                            @if($lessonUrl)
+                                                <a href="{{ $lessonUrl }}" class="truncate font-medium text-slate-700 hover:text-[#0056D2] dark:text-slate-300 dark:hover:text-blue-300">{{ $lesson->title }}</a>
+                                            @else
+                                                <span class="truncate font-medium text-slate-700 dark:text-slate-300">{{ $lesson->title }}</span>
+                                            @endif
                                             @if($lesson->is_preview)
                                                 <span class="ui-badge-success">Học thử</span>
                                             @endif
                                         </div>
-                                        <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ gmdate('i:s', $lesson->duration_seconds) }}</span>
+                                        <span class="ml-3 shrink-0 font-mono text-xs text-slate-500 dark:text-slate-400">{{ gmdate('i:s', $lesson->duration_seconds ?: 0) }}</span>
                                     </li>
                                 @endforeach
                             </ul>
@@ -190,12 +198,20 @@
                     @auth
                         @if(auth()->user()->isStudent())
                             <div class="mb-6 space-y-3">
-                                <form method="POST" action="{{ route('student.cart.add', $course) }}">
-                                    @csrf
-                                    <button type="submit" class="ui-button-primary w-full">
-                                        Thêm vào giỏ hàng
-                                    </button>
-                                </form>
+                                @if($isEnrolled && $learningEntryUrl)
+                                    <a href="{{ $learningEntryUrl }}" class="ui-button-primary flex w-full items-center justify-center gap-2">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                                        Vào học ngay
+                                    </a>
+                                    <p class="text-center text-xs text-emerald-600 dark:text-emerald-400">Bạn đã sở hữu khóa học này</p>
+                                @else
+                                    <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                                        @csrf
+                                        <button type="submit" class="ui-button-primary w-full">
+                                            Thêm vào giỏ hàng
+                                        </button>
+                                    </form>
+                                @endif
                                 <form method="POST" action="{{ route('student.wishlist.toggle', $course->id) }}">
                                     @csrf
                                     <button type="submit" class="ui-button-secondary flex w-full items-center justify-center gap-2">

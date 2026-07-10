@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Enums\CourseStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\HomepageSetting;
@@ -21,8 +22,8 @@ class DashboardController extends Controller
             'users' => User::count(),
             'students' => User::where('role', 'student')->count(),
             'instructors' => User::where('role', 'instructor')->count(),
-            'courses' => Course::where('status', 'published')->count(),
-            'pending' => Course::where('status', 'pending')->count(),
+            'courses' => Course::where('status', CourseStatus::Published->value)->where('is_published', true)->count(),
+            'pending' => Course::where('status', CourseStatus::PendingReview->value)->count(),
             'revenue' => Order::where('status', 'paid')->sum('total_amount'),
             'enrollments' => Enrollment::count(),
         ];
@@ -32,7 +33,7 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
-        $pendingCourses = Course::where('status', 'pending')
+        $pendingCourses = Course::where('status', CourseStatus::PendingReview->value)
             ->with(['instructor:id,name', 'category:id,name'])
             ->orderBy('created_at')
             ->limit(5)
