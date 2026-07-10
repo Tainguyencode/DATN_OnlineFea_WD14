@@ -56,6 +56,14 @@
                     @error('description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
+                <div>
+                    <label for="objectives" class="mb-1.5 block text-sm font-bold text-slate-700">Mục tiêu khóa học</label>
+                    <textarea id="objectives" name="objectives" rows="4"
+                              placeholder="Học viên sẽ đạt được những kỹ năng/kiến thức gì sau khóa học..."
+                              class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('objectives', $course->objectives ?? '') }}</textarea>
+                    @error('objectives') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
+                </div>
+
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div>
                         <label for="category_id" class="mb-1.5 block text-sm font-bold text-slate-700">Danh mục</label>

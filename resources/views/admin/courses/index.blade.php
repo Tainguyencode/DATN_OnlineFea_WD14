@@ -132,22 +132,25 @@
                                     <a href="{{ route('admin.courses.show', $course) }}" class="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">Chi tiết</a>
                                     <a href="{{ route('admin.courses.students', $course) }}" class="inline-flex h-8 items-center rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 cursor-pointer">Học viên</a>
 
-                                    @if($course->status === \App\Models\Course::STATUS_PENDING)
-                                        <form method="POST" action="{{ route('admin.courses.approve', $course) }}" class="inline-flex" onsubmit="return confirm('Duyệt khóa học này?')">
-                                            @csrf
-                                            <button type="submit" class="inline-flex h-8 items-center rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 cursor-pointer">Duyệt</button>
-                                        </form>
-                                        <details class="relative">
-                                            <summary class="inline-flex h-8 list-none items-center rounded-lg bg-rose-50 px-3 text-xs font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 cursor-pointer">Từ chối</summary>
-                                            <form method="POST" action="{{ route('admin.courses.reject', $course) }}" class="absolute right-0 z-10 mt-2 w-72 rounded-lg border border-rose-100 bg-white p-3 text-left shadow-xl" onsubmit="return confirm('Từ chối khóa học này?')">
-                                                @csrf
-                                                <label class="mb-1 block text-xs font-bold text-slate-700" for="reject-reason-{{ $course->id }}">Lý do từ chối</label>
-                                                <textarea id="reject-reason-{{ $course->id }}" name="reject_reason" rows="3" required maxlength="1000" class="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-rose-300 focus:ring-4 focus:ring-rose-100" placeholder="Nêu lý do để giảng viên chỉnh sửa..."></textarea>
-                                                <button type="submit" class="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg bg-rose-600 px-3 text-xs font-bold text-white transition-colors duration-200 hover:bg-rose-700 cursor-pointer">Xác nhận từ chối</button>
-                                            </form>
-                                        </details>
+                                    {{-- Submitted: nút đi vào trang kiểm duyệt đầy đủ --}}
+                                    @if($course->status === \App\Models\Course::STATUS_SUBMITTED)
+                                        <a href="{{ route('admin.courses.review', $course) }}"
+                                           class="inline-flex h-8 items-center rounded-lg bg-amber-500 px-3 text-xs font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 cursor-pointer">
+                                            Kiểm duyệt
+                                        </a>
                                     @endif
 
+                                    {{-- Approved: nút Xuất bản --}}
+                                    @if($course->status === \App\Models\Course::STATUS_APPROVED)
+                                        <form method="POST" action="{{ route('admin.courses.publish', $course) }}" class="inline-flex" onsubmit="return confirm('Xuất bản khóa học này? Học viên sẽ thấy ngay.')">
+                                            @csrf
+                                            <button type="submit" class="inline-flex h-8 items-center rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 cursor-pointer">
+                                                Xuất bản
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    {{-- Published: nút Ẩn --}}
                                     @if($course->status === \App\Models\Course::STATUS_PUBLISHED)
                                         <form method="POST" action="{{ route('admin.courses.archive', $course) }}" class="inline-flex" onsubmit="return confirm('Ẩn/lưu trữ khóa học này?')">
                                             @csrf
@@ -155,6 +158,7 @@
                                         </form>
                                     @endif
 
+                                    {{-- Archived: nút Khôi phục --}}
                                     @if($course->status === \App\Models\Course::STATUS_ARCHIVED)
                                         <form method="POST" action="{{ route('admin.courses.restore', $course) }}" class="inline-flex" onsubmit="return confirm('Khôi phục khóa học này?')">
                                             @csrf

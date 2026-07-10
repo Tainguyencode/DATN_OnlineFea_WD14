@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AdminCourseReviewRequest;
 use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\CourseReview;
+use App\Models\CourseReviewItem;
 use App\Models\Enrollment;
 use App\Models\HomepageSetting;
 use App\Models\Order;
@@ -88,12 +91,13 @@ class ManageController extends Controller
 
     public function pendingCourses(): View
     {
-        $courses = Course::where('status', 'pending')
+        $courses = Course::where('status', Course::STATUS_SUBMITTED)
             ->with([
                 'instructor:id,name,email',
                 'category:id,name',
-                'courseSections.lessons',
-                'chapters.lessons',
+                'courseSections.lessons:id,course_id,section_id,duration_seconds,duration',
+                'chapters.lessons:id,course_id,chapter_id,duration_seconds,duration',
+                'lessons:id,course_id,duration_seconds,duration',
             ])
             ->orderByDesc('submitted_at')
             ->orderBy('created_at')
@@ -146,22 +150,77 @@ class ManageController extends Controller
         ]);
     }
 
-    public function review(Course $course): View
+    public function review(Course $course): View|RedirectResponse
     {
+        if ($course->status !== Course::STATUS_SUBMITTED) {
+            return redirect()
+                ->route('admin.courses.pending')
+                ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm tra tại trang này.');
+        }
+
         $course->load([
             'instructor:id,name,email,avatar,bio',
             'category:id,name',
-            'courseSections.lessons',
-            'chapters.lessons',
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order'),
         ]);
 
         $curriculumSections = $course->courseSections->isNotEmpty()
             ? $course->courseSections
             : $course->chapters;
 
-        $totalLessons = $curriculumSections->sum(fn ($section) => $section->lessons->count());
+        $allLessons = $curriculumSections->flatMap(fn ($section) => $section->lessons);
+        $totalLessons = $allLessons->count();
+        $totalVideoDurationSeconds = $course->totalVideoDurationSeconds();
+        $totalVideoDurationMinutes = $course->totalVideoDurationMinutes();
 
-        return view('admin.courses.review', compact('course', 'curriculumSections', 'totalLessons'));
+        $attachments = $allLessons
+            ->flatMap(function ($lesson) {
+                $files = collect();
+
+                if (filled($lesson->document_file)) {
+                    $files->push([
+                        'lesson_title' => $lesson->title,
+                        'name' => basename($lesson->document_file),
+                        'url' => asset('storage/'.$lesson->document_file),
+                        'type' => 'document',
+                    ]);
+                }
+
+                foreach ($lesson->attachments ?? [] as $attachment) {
+                    if (! is_array($attachment)) {
+                        continue;
+                    }
+
+                    $path = $attachment['path'] ?? $attachment['file'] ?? null;
+                    if (! filled($path)) {
+                        continue;
+                    }
+
+                    $files->push([
+                        'lesson_title' => $lesson->title,
+                        'name' => $attachment['name'] ?? basename((string) $path),
+                        'url' => str_starts_with((string) $path, 'http')
+                            ? $path
+                            : asset('storage/'.$path),
+                        'type' => $attachment['type'] ?? 'file',
+                    ]);
+                }
+
+                return $files;
+            })
+            ->values();
+
+        return view('admin.courses.review', [
+            'course' => $course,
+            'curriculumSections' => $curriculumSections,
+            'totalLessons' => $totalLessons,
+            'totalVideoDurationSeconds' => $totalVideoDurationSeconds,
+            'totalVideoDurationMinutes' => $totalVideoDurationMinutes,
+            'attachments' => $attachments,
+            'checklistKeys' => CourseReviewItem::ADMIN_CHECKLIST_KEYS,
+            'checklistLabels' => CourseReviewItem::ITEM_LABELS,
+        ]);
     }
 
     public function students(Course $course): View
@@ -210,7 +269,7 @@ class ManageController extends Controller
 
     public function approve(Request $request, Course $course): RedirectResponse
     {
-        if ($course->status !== Course::STATUS_PENDING) {
+        if ($course->status !== Course::STATUS_SUBMITTED) {
             return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được duyệt.');
         }
 
@@ -234,7 +293,7 @@ class ManageController extends Controller
 
         $validated = $request->validate(['reject_reason' => 'required|string|max:1000']);
 
-        if ($course->status !== Course::STATUS_PENDING) {
+        if ($course->status !== Course::STATUS_SUBMITTED) {
             return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.');
         }
 
@@ -247,6 +306,113 @@ class ManageController extends Controller
         ActivityLogService::log(auth()->id(), 'reject_course', Course::class, $course->id, null, $request);
 
         return back()->with('success', 'Đã từ chối khóa học.');
+    }
+
+    /**
+     * Xử lý quyết định duyệt từ form checklist admin.
+     * Lưu CourseReview + CourseReviewItem, cập nhật courses.status.
+     */
+    public function submitReview(AdminCourseReviewRequest $request, Course $course): RedirectResponse
+    {
+        if ($course->status !== Course::STATUS_SUBMITTED) {
+            return redirect()
+                ->route('admin.courses.pending')
+                ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm duyệt.');
+        }
+
+        $action  = $request->input('action');
+        $comment = $request->input('comment');
+        $checklist = $request->input('checklist', []);
+
+        DB::transaction(function () use ($course, $action, $comment, $checklist, $request) {
+            // 1. Lưu bản ghi review
+            $courseReview = CourseReview::create([
+                'course_id'   => $course->id,
+                'reviewer_id' => auth()->id(),
+                'action'      => $action,
+                'comment'     => $comment ?: null,
+                'reviewed_at' => now(),
+            ]);
+
+            // 2. Lưu từng checklist item
+            foreach ($checklist as $itemKey => $data) {
+                if (! in_array($itemKey, CourseReviewItem::ADMIN_CHECKLIST_KEYS, true)) {
+                    continue;
+                }
+
+                CourseReviewItem::create([
+                    'course_review_id' => $courseReview->id,
+                    'item_key'         => $itemKey,
+                    'status'           => $data['status'] ?? 'pass',
+                    'note'             => $data['note'] ?? null,
+                ]);
+            }
+
+            // 3. Cập nhật trạng thái khóa học
+            $statusMap = [
+                CourseReview::ACTION_APPROVED      => Course::STATUS_APPROVED,
+                CourseReview::ACTION_NEED_REVISION => Course::STATUS_NEED_REVISION,
+                CourseReview::ACTION_REJECTED      => Course::STATUS_REJECTED,
+            ];
+
+            $newStatus = $statusMap[$action];
+
+            $courseUpdate = ['status' => $newStatus];
+
+            if ($action === CourseReview::ACTION_APPROVED) {
+                // Approved: xóa lý do từ chối cũ (nếu có)
+                $courseUpdate['reject_reason']    = null;
+                $courseUpdate['rejection_reason'] = null;
+            } elseif (in_array($action, [CourseReview::ACTION_NEED_REVISION, CourseReview::ACTION_REJECTED], true)) {
+                // Ghi lý do vào cột cũ để giảng viên vẫn thấy trên edit page (backward-compat)
+                $courseUpdate['reject_reason']    = $comment;
+                $courseUpdate['rejection_reason'] = $comment;
+            }
+
+            $course->update($courseUpdate);
+
+            // 4. Activity log
+            ActivityLogService::log(
+                auth()->id(),
+                "review_course_{$action}",
+                Course::class,
+                $course->id,
+                null,
+                $request,
+            );
+        });
+
+        $actionLabels = [
+            CourseReview::ACTION_APPROVED      => 'Đã duyệt',
+            CourseReview::ACTION_NEED_REVISION => 'Đã yêu cầu chỉnh sửa',
+            CourseReview::ACTION_REJECTED      => 'Đã từ chối',
+        ];
+
+        $label = $actionLabels[$action] ?? 'Đã xử lý';
+
+        return redirect()
+            ->route('admin.courses.pending')
+            ->with('success', "{$label} khóa học \"{$course->title}\".");
+    }
+
+    /**
+     * Xuất bản khóa học đã được duyệt (approved → published).
+     */
+    public function publish(Request $request, Course $course): RedirectResponse
+    {
+        if ($course->status !== Course::STATUS_APPROVED) {
+            return back()->with('error', 'Chỉ khóa học đã duyệt mới có thể xuất bản.');
+        }
+
+        $course->update([
+            'status'       => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        ActivityLogService::log(auth()->id(), 'publish_course', Course::class, $course->id, null, $request);
+
+        return back()->with('success', "Đã xuất bản khóa học \"{$course->title}\".");
     }
 
     public function archive(Request $request, Course $course): RedirectResponse
@@ -339,20 +505,16 @@ class ManageController extends Controller
 
     private function statusLabels(): array
     {
-        return [
-            Course::STATUS_DRAFT => 'Nháp',
-            Course::STATUS_PENDING => 'Chờ duyệt',
-            Course::STATUS_PUBLISHED => 'Đã xuất bản',
-            Course::STATUS_REJECTED => 'Bị từ chối',
-            Course::STATUS_ARCHIVED => 'Đã ẩn',
-        ];
+        return Course::STATUS_LABELS;
     }
 
     private function statusBadgeClasses(): array
     {
         return [
             Course::STATUS_DRAFT => 'bg-slate-50 text-slate-700 ring-1 ring-slate-200',
-            Course::STATUS_PENDING => 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+            Course::STATUS_SUBMITTED => 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+            Course::STATUS_NEED_REVISION => 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
+            Course::STATUS_APPROVED => 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
             Course::STATUS_PUBLISHED => 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
             Course::STATUS_REJECTED => 'bg-rose-50 text-rose-700 ring-1 ring-rose-200',
             Course::STATUS_ARCHIVED => 'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200',

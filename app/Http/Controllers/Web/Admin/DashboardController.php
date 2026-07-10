@@ -22,7 +22,7 @@ class DashboardController extends Controller
             'students' => User::where('role', 'student')->count(),
             'instructors' => User::where('role', 'instructor')->count(),
             'courses' => Course::where('status', 'published')->count(),
-            'pending' => Course::where('status', 'pending')->count(),
+            'pending' => Course::where('status', Course::STATUS_SUBMITTED)->count(),
             'revenue' => Order::where('status', 'paid')->sum('total_amount'),
             'enrollments' => Enrollment::count(),
         ];
@@ -32,9 +32,9 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
-        $pendingCourses = Course::where('status', 'pending')
+        $pendingCourses = Course::where('status', Course::STATUS_SUBMITTED)
             ->with(['instructor:id,name', 'category:id,name'])
-            ->orderBy('created_at')
+            ->orderByDesc('submitted_at')
             ->limit(5)
             ->get();
 

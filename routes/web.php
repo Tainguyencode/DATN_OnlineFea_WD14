@@ -152,6 +152,8 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
     Route::post('/courses/{course}/reject', [ManageController::class, 'reject'])->name('courses.reject');
+    Route::post('/courses/{course}/review', [ManageController::class, 'submitReview'])->name('courses.submitReview');
+    Route::post('/courses/{course}/publish', [ManageController::class, 'publish'])->name('courses.publish');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
