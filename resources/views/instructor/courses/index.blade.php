@@ -4,7 +4,9 @@
     @php
         $statusStyles = [
             'draft' => 'bg-slate-100 text-slate-700 border-slate-200',
-            'pending' => 'bg-amber-50 text-amber-700 border-amber-200',
+            'submitted' => 'bg-amber-50 text-amber-700 border-amber-200',
+            'need_revision' => 'bg-orange-50 text-orange-700 border-orange-200',
+            'approved' => 'bg-sky-50 text-sky-700 border-sky-200',
             'published' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
             'rejected' => 'bg-rose-50 text-rose-700 border-rose-200',
             'archived' => 'bg-zinc-100 text-zinc-700 border-zinc-200',
@@ -82,6 +84,17 @@
             </div>
         </form>
 
+        @if ($errors->has('submission'))
+            <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                <p class="font-bold">Không thể gửi duyệt khóa học</p>
+                <ul class="mt-2 list-inside list-disc space-y-1">
+                    @foreach ($errors->get('submission') as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         @if ($courses->isEmpty())
             <div class="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
                 <div
@@ -124,6 +137,9 @@
                                 @php
                                     $statusClass = $statusStyles[$course->status] ?? $statusStyles['draft'];
                                     $discountPrice = $course->discount_price ?? $course->sale_price;
+                                    $check = $submissionChecks[$course->id] ?? null;
+                                    $canSubmit = $course->canBeSubmittedForReview();
+                                    $isReady = $check?->passes() ?? false;
                                 @endphp
                                 <tr class="align-middle transition-colors duration-200 hover:bg-slate-50">
                                     <td class="px-5 py-4">
@@ -144,9 +160,16 @@
                                                 <p class="mt-1 truncate text-xs text-slate-500">
                                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
                                                     {{ $levelLabels[$course->level] ?? 'Chưa chọn trình độ' }}</p>
-                                                @if ($course->status === 'rejected' && $course->rejectionReasonText())
+                                                @if (in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
                                                     <p class="mt-2 line-clamp-2 text-xs font-semibold text-rose-600">Lý
                                                         do: {{ $course->rejectionReasonText() }}</p>
+                                                @endif
+                                                @if ($canSubmit && $check && ! $isReady)
+                                                    <ul class="mt-2 space-y-0.5 text-xs text-amber-700">
+                                                        @foreach ($check->errorMessages() as $message)
+                                                            <li>• {{ $message }}</li>
+                                                        @endforeach
+                                                    </ul>
                                                 @endif
                                             </div>
                                         </div>
@@ -184,15 +207,19 @@
                                                     title="Chỉ xem trước công khai sau khi khóa học được xuất bản">Xem
                                                     trước</span>
                                             @endif
-                                            @if (in_array($course->status, ['draft', 'rejected'], true))
+                                            @if ($canSubmit && $isReady)
                                                 <form method="POST"
-                                                    action="{{ route('instructor.courses.submit', $course) }}">
+                                                    action="{{ route('instructor.courses.submit', $course) }}"
+                                                    onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
                                                     @csrf
                                                     <button type="submit"
                                                         class="rounded-lg px-3 py-2 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
-                                                        {{ $course->status === 'rejected' ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                                        {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
                                                     </button>
                                                 </form>
+                                            @elseif ($canSubmit)
+                                                <span class="rounded-lg px-3 py-2 text-xs font-bold text-slate-400"
+                                                    title="Hoàn thiện điều kiện gửi duyệt trước">Chưa đủ điều kiện</span>
                                             @endif
                                             @if ($course->status === 'published')
                                                 <form method="POST"
@@ -229,6 +256,9 @@
                     @php
                         $statusClass = $statusStyles[$course->status] ?? $statusStyles['draft'];
                         $discountPrice = $course->discount_price ?? $course->sale_price;
+                        $check = $submissionChecks[$course->id] ?? null;
+                        $canSubmit = $course->canBeSubmittedForReview();
+                        $isReady = $check?->passes() ?? false;
                     @endphp
                     <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                         <div class="aspect-video bg-slate-100">
@@ -253,10 +283,17 @@
                                 <p class="mt-1 text-xs text-slate-500">
                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
                                     {{ $course->created_at?->format('d/m/Y') }}</p>
-                                @if ($course->status === 'rejected' && $course->rejectionReasonText())
+                                @if (in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
                                     <p
                                         class="mt-2 rounded-lg bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-700">
                                         Lý do: {{ $course->rejectionReasonText() }}</p>
+                                @endif
+                                @if ($canSubmit && $check && ! $isReady)
+                                    <ul class="mt-2 space-y-1 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                                        @foreach ($check->errorMessages() as $message)
+                                            <li>• {{ $message }}</li>
+                                        @endforeach
+                                    </ul>
                                 @endif
                             </div>
 
@@ -287,14 +324,20 @@
                                         class="rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">Xem
                                         trước</span>
                                 @endif
-                                @if (in_array($course->status, ['draft', 'rejected'], true))
-                                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}">
+                                @if ($canSubmit && $isReady)
+                                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}"
+                                        onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
                                         @csrf
                                         <button type="submit"
                                             class="w-full rounded-lg border border-amber-200 px-3 py-2 text-center text-xs font-bold text-amber-700">
-                                            {{ $course->status === 'rejected' ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
                                         </button>
                                     </form>
+                                @elseif ($canSubmit)
+                                    <span
+                                        class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">
+                                        Chưa đủ điều kiện
+                                    </span>
                                 @endif
                                 @if ($course->status === 'published')
                                     <form method="POST" action="{{ route('instructor.courses.archive', $course) }}"
