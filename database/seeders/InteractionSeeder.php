@@ -210,6 +210,51 @@ class InteractionSeeder extends Seeder
                 'completed_at' => now()->subDay(),
                 'created_at' => now()->subDays(3),
                 'updated_at' => now(),
+            ],
+            [
+                'user_id' => 8, // Nguyễn Thị Mai
+                'course_id' => 2, // Khóa React
+                'order_id' => null,
+                'progress_percent' => 25.00, // Bắt đầu học
+                'completed_at' => null,
+                'created_at' => now()->subDays(2),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 9, // Đặng Công Hùng
+                'course_id' => 5, // Khóa Vue.js
+                'order_id' => null,
+                'progress_percent' => 35.00,
+                'completed_at' => null,
+                'created_at' => now()->subDays(1),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 10, // Hoàng Lan Anh
+                'course_id' => 1, // Khóa Laravel
+                'order_id' => null,
+                'progress_percent' => 15.00,
+                'completed_at' => null,
+                'created_at' => now()->subHours(12),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 11, // Tạ Minh Khôi
+                'course_id' => 6, // Khóa Node.js
+                'order_id' => null,
+                'progress_percent' => 50.00,
+                'completed_at' => null,
+                'created_at' => now()->subDays(4),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 12, // Bùi Quỳnh Linh
+                'course_id' => 3, // Khóa UI/UX
+                'order_id' => null,
+                'progress_percent' => 20.00,
+                'completed_at' => null,
+                'created_at' => now()->subDays(3),
+                'updated_at' => now(),
             ]
         ];
 
@@ -299,6 +344,74 @@ class InteractionSeeder extends Seeder
                 'is_completed' => true,
                 'completed_at' => now()->subDay(),
                 'created_at' => now()->subDay(),
+                'updated_at' => now(),
+            ],
+            // Nguyễn Thị Mai (User ID: 8) bắt đầu học React
+            [
+                'user_id' => 8,
+                'lesson_id' => 6,
+                'watched_seconds' => 800,
+                'is_completed' => false,
+                'completed_at' => null,
+                'created_at' => now()->subDays(2),
+                'updated_at' => now(),
+            ],
+            // Đặng Công Hùng (User ID: 9) học Vue.js
+            [
+                'user_id' => 9,
+                'lesson_id' => 10,
+                'watched_seconds' => 1200,
+                'is_completed' => true,
+                'completed_at' => now()->subDays(1),
+                'created_at' => now()->subDays(1),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 9,
+                'lesson_id' => 11,
+                'watched_seconds' => 600,
+                'is_completed' => false,
+                'completed_at' => null,
+                'created_at' => now()->subHours(12),
+                'updated_at' => now(),
+            ],
+            // Hoàng Lan Anh (User ID: 10) vừa bắt đầu Laravel
+            [
+                'user_id' => 10,
+                'lesson_id' => 1,
+                'watched_seconds' => 300,
+                'is_completed' => false,
+                'completed_at' => null,
+                'created_at' => now()->subHours(12),
+                'updated_at' => now(),
+            ],
+            // Tạ Minh Khôi (User ID: 11) học Node.js
+            [
+                'user_id' => 11,
+                'lesson_id' => 12,
+                'watched_seconds' => 1200,
+                'is_completed' => true,
+                'completed_at' => now()->subDays(2),
+                'created_at' => now()->subDays(4),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 11,
+                'lesson_id' => 13,
+                'watched_seconds' => 900,
+                'is_completed' => false,
+                'completed_at' => null,
+                'created_at' => now()->subDays(1),
+                'updated_at' => now(),
+            ],
+            // Bùi Quỳnh Linh (User ID: 12) học UI/UX
+            [
+                'user_id' => 12,
+                'lesson_id' => 7,
+                'watched_seconds' => 450,
+                'is_completed' => false,
+                'completed_at' => null,
+                'created_at' => now()->subDays(3),
                 'updated_at' => now(),
             ]
         ];
