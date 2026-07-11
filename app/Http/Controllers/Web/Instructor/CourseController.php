@@ -252,7 +252,12 @@ class CourseController extends Controller
 
     private function validatedCourseData(Request $request): array
     {
-        return $request->validate([
+        $request->merge([
+            'language' => $request->input('language', 'vi'),
+            'discount_price' => $request->input('discount_price', $request->input('sale_price')),
+        ]);
+
+        $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'category_id' => ['nullable', Rule::exists('categories', 'id')],
             'short_description' => ['nullable', 'string', 'max:500'],
@@ -267,6 +272,12 @@ class CourseController extends Controller
             'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
             'language' => ['required', 'string', 'max:10'],
         ]);
+
+        if (blank($validated['short_description'] ?? null) && filled($validated['description'] ?? null)) {
+            $validated['short_description'] = Str::limit($validated['description'], 500);
+        }
+
+        return $validated;
     }
 
     private function uniqueSlug(string $title): string
