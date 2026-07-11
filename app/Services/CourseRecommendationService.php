@@ -12,7 +12,7 @@ class CourseRecommendationService
         $query = Course::query()
             ->where('status', 'published')
             ->where('id', '!=', $course->id)
-            ->with(['instructor:id,name,avatar', 'category:id,name']);
+            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug']);
 
         if ($course->category_id) {
             $query->where('category_id', $course->category_id);
@@ -35,7 +35,7 @@ class CourseRecommendationService
         $fallback = Course::query()
             ->where('status', 'published')
             ->whereNotIn('id', $excludeIds)
-            ->with(['instructor:id,name,avatar', 'category:id,name'])
+            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
             ->orderByDesc('is_featured')
             ->orderByDesc('rating_avg')
             ->limit($limit - $related->count())

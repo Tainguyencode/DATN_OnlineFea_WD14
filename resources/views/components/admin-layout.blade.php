@@ -29,6 +29,12 @@
             'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253"/></svg>'
         ],
         [
+            'route' => 'admin.categories.index',
+            'active' => ['admin.categories.index', 'admin.categories.*'],
+            'label' => 'Danh má»¥c khÃ³a há»c',
+            'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h6M4 10h6m-6 4h6m6-8h4m-4 4h4m-4 4h4M4 18h16"/></svg>'
+        ],
+        [
             'route' => 'admin.courses.pending',
             'active' => ['admin.courses.pending', 'admin.courses.review'],
             'label' => 'Duyệt khóa học',

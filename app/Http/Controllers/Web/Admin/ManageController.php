@@ -34,7 +34,8 @@ class ManageController extends Controller
         $courses = Course::query()
             ->with([
                 'instructor:id,name,email',
-                'category:id,name',
+                'category:id,parent_id,name',
+                'category.parent:id,name',
                 'courseSections.lessons:id,course_id,section_id,title',
                 'chapters.lessons:id,course_id,chapter_id,title',
             ])
@@ -94,7 +95,8 @@ class ManageController extends Controller
         $courses = Course::where('status', Course::STATUS_SUBMITTED)
             ->with([
                 'instructor:id,name,email',
-                'category:id,name',
+                'category:id,parent_id,name',
+                'category.parent:id,name',
                 'courseSections.lessons:id,course_id,section_id,duration_seconds,duration',
                 'chapters.lessons:id,course_id,chapter_id,duration_seconds,duration',
                 'lessons:id,course_id,duration_seconds,duration',
@@ -110,7 +112,8 @@ class ManageController extends Controller
     {
         $course->load([
             'instructor:id,name,email,avatar,bio',
-            'category:id,name,slug',
+            'category:id,parent_id,name,slug',
+            'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order'),
         ])->loadCount([
@@ -160,7 +163,8 @@ class ManageController extends Controller
 
         $course->load([
             'instructor:id,name,email,avatar,bio',
-            'category:id,name',
+            'category:id,parent_id,name',
+            'category.parent:id,name',
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
         ]);
@@ -236,7 +240,8 @@ class ManageController extends Controller
     {
         $course->load([
             'instructor:id,name,email',
-            'category:id,name',
+            'category:id,parent_id,name',
+            'category.parent:id,name',
             'courseSections.lessons:id,course_id,section_id,title',
             'chapters.lessons:id,course_id,chapter_id,title',
         ]);
@@ -329,17 +334,17 @@ class ManageController extends Controller
                 ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm duyệt.');
         }
 
-        $action  = $request->input('action');
+        $action = $request->input('action');
         $comment = $request->input('comment');
         $checklist = $request->input('checklist', []);
 
         DB::transaction(function () use ($course, $action, $comment, $checklist, $request) {
             // 1. Lưu bản ghi review
             $courseReview = CourseReview::create([
-                'course_id'   => $course->id,
+                'course_id' => $course->id,
                 'reviewer_id' => auth()->id(),
-                'action'      => $action,
-                'comment'     => $comment ?: null,
+                'action' => $action,
+                'comment' => $comment ?: null,
                 'reviewed_at' => now(),
             ]);
 
@@ -351,17 +356,17 @@ class ManageController extends Controller
 
                 CourseReviewItem::create([
                     'course_review_id' => $courseReview->id,
-                    'item_key'         => $itemKey,
-                    'status'           => $data['status'] ?? 'pass',
-                    'note'             => $data['note'] ?? null,
+                    'item_key' => $itemKey,
+                    'status' => $data['status'] ?? 'pass',
+                    'note' => $data['note'] ?? null,
                 ]);
             }
 
             // 3. Cập nhật trạng thái khóa học
             $statusMap = [
-                CourseReview::ACTION_APPROVED      => Course::STATUS_APPROVED,
+                CourseReview::ACTION_APPROVED => Course::STATUS_APPROVED,
                 CourseReview::ACTION_NEED_REVISION => Course::STATUS_NEED_REVISION,
-                CourseReview::ACTION_REJECTED      => Course::STATUS_REJECTED,
+                CourseReview::ACTION_REJECTED => Course::STATUS_REJECTED,
             ];
 
             $newStatus = $statusMap[$action];
@@ -370,11 +375,11 @@ class ManageController extends Controller
 
             if ($action === CourseReview::ACTION_APPROVED) {
                 // Approved: xóa lý do từ chối cũ (nếu có)
-                $courseUpdate['reject_reason']    = null;
+                $courseUpdate['reject_reason'] = null;
                 $courseUpdate['rejection_reason'] = null;
             } elseif (in_array($action, [CourseReview::ACTION_NEED_REVISION, CourseReview::ACTION_REJECTED], true)) {
                 // Ghi lý do vào cột cũ để giảng viên vẫn thấy trên edit page (backward-compat)
-                $courseUpdate['reject_reason']    = $comment;
+                $courseUpdate['reject_reason'] = $comment;
                 $courseUpdate['rejection_reason'] = $comment;
             }
 
@@ -392,9 +397,9 @@ class ManageController extends Controller
         });
 
         $actionLabels = [
-            CourseReview::ACTION_APPROVED      => 'Đã duyệt',
+            CourseReview::ACTION_APPROVED => 'Đã duyệt',
             CourseReview::ACTION_NEED_REVISION => 'Đã yêu cầu chỉnh sửa',
-            CourseReview::ACTION_REJECTED      => 'Đã từ chối',
+            CourseReview::ACTION_REJECTED => 'Đã từ chối',
         ];
 
         $label = $actionLabels[$action] ?? 'Đã xử lý';
@@ -414,7 +419,7 @@ class ManageController extends Controller
         }
 
         $course->update([
-            'status'       => Course::STATUS_PUBLISHED,
+            'status' => Course::STATUS_PUBLISHED,
             'is_published' => true,
             'published_at' => now(),
         ]);
@@ -457,23 +462,59 @@ class ManageController extends Controller
         return back()->with('success', "Đã khôi phục khóa học \"{$course->title}\".");
     }
 
-    public function revenue(): View
+    public function revenue(Request $request): View
     {
-        $totalRevenue = Order::where('status', 'paid')->sum('total_amount');
-        $totalOrders = Order::where('status', 'paid')->count();
+        $query = Order::where('status', 'paid');
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+        if ($request->filled('month')) {
+            $query->whereMonth('created_at', $request->input('month'));
+        }
+        if ($request->filled('year')) {
+            $query->whereYear('created_at', $request->input('year'));
+        }
+
+        $totalRevenue = $query->sum('total_amount');
+        $totalOrders = $query->count();
 
         $monthExpr = DB::connection()->getDriverName() === 'sqlite'
             ? "strftime('%Y-%m', created_at)"
             : "DATE_FORMAT(created_at, '%Y-%m')";
 
-        $monthly = Order::where('status', 'paid')
+        $monthlyQuery = Order::where('status', 'paid');
+        if ($request->filled('start_date')) {
+            $monthlyQuery->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $monthlyQuery->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+        if ($request->filled('month')) {
+            $monthlyQuery->whereMonth('created_at', $request->input('month'));
+        }
+        if ($request->filled('year')) {
+            $monthlyQuery->whereYear('created_at', $request->input('year'));
+        }
+
+        $monthly = $monthlyQuery
             ->selectRaw("{$monthExpr} as month, SUM(total_amount) as total, COUNT(*) as count")
             ->groupBy('month')
             ->orderByDesc('month')
             ->limit(12)
             ->get();
 
-        return view('admin.revenue', compact('totalRevenue', 'totalOrders', 'monthly'));
+        $filters = [
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+        ];
+
+        return view('admin.revenue', compact('totalRevenue', 'totalOrders', 'monthly', 'filters'));
     }
 
     public function activityLogs(): View

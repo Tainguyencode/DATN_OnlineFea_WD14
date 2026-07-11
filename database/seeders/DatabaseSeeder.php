@@ -92,6 +92,9 @@ class DatabaseSeeder extends Seeder
 
             // Bảng ghi chép lịch sử và hoạt động hệ thống
             SystemSeeder::class, // Phụ thuộc vào users, badges, courses
+
+            // Thêm dữ liệu mẫu bổ sung cho progress tracking
+            ExpandedSampleDataSeeder::class,
         ]);
     }
 }
