@@ -6,39 +6,25 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('course_reviews', function (Blueprint $table) {
             $table->id();
-
-            $table->foreignId('course_id')
-                ->constrained('courses')
-                ->cascadeOnDelete();
-
-            $table->foreignId('reviewer_id')
-                ->constrained('users')
-                ->cascadeOnDelete();
-
-            $table->enum('action', [
-                'approved',
-                'need_revision',
-                'rejected'
-            ]);
-
+            $table->foreignId('course_id')->constrained('courses')->cascadeOnDelete();
+            $table->foreignId('reviewer_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedInteger('submission_number')->default(1);
+            $table->string('status', 32)->default('pending');
             $table->text('comment')->nullable();
+            $table->json('checklist_json')->nullable();
+            $table->timestamp('submitted_at')->nullable();
             $table->timestamp('reviewed_at')->nullable();
             $table->timestamps();
-            $table->index('course_id');
-            $table->index('reviewer_id');
+
+            $table->index(['course_id', 'submission_number']);
+            $table->index(['status', 'submitted_at']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('course_reviews');

@@ -3,6 +3,10 @@
     'loadingText' => 'Đang xử lý...',
 ])
 
+@php
+    $label = trim((string) $slot);
+@endphp
+
 <button
     type="{{ $type }}"
     {{ $attributes->merge(['class' => 'auth-btn-primary']) }}

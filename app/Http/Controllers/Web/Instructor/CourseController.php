@@ -7,13 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Instructor\StoreChapterRequest;
 use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
-use App\Http\Requests\Instructor\SubmitCourseForReviewRequest;
 use App\Models\Category;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Order;
+use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +21,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CourseController extends Controller
@@ -82,15 +83,14 @@ class CourseController extends Controller
 
     public function edit(Course $course): View
     {
-        $this->authorize($course);
+        $this->ensureOwned($course);
 
         $course->load([
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'category.parent',
-            'courseReviews' => fn ($q) => $q->orderByDesc('reviewed_at')->orderByDesc('id'),
+            'courseReviews' => fn ($q) => $q->orderByDesc('submission_number'),
             'courseReviews.reviewer:id,name,email',
-            'courseReviews.items',
         ]);
         $categories = $this->categoryGroups();
         $statusOptions = $this->statusOptions();
@@ -102,6 +102,8 @@ class CourseController extends Controller
 
     public function update(StoreCourseRequest $request, Course $course): RedirectResponse
     {
+        $this->ensureOwned($course);
+
         $validated = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
@@ -119,7 +121,7 @@ class CourseController extends Controller
 
     public function destroy(Course $course): RedirectResponse
     {
-        $this->authorize($course);
+        $this->ensureOwned($course);
 
         if ($this->hasBusinessRecords($course)) {
             $course->update([
@@ -141,7 +143,7 @@ class CourseController extends Controller
 
     public function archive(Course $course): RedirectResponse
     {
-        $this->authorize($course);
+        $this->ensureOwned($course);
 
         if ($course->status !== Course::STATUS_PUBLISHED) {
             return back()->with('error', 'Chỉ có thể ẩn khóa học đang được xuất bản.');
@@ -158,6 +160,7 @@ class CourseController extends Controller
 
     public function addChapter(StoreChapterRequest $request, Course $course): RedirectResponse
     {
+        $this->ensureOwned($course);
         $validated = $request->validated();
 
         Chapter::create([
@@ -171,6 +174,8 @@ class CourseController extends Controller
 
     public function addLesson(StoreLessonRequest $request, Chapter $chapter): RedirectResponse
     {
+        $this->ensureOwned($chapter->course);
+
         $validated = $request->validated();
 
         Lesson::create([
@@ -183,27 +188,35 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm bài giảng.');
     }
 
-    public function submit(SubmitCourseForReviewRequest $request, Course $course): RedirectResponse
+    public function submit(Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        $this->authorize($course);
-        $request->validateSubmissionRequirements();
+        $this->authorize('submit', $course);
 
-        $course->update([
-            'status' => Course::STATUS_SUBMITTED,
-            'is_published' => false,
-            'submitted_at' => now(),
-            'reject_reason' => null,
-            'rejection_reason' => null,
-        ]);
+        if (! $course->submissionCheck()->passes()) {
+            return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');
+        }
+
+        $reviewService->submitForReview($course, auth()->user());
 
         return redirect()
             ->route('instructor.courses.index')
-            ->with('success', 'Đã gửi khóa học để admin duyệt. Bạn sẽ nhận phản hồi sau khi admin kiểm tra.');
+            ->with('success', 'Đã gửi khóa học để admin duyệt.');
+    }
+
+    public function submitPage(Course $course): RedirectResponse
+    {
+        $this->ensureOwned($course);
+
+        if ($course->isEditable()) {
+            return redirect()->route('instructor.courses.edit', $course);
+        }
+
+        return redirect()->route('instructor.courses.index');
     }
 
     public function students(Course $course): View
     {
-        $this->authorize($course);
+        $this->ensureOwned($course);
 
         $enrollments = Enrollment::where('course_id', $course->id)
             ->with('user:id,name,email,avatar')
@@ -238,25 +251,30 @@ class CourseController extends Controller
 
         foreach ($orders as $order) {
             $items = $order->items;
-            if (is_iterable($items)) {
-                foreach ($items as $item) {
-                    $cid = $item['course_id'] ?? null;
-                    if (in_array($cid, $courseIds)) {
-                        $price = $item['price'] ?? 0;
-                        $totalRevenue += $price;
+            if (! is_iterable($items)) {
+                continue;
+            }
 
-                        if (! isset($courseSales[$cid])) {
-                            $courseSales[$cid] = [
-                                'course_id' => $cid,
-                                'total' => 0,
-                                'sales' => 0,
-                                'course' => Course::find($cid),
-                            ];
-                        }
-                        $courseSales[$cid]['total'] += $price;
-                        $courseSales[$cid]['sales'] += 1;
-                    }
+            foreach ($items as $item) {
+                $cid = $item['course_id'] ?? null;
+                if (! in_array($cid, $courseIds, true)) {
+                    continue;
                 }
+
+                $price = $item['price'] ?? 0;
+                $totalRevenue += $price;
+
+                if (! isset($courseSales[$cid])) {
+                    $courseSales[$cid] = [
+                        'course_id' => $cid,
+                        'total' => 0,
+                        'sales' => 0,
+                        'course' => Course::find($cid),
+                    ];
+                }
+
+                $courseSales[$cid]['total'] += $price;
+                $courseSales[$cid]['sales'] += 1;
             }
         }
 
@@ -271,7 +289,7 @@ class CourseController extends Controller
         return view('instructor.revenue', compact('totalRevenue', 'courseRevenue', 'filters'));
     }
 
-    protected function authorize(Course $course): void
+    protected function ensureOwned(Course $course): void
     {
         abort_unless($course->isOwnedBy(auth()->user()), 403);
     }

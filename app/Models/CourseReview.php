@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\CourseReviewStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CourseReview extends Model
 {
@@ -20,24 +20,25 @@ class CourseReview extends Model
         self::ACTION_REJECTED,
     ];
 
-    public const ACTION_LABELS = [
-        self::ACTION_APPROVED => 'Đã duyệt',
-        self::ACTION_NEED_REVISION => 'Yêu cầu chỉnh sửa',
-        self::ACTION_REJECTED => 'Từ chối',
-    ];
-
     protected $fillable = [
         'course_id',
         'reviewer_id',
-        'action',
+        'submission_number',
+        'status',
         'comment',
+        'checklist_json',
+        'submitted_at',
         'reviewed_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'submission_number' => 'integer',
+            'checklist_json' => 'array',
+            'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
+            'status' => CourseReviewStatus::class,
         ];
     }
 
@@ -51,13 +52,10 @@ class CourseReview extends Model
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
-    public function items(): HasMany
+    public function statusLabel(): string
     {
-        return $this->hasMany(CourseReviewItem::class);
-    }
-
-    public function actionLabel(): string
-    {
-        return self::ACTION_LABELS[$this->action] ?? $this->action;
+        return $this->status instanceof CourseReviewStatus
+            ? $this->status->label()
+            : (string) $this->status;
     }
 }
