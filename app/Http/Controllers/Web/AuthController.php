@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
 
@@ -109,7 +110,11 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         try {
-            $emailVerificationService->sendCode($user);
+            $emailVerificationService->sendCode($user, ignoreCooldown: true);
+        } catch (ValidationException $exception) {
+            return redirect()->route('verification.notice')
+                ->withErrors($exception->errors())
+                ->with('resend_after', $emailVerificationService->resendCooldownSeconds($user));
         } catch (Throwable $exception) {
             Log::error('Verification code email could not be sent after registration.', [
                 'user_id' => $user->id,
@@ -140,7 +145,7 @@ class AuthController extends Controller
     public function availability(Request $request): \Illuminate\Http\JsonResponse
     {
         $validated = $request->validate([
-            'field' => ['required', 'in:email,username'],
+            'field' => ['required', 'in:email,username,phone'],
             'value' => ['required', 'string', 'max:255'],
         ]);
 
