@@ -7,6 +7,7 @@
         ? 'Tạo tài khoản miễn phí và bắt đầu học ngay hôm nay.'
         : 'Tạo tài khoản giảng viên để xây dựng và quản lý khóa học của bạn.';
     $submitLabel = $isStudent ? 'Tạo tài khoản học viên' : 'Tạo tài khoản giảng viên';
+    $availabilityUrl = route('auth.availability');
 @endphp
 
 @section('title', $pageTitle . ' - Website học online FEA')
@@ -21,7 +22,7 @@
             password: '',
             emailMessage: '',
             emailOk: null,
-            availabilityUrl: @js(route('auth.availability')),
+            availabilityUrl: '{{ $availabilityUrl }}',
             get strength() {
                 let score = 0;
                 if (this.password.length >= 8) score++;
@@ -102,14 +103,14 @@
 
                 <x-auth.input label="Số điện thoại" name="phone" :value="old('phone')" placeholder="0912345678" />
 
-                <x-auth.input label="Mật khẩu" name="password" x-bind:type="showPassword ? 'text' : 'password'"
+                <x-auth.input label="Mật khẩu" name="password" type="password" x-bind:type="showPassword ? 'text' : 'password'"
                     x-model="password" placeholder="Tối thiểu 8 ký tự" inputClass="pr-14">
                     <x-slot:trailing>
                         <x-auth.password-toggle />
                     </x-slot:trailing>
                 </x-auth.input>
 
-                <x-auth.input label="Xác nhận mật khẩu" name="password_confirmation"
+                <x-auth.input label="Xác nhận mật khẩu" name="password_confirmation" type="password"
                     x-bind:type="showConfirm ? 'text' : 'password'" placeholder="Nhập lại mật khẩu" inputClass="pr-14">
                     <x-slot:trailing>
                         <x-auth.password-toggle toggle="showConfirm = !showConfirm" visible="showConfirm" />
