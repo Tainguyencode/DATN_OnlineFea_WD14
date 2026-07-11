@@ -5,6 +5,12 @@
         default => 'student-layout',
     };
     $roleLabels = ['admin' => 'Quản trị viên', 'instructor' => 'Giảng viên', 'student' => 'Học viên'];
+    $profileUpdateRoute = match (true) {
+        request()->routeIs('admin.*') => route('admin.profile.update'),
+        request()->routeIs('instructor.*') => route('instructor.profile.update'),
+        request()->routeIs('student.*') => route('student.profile.update'),
+        default => route('profile.update'),
+    };
 @endphp
 
 <x-dynamic-component :component="$layout" title="Hồ sơ" page-title="Hồ sơ cá nhân" breadcrumb="Bảo mật tài khoản và hoạt động đăng nhập">
@@ -56,7 +62,7 @@
                     <h3 class="text-lg font-bold text-slate-900">Thông tin cá nhân</h3>
                     <p class="mt-1 text-sm text-slate-500">Cập nhật avatar, username, số điện thoại và giới thiệu.</p>
 
-                    <form method="POST" action="{{ route('profile.update') }}" enctype="multipart/form-data" class="mt-6 space-y-5">
+                    <form method="POST" action="{{ $profileUpdateRoute }}" enctype="multipart/form-data" class="mt-6 space-y-5">
                         @csrf
                         @method('PUT')
                         <div class="grid gap-5 sm:grid-cols-2">

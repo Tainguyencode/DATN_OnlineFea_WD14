@@ -140,7 +140,7 @@
         </div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             @foreach($categories as $category)
-                <a href="{{ route('home', ['category' => $category->id]) }}#courses"
+                <a href="{{ route('courses.category', $category->slug) }}"
                    class="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:border-blue-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-700">
                     <div class="mb-3 flex items-center gap-4">
                         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-950/50 dark:text-blue-300">
@@ -176,8 +176,13 @@
                     <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Danh mục</label>
                     <select name="category" class="ui-select cursor-pointer">
                         <option value="">Tất cả</option>
-                        @foreach($categories as $cat)
-                            <option value="{{ $cat->id }}" @selected(request('category') == $cat->id)>{{ $cat->name }}</option>
+                        @foreach($categories as $parent)
+                            <option value="{{ $parent->slug }}" @selected($selectedCategory?->id === $parent->id)>Tất cả {{ $parent->name }}</option>
+                            <optgroup label="{{ $parent->name }}">
+                                @foreach($parent->children as $cat)
+                                    <option value="{{ $cat->slug }}" @selected($selectedCategory?->id === $cat->id)>{{ $cat->name }}</option>
+                                @endforeach
+                            </optgroup>
                         @endforeach
                     </select>
                 </div>
