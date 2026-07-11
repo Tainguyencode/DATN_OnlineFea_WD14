@@ -7,7 +7,9 @@ use App\Models\ActivityLog;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\AuthService;
+use App\Services\EmailVerificationService;
 use App\Services\TwoFactorService;
+use App\Support\MailErrorFormatter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,9 +17,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
+use Throwable;
 
 class ProfileController extends Controller
 {
+    public function studentShow(Request $request): View
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        return view('student.profile', compact('user'));
+    }
+
     public function show(Request $request): View
     {
         /** @var User $user */
@@ -45,7 +56,7 @@ class ProfileController extends Controller
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', 'unique:users,username,'.$user->id],
-            'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/'],
+            'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/', 'unique:users,phone,'.$user->id],
             'bio' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -63,7 +74,7 @@ class ProfileController extends Controller
         return back()->with('success', 'Cập nhật hồ sơ thành công.');
     }
 
-    public function updateEmail(Request $request): RedirectResponse
+    public function updateEmail(Request $request, EmailVerificationService $emailVerificationService): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -73,15 +84,23 @@ class ProfileController extends Controller
             'current_password' => ['required', 'current_password'],
         ]);
 
+        $emailVerificationService->invalidateActiveCodes($user);
+
         $user->forceFill([
             'email' => $validated['email'],
             'email_verified_at' => null,
         ])->save();
 
-        $user->sendEmailVerificationNotification();
+        try {
+            $emailVerificationService->sendCode($user);
+        } catch (Throwable $exception) {
+            return redirect()->route('verification.notice')
+                ->with('error', 'Email đã được cập nhật nhưng chưa gửi được mã xác thực: '.MailErrorFormatter::verificationSendFailure($exception));
+        }
+
         ActivityLogService::log($user->id, 'update_email', User::class, $user->id, ['email' => $validated['email']], $request);
 
-        return redirect()->route('verification.notice')->with('success', 'Email đã được cập nhật. Vui lòng xác thực email mới.');
+        return redirect()->route('verification.notice')->with('success', 'Email đã được cập nhật. Vui lòng nhập mã xác thực gửi tới email mới.');
     }
 
     public function updatePassword(Request $request): RedirectResponse

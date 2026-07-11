@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * LessonProgress Model
- * 
+ *
  * Theo dõi tiến độ học của user cho từng lesson
  * - Kiểm tra bài học đã hoàn thành chưa
  * - Lưu thời gian xem video (watched_seconds)
@@ -19,45 +19,48 @@ class LessonProgress extends Model
 
     protected $fillable = [
         'user_id',
+        'course_id',
         'lesson_id',
         'watched_seconds',
+        'duration_seconds',
+        'progress_percent',
         'is_completed',
+        'last_watched_at',
         'completed_at',
     ];
 
-    protected $casts = [
-        'is_completed' => 'boolean',
-        'watched_seconds' => 'integer',
-        'completed_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'watched_seconds' => 'integer',
+            'duration_seconds' => 'integer',
+            'progress_percent' => 'decimal:2',
+            'is_completed' => 'boolean',
+            'last_watched_at' => 'datetime',
+            'completed_at' => 'datetime',
+        ];
+    }
 
-    /**
-     * Relationship: LessonProgress thuộc về một User
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Relationship: LessonProgress thuộc về một Lesson
-     */
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
+    }
+
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
     }
 
-    /**
-     * Scope: Lấy lesson progress đã hoàn thành
-     */
     public function scopeCompleted($query)
     {
         return $query->where('is_completed', true);
     }
 
-    /**
-     * Scope: Lấy lesson progress chưa hoàn thành
-     */
     public function scopeIncomplete($query)
     {
         return $query->where('is_completed', false);

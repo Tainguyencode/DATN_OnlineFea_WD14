@@ -50,18 +50,14 @@ class CartController extends Controller
      */
     public function add(Course $course): RedirectResponse
     {
-        // 1. Kiểm tra khóa học đã xuất bản chưa
-        if ($course->status !== Course::STATUS_PUBLISHED || ! $course->is_published) {
+        if (! $course->isPublished()) {
             return back()->with('error', 'Khóa học chưa được xuất bản hoặc không khả dụng.');
         }
 
-        // 2. Chặn thêm khóa học đã mua/sở hữu (kiểm tra status là active trong bảng enrollments)
-        $hasEnrolled = Enrollment::where('user_id', auth()->id())
+        if (Enrollment::where('user_id', auth()->id())
             ->where('course_id', $course->id)
-            ->where('status', 'active')
-            ->exists();
-
-        if ($hasEnrolled) {
+            ->withLearningAccess()
+            ->exists()) {
             return back()->with('error', 'Bạn đã sở hữu và đăng ký khóa học này rồi.');
         }
 

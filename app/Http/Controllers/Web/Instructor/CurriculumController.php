@@ -11,6 +11,7 @@ use App\Models\Lesson;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CurriculumController extends Controller
@@ -33,6 +34,8 @@ class CurriculumController extends Controller
 
     public function storeSection(StoreChapterRequest $request, Course $course): RedirectResponse
     {
+        $this->authorizeCourse($course);
+
         $validated = $request->validated();
 
         CourseSection::create([
@@ -48,9 +51,7 @@ class CurriculumController extends Controller
     {
         $this->authorizeSection($course, $section);
 
-        $validated = $request->validated();
-
-        $section->update($validated);
+        $section->update($request->validated());
 
         return back()->with('success', 'Đã cập nhật chương học.');
     }
@@ -91,7 +92,7 @@ class CurriculumController extends Controller
         if ($lesson->type === 'quiz') {
             return redirect()
                 ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
-                ->with('success', 'Da tao bai quiz. Ban co the them cau hoi ngay ben duoi.');
+                ->with('success', 'Đã tạo bài quiz. Bạn có thể thêm câu hỏi ngay bên dưới.');
         }
 
         return back()->with('success', 'Đã thêm bài học.');
@@ -121,7 +122,7 @@ class CurriculumController extends Controller
         if ($lesson->type === 'quiz') {
             return redirect()
                 ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
-                ->with('success', 'Da cap nhat bai quiz. Ban co the quan ly cau hoi tai day.');
+                ->with('success', 'Đã cập nhật bài quiz. Bạn có thể quản lý câu hỏi tại đây.');
         }
 
         return back()->with('success', 'Đã cập nhật bài học.');
@@ -136,8 +137,6 @@ class CurriculumController extends Controller
 
         return back()->with('success', 'Đã xóa bài học.');
     }
-
-
 
     private function authorizeCourse(Course $course): void
     {

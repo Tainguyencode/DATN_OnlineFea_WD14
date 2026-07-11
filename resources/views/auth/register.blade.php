@@ -12,6 +12,18 @@
                     subtitle="Chọn loại tài khoản phù hợp với mục tiêu của bạn."
                 />
 
+                <x-auth.errors />
+
+                @if(\App\Enums\SocialProvider::anyConfigured())
+                    <x-auth.social-buttons />
+
+                    <x-auth.divider>Hoặc tiếp tục bằng email</x-auth.divider>
+
+                    <p class="mb-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                        Đăng ký bằng Google hoặc Facebook sẽ tạo tài khoản học viên mặc định.
+                    </p>
+                @endif
+
                 <div class="grid gap-4 sm:grid-cols-2">
                     <a href="{{ route('register.role', 'student') }}"
                        class="group flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-5 transition duration-200 hover:border-[#0056D2] hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-400 dark:hover:bg-slate-800">
