@@ -105,6 +105,15 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(TwoFactorCode::class);
     }
 
+    /**
+     * Relationship: User có nhiều LessonProgress records
+     * (Theo dõi tiến độ học của user cho từng lesson)
+     */
+    public function lessonProgress(): HasMany
+    {
+        return $this->hasMany(LessonProgress::class);
+    }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class);
