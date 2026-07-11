@@ -82,7 +82,6 @@
                 @foreach([
                     ['href' => '#overview', 'label' => 'Tổng quan'],
                     ['href' => '#courses', 'label' => 'Khóa học'],
-                    ['href' => '#cart', 'label' => 'Giỏ hàng'],
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
                     ['href' => '#orders', 'label' => 'Đơn hàng'],
@@ -182,75 +181,7 @@
                 @endif
             </section>
 
-            <section id="cart" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Giỏ hàng</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $stats['cart_items'] }} khóa học trong giỏ</p>
-                    </div>
-                </div>
 
-                @if($cart->courses->isEmpty())
-                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                        Giỏ hàng trống.
-                    </div>
-                @else
-                    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                        <div class="space-y-4 lg:col-span-2">
-                            @foreach($cart->courses as $course)
-                                @php
-                                    $price = $course ? ($course->discount_price ?? $course->sale_price ?? $course->price) : 0;
-                                @endphp
-                                @continue(! $course)
-
-                                <div class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-50 font-bold text-[#0056D2] dark:bg-blue-950/40 dark:text-blue-200">
-                                        {{ strtoupper(substr($course->title, 0, 1)) }}
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <h3 class="truncate font-bold text-slate-950 dark:text-white">{{ $course->title }}</h3>
-                                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ $course->instructor?->name }}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="font-extrabold text-[#0056D2] dark:text-blue-300">{{ number_format($price, 0, ',', '.') }}đ</p>
-                                        <form method="POST" action="{{ route('student.cart.remove', $course->id) }}" class="mt-1">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" @if(! $canUseStudentActions) disabled @endif class="text-xs font-semibold text-rose-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50">Xóa</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-
-                        <div class="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                            <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Thanh toán</h3>
-                            <div class="mt-5 space-y-3 text-sm">
-                                <div class="flex justify-between text-slate-500 dark:text-slate-400">
-                                    <span>Tạm tính</span>
-                                    <span>{{ number_format($cartTotal, 0, ',', '.') }}đ</span>
-                                </div>
-                                <div class="flex justify-between border-t border-slate-200 pt-4 text-lg font-extrabold text-slate-950 dark:border-slate-800 dark:text-white">
-                                    <span>Tổng cộng</span>
-                                    <span class="text-[#0056D2] dark:text-blue-300">{{ number_format($cartTotal, 0, ',', '.') }}đ</span>
-                                </div>
-                            </div>
-                            <form method="POST" action="{{ route('student.cart.checkout') }}" class="mt-6 space-y-4">
-                                @csrf
-                                <input type="text" name="coupon_code" placeholder="Mã giảm giá" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                                <select name="payment_method" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                                    <option value="vnpay">VNPay</option>
-                                    <option value="momo">MoMo</option>
-                                    <option value="bank_transfer">Chuyển khoản</option>
-                                </select>
-                                <button type="submit" @if(! $canUseStudentActions) disabled @endif class="h-11 w-full rounded-xl bg-[#0056D2] text-sm font-bold text-white transition hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60">
-                                    Thanh toán ngay
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                @endif
-            </section>
 
             <section id="wishlist" class="scroll-mt-24 pt-8">
                 <div class="mb-4 flex items-center justify-between gap-4">
@@ -334,7 +265,8 @@
                                         <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Khóa học</th>
                                         <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Tổng tiền</th>
                                         <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Trạng thái</th>
-                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Ngày</th>
+                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Ngày tạo</th>
+                                        <th class="px-5 py-4 text-center font-bold text-slate-600 dark:text-slate-300">Thao tác</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -347,11 +279,38 @@
                                             <td class="px-5 py-4 text-slate-700 dark:text-slate-200">{{ $orderTitles ?: 'Khóa học' }}</td>
                                             <td class="px-5 py-4 font-bold text-slate-950 dark:text-white">{{ number_format($order->total_amount, 0, ',', '.') }}đ</td>
                                             <td class="px-5 py-4">
-                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $order->status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200' }}">
-                                                    {{ $order->status === 'paid' ? 'Đã thanh toán' : ucfirst($order->status) }}
-                                                </span>
+                                                @if($order->status === 'paid')
+                                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200">
+                                                        Đã thanh toán
+                                                    </span>
+                                                @elseif($order->status === 'pending')
+                                                    <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+                                                        Chờ thanh toán
+                                                    </span>
+                                                @elseif($order->status === 'failed')
+                                                    <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-700 dark:bg-rose-950/50 dark:text-rose-200">
+                                                        Thất bại
+                                                    </span>
+                                                @elseif($order->status === 'cancelled')
+                                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
+                                                        Đã hủy
+                                                    </span>
+                                                @else
+                                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-950/50 dark:text-slate-200">
+                                                        {{ ucfirst($order->status) }}
+                                                    </span>
+                                                @endif
                                             </td>
                                             <td class="px-5 py-4 text-slate-500 dark:text-slate-400">{{ $order->created_at->format('d/m/Y') }}</td>
+                                            <td class="px-5 py-4 text-center">
+                                                @if($order->status === 'pending')
+                                                    <a href="{{ route('student.checkout.pay', $order->order_code) }}" class="inline-flex items-center justify-center rounded-xl bg-[#0056D2] px-4 py-1.5 text-xs font-bold text-white transition hover:bg-[#0046B8] shadow-sm">
+                                                        Thanh toán ngay
+                                                    </a>
+                                                @else
+                                                    <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+                                                @endif
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
