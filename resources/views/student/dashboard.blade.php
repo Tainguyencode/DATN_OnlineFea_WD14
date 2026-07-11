@@ -52,6 +52,11 @@
                             <span class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ number_format($enrollment->progress_percent, 0) }}%</span>
                         </div>
                     </div>
+                    @if($enrollment->course->learningEntryUrl())
+                        <a href="{{ $enrollment->course->learningEntryUrl() }}" class="ui-button-primary shrink-0 px-4 py-2 text-sm">
+                            Vào học
+                        </a>
+                    @endif
                 </div>
             @endforeach
         </div>
