@@ -4,6 +4,12 @@
     $formatPrice = fn ($value) => (float) $value <= 0 ? 'Miễn phí' : number_format((float) $value, 0, ',', '.').'đ';
 @endphp
 
+@if(session('error'))
+    <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        {{ session('error') }}
+    </div>
+@endif
+
 @if($courses->isEmpty())
     <div class="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
@@ -21,11 +27,12 @@
                 $sections = $course->courseSections->isNotEmpty() ? $course->courseSections : $course->chapters;
                 $lessonCount = $sections->sum(fn ($section) => $section->lessons->count());
                 $price = $course->discount_price ?? $course->sale_price ?? $course->price;
+                $durationMinutes = $course->totalVideoDurationMinutes();
             @endphp
 
             <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div class="grid gap-5 p-5 lg:grid-cols-[180px_minmax(0,1fr)_220px]">
-                    <div class="aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100 lg:aspect-[4/3]">
+                <div class="grid gap-4 p-4 lg:grid-cols-[140px_minmax(0,1fr)_190px]">
+                    <div class="overflow-hidden rounded-lg border border-slate-200 bg-slate-100" style="height:110px; width:140px; flex-shrink:0;">
                         @if($course->thumbnail)
                             <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
                         @else
@@ -35,7 +42,7 @@
 
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đang chờ duyệt</span>
+                            <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đã gửi duyệt</span>
                             <span class="text-xs font-semibold text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }}</span>
                         </div>
                         <h3 class="mt-2 text-xl font-bold text-slate-950">{{ $course->title }}</h3>
@@ -56,35 +63,21 @@
                                 <strong class="mt-1 block text-sm text-slate-950">{{ $lessonCount }}</strong>
                             </div>
                             <div class="rounded-lg bg-slate-50 p-3">
-                                <span class="block text-xs font-bold uppercase tracking-wide text-slate-500">Gửi duyệt</span>
-                                <strong class="mt-1 block text-sm text-slate-950">{{ $course->submitted_at?->format('d/m/Y H:i') ?? 'Chưa rõ' }}</strong>
+                                <span class="block text-xs font-bold uppercase tracking-wide text-slate-500">Thời lượng</span>
+                                <strong class="mt-1 block text-sm text-slate-950">{{ $durationMinutes }} phút</strong>
                             </div>
                         </div>
                     </div>
 
                     <div class="flex flex-col gap-2">
+                        <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
+                            <span class="block font-bold uppercase tracking-wide">Gửi duyệt</span>
+                            <span class="mt-1 block text-sm font-semibold text-slate-800">{{ $course->submitted_at?->format('d/m/Y H:i') ?? 'Chưa rõ' }}</span>
+                        </div>
                         <a href="{{ route('admin.courses.review', $course) }}"
-                           class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">
-                            Xem chi tiết
+                           class="inline-flex min-h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">
+                            Kiểm duyệt
                         </a>
-                        <form method="POST" action="{{ route('admin.courses.approve', $course) }}" onsubmit="return confirm('Duyệt khóa học này?')">
-                            @csrf
-                            <button type="submit"
-                                    class="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
-                                Duyệt
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ route('admin.courses.reject', $course) }}" class="space-y-2" onsubmit="return confirm('Từ chối khóa học này?')">
-                            @csrf
-                            <label class="sr-only" for="reason-{{ $course->id }}">Lý do từ chối</label>
-                            <textarea id="reason-{{ $course->id }}" name="reject_reason" rows="3" required maxlength="1000"
-                                      placeholder="Lý do từ chối..."
-                                      class="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-colors duration-200 focus:border-rose-500 focus-visible:ring-2 focus-visible:ring-rose-500/20"></textarea>
-                            <button type="submit"
-                                    class="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer">
-                                Từ chối
-                            </button>
-                        </form>
                     </div>
                 </div>
             </article>
