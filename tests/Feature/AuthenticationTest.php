@@ -81,6 +81,17 @@ class AuthenticationTest extends TestCase
         $this->assertSame(1, User::query()->where('email', 'taken@example.com')->count());
     }
 
+    public function test_duplicate_phone_registration_is_rejected(): void
+    {
+        User::factory()->create(['phone' => '0393028777']);
+
+        $this->postRegister('student', ['phone' => '0393028777'])
+            ->assertSessionHasErrors('phone');
+
+        $this->assertGuest();
+        $this->assertSame(1, User::query()->where('phone', '0393028777')->count());
+    }
+
     public function test_password_confirmation_mismatch_is_rejected(): void
     {
         $captcha = $this->registerCaptcha();

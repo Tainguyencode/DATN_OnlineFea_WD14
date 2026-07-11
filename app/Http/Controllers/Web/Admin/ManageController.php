@@ -335,11 +335,7 @@ class ManageController extends Controller
         return back()->with('success', 'Đã từ chối khóa học.');
     }
 
-    /**
-     * Xử lý quyết định duyệt từ form checklist admin.
-     * Lưu CourseReview + CourseReviewItem, cập nhật courses.status.
-     */
-    public function submitReview(AdminCourseReviewRequest $request, Course $course): RedirectResponse
+    public function submitReview(AdminCourseReviewRequest $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
         if (! in_array($course->status, [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value], true)) {
             return redirect()
@@ -348,59 +344,25 @@ class ManageController extends Controller
         }
 
         $action = $request->input('action');
-        $comment = $request->input('comment');
+        $comment = trim((string) $request->input('comment'));
         $checklist = $request->input('checklist', []);
 
-        DB::transaction(function () use ($course, $action, $comment, $checklist, $request) {
-            $courseReview = CourseReview::create([
-                'course_id' => $course->id,
-                'reviewer_id' => auth()->id(),
-                'action' => $action,
-                'comment' => $comment ?: null,
-                'reviewed_at' => now(),
-            ]);
-
-            foreach ($checklist as $itemKey => $data) {
-                if (! in_array($itemKey, CourseReviewItem::ADMIN_CHECKLIST_KEYS, true)) {
-                    continue;
-                }
-
-                CourseReviewItem::create([
-                    'course_review_id' => $courseReview->id,
-                    'item_key' => $itemKey,
-                    'status' => $data['status'] ?? 'pass',
-                    'note' => $data['note'] ?? null,
+        if ($action === CourseReview::ACTION_APPROVED) {
+            $reviewService->approve(
+                $course,
+                $request->user(),
+                $this->legacyChecklistToConfig($checklist),
+                true,
+            );
+        } else {
+            if (strlen($comment) < config('course.reject_reason_min_length', 10)) {
+                return back()->withErrors([
+                    'comment' => 'Lý do / ghi chú phải có ít nhất '.config('course.reject_reason_min_length', 10).' ký tự.',
                 ]);
             }
 
-            $statusMap = [
-                CourseReview::ACTION_APPROVED => Course::STATUS_APPROVED,
-                CourseReview::ACTION_NEED_REVISION => Course::STATUS_NEED_REVISION,
-                CourseReview::ACTION_REJECTED => Course::STATUS_REJECTED,
-            ];
-
-            $newStatus = $statusMap[$action];
-            $courseUpdate = ['status' => $newStatus];
-
-            if ($action === CourseReview::ACTION_APPROVED) {
-                $courseUpdate['reject_reason'] = null;
-                $courseUpdate['rejection_reason'] = null;
-            } elseif (in_array($action, [CourseReview::ACTION_NEED_REVISION, CourseReview::ACTION_REJECTED], true)) {
-                $courseUpdate['reject_reason'] = $comment;
-                $courseUpdate['rejection_reason'] = $comment;
-            }
-
-            $course->update($courseUpdate);
-
-            ActivityLogService::log(
-                auth()->id(),
-                "review_course_{$action}",
-                Course::class,
-                $course->id,
-                null,
-                $request,
-            );
-        });
+            $reviewService->reject($course, $request->user(), $comment, $checklist);
+        }
 
         $actionLabels = [
             CourseReview::ACTION_APPROVED => 'Đã duyệt',
@@ -413,6 +375,23 @@ class ManageController extends Controller
         return redirect()
             ->route('admin.courses.pending')
             ->with('success', "{$label} khóa học \"{$course->title}\".");
+    }
+
+    /**
+     * @param  array<string, array{status?: string, note?: string|null}>  $checklist
+     * @return array<string, bool>
+     */
+    private function legacyChecklistToConfig(array $checklist): array
+    {
+        foreach ($checklist as $item) {
+            if (($item['status'] ?? CourseReviewItem::STATUS_PASS) !== CourseReviewItem::STATUS_PASS) {
+                abort(422, 'Tất cả mục checklist phải đạt trước khi duyệt khóa học.');
+            }
+        }
+
+        return collect(config('course.admin_review_checklist', []))
+            ->mapWithKeys(fn ($label, $key) => [$key => true])
+            ->all();
     }
 
     /**

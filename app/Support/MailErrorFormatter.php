@@ -16,10 +16,12 @@ class MailErrorFormatter
 
         if (
             str_contains($message, '535')
+            || str_contains($message, '534')
             || str_contains($message, 'BadCredentials')
             || str_contains($message, 'Username and Password not accepted')
+            || str_contains($message, 'Application-specific password required')
         ) {
-            return 'Xác thực Gmail SMTP thất bại. Hãy đặt MAIL_PASSWORD là Google App Password 16 ký tự (không dùng mật khẩu đăng nhập Gmail thông thường).';
+            return 'Xác thực Gmail SMTP thất bại. Hãy bật xác minh 2 bước cho Gmail và đặt MAIL_PASSWORD là App Password 16 ký tự (không dùng mật khẩu đăng nhập Gmail thông thường).';
         }
 
         if (

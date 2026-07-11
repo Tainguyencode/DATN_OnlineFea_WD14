@@ -24,7 +24,7 @@ class EmailVerificationService
         return $maskedLocal.'@'.$domain;
     }
 
-    public function sendCode(User $user): void
+    public function sendCode(User $user, bool $ignoreCooldown = false): void
     {
         if ($user->hasVerifiedEmail()) {
             return;
@@ -32,12 +32,12 @@ class EmailVerificationService
 
         $latest = $this->latestCode($user);
 
-        if ($latest?->last_sent_at !== null) {
+        if (! $ignoreCooldown && $latest?->last_sent_at !== null) {
             $secondsRemaining = EmailVerificationCode::RESEND_COOLDOWN_SECONDS - $latest->last_sent_at->diffInSeconds(now());
 
             if ($secondsRemaining > 0) {
                 throw ValidationException::withMessages([
-                    'email' => 'Vui lòng đợi '.$secondsRemaining.' giây trước khi gửi lại mã.',
+                    'email' => 'Vui lòng đợi '.(int) ceil($secondsRemaining).' giây trước khi gửi lại mã.',
                 ]);
             }
         }
