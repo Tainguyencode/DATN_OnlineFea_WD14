@@ -213,38 +213,62 @@ class CourseController extends Controller
         return view('instructor.courses.students', compact('course', 'enrollments'));
     }
 
-    public function revenue(): View
+    public function revenue(Request $request): View
     {
         $courseIds = Course::where('instructor_id', auth()->id())->pluck('id')->toArray();
-        $orders = \App\Models\Order::where('status', 'paid')->get();
+        $query = \App\Models\Order::where('status', 'paid');
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+        if ($request->filled('month')) {
+            $query->whereMonth('created_at', $request->input('month'));
+        }
+        if ($request->filled('year')) {
+            $query->whereYear('created_at', $request->input('year'));
+        }
+
+        $orders = $query->get();
 
         $totalRevenue = 0;
         $courseSales = [];
 
         foreach ($orders as $order) {
-            foreach (($order->items ?? []) as $item) {
-                $cid = $item['course_id'] ?? null;
-                if (in_array($cid, $courseIds)) {
-                    $price = $item['price'] ?? 0;
-                    $totalRevenue += $price;
+            $items = $order->items;
+            if (is_iterable($items)) {
+                foreach ($items as $item) {
+                    $cid = $item['course_id'] ?? null;
+                    if (in_array($cid, $courseIds)) {
+                        $price = $item['price'] ?? 0;
+                        $totalRevenue += $price;
 
-                    if (! isset($courseSales[$cid])) {
-                        $courseSales[$cid] = [
-                            'course_id' => $cid,
-                            'total' => 0,
-                            'sales' => 0,
-                            'course' => Course::find($cid),
-                        ];
+                        if (! isset($courseSales[$cid])) {
+                            $courseSales[$cid] = [
+                                'course_id' => $cid,
+                                'total' => 0,
+                                'sales' => 0,
+                                'course' => Course::find($cid),
+                            ];
+                        }
+                        $courseSales[$cid]['total'] += $price;
+                        $courseSales[$cid]['sales'] += 1;
                     }
-                    $courseSales[$cid]['total'] += $price;
-                    $courseSales[$cid]['sales'] += 1;
                 }
             }
         }
 
         $courseRevenue = collect($courseSales)->values();
+        $filters = [
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+        ];
 
-        return view('instructor.revenue', compact('totalRevenue', 'courseRevenue'));
+        return view('instructor.revenue', compact('totalRevenue', 'courseRevenue', 'filters'));
     }
 
     protected function authorize(Course $course): void

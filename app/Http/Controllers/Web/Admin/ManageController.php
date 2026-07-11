@@ -282,23 +282,59 @@ class ManageController extends Controller
         return back()->with('success', "Đã khôi phục khóa học \"{$course->title}\".");
     }
 
-    public function revenue(): View
+    public function revenue(Request $request): View
     {
-        $totalRevenue = Order::where('status', 'paid')->sum('total_amount');
-        $totalOrders = Order::where('status', 'paid')->count();
+        $query = Order::where('status', 'paid');
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+        if ($request->filled('month')) {
+            $query->whereMonth('created_at', $request->input('month'));
+        }
+        if ($request->filled('year')) {
+            $query->whereYear('created_at', $request->input('year'));
+        }
+
+        $totalRevenue = $query->sum('total_amount');
+        $totalOrders = $query->count();
 
         $monthExpr = DB::connection()->getDriverName() === 'sqlite'
             ? "strftime('%Y-%m', created_at)"
             : "DATE_FORMAT(created_at, '%Y-%m')";
 
-        $monthly = Order::where('status', 'paid')
+        $monthlyQuery = Order::where('status', 'paid');
+        if ($request->filled('start_date')) {
+            $monthlyQuery->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $monthlyQuery->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+        if ($request->filled('month')) {
+            $monthlyQuery->whereMonth('created_at', $request->input('month'));
+        }
+        if ($request->filled('year')) {
+            $monthlyQuery->whereYear('created_at', $request->input('year'));
+        }
+
+        $monthly = $monthlyQuery
             ->selectRaw("{$monthExpr} as month, SUM(total_amount) as total, COUNT(*) as count")
             ->groupBy('month')
             ->orderByDesc('month')
             ->limit(12)
             ->get();
 
-        return view('admin.revenue', compact('totalRevenue', 'totalOrders', 'monthly'));
+        $filters = [
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+        ];
+
+        return view('admin.revenue', compact('totalRevenue', 'totalOrders', 'monthly', 'filters'));
     }
 
     public function activityLogs(): View
