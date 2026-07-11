@@ -42,17 +42,26 @@ class CourseController extends Controller
         $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
         abort_unless($this->isPublished($course) || $canBypassCourseVisibility, 404);
 
+        $isEnrolled = $this->isEnrolled($course);
+        $canManageCourse = auth()->check()
+            && auth()->user()->isInstructor()
+            && $course->isOwnedBy(auth()->user());
+        $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
+
         $course->load([
             'instructor:id,name,avatar,bio',
             'category:id,parent_id,name,slug',
             'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
                 ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->when(!$canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
             'chapters.lessons' => fn ($q) => $q
                 ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->when(!$canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
         ]);
+        $course->loadCount('lessons');
 
         $relatedCourses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->where('id', '!=', $course->id)
@@ -73,14 +82,11 @@ class CourseController extends Controller
         $curriculumSections = $course->courseSections->isNotEmpty()
             ? $course->courseSections
             : $course->chapters;
-        $totalLessons = $curriculumSections->sum(fn ($section) => $section->lessons->count());
+
+        $totalLessons = $course->lessons_count;
         $previewLessons = $curriculumSections->flatMap->lessons->where('is_preview', true)->count();
         $totalSections = $curriculumSections->count();
-        $isEnrolled = $this->isEnrolled($course);
-        $canManageCourse = auth()->check()
-            && auth()->user()->isInstructor()
-            && $course->isOwnedBy(auth()->user());
-        $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
+
         $isFavorited = auth()->check()
             && auth()->user()->isStudent()
             && $course->isFavoritedBy(auth()->user());
@@ -235,13 +241,17 @@ class CourseController extends Controller
         $search = trim((string) $request->query('search'));
         $level = $request->query('level');
         $pricing = $request->query('pricing');
+        $rating = $request->query('rating');
         $selectedCategory ??= $this->resolveCategoryFilter($request->query('category'));
 
         $courses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
             ->withCount(['lessons', 'courseSections']))
             ->when($search !== '', function ($query) use ($search) {
-                $query->where('title', 'like', "%{$search}%");
+                $query->where(function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                        ->orWhereHas('instructor', fn ($instructorQuery) => $instructorQuery->where('name', 'like', "%{$search}%"));
+                });
             })
             ->when($selectedCategory, function ($query) use ($selectedCategory) {
                 if ($selectedCategory->parent_id) {
@@ -259,6 +269,10 @@ class CourseController extends Controller
             ->when(in_array($level, ['beginner', 'intermediate', 'advanced'], true), fn ($query) => $query->where('level', $level))
             ->when($pricing === 'free', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= 0'))
             ->when($pricing === 'paid', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0'))
+            ->when($pricing === 'under_200k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0 AND COALESCE(discount_price, sale_price, price) <= 200000'))
+            ->when($pricing === '200k_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 200000 AND COALESCE(discount_price, sale_price, price) <= 500000'))
+            ->when($pricing === 'above_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 500000'))
+            ->when(is_numeric($rating), fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
             ->orderByDesc('published_at')
             ->orderByDesc('created_at')
             ->paginate(9)
@@ -296,7 +310,8 @@ class CourseController extends Controller
             'search',
             'selectedCategory',
             'level',
-            'pricing'
+            'pricing',
+            'rating'
         ));
     }
 

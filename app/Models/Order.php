@@ -11,7 +11,7 @@ class Order extends Model
 {
     protected $fillable = [
         'order_code', 'user_id', 'coupon_id', 'subtotal', 'discount_amount',
-        'total_amount', 'status', 'payment_method',
+        'total_amount', 'status', 'payment_method', 'transaction_id', 'items',
     ];
 
     protected function casts(): array
@@ -20,6 +20,7 @@ class Order extends Model
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'total_amount' => 'decimal:2',
+            'items' => 'array',
         ];
     }
 

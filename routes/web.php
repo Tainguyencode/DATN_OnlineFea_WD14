@@ -116,10 +116,17 @@ Route::get('/dashboard', function () {
 Route::middleware(['auth', 'active', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
-    Route::get('/cart', fn () => redirect(route('student.dashboard').'#cart'))->name('cart');
+    Route::get('/cart', [CartController::class, 'index'])->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->middleware('verified')->name('cart.checkout');
+    
+    // Các route liên quan đến Quy trình Thanh toán (US07)
+    Route::get('/checkout/{order_code}/pay', [CartController::class, 'showPaymentPage'])->name('checkout.pay');
+    Route::get('/checkout/mock-gateway/{order_code}', [CartController::class, 'mockGateway'])->name('checkout.mock_gateway');
+    Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->name('checkout.simulate');
+    Route::get('/checkout/{order_code}/success', [CartController::class, 'successPage'])->name('checkout.success');
+
     Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->middleware('verified')->name('wishlist.toggle');
     Route::get('/certificates', fn () => redirect(route('student.dashboard').'#certificates'))->name('certificates');
