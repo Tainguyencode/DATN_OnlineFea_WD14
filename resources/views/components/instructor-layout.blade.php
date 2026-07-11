@@ -48,5 +48,22 @@
     :pageTitle="$pageTitle"
     :breadcrumb="$breadcrumb"
 >
+    @if(auth()->check() && ! auth()->user()->hasVerifiedEmail())
+        <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="font-bold">Tài khoản giảng viên chưa xác thực email.</p>
+                    <p class="mt-1 text-sm font-medium text-amber-800 dark:text-amber-200">Bạn vẫn có thể xem khu vực giảng viên, nhưng cần xác thực email trước khi lưu thay đổi hoặc gửi khóa học.</p>
+                </div>
+                <form method="POST" action="{{ route('verification.send') }}" class="shrink-0">
+                    @csrf
+                    <button type="submit" class="inline-flex h-10 items-center justify-center rounded-lg bg-amber-600 px-4 text-sm font-bold text-white transition hover:bg-amber-700">
+                        Gửi lại email
+                    </button>
+                </form>
+            </div>
+        </div>
+    @endif
+
     {{ $slot }}
 </x-layouts.dashboard>
