@@ -23,8 +23,11 @@ class CourseSubmissionValidator
 
     public function validate(Course $course): CourseSubmissionCheckResult
     {
+        $course->loadMissing('category.parent');
+
         $lessonCount = $course->lessonCount();
         $durationMinutes = $course->totalVideoDurationMinutes();
+        $categoryReady = $course->category?->isSelectableForCourse() ?? false;
 
         $items = [
             $this->makeItem(
@@ -54,8 +57,8 @@ class CourseSubmissionValidator
             $this->makeItem(
                 self::KEY_CATEGORY,
                 'Danh mục',
-                filled($course->category_id),
-                'Chưa chọn danh mục',
+                $categoryReady,
+                'Chưa chọn danh mục con đang hoạt động',
             ),
             $this->makeItem(
                 self::KEY_LESSON_COUNT,

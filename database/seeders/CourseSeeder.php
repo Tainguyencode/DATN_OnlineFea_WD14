@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -13,12 +14,18 @@ class CourseSeeder extends Seeder
      */
     public function run(): void
     {
+        $categoryIds = [
+            'web' => $this->categoryId('Phát triển Web'),
+            'design' => $this->categoryId('Thiết kế UI/UX'),
+            'data' => $this->categoryId('Khoa học dữ liệu'),
+        ];
+
         // 1. Tạo khóa học mẫu (Courses)
         $courses = [
             [
                 'id' => 1,
                 'instructor_id' => 2, // Nguyễn Văn Giảng
-                'category_id' => 1,    // Lập trình Web
+                'category_id' => $categoryIds['web'],
                 'title' => 'Laravel từ Zero đến Hero',
                 'slug' => Str::slug('Laravel từ Zero đến Hero'),
                 'description' => 'Khóa học toàn diện về framework Laravel từ cơ bản đến nâng cao. Học qua dự án thực tế.',
@@ -43,7 +50,7 @@ class CourseSeeder extends Seeder
             [
                 'id' => 2,
                 'instructor_id' => 2, // Nguyễn Văn Giảng
-                'category_id' => 1,    // Lập trình Web
+                'category_id' => $categoryIds['web'],
                 'title' => 'React.js Masterclass',
                 'slug' => Str::slug('React.js Masterclass'),
                 'description' => 'Làm chủ React.js và các công cụ hiện đại như Redux Toolkit, React Router, Vite, TailwindCSS.',
@@ -68,7 +75,7 @@ class CourseSeeder extends Seeder
             [
                 'id' => 3,
                 'instructor_id' => 3, // Trần Đức Dũng
-                'category_id' => 4,    // Thiết kế UI/UX
+                'category_id' => $categoryIds['design'],
                 'title' => 'UI/UX Design Fundamentals',
                 'slug' => Str::slug('UI/UX Design Fundamentals'),
                 'description' => 'Học thiết kế trải nghiệm người dùng (UX) và giao diện trực quan (UI) bằng công cụ Figma từ con số 0.',
@@ -93,7 +100,7 @@ class CourseSeeder extends Seeder
             [
                 'id' => 4,
                 'instructor_id' => 2, // Nguyễn Văn Giảng
-                'category_id' => 3,    // Khoa học dữ liệu & AI
+                'category_id' => $categoryIds['data'],
                 'title' => 'Python cho Data Science',
                 'slug' => Str::slug('Python cho Data Science'),
                 'description' => 'Sử dụng Python để phân tích dữ liệu, trực quan hóa và xây dựng các thuật toán Machine Learning cơ bản.',
@@ -164,7 +171,7 @@ class CourseSeeder extends Seeder
                 'sort_order' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('chapters')->insert($chapters);
@@ -279,7 +286,7 @@ class CourseSeeder extends Seeder
                 'sort_order' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('lessons')->insert($lessons);
@@ -303,7 +310,7 @@ class CourseSeeder extends Seeder
                 'file_size' => 2048120, // ~2MB
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('lesson_attachments')->insert($attachments);
@@ -330,7 +337,7 @@ class CourseSeeder extends Seeder
                 'file_path' => 'subtitles/lesson-2-vi.vtt',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('lesson_subtitles')->insert($subtitles);
@@ -350,7 +357,7 @@ class CourseSeeder extends Seeder
                 'language' => 'vi',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('ai_summaries')->insert($aiSummaries);
@@ -366,7 +373,7 @@ class CourseSeeder extends Seeder
                 'max_score' => 100,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('assignments')->insert($assignments);
@@ -381,7 +388,7 @@ class CourseSeeder extends Seeder
                 'time_limit_minutes' => 15,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('quizzes')->insert($quizzes);
@@ -417,7 +424,7 @@ class CourseSeeder extends Seeder
                 'sort_order' => 3,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('quiz_questions')->insert($quizQuestions);
@@ -496,9 +503,18 @@ class CourseSeeder extends Seeder
                 'is_correct' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('quiz_options')->insert($quizOptions);
+    }
+
+    private function categoryId(string $name): int
+    {
+        return (int) (
+            Category::where('slug', Str::slug($name))->value('id')
+            ?: Category::query()->value('id')
+            ?: 1
+        );
     }
 }

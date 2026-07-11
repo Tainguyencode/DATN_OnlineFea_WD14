@@ -44,7 +44,9 @@
 
                 <div class="flex flex-1 flex-col p-5">
                     @if($course->category)
-                        <span class="text-xs font-bold uppercase tracking-wide text-indigo-600">{{ $course->category->name }}</span>
+                        <a href="{{ route('courses.category', $course->category->slug) }}" class="text-xs font-bold uppercase tracking-wide text-indigo-600 hover:text-indigo-800">
+                            {{ $course->category->full_name }}
+                        </a>
                     @endif
 
                     <h3 class="mt-2 line-clamp-2 text-lg font-extrabold leading-snug text-slate-950">

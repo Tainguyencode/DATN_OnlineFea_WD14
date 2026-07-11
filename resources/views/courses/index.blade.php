@@ -10,6 +10,7 @@
         'free' => 'Miễn phí',
         'paid' => 'Trả phí',
     ];
+    $categoryCount = $categories->sum(fn ($parent) => $parent->children->count());
 @endphp
 
 <section class="bg-slate-950 text-white">
@@ -26,7 +27,7 @@
             </p>
             <div class="mt-7 flex flex-wrap gap-3 text-sm text-slate-300">
                 <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">{{ $courses->total() }} khóa học đã xuất bản</span>
-                <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">{{ $categories->count() }} danh mục</span>
+                <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">{{ $categoryCount }} danh mục</span>
                 <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">Học thử với bài preview</span>
             </div>
         </div>
@@ -68,10 +69,17 @@
 
                 <select name="category" class="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white">
                     <option value="">Tất cả danh mục</option>
-                    @foreach($categories as $category)
-                        <option value="{{ $category->id }}" @selected((string) $categoryId === (string) $category->id)>
-                            {{ $category->name }} ({{ $category->courses_count }})
+                    @foreach($categories as $parent)
+                        <option value="{{ $parent->slug }}" @selected($selectedCategory?->id === $parent->id)>
+                            Tất cả {{ $parent->name }}
                         </option>
+                        <optgroup label="{{ $parent->name }}">
+                            @foreach($parent->children as $category)
+                                <option value="{{ $category->slug }}" @selected($selectedCategory?->id === $category->id)>
+                                    {{ $category->name }} ({{ $category->courses_count }})
+                                </option>
+                            @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
 
@@ -149,7 +157,9 @@
 
                         <div class="flex flex-1 flex-col p-5">
                             @if($course->category)
-                                <span class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">{{ $course->category->name }}</span>
+                                <a href="{{ route('courses.category', $course->category->slug) }}" class="text-xs font-bold uppercase tracking-wide text-indigo-600 transition hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200">
+                                    {{ $course->category->full_name }}
+                                </a>
                             @endif
                             <h3 class="mt-2 line-clamp-2 text-lg font-extrabold leading-snug text-slate-950 transition group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-300">
                                 <a href="{{ route('courses.show', $course->slug) }}">{{ $course->title }}</a>

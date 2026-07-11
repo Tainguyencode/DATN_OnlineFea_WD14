@@ -13,9 +13,11 @@ use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\Order;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -29,7 +31,7 @@ class CourseController extends Controller
         $status = $request->query('status');
 
         $courses = Course::where('instructor_id', auth()->id())
-            ->with('category:id,name')
+            ->with(['category:id,parent_id,name', 'category.parent:id,name'])
             ->withCount('enrollments')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -51,7 +53,7 @@ class CourseController extends Controller
 
     public function create(): View
     {
-        $categories = Category::orderBy('name')->get(['id', 'name']);
+        $categories = $this->categoryGroups();
 
         return view('instructor.courses.create', compact('categories'));
     }
@@ -85,12 +87,12 @@ class CourseController extends Controller
         $course->load([
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
-            'category',
+            'category.parent',
             'courseReviews' => fn ($q) => $q->orderByDesc('reviewed_at')->orderByDesc('id'),
             'courseReviews.reviewer:id,name,email',
             'courseReviews.items',
         ]);
-        $categories = Category::orderBy('name')->get(['id', 'name']);
+        $categories = $this->categoryGroups();
         $statusOptions = $this->statusOptions();
         $submissionCheck = $course->submissionCheck();
         $courseReviews = $course->courseReviews;
@@ -214,7 +216,7 @@ class CourseController extends Controller
     public function revenue(): View
     {
         $courseIds = Course::where('instructor_id', auth()->id())->pluck('id')->toArray();
-        $orders = \App\Models\Order::where('status', 'paid')->get();
+        $orders = Order::where('status', 'paid')->get();
 
         $totalRevenue = 0;
         $courseSales = [];
@@ -250,8 +252,6 @@ class CourseController extends Controller
         abort_unless($course->isOwnedBy(auth()->user()), 403);
     }
 
-
-
     private function uniqueSlug(string $title): string
     {
         $baseSlug = Str::slug($title) ?: 'course';
@@ -281,7 +281,7 @@ class CourseController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Course>  $courses
+     * @param  Collection<int, Course>  $courses
      * @return array<int, CourseSubmissionCheckResult>
      */
     private function buildSubmissionChecks($courses): array
@@ -299,5 +299,22 @@ class CourseController extends Controller
     private function statusOptions(): array
     {
         return Course::STATUS_LABELS;
+    }
+
+    private function categoryGroups()
+    {
+        return Category::query()
+            ->active()
+            ->parent()
+            ->whereHas('children', fn ($query) => $query->active())
+            ->with([
+                'children' => fn ($query) => $query
+                    ->active()
+                    ->orderBy('sort_order')
+                    ->orderBy('name'),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'sort_order']);
     }
 }

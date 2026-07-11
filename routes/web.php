@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Web\Admin\AiModerationController;
+use App\Http\Controllers\Web\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
@@ -8,17 +10,17 @@ use App\Http\Controllers\Web\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\HomeController;
-use App\Http\Controllers\Web\NotificationController;
-use App\Http\Controllers\Web\ProfileController;
-use App\Services\GeminiService;
-use App\Services\VideoFrameExtractor;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
+use App\Http\Controllers\Web\NotificationController;
+use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
+use App\Services\GeminiService;
+use App\Services\VideoFrameExtractor;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -35,7 +37,7 @@ Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
 });
 
 Route::get('/test-gemini', function (GeminiService $gemini) {
-    $framePath = storage_path('app' . DIRECTORY_SEPARATOR . 'temp_frames' . DIRECTORY_SEPARATOR . 'frame_0.jpg');
+    $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
 
     $result = $gemini->analyzeImage($framePath);
 
@@ -44,6 +46,7 @@ Route::get('/test-gemini', function (GeminiService $gemini) {
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
 Route::middleware('auth')->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
@@ -111,7 +114,7 @@ Route::get('/dashboard', function () {
 
 // ─── HỌC VIÊN ───
 Route::middleware(['auth', 'active', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
-    Route::get('/dashboard', [\App\Http\Controllers\Web\AuthController::class, 'studentDashboard'])->name('dashboard');
+    Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
     Route::get('/cart', fn () => redirect(route('student.dashboard').'#cart'))->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
@@ -181,6 +184,13 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
     Route::put('/roles/{role}', [RoleController::class, 'update'])->name('roles.update');
     Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+    Route::get('/categories', [AdminCategoryController::class, 'index'])->name('categories.index');
+    Route::get('/categories/create', [AdminCategoryController::class, 'create'])->name('categories.create');
+    Route::post('/categories', [AdminCategoryController::class, 'store'])->name('categories.store');
+    Route::get('/categories/{category}/edit', [AdminCategoryController::class, 'edit'])->name('categories.edit');
+    Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])->name('categories.update');
+    Route::post('/categories/{category}/toggle-status', [AdminCategoryController::class, 'toggleStatus'])->name('categories.toggle-status');
+    Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
     Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/courses/pending', [ManageController::class, 'pendingCourses'])->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
@@ -188,11 +198,11 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/courses/{course}/approve', [ManageController::class, 'approve'])->name('courses.approve');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::post('/courses/{course}/review', [ManageController::class, 'submitReview'])->name('courses.submitReview');
-    
+
     // Quét AI Video Moderation
-    Route::post('/ai-moderation/{lesson}/extract', [\App\Http\Controllers\Web\Admin\AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
-    Route::post('/ai-moderation/analyze-frame', [\App\Http\Controllers\Web\Admin\AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
-    Route::post('/ai-moderation/{lesson}/save', [\App\Http\Controllers\Web\Admin\AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
+    Route::post('/ai-moderation/{lesson}/extract', [AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
+    Route::post('/ai-moderation/analyze-frame', [AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
+    Route::post('/ai-moderation/{lesson}/save', [AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
     Route::post('/courses/{course}/publish', [ManageController::class, 'publish'])->name('courses.publish');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');

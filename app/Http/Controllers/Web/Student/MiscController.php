@@ -21,7 +21,7 @@ class MiscController extends Controller
                 ->where('status', Course::STATUS_PUBLISHED)
                 ->where('is_published', true))
             ->with(['course' => fn ($query) => $query
-                ->with(['instructor:id,name,avatar', 'category:id,name,slug'])
+                ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
                 ->withCount(['lessons', 'courseSections'])])
             ->orderByDesc('created_at')
             ->paginate(9);
