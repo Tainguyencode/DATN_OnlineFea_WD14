@@ -105,11 +105,17 @@ class CartController extends Controller
         $validated = $request->validate([
             'payment_method' => 'required|in:momo,vnpay,bank_transfer',
             'coupon_code' => 'nullable|string',
+            'course_ids' => 'required|array',
+            'course_ids.*' => 'required|integer|exists:courses,id',
         ]);
 
-        $cart = $this->getCart()->load('courses');
+        $selectedCourseIds = $validated['course_ids'];
+        $cart = $this->getCart()->load(['courses' => function ($query) use ($selectedCourseIds) {
+            $query->whereIn('courses.id', $selectedCourseIds);
+        }]);
+
         if ($cart->courses->isEmpty()) {
-            return back()->with('error', 'Giỏ hàng của bạn hiện đang trống.');
+            return back()->with('error', 'Vui lòng chọn ít nhất một khóa học để thanh toán.');
         }
 
         // Tính toán số tiền
@@ -139,7 +145,7 @@ class CartController extends Controller
 
         // Nếu tổng tiền là 0 (Ví dụ coupon giảm 100%), thực hiện hoàn tất thanh toán ngay lập tức
         if ($total <= 0) {
-            DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot) {
+            DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds) {
                 $order = Order::create([
                     'order_code' => $orderCode,
                     'user_id' => auth()->id(),
@@ -192,7 +198,7 @@ class CartController extends Controller
                 }
 
                 // Xóa các khóa học đã mua khỏi giỏ hàng
-                $cart->courses()->detach();
+                $cart->courses()->detach($selectedCourseIds);
             });
 
             return redirect()->route('student.checkout.success', $orderCode)
