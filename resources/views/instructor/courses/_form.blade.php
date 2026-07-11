@@ -80,13 +80,19 @@
                                 </option>
                             @endif
                             @foreach($categories as $parent)
-                                <optgroup label="{{ $parent->name }}">
-                                    @foreach($parent->children as $cat)
-                                        <option value="{{ $cat->id }}" @selected((string) $selectedCategory === (string) $cat->id)>
-                                            {{ $cat->name }}
-                                        </option>
-                                    @endforeach
-                                </optgroup>
+                                @if($parent->children->isNotEmpty())
+                                    <optgroup label="{{ $parent->name }}">
+                                        @foreach($parent->children as $cat)
+                                            <option value="{{ $cat->id }}" @selected((string) $selectedCategory === (string) $cat->id)>
+                                                {{ $cat->name }}
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                @else
+                                    <option value="{{ $parent->id }}" @selected((string) $selectedCategory === (string) $parent->id)>
+                                        {{ $parent->name }}
+                                    </option>
+                                @endif
                             @endforeach
                         </select>
                         @error('category_id') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror

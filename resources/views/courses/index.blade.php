@@ -81,13 +81,15 @@
                         <option value="{{ $parent->slug }}" @selected($selectedCategory?->id === $parent->id)>
                             Tất cả {{ $parent->name }}
                         </option>
-                        <optgroup label="{{ $parent->name }}">
-                            @foreach($parent->children as $category)
-                                <option value="{{ $category->slug }}" @selected($selectedCategory?->id === $category->id)>
-                                    {{ $category->name }} ({{ $category->courses_count }})
-                                </option>
-                            @endforeach
-                        </optgroup>
+                        @if($parent->children->isNotEmpty())
+                            <optgroup label="{{ $parent->name }}">
+                                @foreach($parent->children as $category)
+                                    <option value="{{ $category->slug }}" @selected($selectedCategory?->id === $category->id)>
+                                        {{ $category->name }} ({{ $category->courses_count }})
+                                    </option>
+                                @endforeach
+                            </optgroup>
+                        @endif
                     @endforeach
                 </select>
 
