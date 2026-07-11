@@ -73,8 +73,15 @@ class Category extends Model
     public function scopeSelectableForCourse(Builder $query): Builder
     {
         return $query->active()
-            ->child()
-            ->whereHas('parent', fn (Builder $parent) => $parent->active());
+            ->where(function (Builder $q) {
+                $q->where(function (Builder $childQ) {
+                    $childQ->child()
+                        ->whereHas('parent', fn (Builder $parent) => $parent->active());
+                })->orWhere(function (Builder $parentQ) {
+                    $parentQ->parent()
+                        ->whereDoesntHave('children', fn (Builder $children) => $children->active());
+                });
+            });
     }
 
     public function getFullNameAttribute(): string
@@ -86,9 +93,15 @@ class Category extends Model
 
     public function isSelectableForCourse(): bool
     {
-        return (bool) $this->status
-            && filled($this->parent_id)
-            && (bool) $this->parent?->status;
+        if (! $this->status) {
+            return false;
+        }
+
+        if (filled($this->parent_id)) {
+            return (bool) $this->parent?->status;
+        }
+
+        return ! $this->children()->active()->exists();
     }
 
     public static function uniqueSlug(string $value, ?int $ignoreId = null): string

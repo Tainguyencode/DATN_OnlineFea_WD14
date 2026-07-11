@@ -348,7 +348,6 @@ class CourseController extends Controller
         return Category::query()
             ->active()
             ->parent()
-            ->whereHas('children', fn ($query) => $query->active())
             ->with([
                 'children' => fn ($query) => $query
                     ->active()

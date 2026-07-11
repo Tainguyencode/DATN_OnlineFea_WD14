@@ -178,11 +178,13 @@
                         <option value="">Tất cả</option>
                         @foreach($categories as $parent)
                             <option value="{{ $parent->slug }}" @selected($selectedCategory?->id === $parent->id)>Tất cả {{ $parent->name }}</option>
-                            <optgroup label="{{ $parent->name }}">
-                                @foreach($parent->children as $cat)
-                                    <option value="{{ $cat->slug }}" @selected($selectedCategory?->id === $cat->id)>{{ $cat->name }}</option>
-                                @endforeach
-                            </optgroup>
+                            @if($parent->children->isNotEmpty())
+                                <optgroup label="{{ $parent->name }}">
+                                    @foreach($parent->children as $cat)
+                                        <option value="{{ $cat->slug }}" @selected($selectedCategory?->id === $cat->id)>{{ $cat->name }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
                         @endforeach
                     </select>
                 </div>

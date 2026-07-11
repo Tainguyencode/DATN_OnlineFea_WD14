@@ -64,7 +64,7 @@ class StoreCourseRequest extends FormRequest
                     $validator->errors()->add('category_id', 'Danh mục được chọn đang bị tắt.');
                 }
 
-                if (! $category->parent_id) {
+                if (! $category->parent_id && $category->children()->active()->exists()) {
                     $validator->errors()->add('category_id', 'Vui lòng chọn danh mục con, không chọn trực tiếp danh mục cha.');
                 }
 
