@@ -8,7 +8,15 @@
     $pricingOptions = [
         '' => 'Tất cả mức giá',
         'free' => 'Miễn phí',
-        'paid' => 'Trả phí',
+        'under_200k' => 'Dưới 200.000đ',
+        '200k_500k' => '200.000đ - 500.000đ',
+        'above_500k' => 'Trên 500.000đ',
+    ];
+    $ratingOptions = [
+        '' => 'Tất cả đánh giá',
+        '4.5' => '4.5 sao trở lên',
+        '4.0' => '4.0 sao trở lên',
+        '3.0' => '3.0 sao trở lên',
     ];
 @endphp
 
@@ -58,11 +66,11 @@
 <section class="bg-slate-50 py-10 dark:bg-[#0a0a0a]">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <form method="GET" action="{{ route('courses.index') }}" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-5">
-            <div class="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(180px,.8fr)_minmax(170px,.7fr)_minmax(160px,.7fr)_auto]">
+            <div class="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(150px,.7fr)_minmax(140px,.6fr)_minmax(140px,.6fr)_minmax(140px,.6fr)_auto]">
                 <label class="block">
                     <span class="sr-only">Tìm kiếm khóa học</span>
                     <input type="search" name="search" value="{{ $search }}"
-                           placeholder="Tìm theo tên khóa học..."
+                           placeholder="Tìm theo tên khóa học, giảng viên..."
                            class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white">
                 </label>
 
@@ -85,6 +93,12 @@
                 <select name="pricing" class="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white">
                     @foreach($pricingOptions as $value => $label)
                         <option value="{{ $value }}" @selected($pricing === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+
+                <select name="rating" class="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white">
+                    @foreach($ratingOptions as $value => $label)
+                        <option value="{{ $value }}" @selected((string) $rating === (string) $value)>{{ $label }}</option>
                     @endforeach
                 </select>
 
