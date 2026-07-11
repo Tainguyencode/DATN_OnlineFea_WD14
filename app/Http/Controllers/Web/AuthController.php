@@ -70,7 +70,7 @@ class AuthController extends Controller
                 ->with('success', 'Mã 2FA đã được gửi tới email của bạn.');
         }
 
-        return redirect()->intended($user->dashboardUrl())->with('success', 'Đăng nhập thành công!');
+        return $this->redirectAfterAuthentication($user, $request)->with('success', 'Đăng nhập thành công!');
     }
 
     public function showRegister(): View
@@ -201,7 +201,7 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($user?->hasVerifiedEmail()) {
-            return redirect()->intended($user->dashboardUrl());
+            return $this->redirectAfterAuthentication($user, $request);
         }
 
         return view('auth.verify-email', [
@@ -243,21 +243,21 @@ class AuthController extends Controller
     public function verifyEmail(EmailVerificationRequest $request): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended($request->user()->dashboardUrl());
+            return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
         if ($request->user()->markEmailAsVerified()) {
             event(new Verified($request->user()));
         }
 
-        return redirect()->intended($request->user()->dashboardUrl())
+        return $this->redirectAfterAuthentication($request->user(), $request)
             ->with('success', 'Email đã được xác thực thành công.');
     }
 
     public function resendVerification(Request $request, EmailVerificationService $emailVerificationService): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended($request->user()->dashboardUrl());
+            return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
         try {
@@ -301,7 +301,7 @@ class AuthController extends Controller
         $request->session()->put('two_factor_passed_at', now()->timestamp);
         \App\Services\ActivityLogService::log($request->user()->id, 'verify_2fa', User::class, $request->user()->id, null, $request);
 
-        return redirect()->intended($request->user()->dashboardUrl())->with('success', 'Xác thực 2FA thành công.');
+        return $this->redirectAfterAuthentication($request->user(), $request)->with('success', 'Xác thực 2FA thành công.');
     }
 
     public function resendTwoFactor(Request $request, TwoFactorService $twoFactorService): RedirectResponse
@@ -328,6 +328,16 @@ class AuthController extends Controller
         return redirect($user->dashboardUrl())->with('success', 'Đăng nhập nhanh thành công.');
     }
 
+    private function redirectAfterAuthentication(User $user, Request $request): RedirectResponse
+    {
+        if (! $user->isStudent()) {
+            $request->session()->forget('url.intended');
+
+            return redirect($user->dashboardUrl());
+        }
+
+        return redirect()->intended($user->dashboardUrl());
+    }
     private function isSafeRedirect(string $redirect): bool
     {
         if ($redirect === '') {

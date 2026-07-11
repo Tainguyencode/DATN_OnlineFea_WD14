@@ -61,8 +61,11 @@ class ProfileController extends Controller
         ]);
 
         if ($request->hasFile('avatar')) {
-            $authService->deleteAvatar($user->avatar);
+            $oldAvatar = $user->avatar;
             $validated['avatar'] = $request->file('avatar')->store('avatars', 'public');
+            $authService->deleteAvatar($oldAvatar);
+        } else {
+            unset($validated['avatar']);
         }
 
         $user->update($validated);

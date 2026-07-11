@@ -36,7 +36,8 @@ class ManageController extends Controller
         $courses = Course::query()
             ->with([
                 'instructor:id,name,email',
-                'category:id,name',
+                'category:id,parent_id,name',
+                'category.parent:id,name',
                 'courseSections.lessons:id,course_id,section_id,title',
                 'chapters.lessons:id,course_id,chapter_id,title',
             ])
@@ -96,7 +97,8 @@ class ManageController extends Controller
         $courses = Course::whereIn('status', [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value])
             ->with([
                 'instructor:id,name,email',
-                'category:id,name',
+                'category:id,parent_id,name',
+                'category.parent:id,name',
                 'courseSections.lessons:id,course_id,section_id,duration_seconds,duration',
                 'chapters.lessons:id,course_id,chapter_id,duration_seconds,duration',
                 'lessons:id,course_id,duration_seconds,duration',
@@ -112,7 +114,8 @@ class ManageController extends Controller
     {
         $course->load([
             'instructor:id,name,email,avatar,bio',
-            'category:id,name,slug',
+            'category:id,parent_id,name,slug',
+            'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order'),
         ])->loadCount([
@@ -162,7 +165,8 @@ class ManageController extends Controller
 
         $course->load([
             'instructor:id,name,email,avatar,bio',
-            'category:id,name',
+            'category:id,parent_id,name',
+            'category.parent:id,name',
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
         ]);
@@ -238,7 +242,8 @@ class ManageController extends Controller
     {
         $course->load([
             'instructor:id,name,email',
-            'category:id,name',
+            'category:id,parent_id,name',
+            'category.parent:id,name',
             'courseSections.lessons:id,course_id,section_id,title',
             'chapters.lessons:id,course_id,chapter_id,title',
         ]);

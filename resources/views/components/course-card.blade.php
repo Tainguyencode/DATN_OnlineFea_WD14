@@ -32,7 +32,7 @@
             @endif
         </a>
 
-        <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-10" />
+        <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-20" />
 
         @if($course->is_featured)
             <span class="absolute left-2 top-2 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Best Seller</span>
@@ -44,7 +44,9 @@
 
     <div class="flex flex-1 flex-col p-4">
         @if($course->category)
-            <span class="mb-1 text-xs font-semibold uppercase tracking-wide text-[#0056D2] dark:text-blue-300">{{ $course->category->name }}</span>
+            <a href="{{ route('courses.category', $course->category->slug) }}" class="mb-1 text-xs font-semibold uppercase tracking-wide text-[#0056D2] transition hover:text-indigo-700 dark:text-blue-300 dark:hover:text-blue-200">
+                {{ $course->category->full_name }}
+            </a>
         @endif
 
         <h3 class="mb-1.5 line-clamp-2 min-h-10 text-base font-bold leading-snug text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">

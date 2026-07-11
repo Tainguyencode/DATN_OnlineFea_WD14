@@ -1,6 +1,10 @@
 @php
     $isEdit = isset($course) && $course?->exists;
     $selectedCategory = old('category_id', $course->category_id ?? '');
+    $currentCategory = $course?->category ?? null;
+    $selectedCategoryIsVisible = $categories
+        ->flatMap(fn ($parent) => $parent->children)
+        ->contains(fn ($cat) => (string) $cat->id === (string) $selectedCategory);
     $selectedLevel = old('level', $course->level ?? 'beginner');
     $selectedLanguage = old('language', $course->language ?? 'vi');
     $discountPrice = old('discount_price', $course->discount_price ?? $course->sale_price ?? null);
@@ -66,12 +70,23 @@
 
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div>
-                        <label for="category_id" class="mb-1.5 block text-sm font-bold text-slate-700">Danh mục</label>
+                        <label for="category_id" class="mb-1.5 block text-sm font-bold text-slate-700">Danh mục <span class="text-rose-500">*</span></label>
                         <select id="category_id" name="category_id"
                                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer">
-                            <option value="">Chưa chọn danh mục</option>
-                            @foreach($categories as $cat)
-                                <option value="{{ $cat->id }}" @selected((string) $selectedCategory === (string) $cat->id)>{{ $cat->name }}</option>
+                            <option value="">Chọn danh mục khóa học</option>
+                            @if($selectedCategory && $currentCategory && ! $selectedCategoryIsVisible)
+                                <option value="{{ $currentCategory->id }}" selected disabled>
+                                    {{ $currentCategory->full_name }} (không còn khả dụng)
+                                </option>
+                            @endif
+                            @foreach($categories as $parent)
+                                <optgroup label="{{ $parent->name }}">
+                                    @foreach($parent->children as $cat)
+                                        <option value="{{ $cat->id }}" @selected((string) $selectedCategory === (string) $cat->id)>
+                                            {{ $cat->name }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
                             @endforeach
                         </select>
                         @error('category_id') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
