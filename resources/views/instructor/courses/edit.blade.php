@@ -9,6 +9,7 @@
         {{-- Edit form --}}
         <form method="POST" action="{{ route('instructor.courses.update', $course) }}" class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
             @csrf @method('PUT')
+            <input type="hidden" name="language" value="{{ old('language', $course->language ?: 'vi') }}">
             <h2 class="font-bold text-slate-900 text-lg">Thông tin khóa học</h2>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Tên khóa học</label>

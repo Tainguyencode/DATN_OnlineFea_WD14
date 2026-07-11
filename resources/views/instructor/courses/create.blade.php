@@ -1,8 +1,20 @@
 <x-instructor-layout title="Tạo khóa học" page-title="Tạo khóa học mới" breadcrumb="Điền thông tin cơ bản">
 
 <div class="max-w-3xl">
+    @if($errors->any())
+        <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <p class="font-semibold">Không thể tạo khóa học:</p>
+            <ul class="mt-2 list-disc space-y-1 pl-5">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('instructor.courses.store') }}" class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm space-y-6">
         @csrf
+        <input type="hidden" name="language" value="vi">
         <div>
             <label class="block text-sm font-medium text-slate-700 mb-1.5">Tên khóa học *</label>
             <input type="text" name="title" value="{{ old('title') }}" required
