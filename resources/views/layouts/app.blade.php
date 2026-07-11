@@ -54,8 +54,17 @@
                             :unread-count="$unreadNotificationCount ?? 0"
                         />
                         @if(Auth::user()->isStudent())
-                            <a href="{{ route('student.cart') }}" class="hidden rounded-lg p-2 text-slate-600 transition duration-200 hover:bg-slate-50 hover:text-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300 sm:inline-flex" aria-label="Giỏ hàng">
+                            @php
+                                $studentCart = \App\Models\Cart::where('user_id', Auth::id())->first();
+                                $studentCartCount = $studentCart ? $studentCart->courses()->count() : 0;
+                            @endphp
+                            <a href="{{ route('student.cart') }}" class="hidden rounded-lg p-2 text-slate-600 transition duration-200 hover:bg-slate-50 hover:text-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300 sm:inline-flex relative" aria-label="Giỏ hàng">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2 5h13M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/></svg>
+                                @if($studentCartCount > 0)
+                                    <span class="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white leading-none">
+                                        {{ $studentCartCount }}
+                                    </span>
+                                @endif
                             </a>
                         @endif
                         <a href="{{ auth()->user()->dashboardUrl() }}" class="hidden text-sm font-semibold text-[#0056D2] transition duration-200 hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200 sm:inline-flex">Dashboard</a>

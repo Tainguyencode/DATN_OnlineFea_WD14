@@ -56,6 +56,7 @@ class UserSeeder extends Seeder
             [
                 'id' => 3,
                 'name' => 'Trần Đức Dũng',
+                'username' => 'instructor2',
                 'email' => 'instructor2@example.com',
                 'email_verified_at' => now(),
                 'password' => Hash::make('password'),
@@ -93,6 +94,7 @@ class UserSeeder extends Seeder
             [
                 'id' => 5,
                 'name' => 'Lê Văn Học',
+                'username' => 'student2',
                 'email' => 'student2@example.com',
                 'email_verified_at' => now(),
                 'password' => Hash::make('password'),
@@ -111,6 +113,7 @@ class UserSeeder extends Seeder
             [
                 'id' => 6,
                 'name' => 'Phạm Minh Tuấn',
+                'username' => 'student3',
                 'email' => 'student3@example.com',
                 'email_verified_at' => now(),
                 'password' => Hash::make('password'),
