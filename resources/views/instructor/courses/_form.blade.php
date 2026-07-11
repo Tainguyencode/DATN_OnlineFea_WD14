@@ -34,7 +34,7 @@
             <div class="mt-5 space-y-5">
                 <div>
                     <label for="title" class="mb-1.5 block text-sm font-bold text-slate-700">Tên khóa học <span class="text-rose-500">*</span></label>
-                    <input id="title" type="text" name="title" value="{{ old('title', $course->title ?? '') }}" required maxlength="255"
+                    <input id="title" type="text" name="title" value="{{ old('title', $course->title ?? '') }}" maxlength="255"
                            placeholder="Ví dụ: Laravel từ Zero đến Hero"
                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
                     @error('title') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
@@ -54,6 +54,14 @@
                               placeholder="Nội dung khóa học, đối tượng phù hợp, kết quả sau khi hoàn thành..."
                               class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('description', $course->description ?? '') }}</textarea>
                     @error('description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
+                </div>
+
+                <div>
+                    <label for="objectives" class="mb-1.5 block text-sm font-bold text-slate-700">Mục tiêu khóa học</label>
+                    <textarea id="objectives" name="objectives" rows="4"
+                              placeholder="Học viên sẽ đạt được những kỹ năng/kiến thức gì sau khóa học..."
+                              class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('objectives', $course->objectives ?? '') }}</textarea>
+                    @error('objectives') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
                 <div class="grid gap-5 sm:grid-cols-2">
@@ -118,7 +126,7 @@
                 <div class="mt-4 space-y-4">
                     <div>
                         <label for="price" class="mb-1.5 block text-sm font-bold text-slate-700">Giá gốc <span class="text-rose-500">*</span></label>
-                        <input id="price" type="number" name="price" value="{{ old('price', $course->price ?? 0) }}" min="0" step="1000" required
+                        <input id="price" type="number" name="price" value="{{ old('price', $course->price ?? 0) }}" min="0" step="1000"
                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
                         @error('price') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>

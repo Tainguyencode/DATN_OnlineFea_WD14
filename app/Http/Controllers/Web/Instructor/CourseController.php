@@ -2,18 +2,23 @@
 
 namespace App\Http\Controllers\Web\Instructor;
 
+use App\Data\CourseSubmissionCheckResult;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Instructor\StoreChapterRequest;
+use App\Http\Requests\Instructor\StoreCourseRequest;
+use App\Http\Requests\Instructor\StoreLessonRequest;
+use App\Http\Requests\Instructor\SubmitCourseForReviewRequest;
 use App\Models\Category;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Services\CourseSubmissionValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CourseController extends Controller
@@ -39,8 +44,9 @@ class CourseController extends Controller
             ->withQueryString();
 
         $statusOptions = $this->statusOptions();
+        $submissionChecks = $this->buildSubmissionChecks($courses->getCollection());
 
-        return view('instructor.courses.index', compact('courses', 'statusOptions', 'search', 'status'));
+        return view('instructor.courses.index', compact('courses', 'statusOptions', 'search', 'status', 'submissionChecks'));
     }
 
     public function create(): View
@@ -50,9 +56,9 @@ class CourseController extends Controller
         return view('instructor.courses.create', compact('categories'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreCourseRequest $request): RedirectResponse
     {
-        $validated = $this->validatedCourseData($request);
+        $validated = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
             $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
@@ -76,18 +82,25 @@ class CourseController extends Controller
     {
         $this->authorize($course);
 
-        $course->load(['courseSections.lessons', 'category']);
+        $course->load([
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'category',
+            'courseReviews' => fn ($q) => $q->orderByDesc('reviewed_at')->orderByDesc('id'),
+            'courseReviews.reviewer:id,name,email',
+            'courseReviews.items',
+        ]);
         $categories = Category::orderBy('name')->get(['id', 'name']);
         $statusOptions = $this->statusOptions();
+        $submissionCheck = $course->submissionCheck();
+        $courseReviews = $course->courseReviews;
 
-        return view('instructor.courses.edit', compact('course', 'categories', 'statusOptions'));
+        return view('instructor.courses.edit', compact('course', 'categories', 'statusOptions', 'submissionCheck', 'courseReviews'));
     }
 
-    public function update(Request $request, Course $course): RedirectResponse
+    public function update(StoreCourseRequest $request, Course $course): RedirectResponse
     {
-        $this->authorize($course);
-
-        $validated = $this->validatedCourseData($request);
+        $validated = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
             $this->deleteThumbnail($course);
@@ -141,11 +154,9 @@ class CourseController extends Controller
         return back()->with('success', 'Đã ẩn khóa học khỏi trang học viên.');
     }
 
-    public function addChapter(Request $request, Course $course): RedirectResponse
+    public function addChapter(StoreChapterRequest $request, Course $course): RedirectResponse
     {
-        $this->authorize($course);
-
-        $validated = $request->validate(['title' => 'required|string|max:255']);
+        $validated = $request->validated();
 
         Chapter::create([
             'course_id' => $course->id,
@@ -156,16 +167,9 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm chương mới.');
     }
 
-    public function addLesson(Request $request, Chapter $chapter): RedirectResponse
+    public function addLesson(StoreLessonRequest $request, Chapter $chapter): RedirectResponse
     {
-        $this->authorize($chapter->course);
-
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'type' => 'required|in:video,document,quiz,assignment',
-            'video_url' => 'nullable|string|max:2048',
-            'is_preview' => 'sometimes|boolean',
-        ]);
+        $validated = $request->validated();
 
         Lesson::create([
             ...$validated,
@@ -177,28 +181,22 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm bài giảng.');
     }
 
-    public function submit(Course $course): RedirectResponse
+    public function submit(SubmitCourseForReviewRequest $request, Course $course): RedirectResponse
     {
         $this->authorize($course);
-
-        if (! in_array($course->status, [Course::STATUS_DRAFT, Course::STATUS_REJECTED], true)) {
-            return back()->with('error', 'Chỉ khóa học nháp hoặc bị từ chối mới có thể gửi duyệt.');
-        }
-
-        $missing = $this->publicationMissingRequirements($course);
-
-        if ($missing !== []) {
-            return back()->with('error', 'Chưa thể gửi duyệt: '.implode('; ', $missing).'.');
-        }
+        $request->validateSubmissionRequirements();
 
         $course->update([
-            'status' => Course::STATUS_PENDING,
+            'status' => Course::STATUS_SUBMITTED,
             'is_published' => false,
             'submitted_at' => now(),
             'reject_reason' => null,
+            'rejection_reason' => null,
         ]);
 
-        return back()->with('success', 'Đã gửi khóa học để admin duyệt.');
+        return redirect()
+            ->route('instructor.courses.index')
+            ->with('success', 'Đã gửi khóa học để admin duyệt. Bạn sẽ nhận phản hồi sau khi admin kiểm tra.');
     }
 
     public function students(Course $course): View
@@ -252,21 +250,7 @@ class CourseController extends Controller
         abort_unless($course->isOwnedBy(auth()->user()), 403);
     }
 
-    private function validatedCourseData(Request $request): array
-    {
-        return $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'category_id' => ['nullable', Rule::exists('categories', 'id')],
-            'short_description' => ['nullable', 'string', 'max:500'],
-            'description' => ['nullable', 'string'],
-            'thumbnail' => ['nullable', 'image', 'max:2048'],
-            'preview_video' => ['nullable', 'string', 'max:2048'],
-            'price' => ['required', 'numeric', 'min:0', 'max:999999999'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'lte:price'],
-            'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
-            'language' => ['required', 'string', 'max:10'],
-        ]);
-    }
+
 
     private function uniqueSlug(string $title): string
     {
@@ -296,49 +280,24 @@ class CourseController extends Controller
             || DB::table('order_items')->where('course_id', $course->id)->exists();
     }
 
-    private function publicationMissingRequirements(Course $course): array
+    /**
+     * @param  \Illuminate\Support\Collection<int, Course>  $courses
+     * @return array<int, CourseSubmissionCheckResult>
+     */
+    private function buildSubmissionChecks($courses): array
     {
-        $missing = [];
+        $validator = app(CourseSubmissionValidator::class);
+        $checks = [];
 
-        if (blank($course->title)) {
-            $missing[] = 'thiếu tên khóa học';
+        foreach ($courses as $course) {
+            $checks[$course->id] = $validator->validate($course);
         }
 
-        if (blank($course->short_description)) {
-            $missing[] = 'thiếu mô tả ngắn';
-        }
-
-        if (blank($course->description)) {
-            $missing[] = 'thiếu mô tả chi tiết';
-        }
-
-        if (blank($course->thumbnail)) {
-            $missing[] = 'thiếu ảnh thumbnail';
-        }
-
-        $hasSection = $course->courseSections()->exists() || $course->chapters()->exists();
-        if (! $hasSection) {
-            $missing[] = 'thiếu ít nhất 1 chương học';
-        }
-
-        $hasLesson = $course->lessons()->exists()
-            || Lesson::whereHas('chapter', fn ($query) => $query->where('course_id', $course->id))->exists();
-
-        if (! $hasLesson) {
-            $missing[] = 'thiếu ít nhất 1 bài học';
-        }
-
-        return $missing;
+        return $checks;
     }
 
     private function statusOptions(): array
     {
-        return [
-            Course::STATUS_DRAFT => 'Nháp',
-            Course::STATUS_PENDING => 'Đang chờ duyệt',
-            Course::STATUS_PUBLISHED => 'Đã xuất bản',
-            Course::STATUS_REJECTED => 'Bị từ chối',
-            Course::STATUS_ARCHIVED => 'Đã ẩn',
-        ];
+        return Course::STATUS_LABELS;
     }
 }
