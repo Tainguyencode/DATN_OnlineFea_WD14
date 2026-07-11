@@ -61,4 +61,9 @@ class Lesson extends Model
     {
         return $this->hasMany(VideoNote::class);
     }
+
+    public function videoModeration(): HasOne
+    {
+        return $this->hasOne(VideoModeration::class);
+    }
 }

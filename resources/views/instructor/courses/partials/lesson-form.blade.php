@@ -21,37 +21,42 @@
     <div class="grid gap-4 lg:grid-cols-2">
         <label class="block">
             <span class="mb-1.5 block text-sm font-bold text-slate-700">Tên bài học</span>
-            <input type="text" name="title" value="{{ old('title', $lesson->title ?? '') }}" required maxlength="255"
-                   class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+            <input type="text" name="title" value="{{ old('title', $lesson->title ?? '') }}" maxlength="255"
+                   class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('title', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">
+            @error('title', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
         </label>
 
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Loại</span>
-                <select name="type" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 cursor-pointer">
+                <select name="type" class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 cursor-pointer @error('type', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
                     @foreach($lessonTypes as $value => $label)
                         <option value="{{ $value }}" @selected($selectedType === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
+                @error('type', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 <span class="mt-1 block text-xs font-medium text-violet-600">Chọn Quiz rồi bấm lưu bài học, hệ thống sẽ mở trang thêm câu hỏi.</span>
             </label>
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Thời lượng</span>
                 <input type="number" name="duration" value="{{ old('duration', $lesson->duration ?? $lesson->duration_seconds ?? '') }}" min="0"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500">
+                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 @error('duration', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
+                @error('duration', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Thứ tự</span>
                 <input type="number" name="sort_order" value="{{ old('sort_order', $lesson->sort_order ?? $nextSortOrder ?? '') }}" min="0"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500">
+                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 @error('sort_order', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
+                @error('sort_order', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Trạng thái</span>
-                <select name="status" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 cursor-pointer">
+                <select name="status" class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 cursor-pointer @error('status', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
                     @foreach($lessonStatuses as $value => $label)
                         <option value="{{ $value }}" @selected($selectedStatus === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
+                @error('status', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
         </div>
     </div>
@@ -59,14 +64,16 @@
     <label class="block">
         <span class="mb-1.5 block text-sm font-bold text-slate-700">Video URL</span>
         <input type="text" name="video_url" value="{{ old('video_url', $lesson->video_url ?? '') }}" placeholder="https://..."
-               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+               class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('video_url', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">
+        @error('video_url', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
     </label>
 
     <label class="block">
         <span class="mb-1.5 block text-sm font-bold text-slate-700">Video bài giảng</span>
         <input type="file" name="video_file" accept=".mp4,.mov,.avi,.webm,video/mp4,video/quicktime,video/x-msvideo,video/webm"
-               class="block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-indigo-700 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-800">
+               class="block w-full cursor-pointer rounded-lg border bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-indigo-700 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-800 @error('video_file', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 @else border-slate-300 @enderror">
         <span class="mt-1 block text-xs font-medium text-slate-500">MP4, MOV, AVI hoặc WEBM. Tối đa 200MB.</span>
+        @error('video_file', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
     </label>
 
     @if($lesson?->video_path)
@@ -83,17 +90,19 @@
 
     <label class="block">
         <span class="mb-1.5 block text-sm font-bold text-slate-700">Nội dung dạng text</span>
-        <textarea name="content" rows="4" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('content', $lesson->content ?? '') }}</textarea>
+        <textarea name="content" rows="4" class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('content', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">{{ old('content', $lesson->content ?? '') }}</textarea>
+        @error('content', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
     </label>
 
     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px] lg:items-end">
         <label class="block">
             <span class="mb-1.5 block text-sm font-bold text-slate-700">Tệp tài liệu</span>
             <input type="file" name="document_file"
-                   class="block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800">
+                   class="block w-full cursor-pointer rounded-lg border bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800 @error('document_file', $errorBag ?? 'default') border-rose-500 focus:border-rose-500 @else border-slate-300 @enderror">
             @if($lesson?->document_file)
                 <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="mt-1 inline-block text-xs font-semibold text-sky-600 hover:underline">Tệp hiện tại</a>
             @endif
+            @error('document_file', $errorBag ?? 'default') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
         </label>
 
         <label class="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">

@@ -10,6 +10,7 @@
         "laravel/framework": "^13.0",
         "laravel/socialite": "*",
         "laravel/tinker": "^3.0",
+        "php-ffmpeg/php-ffmpeg": "^1.4",
         "socialiteproviders/microsoft": "*"
     },
     "require-dev": {
