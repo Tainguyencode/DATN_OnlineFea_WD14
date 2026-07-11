@@ -8,26 +8,34 @@ use FFMpeg\Coordinate\TimeCode;
 
 class VideoFrameExtractor
 {
-    private string $ffmpegBin  = 'C:\\Users\\Lenovo\\Downloads\\ffmpeg-8.1.2-essentials_build\\ffmpeg-8.1.2-essentials_build\\bin\\ffmpeg.exe';
-    private string $ffprobeBin = 'C:\\Users\\Lenovo\\Downloads\\ffmpeg-8.1.2-essentials_build\\ffmpeg-8.1.2-essentials_build\\bin\\ffprobe.exe';
+    private ?string $ffmpegBin;
+    private ?string $ffprobeBin;
+
+    public function __construct()
+    {
+        $this->ffmpegBin = env('FFMPEG_BIN') ?: null;
+        $this->ffprobeBin = env('FFPROBE_BIN') ?: null;
+    }
 
     public function extract(string $videoPath, int $intervalSeconds = 30, ?int $lessonId = null): array
     {
+        $config = [];
+        if ($this->ffmpegBin) {
+            $config['ffmpeg.binaries'] = $this->ffmpegBin;
+        }
+        if ($this->ffprobeBin) {
+            $config['ffprobe.binaries'] = $this->ffprobeBin;
+        }
+
         // 1. Lấy duration thực tế của video
-        $ffprobe = FFProbe::create([
-            'ffmpeg.binaries'  => $this->ffmpegBin,
-            'ffprobe.binaries' => $this->ffprobeBin,
-        ]);
+        $ffprobe = FFProbe::create($config);
 
         $duration = (float) $ffprobe
             ->format($videoPath)
             ->get('duration');
 
         // 2. Mở video
-        $ffmpeg = FFMpeg::create([
-            'ffmpeg.binaries'  => $this->ffmpegBin,
-            'ffprobe.binaries' => $this->ffprobeBin,
-        ]);
+        $ffmpeg = FFMpeg::create($config);
 
         $video = $ffmpeg->open($videoPath);
 
