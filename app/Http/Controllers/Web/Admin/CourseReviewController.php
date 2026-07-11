@@ -39,33 +39,9 @@ class CourseReviewController extends Controller
         ]);
     }
 
-    public function show(Course $course): View
+    public function show(Course $course): RedirectResponse
     {
-        $course->load([
-            'instructor:id,name,email,avatar,bio',
-            'category:id,name',
-            'courseSections.lessons.quiz.questions',
-            'courseSections.lessons.assignment',
-            'chapters.lessons.quiz.questions',
-            'chapters.lessons.assignment',
-            'courseReviews.reviewer:id,name',
-        ]);
-
-        $curriculumSections = $course->courseSections->isNotEmpty()
-            ? $course->courseSections
-            : $course->chapters;
-
-        $totalLessons = $curriculumSections->sum(fn ($s) => $s->lessons->count());
-        $totalDuration = $curriculumSections->flatMap->lessons->sum(fn ($l) => (int) ($l->duration_seconds ?? 0));
-
-        return view('admin.course-reviews.show', [
-            'course' => $course,
-            'curriculumSections' => $curriculumSections,
-            'totalLessons' => $totalLessons,
-            'totalDuration' => $totalDuration,
-            'reviewHistory' => $course->courseReviews,
-            'checklistItems' => config('course.admin_review_checklist'),
-        ]);
+        return redirect()->route('admin.courses.review', $course);
     }
 
     public function approve(ApproveCourseRequest $request, Course $course): RedirectResponse

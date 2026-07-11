@@ -34,7 +34,7 @@
                         <td class="px-4 py-3 text-slate-500">{{ $course->submitted_at?->format('d/m/Y H:i') ?? '—' }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ $course->submission_count }}</td>
                         <td class="px-4 py-3 text-right">
-                            <a href="{{ route('admin.course-reviews.show', $course) }}" class="text-sm font-semibold text-blue-600 hover:underline">Xem chi tiết</a>
+                            <a href="{{ route('admin.courses.review', $course) }}" class="text-sm font-semibold text-blue-600 hover:underline">Xem chi tiết</a>
                         </td>
                     </tr>
                 @empty
