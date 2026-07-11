@@ -19,7 +19,7 @@
 
                 <x-auth.input label="Email" name="identifier" :value="old('identifier')" placeholder="you@example.com" autofocus />
 
-                <x-auth.input label="Mật khẩu" name="password" x-bind:type="showPassword ? 'text' : 'password'"
+                <x-auth.input label="Mật khẩu" name="password" type="password" x-bind:type="showPassword ? 'text' : 'password'"
                     placeholder="Nhập mật khẩu" inputClass="pr-14">
                     <x-slot:labelAction>
                         <a href="{{ route('password.request') }}"
