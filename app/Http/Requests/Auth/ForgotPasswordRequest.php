@@ -25,6 +25,16 @@ class ForgotPasswordRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'Vui lòng nhập địa chỉ email.',
+            'email.email' => 'Địa chỉ email không đúng định dạng.',
+            'captcha_token.required' => 'Phiên xác nhận đã hết hạn, vui lòng tải lại trang.',
+            'captcha_answer.required' => 'Vui lòng nhập kết quả phép tính xác nhận.',
+        ];
+    }
+
     public function validateCaptcha(): void
     {
         if (! CaptchaService::verify($this->input('captcha_token'), $this->input('captcha_answer'), 'forgot-password')) {

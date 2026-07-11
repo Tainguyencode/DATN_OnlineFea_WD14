@@ -26,6 +26,7 @@ class RegisterRequest extends FormRequest
             'phone'           => ['required', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/'],
             'password'        => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
             'terms'           => ['accepted'],
+            'role'            => ['prohibited'],
             'captcha_token'   => ['required', 'string'],
             'captcha_answer'  => ['required', 'string', 'max:10'],
         ];
@@ -54,6 +55,7 @@ class RegisterRequest extends FormRequest
             'password.numbers'        => 'Mật khẩu phải chứa ít nhất một chữ số.',
             'password.symbols'        => 'Mật khẩu phải chứa ít nhất một ký tự đặc biệt.',
             'terms.accepted'          => 'Vui lòng đồng ý với điều khoản sử dụng để tiếp tục.',
+            'role.prohibited'         => 'Không thể chỉ định vai trò khi đăng ký.',
             'captcha_token.required'  => 'Phiên xác nhận đã hết hạn, vui lòng tải lại trang.',
             'captcha_answer.required' => 'Vui lòng nhập kết quả phép tính xác nhận.',
             'captcha_answer.string'   => 'Kết quả xác nhận không hợp lệ.',

@@ -13,6 +13,35 @@ class UpdateUserRequest extends FormRequest
         return true;
     }
 
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            /** @var \App\Models\User|null $user */
+            $user = $this->route('user');
+            $authUser = $this->user();
+
+            if (! $user || ! $authUser) {
+                return;
+            }
+
+            if ($user->id !== $authUser->id) {
+                return;
+            }
+
+            if ($this->has('toggle_active') && $user->is_active) {
+                $validator->errors()->add('error', 'Không thể khóa tài khoản của chính bạn.');
+            }
+
+            if ($this->filled('is_active') && ! $this->boolean('is_active')) {
+                $validator->errors()->add('is_active', 'Không thể khóa tài khoản của chính bạn.');
+            }
+
+            if ($this->filled('role') && $user->role === 'admin' && $this->input('role') !== 'admin') {
+                $validator->errors()->add('role', 'Không thể hạ quyền quản trị của chính bạn.');
+            }
+        });
+    }
+
     /**
      * @return array<string, mixed>
      */

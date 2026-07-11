@@ -61,9 +61,16 @@
                             </div>
                         @endif
 
-                        <a href="{{ route('courses.show', $course->slug) }}" class="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950 dark:bg-white text-sm font-bold text-white dark:text-slate-950 transition-colors duration-200 hover:bg-indigo-600 dark:hover:bg-slate-200 cursor-pointer">
-                            Tiếp tục học
-                        </a>
+                        @if($course->learningEntryUrl())
+                            <a href="{{ $course->learningEntryUrl() }}" class="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                                Vào học
+                            </a>
+                        @else
+                            <a href="{{ route('courses.show', $course->slug) }}" class="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
+                                Tiếp tục học
+                            </a>
+                        @endif
                     </div>
                 </div>
             </article>
