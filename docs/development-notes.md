@@ -27,3 +27,6 @@
 ### Commit 9: feat: hoan thien quy trinh duyet khoa hoc va tien do bai hoc (2026-07-10 09:15:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 10: fix: xu ly cac rang buoc khoa ngoai va validation form (2026-07-11 16:45:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
