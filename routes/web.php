@@ -136,6 +136,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
     Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     Route::middleware('verified')->group(function () {
         Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
@@ -203,4 +204,5 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
