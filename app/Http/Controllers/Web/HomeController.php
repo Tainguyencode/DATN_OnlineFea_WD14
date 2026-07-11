@@ -47,7 +47,6 @@ class HomeController extends Controller
         $categories = Category::query()
             ->active()
             ->parent()
-            ->whereHas('children', fn ($q) => $q->active())
             ->with([
                 'children' => fn ($q) => $q
                     ->active()
