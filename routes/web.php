@@ -123,6 +123,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:student'])->prefix('student')-
     Route::get('/checkout/mock-gateway/{order_code}', [CartController::class, 'mockGateway'])->name('checkout.mock_gateway');
     Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->name('checkout.simulate');
     Route::get('/checkout/{order_code}/success', [CartController::class, 'successPage'])->name('checkout.success');
+    Route::get('/checkout/{order_code}/failed', [CartController::class, 'failedPage'])->name('checkout.failed');
 
     Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->middleware('verified')->name('wishlist.toggle');

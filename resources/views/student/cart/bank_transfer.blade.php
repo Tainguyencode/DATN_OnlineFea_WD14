@@ -76,7 +76,7 @@
                         @csrf
                         <input type="hidden" name="status" value="success">
                         <button type="submit" class="w-full inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm">
-                            Giả lập Thành công (Kích hoạt khóa học)
+                            Thanh toán thành công (Kích hoạt khóa học)
                         </button>
                     </form>
                     
@@ -84,7 +84,7 @@
                         @csrf
                         <input type="hidden" name="status" value="failed">
                         <button type="submit" class="w-full inline-flex h-10 items-center justify-center rounded-xl border border-rose-300 bg-white text-sm font-bold text-rose-700 transition hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-400 dark:hover:bg-slate-800 shadow-sm">
-                            Giả lập Thất bại / Hủy bỏ
+                            Thanh toán thất bại / Hủy bỏ
                         </button>
                     </form>
                 </div>

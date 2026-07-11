@@ -223,7 +223,7 @@ class CartCheckoutTest extends TestCase
                 'status' => 'failed',
             ]);
 
-        $response->assertRedirect(route('student.dashboard'));
+        $response->assertRedirect(route('student.checkout.failed', $order->order_code));
         
         $order->refresh();
         $this->assertEquals('failed', $order->status);
@@ -236,5 +236,36 @@ class CartCheckoutTest extends TestCase
             ->where('course_id', $this->course->id)
             ->first();
         $this->assertNull($enrollment);
+    }
+
+    /**
+     * Test học viên có thể xem trang thanh toán thất bại.
+     */
+    public function test_student_can_view_failed_page(): void
+    {
+        // Tạo đơn hàng ở trạng thái failed
+        $order = Order::create([
+            'order_code' => 'ORD-FAILED',
+            'user_id' => $this->student->id,
+            'subtotal' => 100000,
+            'discount_amount' => 0,
+            'total_amount' => 100000,
+            'status' => 'failed',
+            'payment_method' => 'bank_transfer',
+            'items' => [
+                [
+                    'course_id' => $this->course->id,
+                    'title' => $this->course->title,
+                    'price' => 100000,
+                ]
+            ],
+        ]);
+
+        $response = $this->actingAs($this->student)
+            ->get(route('student.checkout.failed', $order->order_code));
+
+        $response->assertStatus(200);
+        $response->assertSee('Thanh toán không thành công!');
+        $response->assertSee($order->order_code);
     }
 }

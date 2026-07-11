@@ -317,7 +317,8 @@ class CartController extends Controller
                 ->with('success', 'Thanh toán thành công! Khóa học đã được đăng ký.');
         }
 
-        return redirect()->route('student.dashboard')->with('error', 'Giao dịch thanh toán đã bị hủy hoặc thất bại.');
+        return redirect()->route('student.checkout.failed', $orderCode)
+            ->with('error', 'Giao dịch thanh toán đã bị hủy hoặc thất bại.');
     }
 
     /**
@@ -340,6 +341,28 @@ class CartController extends Controller
         $orderItems = $order->items()->with(['course.instructor'])->get();
 
         return view('student.cart.success', compact('order', 'orderItems'));
+    }
+
+    /**
+     * Hiển thị trang kết quả thanh toán thất bại.
+     *
+     * @param string $orderCode
+     * @return View|RedirectResponse
+     */
+    public function failedPage(string $orderCode)
+    {
+        $order = Order::where('order_code', $orderCode)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        if ($order->status !== 'failed') {
+            return redirect()->route('student.dashboard')->with('error', 'Đơn hàng này không ở trạng thái thanh toán thất bại.');
+        }
+
+        // Tải chi tiết các mục đơn hàng dạng Eloquent Model kèm theo thông tin khóa học & giảng viên
+        $orderItems = $order->items()->with(['course.instructor'])->get();
+
+        return view('student.cart.failed', compact('order', 'orderItems'));
     }
 }
 
