@@ -7,16 +7,20 @@ use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Http\Requests\Auth\VerifyEmailCodeRequest;
 use App\Models\Cart;
 use App\Models\Certificate;
 use App\Models\Course;
+use App\Models\EmailVerificationCode;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Wishlist;
 use App\Services\AuthService;
 use App\Services\CaptchaService;
+use App\Services\EmailVerificationService;
 use App\Services\TwoFactorService;
+use App\Support\MailErrorFormatter;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
@@ -24,12 +28,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Laravel\Socialite\Facades\Socialite;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -85,8 +88,12 @@ class AuthController extends Controller
         ]);
     }
 
-    public function register(string $role, RegisterRequest $request, AuthService $authService): RedirectResponse
-    {
+    public function register(
+        string $role,
+        RegisterRequest $request,
+        AuthService $authService,
+        EmailVerificationService $emailVerificationService
+    ): RedirectResponse {
         abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
 
         $request->validateCaptcha();
@@ -101,8 +108,22 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->intended($user->dashboardUrl())
-            ->with('success', 'Đăng ký thành công. Vui lòng xác thực email để mở khóa đầy đủ tính năng.');
+        try {
+            $emailVerificationService->sendCode($user);
+        } catch (Throwable $exception) {
+            Log::error('Verification code email could not be sent after registration.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return redirect()->route('verification.notice')
+                ->with('error', 'Đăng ký thành công nhưng chưa gửi được mã xác thực: '.MailErrorFormatter::verificationSendFailure($exception));
+        }
+
+        return redirect()->route('verification.notice')
+            ->with('success', 'Đăng ký thành công. Vui lòng kiểm tra email để nhập mã xác thực.')
+            ->with('resend_after', $emailVerificationService->resendCooldownSeconds($user) ?: EmailVerificationCode::RESEND_COOLDOWN_SECONDS);
     }
 
     public function logout(Request $request): RedirectResponse
@@ -142,11 +163,11 @@ class AuthController extends Controller
     {
         $request->validateCaptcha();
 
-        $status = Password::sendResetLink($request->only('email'));
+        Password::sendResetLink($request->only('email'));
 
-        return $status === Password::RESET_LINK_SENT
-            ? back()->with('success', __($status))->with('resend_after', 60)
-            : back()->withErrors(['email' => __($status)]);
+        return back()
+            ->with('success', 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu sẽ được gửi.')
+            ->with('resend_after', 60);
     }
 
     public function showResetPassword(Request $request, string $token): View
@@ -175,7 +196,7 @@ class AuthController extends Controller
             : back()->withErrors(['email' => __($status)]);
     }
 
-    public function verificationNotice(Request $request): View|RedirectResponse
+    public function verificationNotice(Request $request, EmailVerificationService $emailVerificationService): View|RedirectResponse
     {
         $user = $request->user();
 
@@ -183,12 +204,40 @@ class AuthController extends Controller
             return redirect()->intended($user->dashboardUrl());
         }
 
-        return view('auth.verify-email', ['currentUser' => $user]);
+        return view('auth.verify-email', [
+            'currentUser' => $user,
+            'maskedEmail' => $emailVerificationService->maskEmail($user->email),
+            'resendAfter' => max(
+                (int) session('resend_after', 0),
+                $emailVerificationService->resendCooldownSeconds($user)
+            ),
+        ]);
     }
 
     public function studentDashboard(Request $request): View
     {
         return view('auth.verify-email', $this->studentHubData($request->user()));
+    }
+
+    public function verifyEmailCode(VerifyEmailCodeRequest $request, EmailVerificationService $emailVerificationService): RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return redirect()->intended($user->dashboardUrl());
+        }
+
+        $result = $emailVerificationService->verify($user, $request->string('code')->toString());
+
+        if (! $result['success']) {
+            return back()->withErrors(['code' => $result['message']]);
+        }
+
+        event(new Verified($user));
+        $request->session()->regenerate();
+
+        return redirect()->intended($user->dashboardUrl())
+            ->with('success', $result['message']);
     }
 
     public function verifyEmail(EmailVerificationRequest $request): RedirectResponse
@@ -205,15 +254,33 @@ class AuthController extends Controller
             ->with('success', 'Email đã được xác thực thành công.');
     }
 
-    public function resendVerification(Request $request): RedirectResponse
+    public function resendVerification(Request $request, EmailVerificationService $emailVerificationService): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
             return redirect()->intended($request->user()->dashboardUrl());
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        try {
+            $emailVerificationService->sendCode($request->user());
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return back()
+                ->withErrors($exception->errors())
+                ->with('resend_after', $emailVerificationService->resendCooldownSeconds($request->user()));
+        } catch (Throwable $exception) {
+            Log::error('Verification code email could not be resent.', [
+                'user_id' => $request->user()->id,
+                'email' => $request->user()->email,
+                'error' => $exception->getMessage(),
+            ]);
 
-        return back()->with('success', 'Email xác thực mới đã được gửi.')->with('resend_after', 60);
+            return back()->withErrors([
+                'email' => MailErrorFormatter::verificationSendFailure($exception),
+            ]);
+        }
+
+        return back()
+            ->with('success', 'Mã xác thực mới đã được gửi.')
+            ->with('resend_after', EmailVerificationCode::RESEND_COOLDOWN_SECONDS);
     }
 
     public function showTwoFactorChallenge(): View
@@ -244,85 +311,6 @@ class AuthController extends Controller
         return back()->with('success', 'Mã 2FA mới đã được gửi.')->with('resend_after', 60);
     }
 
-    public function redirectToProvider(string $provider): RedirectResponse
-    {
-        $this->ensureSupportedProvider($provider);
-
-        return Socialite::driver($provider)->redirect();
-    }
-
-    public function handleProviderCallback(string $provider, Request $request, TwoFactorService $twoFactorService): RedirectResponse
-    {
-        $this->ensureSupportedProvider($provider);
-
-        try {
-            $socialUser = Socialite::driver($provider)->user();
-        } catch (\Throwable) {
-            throw ValidationException::withMessages([
-                'identifier' => 'Không thể xác thực với nhà cung cấp đã chọn. Vui lòng thử lại.',
-            ]);
-        }
-
-        $providerColumn = "{$provider}_id";
-        $email = $socialUser->getEmail();
-
-        if (! $email) {
-            throw ValidationException::withMessages([
-                'identifier' => 'Tài khoản mạng xã hội chưa cung cấp email xác thực.',
-            ]);
-        }
-
-        $user = User::where($providerColumn, $socialUser->getId())
-            ->orWhere('email', $email)
-            ->first();
-
-        if (! $user) {
-            $user = User::create([
-                'name' => $socialUser->getName() ?: Str::headline(Str::before($email, '@')),
-                'username' => AuthService::generateUniqueUsername($socialUser->getName() ?: Str::before($email, '@')),
-                'email' => $email,
-                'email_verified_at' => now(),
-                'password' => Str::password(24),
-                'role' => 'student',
-                'avatar' => $socialUser->getAvatar(),
-                $providerColumn => $socialUser->getId(),
-                'is_active' => true,
-            ]);
-        } else {
-            $user->forceFill([
-                $providerColumn => $socialUser->getId(),
-                'email_verified_at' => $user->email_verified_at ?: now(),
-                'avatar' => $user->avatar ?: $socialUser->getAvatar(),
-            ])->save();
-        }
-
-        if (! $user->is_active) {
-            return redirect()->route('login')->withErrors([
-                'identifier' => 'Tài khoản hiện đang bị khóa. Vui lòng liên hệ quản trị viên.',
-            ]);
-        }
-
-        Auth::login($user, true);
-        $request->session()->regenerate();
-
-        $user->forceFill([
-            'last_login_at' => now(),
-            'last_login_ip' => $request->ip(),
-        ])->save();
-
-        \App\Services\ActivityLogService::log($user->id, "login_{$provider}", User::class, $user->id, null, $request);
-
-        if ($user->two_factor_enabled) {
-            $twoFactorService->sendCode($user);
-            $request->session()->forget('two_factor_passed_at');
-
-            return redirect()->route('two-factor.challenge')
-                ->with('success', 'Mã 2FA đã được gửi tới email của bạn.');
-        }
-
-        return redirect()->intended($user->dashboardUrl())->with('success', 'Đăng nhập thành công!');
-    }
-
     public function quickLogin(Request $request, string $role): RedirectResponse
     {
         abort_if(app()->environment('production'), Response::HTTP_NOT_FOUND);
@@ -340,19 +328,6 @@ class AuthController extends Controller
         return redirect($user->dashboardUrl())->with('success', 'Đăng nhập nhanh thành công.');
     }
 
-    private function ensureSupportedProvider(string $provider): void
-    {
-        if (! in_array($provider, ['google', 'facebook', 'github', 'microsoft'], true)) {
-            abort(Response::HTTP_NOT_FOUND);
-        }
-
-        if ($provider === 'microsoft' && ! class_exists(\SocialiteProviders\Microsoft\Provider::class)) {
-            throw ValidationException::withMessages([
-                'identifier' => 'Microsoft Login cần gói SocialiteProviders Microsoft trước khi sử dụng.',
-            ]);
-        }
-    }
-
     private function isSafeRedirect(string $redirect): bool
     {
         if ($redirect === '') {
@@ -366,23 +341,10 @@ class AuthController extends Controller
         return Str::startsWith($redirect, url('/'));
     }
 
-    private function uniqueUsername(string $base): string
-    {
-        $base = Str::of($base)->ascii()->lower()->replaceMatches('/[^a-z0-9_]+/', '_')->trim('_')->limit(24, '')->toString() ?: 'user';
-        $username = $base;
-        $suffix = 1;
-
-        while (User::where('username', $username)->exists()) {
-            $username = $base.$suffix++;
-        }
-
-        return $username;
-    }
-
     private function studentHubData(User $user): array
     {
         $activeEnrollments = Enrollment::where('user_id', $user->id)
-            ->where('status', 'active');
+            ->withLearningAccess();
 
         $enrollments = (clone $activeEnrollments)
             ->with(['course.instructor:id,name', 'course.category:id,name'])

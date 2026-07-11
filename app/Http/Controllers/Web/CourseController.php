@@ -8,6 +8,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Review;
+use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -32,9 +33,9 @@ class CourseController extends Controller
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
-                      ->orWhereHas('instructor', function ($qInst) use ($search) {
-                          $qInst->where('name', 'like', "%{$search}%");
-                      });
+                        ->orWhereHas('instructor', function ($qInst) use ($search) {
+                            $qInst->where('name', 'like', "%{$search}%");
+                        });
                 });
             })
             ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
@@ -43,6 +44,7 @@ class CourseController extends Controller
             ->when($pricing === 'under_200k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0 AND COALESCE(discount_price, sale_price, price) <= 200000'))
             ->when($pricing === '200k_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 200000 AND COALESCE(discount_price, sale_price, price) <= 500000'))
             ->when($pricing === 'above_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 500000'))
+            ->when($pricing === 'paid', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0'))
             ->when($rating, fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
             ->orderByDesc('published_at')
             ->orderByDesc('created_at')
@@ -84,7 +86,7 @@ class CourseController extends Controller
             ->firstOrFail();
 
         $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
-        abort_unless($this->isPublished($course) || $canBypassCourseVisibility, 404);
+        abort_unless($this->isPublished($course) || $canBypassCourseVisibility || $this->isEnrolled($course), 404);
 
         $isEnrolled = $this->isEnrolled($course);
         $canManageCourse = auth()->check()
@@ -97,11 +99,11 @@ class CourseController extends Controller
             'category:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
                 ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
-                ->when(!$canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
+                ->when(! $canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
             'chapters.lessons' => fn ($q) => $q
                 ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
-                ->when(!$canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
+                ->when(! $canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
         ]);
         $course->loadCount('lessons');
@@ -126,13 +128,13 @@ class CourseController extends Controller
             ? $course->courseSections
             : $course->chapters;
 
-        $totalLessons = $course->lessons_count;
+        $totalLessons = $course->lessons_count ?: $curriculumSections->sum(fn ($section) => $section->lessons->count());
         $previewLessons = $curriculumSections->flatMap->lessons->where('is_preview', true)->count();
         $totalSections = $curriculumSections->count();
-
         $isFavorited = auth()->check()
             && auth()->user()->isStudent()
             && $course->isFavoritedBy(auth()->user());
+        $learningEntryUrl = $canAccessFullCourse ? $course->learningEntryUrl() : null;
 
         return view('courses.show', compact(
             'course',
@@ -145,53 +147,53 @@ class CourseController extends Controller
             'isEnrolled',
             'canManageCourse',
             'canAccessFullCourse',
-            'isFavorited'
+            'isFavorited',
+            'learningEntryUrl'
         ));
     }
 
-    public function lesson(Course $course, Lesson $lesson): View
+    public function lesson(Course $course, Lesson $lesson, LearningPlayerService $playerService): View
     {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
 
         $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
-        abort_unless($this->isPublished($course) || $canBypassCourseVisibility, 404);
+        abort_unless($this->isPublished($course) || $canBypassCourseVisibility || $this->isEnrolled($course), 404);
 
-        $course->load(['instructor:id,name,avatar,bio', 'category:id,name,slug']);
-        $lesson->loadMissing(['section:id,course_id,title,sort_order', 'chapter:id,course_id,title,sort_order']);
+        $user = auth()->user();
+        $player = $playerService->buildPlayerContext($course, $lesson, $user, $canBypassCourseVisibility);
 
-        $enrollment = auth()->check()
-            ? Enrollment::where('user_id', auth()->id())
-                ->where('course_id', $course->id)
-                ->where('status', 'active')
-                ->first()
-            : null;
-        $isEnrolled = (bool) $enrollment;
-        $canAccessLesson = $canBypassCourseVisibility || $isEnrolled || $lesson->is_preview;
         $videoSource = null;
-        $lessonProgress = null;
-
-        if ($canAccessLesson && $lesson->type === 'video') {
+        if ($player['canAccessLesson'] && $lesson->type === 'video') {
             $videoSource = $lesson->video_path
                 ? Storage::disk('public')->url($lesson->video_path)
                 : $lesson->video_url;
         }
 
-        if (auth()->check()) {
-            $lessonProgress = DB::table('lesson_progress')
-                ->where('user_id', auth()->id())
-                ->where('lesson_id', $lesson->id)
-                ->first();
-        }
+        $progressUrl = $player['isEnrolled']
+            ? route('courses.lessons.progress', [$course, $lesson])
+            : null;
 
-        return view('courses.lesson', compact(
-            'course',
-            'lesson',
-            'enrollment',
-            'lessonProgress',
-            'isEnrolled',
-            'canAccessLesson',
-            'videoSource'
-        ));
+        $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
+
+        return view('courses.lesson', [
+            'course' => $course,
+            'lesson' => $lesson,
+            'enrollment' => $player['enrollment'],
+            'isEnrolled' => $player['isEnrolled'],
+            'canAccessLesson' => $player['canAccessLesson'],
+            'videoSource' => $videoSource,
+            'progressUrl' => $progressUrl,
+            'sectionTitle' => $sectionTitle,
+            'courseProgress' => $player['courseProgress'],
+            'requiredVideoPercent' => $player['requiredVideoPercent'],
+            'lessonProgress' => $player['lessonProgress'],
+            'lessonState' => $player['lessonState'],
+            'curriculumSections' => $player['sections'],
+            'navigation' => $player['navigation'],
+            'quizContext' => $player['quizContext'],
+            'totalLessons' => $player['totalLessons'],
+            'completedLessons' => $player['completedLessons'],
+        ]);
     }
 
     public function updateLessonProgress(
@@ -206,7 +208,7 @@ class CourseController extends Controller
 
         $enrollmentExists = Enrollment::where('user_id', $request->user()->id)
             ->where('course_id', $course->id)
-            ->where('status', 'active')
+            ->withLearningAccess()
             ->exists();
 
         abort_unless($enrollmentExists, 403);
@@ -221,7 +223,8 @@ class CourseController extends Controller
         $completed = $request->boolean('completed');
 
         if ($lesson->type === 'video' && $durationSeconds > 0) {
-            $completed = $completed || $watchedSeconds >= (int) ceil($durationSeconds * 0.9);
+            $threshold = $course->requiredVideoPercent() / 100;
+            $completed = $completed || $watchedSeconds >= (int) ceil($durationSeconds * $threshold);
         }
 
         $progress = $progressService->recordLessonProgress(
@@ -229,10 +232,17 @@ class CourseController extends Controller
             $course,
             $lesson,
             $watchedSeconds,
+            $durationSeconds,
             $completed
         );
 
-        return response()->json($progress);
+        return response()->json([
+            'success' => true,
+            'lesson_progress' => $progress['lesson_progress'],
+            'course_progress' => $progress['course_progress'],
+            'lesson_completed' => $progress['lesson_completed'],
+            'course_completed' => $progress['course_completed'],
+        ]);
     }
 
     public function enroll(Course $course): RedirectResponse
@@ -260,7 +270,7 @@ class CourseController extends Controller
                     'course_id' => $course->id,
                 ],
                 [
-                    'status' => 'active',
+                    'status' => Enrollment::STATUS_ACTIVE,
                     'progress_percent' => 0,
                     'enrolled_at' => now(),
                 ]
@@ -272,8 +282,10 @@ class CourseController extends Controller
             }
         });
 
+        $learningUrl = $course->learningEntryUrl();
+
         return redirect()
-            ->route('my-courses')
+            ->to($learningUrl ?? route('student.courses'))
             ->with('success', $created
                 ? 'Đăng ký khóa học thành công. Bạn có thể bắt đầu học ngay.'
                 : 'Bạn đã đăng ký khóa học này trước đó.');
@@ -318,7 +330,7 @@ class CourseController extends Controller
         return auth()->check()
             && Enrollment::where('user_id', auth()->id())
                 ->where('course_id', $course->id)
-                ->where('status', 'active')
+                ->withLearningAccess()
                 ->exists();
     }
 

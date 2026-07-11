@@ -61,6 +61,7 @@ class DatabaseSeeder extends Seeder
             'support_ticket_messages',
             'reviews',
             'lesson_progress',
+            'course_reviews',
         ];
 
         foreach ($tables as $table) {
@@ -84,7 +85,8 @@ class DatabaseSeeder extends Seeder
             HomepageSettingSeeder::class,
 
             // Bảng phụ thuộc cấp 1 (Chỉ chứa khóa ngoại liên kết đến các bảng trên)
-            CourseSeeder::class, // Phụ thuộc vào users và categories
+            CourseSeeder::class,
+            CourseReviewSeeder::class,
 
             // Bảng phụ thuộc cấp 2 (Phụ thuộc vào khóa học và bài học)
             LearningPathSeeder::class, // Phụ thuộc vào courses qua bảng pivot

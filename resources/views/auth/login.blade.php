@@ -12,19 +12,21 @@
 
         <x-auth.errors />
 
-        <x-auth.social-buttons />
+        @if(\App\Enums\SocialProvider::anyConfigured())
+            <x-auth.social-buttons />
 
-        <x-auth.divider />
+            <x-auth.divider>Hoặc tiếp tục bằng email</x-auth.divider>
+        @endif
 
         <form method="POST" action="{{ route('login') }}" class="space-y-4" x-on:submit="loading = true">
             @csrf
             <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
 
             <x-auth.input
-                label="Email"
+                label="Email hoặc tên đăng nhập"
                 name="identifier"
                 :value="old('identifier')"
-                placeholder="you@example.com"
+                placeholder="email@example.com hoặc username"
                 autofocus
             />
 
