@@ -142,6 +142,7 @@ class CartCheckoutTest extends TestCase
         $response = $this->actingAs($this->student)
             ->post(route('student.cart.checkout'), [
                 'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
             ]);
 
         // Sẽ chuyển hướng đến trang thanh toán
@@ -171,6 +172,7 @@ class CartCheckoutTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('student.cart.checkout'), [
                 'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
             ]);
 
         $order = Order::where('user_id', $this->student->id)->first();
@@ -214,6 +216,7 @@ class CartCheckoutTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('student.cart.checkout'), [
                 'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
             ]);
 
         $order = Order::where('user_id', $this->student->id)->first();
@@ -267,5 +270,64 @@ class CartCheckoutTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Thanh toán không thành công!');
         $response->assertSee($order->order_code);
+    }
+
+    /**
+     * Test học viên tích chọn một số khóa học để thanh toán, khóa học còn lại giữ nguyên trong giỏ.
+     */
+    public function test_student_can_checkout_partial_cart_items(): void
+    {
+        // Tạo thêm khóa học thứ hai
+        $course2 = Course::create([
+            'instructor_id' => $this->instructor->id,
+            'category_id' => $this->category->id,
+            'title' => 'Lập trình Vue.js',
+            'slug' => 'lap-trinh-vue-js',
+            'short_description' => 'Mô tả ngắn Vue',
+            'description' => 'Mô tả chi tiết Vue',
+            'price' => 150000,
+            'status' => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+        ]);
+
+        // Thêm cả 2 khóa học vào giỏ hàng
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach([$this->course->id, $course2->id]);
+
+        // Học viên tiến hành checkout chỉ tích chọn khóa học thứ nhất
+        $response = $this->actingAs($this->student)
+            ->post(route('student.cart.checkout'), [
+                'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
+            ]);
+
+        $order = Order::where('user_id', $this->student->id)->first();
+        $this->assertNotNull($order);
+        $this->assertEquals(100000, $order->total_amount); // Chỉ tính tiền khóa học thứ nhất
+
+        // Giả lập thanh toán thành công
+        $this->actingAs($this->student)
+            ->post(route('student.checkout.simulate', $order->order_code), [
+                'status' => 'success',
+            ]);
+
+        // Khóa học thứ nhất đã được ghi danh
+        $enrollment = Enrollment::where('user_id', $this->student->id)
+            ->where('course_id', $this->course->id)
+            ->first();
+        $this->assertNotNull($enrollment);
+
+        // Khóa học thứ hai KHÔNG được ghi danh
+        $enrollment2 = Enrollment::where('user_id', $this->student->id)
+            ->where('course_id', $course2->id)
+            ->first();
+        $this->assertNull($enrollment2);
+
+        // Khóa học thứ nhất phải biến mất khỏi giỏ hàng
+        $cart->refresh();
+        $this->assertFalse($cart->courses->contains($this->course->id));
+
+        // Khóa học thứ hai VẪN PHẢI NẰM trong giỏ hàng
+        $this->assertTrue($cart->courses->contains($course2->id));
     }
 }
