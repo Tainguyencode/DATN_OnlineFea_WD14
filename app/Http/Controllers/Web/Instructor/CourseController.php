@@ -13,9 +13,11 @@ use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\Order;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -29,7 +31,7 @@ class CourseController extends Controller
         $status = $request->query('status');
 
         $courses = Course::where('instructor_id', auth()->id())
-            ->with('category:id,name')
+            ->with(['category:id,parent_id,name', 'category.parent:id,name'])
             ->withCount('enrollments')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -51,7 +53,7 @@ class CourseController extends Controller
 
     public function create(): View
     {
-        $categories = Category::orderBy('name')->get(['id', 'name']);
+        $categories = $this->categoryGroups();
 
         return view('instructor.courses.create', compact('categories'));
     }
@@ -85,12 +87,12 @@ class CourseController extends Controller
         $course->load([
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
-            'category',
+            'category.parent',
             'courseReviews' => fn ($q) => $q->orderByDesc('reviewed_at')->orderByDesc('id'),
             'courseReviews.reviewer:id,name,email',
             'courseReviews.items',
         ]);
-        $categories = Category::orderBy('name')->get(['id', 'name']);
+        $categories = $this->categoryGroups();
         $statusOptions = $this->statusOptions();
         $submissionCheck = $course->submissionCheck();
         $courseReviews = $course->courseReviews;
@@ -211,46 +213,68 @@ class CourseController extends Controller
         return view('instructor.courses.students', compact('course', 'enrollments'));
     }
 
-    public function revenue(): View
+    public function revenue(Request $request): View
     {
         $courseIds = Course::where('instructor_id', auth()->id())->pluck('id')->toArray();
-        $orders = \App\Models\Order::where('status', 'paid')->get();
+        $query = Order::where('status', 'paid');
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+        if ($request->filled('month')) {
+            $query->whereMonth('created_at', $request->input('month'));
+        }
+        if ($request->filled('year')) {
+            $query->whereYear('created_at', $request->input('year'));
+        }
+
+        $orders = $query->get();
 
         $totalRevenue = 0;
         $courseSales = [];
 
         foreach ($orders as $order) {
-            foreach (($order->items ?? []) as $item) {
-                $cid = $item['course_id'] ?? null;
-                if (in_array($cid, $courseIds)) {
-                    $price = $item['price'] ?? 0;
-                    $totalRevenue += $price;
+            $items = $order->items;
+            if (is_iterable($items)) {
+                foreach ($items as $item) {
+                    $cid = $item['course_id'] ?? null;
+                    if (in_array($cid, $courseIds)) {
+                        $price = $item['price'] ?? 0;
+                        $totalRevenue += $price;
 
-                    if (! isset($courseSales[$cid])) {
-                        $courseSales[$cid] = [
-                            'course_id' => $cid,
-                            'total' => 0,
-                            'sales' => 0,
-                            'course' => Course::find($cid),
-                        ];
+                        if (! isset($courseSales[$cid])) {
+                            $courseSales[$cid] = [
+                                'course_id' => $cid,
+                                'total' => 0,
+                                'sales' => 0,
+                                'course' => Course::find($cid),
+                            ];
+                        }
+                        $courseSales[$cid]['total'] += $price;
+                        $courseSales[$cid]['sales'] += 1;
                     }
-                    $courseSales[$cid]['total'] += $price;
-                    $courseSales[$cid]['sales'] += 1;
                 }
             }
         }
 
         $courseRevenue = collect($courseSales)->values();
+        $filters = [
+            'start_date' => $request->input('start_date'),
+            'end_date' => $request->input('end_date'),
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+        ];
 
-        return view('instructor.revenue', compact('totalRevenue', 'courseRevenue'));
+        return view('instructor.revenue', compact('totalRevenue', 'courseRevenue', 'filters'));
     }
 
     protected function authorize(Course $course): void
     {
         abort_unless($course->isOwnedBy(auth()->user()), 403);
     }
-
-
 
     private function uniqueSlug(string $title): string
     {
@@ -281,7 +305,7 @@ class CourseController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Course>  $courses
+     * @param  Collection<int, Course>  $courses
      * @return array<int, CourseSubmissionCheckResult>
      */
     private function buildSubmissionChecks($courses): array
@@ -299,5 +323,22 @@ class CourseController extends Controller
     private function statusOptions(): array
     {
         return Course::STATUS_LABELS;
+    }
+
+    private function categoryGroups()
+    {
+        return Category::query()
+            ->active()
+            ->parent()
+            ->whereHas('children', fn ($query) => $query->active())
+            ->with([
+                'children' => fn ($query) => $query
+                    ->active()
+                    ->orderBy('sort_order')
+                    ->orderBy('name'),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'sort_order']);
     }
 }

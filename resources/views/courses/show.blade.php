@@ -28,8 +28,8 @@
         <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2 text-sm">
                 @if($course->category)
-                    <a href="{{ route('courses.index', ['category' => $course->category_id]) }}" class="rounded-full bg-indigo-500/15 px-3 py-1 font-bold text-indigo-200 ring-1 ring-indigo-400/30">
-                        {{ $course->category->name }}
+                    <a href="{{ route('courses.category', $course->category->slug) }}" class="rounded-full bg-indigo-500/15 px-3 py-1 font-bold text-indigo-200 ring-1 ring-indigo-400/30">
+                        {{ $course->category->full_name }}
                     </a>
                 @endif
                 <span class="rounded-full bg-white/10 px-3 py-1 font-semibold text-slate-200">{{ $levelLabels[$course->level] ?? 'Mọi trình độ' }}</span>

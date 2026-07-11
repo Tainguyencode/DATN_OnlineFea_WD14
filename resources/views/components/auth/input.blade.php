@@ -31,9 +31,7 @@
 
     <div class="relative">
         <input
-            @unless($attributes->has('x-bind:type') || $attributes->has(':type'))
-                type="{{ $type }}"
-            @endunless
+            type="{{ $type }}"
             id="{{ $inputId }}"
             name="{{ $name }}"
             @if(! is_null($resolvedValue) && $resolvedValue !== '') value="{{ $resolvedValue }}" @endif

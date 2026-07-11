@@ -117,7 +117,7 @@
                                 <div class="max-w-[180px] truncate font-semibold text-slate-800">{{ $course->instructor?->name ?? 'Chưa gán' }}</div>
                                 <div class="max-w-[180px] truncate text-xs text-slate-500">{{ $course->instructor?->email }}</div>
                             </td>
-                            <td class="px-4 py-3 align-middle text-slate-600">{{ $course->category?->name ?? 'Chưa chọn' }}</td>
+                            <td class="px-4 py-3 align-middle text-slate-600">{{ $course->category?->full_name ?? 'Chưa chọn' }}</td>
                             <td class="whitespace-nowrap px-4 py-3 align-middle font-semibold text-slate-900">{{ $formatPrice($price) }}</td>
                             <td class="px-4 py-3 text-center align-middle font-semibold text-slate-900">{{ number_format((int) $course->active_enrollments_count) }}</td>
                             <td class="px-4 py-3 text-center align-middle text-slate-700">{{ $sectionsCount }}</td>

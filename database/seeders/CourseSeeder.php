@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -13,12 +14,18 @@ class CourseSeeder extends Seeder
      */
     public function run(): void
     {
+        $categoryIds = [
+            'web' => $this->categoryId('Phát triển Web'),
+            'design' => $this->categoryId('Thiết kế UI/UX'),
+            'data' => $this->categoryId('Khoa học dữ liệu'),
+        ];
+
         // 1. Tạo khóa học mẫu (Courses)
         $courses = [
             [
                 'id' => 1,
                 'instructor_id' => 2, // Nguyễn Văn Giảng
-                'category_id' => 1,    // Lập trình Web
+                'category_id' => $categoryIds['web'],
                 'title' => 'Laravel từ Zero đến Hero',
                 'slug' => Str::slug('Laravel từ Zero đến Hero'),
                 'description' => 'Khóa học toàn diện về framework Laravel từ cơ bản đến nâng cao. Học qua dự án thực tế.',
@@ -44,7 +51,7 @@ class CourseSeeder extends Seeder
             [
                 'id' => 2,
                 'instructor_id' => 2, // Nguyễn Văn Giảng
-                'category_id' => 1,    // Lập trình Web
+                'category_id' => $categoryIds['web'],
                 'title' => 'React.js Masterclass',
                 'slug' => Str::slug('React.js Masterclass'),
                 'description' => 'Làm chủ React.js và các công cụ hiện đại như Redux Toolkit, React Router, Vite, TailwindCSS.',
@@ -70,7 +77,7 @@ class CourseSeeder extends Seeder
             [
                 'id' => 3,
                 'instructor_id' => 3, // Trần Đức Dũng
-                'category_id' => 4,    // Thiết kế UI/UX
+                'category_id' => $categoryIds['design'],
                 'title' => 'UI/UX Design Fundamentals',
                 'slug' => Str::slug('UI/UX Design Fundamentals'),
                 'description' => 'Học thiết kế trải nghiệm người dùng (UX) và giao diện trực quan (UI) bằng công cụ Figma từ con số 0.',
@@ -96,7 +103,7 @@ class CourseSeeder extends Seeder
             [
                 'id' => 4,
                 'instructor_id' => 2, // Nguyễn Văn Giảng
-                'category_id' => 3,    // Khoa học dữ liệu & AI
+                'category_id' => $categoryIds['data'],
                 'title' => 'Python cho Data Science',
                 'slug' => Str::slug('Python cho Data Science'),
                 'description' => 'Sử dụng Python để phân tích dữ liệu, trực quan hóa và xây dựng các thuật toán Machine Learning cơ bản.',
@@ -117,6 +124,81 @@ class CourseSeeder extends Seeder
                 'is_featured' => false,
                 'published_at' => now()->subWeeks(2),
                 'created_at' => now()->subWeeks(2),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 5,
+                'instructor_id' => 2, // Nguyễn Văn Giảng
+                'category_id' => 1,    // Lập trình Web
+                'title' => 'Vue.js - Progressive Framework for Web',
+                'slug' => Str::slug('Vue.js - Progressive Framework for Web'),
+                'description' => 'Làm chủ framework Vue.js từ cơ bản đến nâng cao. Học Composition API, Pinia State Management, và xây dựng ứng dụng SPA hiện đại.',
+                'objectives' => 'Hiểu sâu Components, Directives, Reactivity System, và xây dựng các project thực tế với Vue 3 + TypeScript.',
+                'thumbnail' => 'vue_progressive.png',
+                'preview_video' => 'https://example.com/videos/vue-intro.mp4',
+                'level' => 'intermediate',
+                'price' => 549000.00,
+                'sale_price' => 349000.00,
+                'status' => 'published',
+                'rejection_reason' => null,
+                'rating_avg' => 4.70,
+                'rating_count' => 76,
+                'enrollment_count' => 650,
+                'duration_minutes' => 540, // 9 tiếng
+                'tags' => json_encode(['javascript', 'vue', 'frontend', 'spa']),
+                'is_featured' => false,
+                'published_at' => now()->subWeeks(1),
+                'created_at' => now()->subWeeks(1),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 6,
+                'instructor_id' => 7, // Võ Quốc Huy
+                'category_id' => 1,    // Lập trình Web
+                'title' => 'Node.js & Express - Backend Mastery',
+                'slug' => Str::slug('Node.js & Express - Backend Mastery'),
+                'description' => 'Xây dựng các ứng dụng backend mạnh mẽ với Node.js và Express. Tìm hiểu REST API, Middleware, Authentication, Database Integration.',
+                'objectives' => 'Nắm vững Event-driven Architecture, RESTful API Design, JWT Authentication, Async/Await, MongoDB Integration.',
+                'thumbnail' => 'nodejs_backend.png',
+                'preview_video' => 'https://example.com/videos/nodejs-intro.mp4',
+                'level' => 'intermediate',
+                'price' => 599000.00,
+                'sale_price' => 399000.00,
+                'status' => 'published',
+                'rejection_reason' => null,
+                'rating_avg' => 4.78,
+                'rating_count' => 102,
+                'enrollment_count' => 920,
+                'duration_minutes' => 660, // 11 tiếng
+                'tags' => json_encode(['nodejs', 'express', 'backend', 'api']),
+                'is_featured' => true,
+                'published_at' => now()->subDays(10),
+                'created_at' => now()->subDays(10),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 7,
+                'instructor_id' => 3, // Trần Đức Dũng
+                'category_id' => 2,    // Lập trình Di động
+                'title' => 'Flutter - Build Cross-Platform Apps',
+                'slug' => Str::slug('Flutter - Build Cross-Platform Apps'),
+                'description' => 'Phát triển ứng dụng mobile cho iOS và Android bằng Flutter. Học Widget, State Management, Firebase Integration và Deploy lên App Store.',
+                'objectives' => 'Nắm vững Flutter Framework, Widget Tree Architecture, Provider Pattern, Firebase Services, và App Publishing.',
+                'thumbnail' => 'flutter_crossplatform.png',
+                'preview_video' => null,
+                'level' => 'beginner',
+                'price' => 549000.00,
+                'sale_price' => null,
+                'status' => 'published',
+                'rejection_reason' => null,
+                'rating_avg' => 4.65,
+                'rating_count' => 58,
+                'enrollment_count' => 380,
+                'duration_minutes' => 720, // 12 tiếng
+                'tags' => json_encode(['flutter', 'mobile', 'dart', 'ios', 'android']),
+                'is_featured' => false,
+                'published_at' => now()->subDays(15),
+                'created_at' => now()->subDays(15),
                 'updated_at' => now(),
             ],
         ];
@@ -151,6 +233,14 @@ class CourseSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'id' => 9,
+                'course_id' => 2,
+                'title' => 'Chương 2: Hooks và State Management',
+                'sort_order' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
             // UI/UX Design Fundamentals (Course ID: 3)
             [
                 'id' => 4,
@@ -168,7 +258,34 @@ class CourseSeeder extends Seeder
                 'sort_order' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
+            // Vue.js (Course ID: 5)
+            [
+                'id' => 10,
+                'course_id' => 5,
+                'title' => 'Chương 1: Vue 3 Fundamentals',
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            // Node.js (Course ID: 6)
+            [
+                'id' => 11,
+                'course_id' => 6,
+                'title' => 'Chương 1: Node.js Basics & Express Setup',
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            // Flutter (Course ID: 7)
+            [
+                'id' => 12,
+                'course_id' => 7,
+                'title' => 'Chương 1: Flutter Installation & First App',
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ];
 
         DB::table('chapters')->insert($chapters);
@@ -256,6 +373,20 @@ class CourseSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            // Chương 2 - React (Chapter ID: 9)
+            [
+                'id' => 9,
+                'chapter_id' => 9,
+                'title' => 'Bài 1: Introduction to Hooks - useState và useEffect',
+                'content' => 'Tìm hiểu cách sử dụng Hooks để quản lý state trong function components thay vì sử dụng class components.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/react-hooks-01.mp4',
+                'duration_seconds' => 1800, // 30 phút
+                'is_preview' => false,
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
             // Chương 1 - UI/UX (Chapter ID: 4)
             [
                 'id' => 7,
@@ -283,7 +414,88 @@ class CourseSeeder extends Seeder
                 'sort_order' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
+            // Chương 1 - Vue (Chapter ID: 10)
+            [
+                'id' => 10,
+                'chapter_id' => 10,
+                'title' => 'Bài 1: Vue 3 Setup & Composition API Basics',
+                'content' => 'Tìm hiểu cách thiết lập Vue 3 với Vite và giới thiệu về Composition API - cách mới để tổ chức logic trong Vue components.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/vue-01.mp4',
+                'duration_seconds' => 1600, // 26 phút 40 giây
+                'is_preview' => true,
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 11,
+                'chapter_id' => 10,
+                'title' => 'Bài 2: Reactive Data & Template Directives',
+                'content' => 'Khám phá hệ thống Reactivity của Vue 3 và các Directives như v-if, v-for, v-bind để xây dựng dynamic templates.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/vue-02.mp4',
+                'duration_seconds' => 1400, // 23 phút 20 giây
+                'is_preview' => false,
+                'sort_order' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            // Chương 1 - Node.js (Chapter ID: 11)
+            [
+                'id' => 12,
+                'chapter_id' => 11,
+                'title' => 'Bài 1: Node.js Installation & NPM Basics',
+                'content' => 'Cài đặt Node.js, hiểu cách hoạt động của NPM (Node Package Manager) và khởi tạo project Node.js đầu tiên.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/nodejs-01.mp4',
+                'duration_seconds' => 1200, // 20 phút
+                'is_preview' => true,
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 13,
+                'chapter_id' => 11,
+                'title' => 'Bài 2: Express.js Fundamentals & Routing',
+                'content' => 'Thiết lập Express.js server, tìm hiểu Routing, Middleware, và cách xử lý HTTP requests/responses.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/nodejs-02.mp4',
+                'duration_seconds' => 1800, // 30 phút
+                'is_preview' => false,
+                'sort_order' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            // Chương 1 - Flutter (Chapter ID: 12)
+            [
+                'id' => 14,
+                'chapter_id' => 12,
+                'title' => 'Bài 1: Flutter Setup & Dart Programming Basics',
+                'content' => 'Cài đặt Flutter SDK, hiểu cơ bản về ngôn ngữ Dart và cấu trúc một Flutter project.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/flutter-01.mp4',
+                'duration_seconds' => 2000, // 33 phút 20 giây
+                'is_preview' => true,
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 15,
+                'chapter_id' => 12,
+                'title' => 'Bài 2: Widgets & Widget Tree',
+                'content' => 'Tìm hiểu kiến trúc Widget trong Flutter, cách xây dựng giao diện thông qua Widget Composition.',
+                'type' => 'video',
+                'video_url' => 'https://example.com/videos/lessons/flutter-02.mp4',
+                'duration_seconds' => 1700, // 28 phút 20 giây
+                'is_preview' => false,
+                'sort_order' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ];
 
         DB::table('lessons')->insert($lessons);
@@ -307,7 +519,7 @@ class CourseSeeder extends Seeder
                 'file_size' => 2048120, // ~2MB
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('lesson_attachments')->insert($attachments);
@@ -334,7 +546,7 @@ class CourseSeeder extends Seeder
                 'file_path' => 'subtitles/lesson-2-vi.vtt',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('lesson_subtitles')->insert($subtitles);
@@ -354,7 +566,7 @@ class CourseSeeder extends Seeder
                 'language' => 'vi',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('ai_summaries')->insert($aiSummaries);
@@ -370,7 +582,7 @@ class CourseSeeder extends Seeder
                 'max_score' => 100,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('assignments')->insert($assignments);
@@ -385,7 +597,7 @@ class CourseSeeder extends Seeder
                 'time_limit_minutes' => 15,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('quizzes')->insert($quizzes);
@@ -421,7 +633,7 @@ class CourseSeeder extends Seeder
                 'sort_order' => 3,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('quiz_questions')->insert($quizQuestions);
@@ -500,9 +712,18 @@ class CourseSeeder extends Seeder
                 'is_correct' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('quiz_options')->insert($quizOptions);
+    }
+
+    private function categoryId(string $name): int
+    {
+        return (int) (
+            Category::where('slug', Str::slug($name))->value('id')
+            ?: Category::query()->value('id')
+            ?: 1
+        );
     }
 }

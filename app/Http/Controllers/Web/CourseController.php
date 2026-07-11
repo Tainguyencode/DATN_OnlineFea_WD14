@@ -20,61 +20,17 @@ class CourseController extends Controller
 {
     public function index(Request $request): View
     {
-        $search = trim((string) $request->query('search'));
-        $categoryId = $request->query('category');
-        $level = $request->query('level');
-        $pricing = $request->query('pricing');
-        $rating = $request->query('rating');
+        return $this->catalog($request);
+    }
 
-        $courses = $this->withFavoriteState($this->publishedCoursesQuery()
-            ->with(['instructor:id,name,avatar', 'category:id,name,slug'])
-            ->withCount(['lessons', 'courseSections']))
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('title', 'like', "%{$search}%")
-                      ->orWhereHas('instructor', function ($qInst) use ($search) {
-                          $qInst->where('name', 'like', "%{$search}%");
-                      });
-                });
-            })
-            ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
-            ->when(in_array($level, ['beginner', 'intermediate', 'advanced'], true), fn ($query) => $query->where('level', $level))
-            ->when($pricing === 'free', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= 0'))
-            ->when($pricing === 'under_200k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0 AND COALESCE(discount_price, sale_price, price) <= 200000'))
-            ->when($pricing === '200k_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 200000 AND COALESCE(discount_price, sale_price, price) <= 500000'))
-            ->when($pricing === 'above_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 500000'))
-            ->when($rating, fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
-            ->orderByDesc('published_at')
-            ->orderByDesc('created_at')
-            ->paginate(9)
-            ->withQueryString();
+    public function category(Request $request, Category $category): View
+    {
+        $category->loadMissing('parent');
 
-        $categories = Category::query()
-            ->select('id', 'name')
-            ->withCount([
-                'courses' => fn ($query) => $query
-                    ->where('status', Course::STATUS_PUBLISHED)
-                    ->where('is_published', true),
-            ])
-            ->orderBy('name')
-            ->get();
+        abort_unless($category->status, 404);
+        abort_if($category->parent_id && ! $category->parent?->status, 404);
 
-        $levelOptions = [
-            'beginner' => 'Cơ bản',
-            'intermediate' => 'Trung cấp',
-            'advanced' => 'Nâng cao',
-        ];
-
-        return view('courses.index', compact(
-            'courses',
-            'categories',
-            'levelOptions',
-            'search',
-            'categoryId',
-            'level',
-            'pricing',
-            'rating'
-        ));
+        return $this->catalog($request, $category);
     }
 
     public function show(string $slug): View
@@ -94,7 +50,8 @@ class CourseController extends Controller
 
         $course->load([
             'instructor:id,name,avatar,bio',
-            'category:id,name,slug',
+            'category:id,parent_id,name,slug',
+            'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
                 ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->when(!$canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
@@ -109,7 +66,7 @@ class CourseController extends Controller
         $relatedCourses = $this->withFavoriteState($this->publishedCoursesQuery()
             ->where('id', '!=', $course->id)
             ->when($course->category_id, fn ($query) => $query->where('category_id', $course->category_id))
-            ->with(['instructor:id,name,avatar', 'category:id,name'])
+            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
             ->withCount('lessons'))
             ->orderByDesc('rating_avg')
             ->orderByDesc('published_at')
@@ -156,7 +113,7 @@ class CourseController extends Controller
         $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
         abort_unless($this->isPublished($course) || $canBypassCourseVisibility, 404);
 
-        $course->load(['instructor:id,name,avatar,bio', 'category:id,name,slug']);
+        $course->load(['instructor:id,name,avatar,bio', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug']);
         $lesson->loadMissing(['section:id,course_id,title,sort_order', 'chapter:id,course_id,title,sort_order']);
 
         $enrollment = auth()->check()
@@ -277,6 +234,108 @@ class CourseController extends Controller
             ->with('success', $created
                 ? 'Đăng ký khóa học thành công. Bạn có thể bắt đầu học ngay.'
                 : 'Bạn đã đăng ký khóa học này trước đó.');
+    }
+
+    private function catalog(Request $request, ?Category $selectedCategory = null): View
+    {
+        $search = trim((string) $request->query('search'));
+        $level = $request->query('level');
+        $pricing = $request->query('pricing');
+        $rating = $request->query('rating');
+        $selectedCategory ??= $this->resolveCategoryFilter($request->query('category'));
+
+        $courses = $this->withFavoriteState($this->publishedCoursesQuery()
+            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
+            ->withCount(['lessons', 'courseSections']))
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                        ->orWhereHas('instructor', fn ($instructorQuery) => $instructorQuery->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when($selectedCategory, function ($query) use ($selectedCategory) {
+                if ($selectedCategory->parent_id) {
+                    $query->where('category_id', $selectedCategory->id);
+
+                    return;
+                }
+
+                $childIds = $selectedCategory->children()
+                    ->active()
+                    ->pluck('id');
+
+                $query->whereIn('category_id', $childIds);
+            })
+            ->when(in_array($level, ['beginner', 'intermediate', 'advanced'], true), fn ($query) => $query->where('level', $level))
+            ->when($pricing === 'free', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= 0'))
+            ->when($pricing === 'paid', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0'))
+            ->when($pricing === 'under_200k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0 AND COALESCE(discount_price, sale_price, price) <= 200000'))
+            ->when($pricing === '200k_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 200000 AND COALESCE(discount_price, sale_price, price) <= 500000'))
+            ->when($pricing === 'above_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 500000'))
+            ->when(is_numeric($rating), fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
+            ->orderByDesc('published_at')
+            ->orderByDesc('created_at')
+            ->paginate(9)
+            ->withQueryString();
+
+        $categories = Category::query()
+            ->active()
+            ->parent()
+            ->whereHas('children', fn ($query) => $query->active())
+            ->with([
+                'children' => fn ($query) => $query
+                    ->active()
+                    ->withCount([
+                        'courses' => fn ($courseQuery) => $courseQuery
+                            ->where('status', Course::STATUS_PUBLISHED)
+                            ->where('is_published', true),
+                    ])
+                    ->orderBy('sort_order')
+                    ->orderBy('name'),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'sort_order']);
+
+        $levelOptions = [
+            'beginner' => 'Cơ bản',
+            'intermediate' => 'Trung cấp',
+            'advanced' => 'Nâng cao',
+        ];
+
+        return view('courses.index', compact(
+            'courses',
+            'categories',
+            'levelOptions',
+            'search',
+            'selectedCategory',
+            'level',
+            'pricing',
+            'rating'
+        ));
+    }
+
+    private function resolveCategoryFilter(mixed $value): ?Category
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        $category = Category::query()
+            ->active()
+            ->with('parent:id,name,slug,status')
+            ->when(
+                is_numeric($value),
+                fn ($query) => $query->whereKey((int) $value),
+                fn ($query) => $query->where('slug', (string) $value),
+            )
+            ->first();
+
+        if ($category?->parent_id && ! $category->parent?->status) {
+            return null;
+        }
+
+        return $category;
     }
 
     private function publishedCoursesQuery()
