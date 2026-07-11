@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\EmailVerificationService;
+use App\Notifications\VerifyEmailNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;

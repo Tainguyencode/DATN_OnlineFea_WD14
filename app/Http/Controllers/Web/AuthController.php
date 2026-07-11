@@ -16,6 +16,7 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Wishlist;
+use App\Services\ActivityLogService;
 use App\Services\AuthService;
 use App\Services\CaptchaService;
 use App\Services\EmailVerificationService;
@@ -24,6 +25,7 @@ use App\Support\MailErrorFormatter;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -133,7 +135,7 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        \App\Services\ActivityLogService::log(Auth::id(), 'logout', User::class, Auth::id(), null, $request);
+        ActivityLogService::log(Auth::id(), 'logout', User::class, Auth::id(), null, $request);
 
         Auth::logout();
         $request->session()->invalidate();
@@ -142,7 +144,7 @@ class AuthController extends Controller
         return redirect()->route('home')->with('success', 'Đã đăng xuất.');
     }
 
-    public function availability(Request $request): \Illuminate\Http\JsonResponse
+    public function availability(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'field' => ['required', 'in:email,username,phone'],
@@ -288,6 +290,22 @@ class AuthController extends Controller
             ->with('resend_after', EmailVerificationCode::RESEND_COOLDOWN_SECONDS);
     }
 
+    public function instantVerify(Request $request): RedirectResponse
+    {
+        abort_if(app()->environment('production'), Response::HTTP_NOT_FOUND);
+
+        $user = $request->user();
+
+        if ($user && ! $user->hasVerifiedEmail()) {
+            if ($user->markEmailAsVerified()) {
+                event(new Verified($user));
+            }
+        }
+
+        return redirect()->intended($user->dashboardUrl())
+            ->with('success', 'Email đã được xác thực thành công (Chế độ Dev).');
+    }
+
     public function showTwoFactorChallenge(): View
     {
         return view('auth.two-factor-challenge');
@@ -304,7 +322,7 @@ class AuthController extends Controller
         }
 
         $request->session()->put('two_factor_passed_at', now()->timestamp);
-        \App\Services\ActivityLogService::log($request->user()->id, 'verify_2fa', User::class, $request->user()->id, null, $request);
+        ActivityLogService::log($request->user()->id, 'verify_2fa', User::class, $request->user()->id, null, $request);
 
         return $this->redirectAfterAuthentication($request->user(), $request)->with('success', 'Xác thực 2FA thành công.');
     }

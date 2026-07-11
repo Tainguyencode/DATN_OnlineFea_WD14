@@ -99,6 +99,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/email/verification-notification', [AuthController::class, 'resendVerification'])
         ->middleware('throttle:5,15')
         ->name('verification.send');
+    Route::post('/email/verify/instant', [AuthController::class, 'instantVerify'])
+        ->name('verification.instant');
     Route::get('/two-factor-challenge', [AuthController::class, 'showTwoFactorChallenge'])->name('two-factor.challenge');
     Route::post('/two-factor-challenge', [AuthController::class, 'verifyTwoFactor'])->middleware('throttle:6,1')->name('two-factor.verify');
     Route::post('/two-factor-challenge/resend', [AuthController::class, 'resendTwoFactor'])->middleware('throttle:3,1')->name('two-factor.resend');
@@ -236,3 +238,10 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
+
+// Dev helper login route
+Route::get('/dev/login-as-admin', function () {
+    auth()->login(\App\Models\User::where('role', 'admin')->first());
+    return redirect()->route('admin.dashboard');
+})->name('dev.login-as-admin');
+

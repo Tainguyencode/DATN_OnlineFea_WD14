@@ -81,6 +81,31 @@
                 @endunless
             </section>
 
+            @if(app()->environment('local') && ! $emailVerified)
+                <div class="mt-6 rounded-2xl border border-blue-200 bg-blue-50/50 p-6 dark:border-blue-900/40 dark:bg-blue-950/20 text-left">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Dev Mode Helper</h3>
+                            <p class="text-xs text-blue-700/80 dark:text-blue-400/80">Bạn đang chạy trong môi trường cục bộ (local). Bạn có thể xác thực nhanh tài khoản tại đây mà không cần kiểm tra file log.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex flex-wrap items-center gap-3">
+                        <form method="POST" action="{{ route('verification.instant') }}">
+                            @csrf
+                            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-xl bg-blue-600 px-4 text-xs font-bold text-white transition hover:bg-blue-700 shadow-sm">
+                                Xác thực nhanh tài khoản này
+                            </button>
+                        </form>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">
+                            Hoặc tìm liên kết xác thực được gửi đến trong file: <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">storage/logs/laravel.log</code>
+                        </span>
+                    </div>
+                </div>
+            @endif
+
             <nav class="mt-6 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 @foreach([
                     ['href' => '#overview', 'label' => 'Tổng quan'],
@@ -510,6 +535,31 @@
                         <button class="ui-button-secondary">Đăng xuất</button>
                     </form>
                 </div>
+
+                @if(app()->environment('local'))
+                    <div class="mt-8 rounded-xl border border-blue-200 bg-blue-50/50 p-6 dark:border-blue-900/40 dark:bg-blue-950/20 text-left">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Dev Mode Helper</h3>
+                                <p class="text-xs text-blue-700/80 dark:text-blue-400/80">Bạn đang chạy trong môi trường cục bộ (local). Bạn có thể kích hoạt nhanh email mà không cần mở file log.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex flex-wrap items-center gap-3">
+                            <form method="POST" action="{{ route('verification.instant') }}">
+                                @csrf
+                                <button type="submit" class="inline-flex h-9 items-center justify-center rounded-xl bg-blue-600 px-4 text-xs font-bold text-white transition hover:bg-blue-700 shadow-sm">
+                                    Xác thực nhanh tài khoản
+                                </button>
+                            </form>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">
+                                Email đã được ghi nhận trong file: <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">storage/logs/laravel.log</code>
+                            </span>
+                        </div>
+                    </div>
+                @endif
             </div>
         </div>
     </div>
