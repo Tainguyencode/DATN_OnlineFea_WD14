@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Instructor\StoreChapterRequest;
+use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CurriculumController extends Controller
@@ -19,7 +20,8 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
 
         $course->load([
-            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
         ]);
 
         return view('instructor.courses.curriculum', [
@@ -29,14 +31,9 @@ class CurriculumController extends Controller
         ]);
     }
 
-    public function storeSection(Request $request, Course $course): RedirectResponse
+    public function storeSection(StoreChapterRequest $request, Course $course): RedirectResponse
     {
-        $this->authorizeCourse($course);
-
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $validated = $request->validated();
 
         CourseSection::create([
             ...$validated,
@@ -47,14 +44,11 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã thêm chương học.');
     }
 
-    public function updateSection(Request $request, Course $course, CourseSection $section): RedirectResponse
+    public function updateSection(StoreChapterRequest $request, Course $course, CourseSection $section): RedirectResponse
     {
         $this->authorizeSection($course, $section);
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $validated = $request->validated();
 
         $section->update($validated);
 
@@ -71,11 +65,11 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã xóa chương học.');
     }
 
-    public function storeLesson(Request $request, Course $course, CourseSection $section): RedirectResponse
+    public function storeLesson(StoreLessonRequest $request, Course $course, CourseSection $section): RedirectResponse
     {
         $this->authorizeSection($course, $section);
 
-        $validated = $this->validatedLessonData($request);
+        $validated = $request->validated();
 
         if ($request->hasFile('document_file')) {
             $validated['document_file'] = $request->file('document_file')->store('lesson-documents', 'public');
@@ -103,11 +97,11 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã thêm bài học.');
     }
 
-    public function updateLesson(Request $request, Course $course, Lesson $lesson): RedirectResponse
+    public function updateLesson(StoreLessonRequest $request, Course $course, Lesson $lesson): RedirectResponse
     {
         $this->authorizeLesson($course, $lesson);
 
-        $validated = $this->validatedLessonData($request);
+        $validated = $request->validated();
 
         if ($request->hasFile('document_file')) {
             $this->deleteLessonDocument($lesson);
@@ -143,27 +137,7 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã xóa bài học.');
     }
 
-    private function validatedLessonData(Request $request): array
-    {
-        return $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'type' => ['required', Rule::in(array_keys($this->lessonTypes()))],
-            'video_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,webm', 'max:204800', 'prohibited_unless:type,video'],
-            'video_url' => ['nullable', 'string', 'max:2048'],
-            'content' => ['nullable', 'string'],
-            'document_file' => ['nullable', 'file', 'max:10240'],
-            'duration' => ['nullable', 'integer', 'min:0', 'max:999999'],
-            'is_preview' => ['sometimes', 'boolean'],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
-            'status' => ['nullable', Rule::in(array_keys($this->lessonStatuses()))],
-        ], [
-            'video_file.mimes' => 'Video bài giảng chỉ cho phép định dạng mp4, mov, avi hoặc webm.',
-            'video_file.max' => 'Dung lượng video bài giảng tối đa là 200MB.',
-            'video_file.prohibited_unless' => 'Chỉ upload video khi loại bài học là Video.',
-            'duration.integer' => 'Thời lượng phải là số nguyên.',
-            'sort_order.integer' => 'Thứ tự sắp xếp phải là số nguyên.',
-        ]);
-    }
+
 
     private function authorizeCourse(Course $course): void
     {

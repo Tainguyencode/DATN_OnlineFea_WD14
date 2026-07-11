@@ -65,16 +65,9 @@
         </div>
     </div>
 
-    @if ($errors->any())
-        <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-            <p class="font-bold">Vui lòng kiểm tra lại thông tin.</p>
-            <ul class="mt-2 list-inside list-disc space-y-1">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
+
+
+
 
     <form method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -82,13 +75,15 @@
         <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] lg:items-end">
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Tên chương</span>
-                <input type="text" name="title" required maxlength="255" placeholder="Ví dụ: Giới thiệu khóa học"
-                       class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                <input type="text" name="title" maxlength="255" placeholder="Ví dụ: Giới thiệu khóa học"
+                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('title', 'storeSection') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">
+                @error('title', 'storeSection') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Mô tả chương</span>
                 <input type="text" name="description" maxlength="1000" placeholder="Nội dung chính của chương này"
-                       class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('description', 'storeSection') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">
+                @error('description', 'storeSection') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
             <button type="submit"
                     class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
@@ -123,11 +118,13 @@
                                         @method('PUT')
                                         <label class="block">
                                             <span class="mb-1 block text-xs font-bold text-slate-600">Tên chương</span>
-                                            <input type="text" name="title" value="{{ $section->title }}" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500">
+                                            <input type="text" name="title" value="{{ $section->title }}" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('title', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
+                                            @error('title', 'updateSection_'.$section->id) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                         </label>
                                         <label class="block">
                                             <span class="mb-1 block text-xs font-bold text-slate-600">Mô tả</span>
-                                            <textarea name="description" rows="3" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500">{{ $section->description }}</textarea>
+                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $section->description }}</textarea>
+                                            @error('description', 'updateSection_'.$section->id) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                         </label>
                                         <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 cursor-pointer">Lưu chương</button>
                                     </form>
@@ -191,7 +188,7 @@
                                             Quan ly cau hoi
                                         </a>
                                     @endif
-                                    <details>
+                                    <details {{ $errors->hasBag('updateLesson_'.$lesson->id) ? 'open' : '' }}>
                                         <summary class="inline-flex min-h-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50">
                                             Sửa bài học
                                         </summary>
@@ -200,6 +197,7 @@
                                                 'action' => route('instructor.courses.lessons.update', [$course, $lesson]),
                                                 'method' => 'PUT',
                                                 'lesson' => $lesson,
+                                                'errorBag' => 'updateLesson_'.$lesson->id,
                                                 'lessonTypes' => $lessonTypes,
                                                 'lessonStatuses' => $lessonStatuses,
                                                 'submitLabel' => 'Lưu bài học',
@@ -221,7 +219,7 @@
                     @endforelse
                 </div>
 
-                <details class="border-t border-slate-100 bg-white">
+                <details class="border-t border-slate-100 bg-white" {{ $errors->hasBag('storeLesson_'.$section->id) ? 'open' : '' }}>
                     <summary class="cursor-pointer list-none px-5 py-4 text-sm font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50">
                         + Thêm bài học
                     </summary>
@@ -230,6 +228,7 @@
                             'action' => route('instructor.courses.sections.lessons.store', [$course, $section]),
                             'method' => 'POST',
                             'lesson' => null,
+                            'errorBag' => 'storeLesson_'.$section->id,
                             'nextSortOrder' => $section->lessons->count(),
                             'lessonTypes' => $lessonTypes,
                             'lessonStatuses' => $lessonStatuses,
