@@ -67,7 +67,7 @@ class AuthController extends Controller
                 ->with('success', 'Mã 2FA đã được gửi tới email của bạn.');
         }
 
-        return redirect()->intended($user->dashboardUrl())->with('success', 'Đăng nhập thành công!');
+        return $this->redirectAfterAuthentication($user, $request)->with('success', 'Đăng nhập thành công!');
     }
 
     public function showRegister(): View
@@ -101,7 +101,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->intended($user->dashboardUrl())
+        return $this->redirectAfterAuthentication($user, $request)
             ->with('success', 'Đăng ký thành công. Vui lòng xác thực email để mở khóa đầy đủ tính năng.');
     }
 
@@ -180,7 +180,7 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($user?->hasVerifiedEmail()) {
-            return redirect()->intended($user->dashboardUrl());
+            return $this->redirectAfterAuthentication($user, $request);
         }
 
         return view('auth.verify-email', ['currentUser' => $user]);
@@ -194,21 +194,21 @@ class AuthController extends Controller
     public function verifyEmail(EmailVerificationRequest $request): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended($request->user()->dashboardUrl());
+            return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
         if ($request->user()->markEmailAsVerified()) {
             event(new Verified($request->user()));
         }
 
-        return redirect()->intended($request->user()->dashboardUrl())
+        return $this->redirectAfterAuthentication($request->user(), $request)
             ->with('success', 'Email đã được xác thực thành công.');
     }
 
     public function resendVerification(Request $request): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended($request->user()->dashboardUrl());
+            return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
         $request->user()->sendEmailVerificationNotification();
@@ -234,7 +234,7 @@ class AuthController extends Controller
         $request->session()->put('two_factor_passed_at', now()->timestamp);
         \App\Services\ActivityLogService::log($request->user()->id, 'verify_2fa', User::class, $request->user()->id, null, $request);
 
-        return redirect()->intended($request->user()->dashboardUrl())->with('success', 'Xác thực 2FA thành công.');
+        return $this->redirectAfterAuthentication($request->user(), $request)->with('success', 'Xác thực 2FA thành công.');
     }
 
     public function resendTwoFactor(Request $request, TwoFactorService $twoFactorService): RedirectResponse
@@ -320,7 +320,7 @@ class AuthController extends Controller
                 ->with('success', 'Mã 2FA đã được gửi tới email của bạn.');
         }
 
-        return redirect()->intended($user->dashboardUrl())->with('success', 'Đăng nhập thành công!');
+        return $this->redirectAfterAuthentication($user, $request)->with('success', 'Đăng nhập thành công!');
     }
 
     public function quickLogin(Request $request, string $role): RedirectResponse
@@ -351,6 +351,17 @@ class AuthController extends Controller
                 'identifier' => 'Microsoft Login cần gói SocialiteProviders Microsoft trước khi sử dụng.',
             ]);
         }
+    }
+
+    private function redirectAfterAuthentication(User $user, Request $request): RedirectResponse
+    {
+        if (! $user->isStudent()) {
+            $request->session()->forget('url.intended');
+
+            return redirect($user->dashboardUrl());
+        }
+
+        return redirect()->intended($user->dashboardUrl());
     }
 
     private function isSafeRedirect(string $redirect): bool
