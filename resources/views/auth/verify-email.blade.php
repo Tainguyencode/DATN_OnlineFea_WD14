@@ -3,6 +3,9 @@
     $currentUser = $user ?? auth()->user();
     $emailVerified = $emailVerified ?? (bool) $currentUser?->hasVerifiedEmail();
     $canUseStudentActions = $studentHub && $emailVerified;
+    $isVerificationNotice = ! $studentHub;
+    $maskedEmail = $maskedEmail ?? app(\App\Services\EmailVerificationService::class)->maskEmail($currentUser->email);
+    $resendAfter = $resendAfter ?? (int) session('resend_after', 0);
 @endphp
 
 @extends('layouts.app')
@@ -52,10 +55,10 @@
 
                     <div class="flex flex-col gap-3 sm:flex-row lg:justify-end">
                         @unless($emailVerified)
-                            <form method="POST" action="{{ route('verification.send') }}" x-data="{ seconds: {{ session('resend_after', 0) }}, loading: false, init() { if (this.seconds > 0) setInterval(() => { if (this.seconds > 0) this.seconds-- }, 1000) } }" x-on:submit="loading = true">
+                            <form method="POST" action="{{ route('verification.send') }}" x-data="{ seconds: {{ $resendAfter }}, loading: false, init() { if (this.seconds > 0) setInterval(() => { if (this.seconds > 0) this.seconds-- }, 1000) } }" x-on:submit="loading = true">
                                 @csrf
                                 <button type="submit" :disabled="loading || seconds > 0" class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0056D2] px-5 text-sm font-bold text-white transition hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60">
-                                    <span x-show="seconds === 0 && !loading">Gửi lại email</span>
+                                    <span x-show="seconds === 0 && !loading">Gửi lại mã</span>
                                     <span x-show="loading">Đang gửi...</span>
                                     <span x-show="seconds > 0">Gửi lại sau <span x-text="seconds"></span>s</span>
                                 </button>
@@ -82,10 +85,11 @@
                 @foreach([
                     ['href' => '#overview', 'label' => 'Tổng quan'],
                     ['href' => '#courses', 'label' => 'Khóa học'],
+                    ['href' => '#cart', 'label' => 'Giỏ hàng'],
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
                     ['href' => '#orders', 'label' => 'Đơn hàng'],
-                    ['href' => '#profile', 'label' => 'Hồ sơ'],
+                    ['href' => route('student.profile'), 'label' => 'Hồ sơ', 'external' => true],
                 ] as $item)
                     <a href="{{ $item['href'] }}" class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
                         {{ $item['label'] }}
@@ -171,7 +175,7 @@
                                             <div class="h-full rounded-full bg-[#0056D2]" style="width: {{ min(100, $progress) }}%"></div>
                                         </div>
                                     </div>
-                                    <a href="{{ route('courses.show', $course->slug) }}" class="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-[#0056D2] dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100">
+                                    <a href="{{ $course->learningEntryUrl() ?? route('courses.show', $course->slug) }}" class="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-[#0056D2] dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100">
                                         Tiếp tục học
                                     </a>
                                 </div>
@@ -181,7 +185,75 @@
                 @endif
             </section>
 
+            <section id="cart" class="scroll-mt-24 pt-8">
+                <div class="mb-4 flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Giỏ hàng</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $stats['cart_items'] }} khóa học trong giỏ</p>
+                    </div>
+                </div>
 
+                @if($cart->courses->isEmpty())
+                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                        Giỏ hàng trống.
+                    </div>
+                @else
+                    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                        <div class="space-y-4 lg:col-span-2">
+                            @foreach($cart->courses as $course)
+                                @php
+                                    $price = $course ? ($course->discount_price ?? $course->sale_price ?? $course->price) : 0;
+                                @endphp
+                                @continue(! $course)
+
+                                <div class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-50 font-bold text-[#0056D2] dark:bg-blue-950/40 dark:text-blue-200">
+                                        {{ strtoupper(substr($course->title, 0, 1)) }}
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="truncate font-bold text-slate-950 dark:text-white">{{ $course->title }}</h3>
+                                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ $course->instructor?->name }}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-extrabold text-[#0056D2] dark:text-blue-300">{{ number_format($price, 0, ',', '.') }}đ</p>
+                                        <form method="POST" action="{{ route('student.cart.remove', $course->id) }}" class="mt-1">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" @if(! $canUseStudentActions) disabled @endif class="text-xs font-semibold text-rose-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50">Xóa</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        <div class="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                            <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Thanh toán</h3>
+                            <div class="mt-5 space-y-3 text-sm">
+                                <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                                    <span>Tạm tính</span>
+                                    <span>{{ number_format($cartTotal, 0, ',', '.') }}đ</span>
+                                </div>
+                                <div class="flex justify-between border-t border-slate-200 pt-4 text-lg font-extrabold text-slate-950 dark:border-slate-800 dark:text-white">
+                                    <span>Tổng cộng</span>
+                                    <span class="text-[#0056D2] dark:text-blue-300">{{ number_format($cartTotal, 0, ',', '.') }}đ</span>
+                                </div>
+                            </div>
+                            <form method="POST" action="{{ route('student.cart.checkout') }}" class="mt-6 space-y-4">
+                                @csrf
+                                <input type="text" name="coupon_code" placeholder="Mã giảm giá" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
+                                <select name="payment_method" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
+                                    <option value="vnpay">VNPay</option>
+                                    <option value="momo">MoMo</option>
+                                    <option value="bank_transfer">Chuyển khoản</option>
+                                </select>
+                                <button type="submit" @if(! $canUseStudentActions) disabled @endif class="h-11 w-full rounded-xl bg-[#0056D2] text-sm font-bold text-white transition hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60">
+                                    Thanh toán ngay
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
+            </section>
 
             <section id="wishlist" class="scroll-mt-24 pt-8">
                 <div class="mb-4 flex items-center justify-between gap-4">
@@ -319,65 +391,59 @@
                     @endif
                 </div>
             </section>
-
-            <section id="profile" class="scroll-mt-24 pt-8">
-                <div class="mb-4">
-                    <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Hồ sơ</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Thông tin tài khoản học viên</p>
-                </div>
-
-                <form method="POST" action="{{ route('student.profile.update') }}" enctype="multipart/form-data" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    @csrf
-                    @method('PUT')
-
-                    <div class="grid gap-5 md:grid-cols-2">
-                        <div>
-                            <label for="name" class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">Họ tên</label>
-                            <input id="name" name="name" value="{{ old('name', $currentUser->name) }}" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                        </div>
-                        <div>
-                            <label for="username" class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">Tên đăng nhập</label>
-                            <input id="username" name="username" value="{{ old('username', $currentUser->username) }}" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                        </div>
-                        <div>
-                            <label for="phone" class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">Số điện thoại</label>
-                            <input id="phone" name="phone" value="{{ old('phone', $currentUser->phone) }}" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                        </div>
-                        <div>
-                            <label for="avatar" class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">Ảnh đại diện</label>
-                            <input id="avatar" type="file" name="avatar" accept="image/*" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-slate-950 file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-white disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:file:bg-white dark:file:text-slate-950 dark:disabled:bg-slate-800">
-                        </div>
-                        <div class="md:col-span-2">
-                            <label for="bio" class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">Giới thiệu</label>
-                            <textarea id="bio" name="bio" rows="4" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">{{ old('bio', $currentUser->bio) }}</textarea>
-                        </div>
-                    </div>
-
-                    <div class="mt-6 flex justify-end">
-                        <button type="submit" @if(! $canUseStudentActions) disabled @endif class="h-11 rounded-xl bg-[#0056D2] px-6 text-sm font-bold text-white transition hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60">
-                            Lưu hồ sơ
-                        </button>
-                    </div>
-                </form>
-            </section>
         </div>
     </div>
 @else
     <div class="bg-white dark:bg-slate-950">
         <div class="flex min-h-[calc(100vh-16rem)] items-center justify-center px-4 py-12">
-            <div x-data="{ seconds: {{ session('resend_after', 0) }}, loading: false, init() { if (this.seconds > 0) setInterval(() => { if (this.seconds > 0) this.seconds-- }, 1000) } }" class="ui-card w-full max-w-2xl p-8 text-center">
-                <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
-                    <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-                </div>
+            <div
+                x-data="{
+                    seconds: {{ $resendAfter }},
+                    loading: false,
+                    code: '',
+                    init() {
+                        if (this.seconds > 0) {
+                            setInterval(() => { if (this.seconds > 0) this.seconds-- }, 1000);
+                        }
+                        this.$nextTick(() => this.$refs.codeInput?.focus());
+                    },
+                    handleInput(event) {
+                        this.code = event.target.value.replace(/\D/g, '').slice(0, 6);
+                        event.target.value = this.code;
+                    },
+                    handlePaste(event) {
+                        event.preventDefault();
+                        const pasted = (event.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+                        this.code = pasted;
+                        this.$refs.codeInput.value = pasted;
+                    }
+                }"
+                class="ui-card w-full max-w-2xl p-8"
+            >
+                <div class="text-center">
+                    <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    </div>
 
-                <div class="mx-auto mb-6 h-2 max-w-sm overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                    <div class="h-full w-2/3 rounded-full bg-emerald-500"></div>
+                    <h1 class="text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Xác thực email</h1>
+                    <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        Chúng tôi đã gửi mã gồm 6 chữ số tới <strong>{{ $maskedEmail }}</strong>.
+                        Mã có hiệu lực trong <strong>10 phút</strong>.
+                    </p>
+                    <p class="mx-auto mt-2 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+                        Sau khi xác thực, bạn sẽ được chuyển vào khu vực
+                        @if($currentUser->isAdmin())
+                            quản trị
+                        @elseif($currentUser->isInstructor())
+                            giảng viên
+                        @elseif($currentUser->isStudent())
+                            học viên
+                        @else
+                            học viên
+                        @endif
+                        tương ứng.
+                    </p>
                 </div>
-
-                <h1 class="text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Kiểm tra email của bạn</h1>
-                <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    Chúng tôi đã gửi liên kết xác thực tới <strong>{{ $currentUser->email }}</strong>. Sau khi xác thực, bạn sẽ được chuyển vào dashboard tương ứng.
-                </p>
 
                 @if(session('success'))
                     <div class="ui-alert-success mx-auto mt-6 max-w-lg">
@@ -385,11 +451,55 @@
                     </div>
                 @endif
 
-                <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                @if(session('error'))
+                    <div class="ui-alert-error mx-auto mt-6 max-w-lg">
+                        {{ session('error') }}
+                    </div>
+                @endif
+
+                @if($errors->any())
+                    <div class="ui-alert-error mx-auto mt-6 max-w-lg">
+                        <ul class="space-y-1 text-left">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                <form method="POST" action="{{ route('verification.code.verify') }}" class="mx-auto mt-8 max-w-md space-y-5" x-on:submit="loading = true">
+                    @csrf
+                    <div>
+                        <label for="verification-code" class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Mã xác thực 6 chữ số</label>
+                        <input
+                            id="verification-code"
+                            x-ref="codeInput"
+                            type="text"
+                            name="code"
+                            x-model="code"
+                            x-on:input="handleInput($event)"
+                            x-on:paste="handlePaste($event)"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            maxlength="6"
+                            pattern="[0-9]{6}"
+                            required
+                            class="ui-input w-full text-center text-2xl font-bold tracking-[0.5em]"
+                            placeholder="000000"
+                        >
+                    </div>
+
+                    <button type="submit" :disabled="loading || code.length !== 6" class="ui-button-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-show="!loading">Xác thực</span>
+                        <span x-show="loading">Đang xác thực...</span>
+                    </button>
+                </form>
+
+                <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
                     <form method="POST" action="{{ route('verification.send') }}" x-on:submit="loading = true">
                         @csrf
                         <button type="submit" :disabled="loading || seconds > 0" class="ui-button-primary">
-                            <span x-show="seconds === 0 && !loading">Gửi lại email</span>
+                            <span x-show="seconds === 0 && !loading">Gửi lại mã</span>
                             <span x-show="loading">Đang gửi...</span>
                             <span x-show="seconds > 0">Gửi lại sau <span x-text="seconds"></span>s</span>
                         </button>

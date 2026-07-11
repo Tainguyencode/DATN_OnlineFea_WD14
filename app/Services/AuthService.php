@@ -70,6 +70,7 @@ class AuthService
             'password' => $validated['password'],
             'role' => $validated['role'],
             'avatar' => $avatarPath,
+            'is_active' => true,
             'password_changed_at' => now(),
         ]);
 

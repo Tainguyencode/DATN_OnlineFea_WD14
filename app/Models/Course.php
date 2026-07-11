@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Data\CourseSubmissionCheckResult;
+use App\Enums\CourseStatus;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,11 +12,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Course extends Model
 {
+    /** @deprecated Use CourseStatus enum */
     public const STATUS_DRAFT = 'draft';
 
-    public const STATUS_SUBMITTED = 'submitted';
+    /** @deprecated Use CourseStatus::PendingReview */
+    public const STATUS_SUBMITTED = 'pending_review';
 
-    public const STATUS_NEED_REVISION = 'need_revision';
+    /** @deprecated Use CourseStatus::PendingReview */
+    public const STATUS_PENDING = 'pending_review';
+
+    public const STATUS_NEED_REVISION = 'rejected';
 
     public const STATUS_APPROVED = 'approved';
 
@@ -25,27 +31,24 @@ class Course extends Model
 
     public const STATUS_ARCHIVED = 'archived';
 
-    /** @deprecated Use STATUS_SUBMITTED */
-    public const STATUS_PENDING = 'submitted';
-
     public const STATUSES = [
-        self::STATUS_DRAFT,
-        self::STATUS_SUBMITTED,
-        self::STATUS_NEED_REVISION,
-        self::STATUS_APPROVED,
-        self::STATUS_PUBLISHED,
-        self::STATUS_REJECTED,
-        self::STATUS_ARCHIVED,
+        'draft',
+        'pending_review',
+        'approved',
+        'rejected',
+        'published',
+        'suspended',
+        'archived',
     ];
 
     public const STATUS_LABELS = [
-        self::STATUS_DRAFT => 'Nháp',
-        self::STATUS_SUBMITTED => 'Đã gửi duyệt',
-        self::STATUS_NEED_REVISION => 'Cần chỉnh sửa',
-        self::STATUS_APPROVED => 'Đã duyệt',
-        self::STATUS_PUBLISHED => 'Đã xuất bản',
-        self::STATUS_REJECTED => 'Bị từ chối',
-        self::STATUS_ARCHIVED => 'Đã ẩn',
+        'draft' => 'Nháp',
+        'pending_review' => 'Chờ duyệt',
+        'approved' => 'Đã duyệt',
+        'published' => 'Đã xuất bản',
+        'rejected' => 'Bị từ chối',
+        'suspended' => 'Tạm ngừng',
+        'archived' => 'Đã lưu trữ',
     ];
 
     public const MIN_LESSON_COUNT = 5;
@@ -54,11 +57,14 @@ class Course extends Model
 
     protected $fillable = [
         'instructor_id', 'category_id', 'title', 'slug', 'short_description',
-        'description', 'objectives', 'thumbnail', 'preview_video', 'price',
+        'description', 'objectives', 'target_audience', 'requirements',
+        'thumbnail', 'preview_video', 'price',
         'discount_price', 'sale_price', 'level', 'language', 'status', 'is_published',
         'reject_reason', 'rejection_reason', 'rating_avg', 'rating_count',
         'enrollment_count', 'duration_minutes', 'tags', 'is_featured',
-        'published_at', 'submitted_at',
+        'published_at', 'submitted_at', 'approved_at', 'suspended_at', 'submission_count',
+        'required_video_percent', 'required_lesson_percent', 'minimum_quiz_score',
+        'require_all_quizzes', 'require_all_assignments', 'certificate_enabled',
     ];
 
     protected function casts(): array
@@ -71,8 +77,13 @@ class Course extends Model
             'tags' => 'array',
             'is_featured' => 'boolean',
             'is_published' => 'boolean',
+            'require_all_quizzes' => 'boolean',
+            'require_all_assignments' => 'boolean',
+            'certificate_enabled' => 'boolean',
             'published_at' => 'datetime',
             'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'suspended_at' => 'datetime',
         ];
     }
 
@@ -123,12 +134,17 @@ class Course extends Model
 
     public function courseReviews(): HasMany
     {
-        return $this->hasMany(CourseReview::class)->orderByDesc('reviewed_at')->orderByDesc('id');
+        return $this->hasMany(CourseReview::class)->orderByDesc('submission_number');
     }
 
     public function latestCourseReview(): ?CourseReview
     {
         return $this->courseReviews()->first();
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class);
     }
 
     public function getEffectivePriceAttribute(): float
@@ -144,6 +160,16 @@ class Course extends Model
     public function isPublished(): bool
     {
         return $this->status === self::STATUS_PUBLISHED && (bool) $this->is_published;
+    }
+
+    public function isEditable(): bool
+    {
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED], true);
+    }
+
+    public function statusEnum(): CourseStatus
+    {
+        return CourseStatus::from($this->status);
     }
 
     public function isFavoritedBy(?User $user): bool
@@ -171,7 +197,6 @@ class Course extends Model
     {
         return in_array($this->status, [
             self::STATUS_DRAFT,
-            self::STATUS_NEED_REVISION,
             self::STATUS_REJECTED,
         ], true);
     }
@@ -206,5 +231,55 @@ class Course extends Model
     public function isReadyForSubmission(): bool
     {
         return $this->submissionCheck()->passes();
+    }
+
+    public function requiredVideoPercent(): int
+    {
+        return (int) ($this->required_video_percent ?? config('course.default_required_video_percent'));
+    }
+
+    public function requiredLessonPercent(): int
+    {
+        return (int) ($this->required_lesson_percent ?? config('course.default_required_lesson_percent'));
+    }
+
+    public function minimumQuizScore(): int
+    {
+        return (int) ($this->minimum_quiz_score ?? config('course.default_minimum_quiz_score'));
+    }
+
+    public function curriculumSections()
+    {
+        return $this->courseSections->isNotEmpty()
+            ? $this->courseSections
+            : $this->chapters;
+    }
+
+    public function firstLesson(): ?Lesson
+    {
+        $this->loadMissing([
+            'courseSections' => fn ($q) => $q->orderBy('sort_order'),
+            'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order'),
+            'chapters' => fn ($q) => $q->orderBy('sort_order'),
+            'chapters.lessons' => fn ($q) => $q->orderBy('sort_order'),
+        ]);
+
+        foreach ($this->curriculumSections() as $section) {
+            $lesson = $section->lessons->first();
+            if ($lesson) {
+                return $lesson;
+            }
+        }
+
+        return $this->lessons()->orderBy('sort_order')->first();
+    }
+
+    public function learningEntryUrl(): ?string
+    {
+        $lesson = $this->firstLesson();
+
+        return $lesson
+            ? route('courses.lessons.show', [$this, $lesson])
+            : null;
     }
 }

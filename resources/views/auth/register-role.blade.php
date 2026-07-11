@@ -61,6 +61,18 @@
 
         <x-auth.errors />
 
+        @if($isStudent && \App\Enums\SocialProvider::anyConfigured())
+            <x-auth.social-buttons />
+
+            <x-auth.divider>Hoặc tiếp tục bằng email</x-auth.divider>
+        @endif
+
+        @unless($isStudent)
+            <p class="mb-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                Đăng ký bằng Google hoặc Facebook chỉ tạo tài khoản học viên. Để đăng ký giảng viên, vui lòng dùng form bên dưới.
+            </p>
+        @endunless
+
         <form method="POST" action="{{ route('register.role', $role) }}" enctype="multipart/form-data" class="space-y-4" x-on:submit="loading = true">
             @csrf
             <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">

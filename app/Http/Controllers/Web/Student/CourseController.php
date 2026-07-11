@@ -13,7 +13,7 @@ class CourseController extends Controller
         abort_unless(auth()->user()->isStudent(), 403);
 
         $enrollments = Enrollment::where('user_id', auth()->id())
-            ->where('status', 'active')
+            ->withLearningAccess()
             ->with(['course.instructor:id,name,avatar', 'course.category:id,name'])
             ->orderByDesc('enrolled_at')
             ->orderByDesc('created_at')

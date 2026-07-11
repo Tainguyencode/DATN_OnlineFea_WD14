@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
+use App\Enums\CourseStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminCourseReviewRequest;
 use App\Models\ActivityLog;
@@ -14,6 +15,7 @@ use App\Models\HomepageSetting;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\CourseReviewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -91,7 +93,7 @@ class ManageController extends Controller
 
     public function pendingCourses(): View
     {
-        $courses = Course::where('status', Course::STATUS_SUBMITTED)
+        $courses = Course::whereIn('status', [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value])
             ->with([
                 'instructor:id,name,email',
                 'category:id,name',
@@ -152,7 +154,7 @@ class ManageController extends Controller
 
     public function review(Course $course): View|RedirectResponse
     {
-        if ($course->status !== Course::STATUS_SUBMITTED) {
+        if (! in_array($course->status, [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value], true)) {
             return redirect()
                 ->route('admin.courses.pending')
                 ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm tra tại trang này.');
@@ -276,43 +278,54 @@ class ManageController extends Controller
         ]);
     }
 
-    public function approve(Request $request, Course $course): RedirectResponse
+    public function approve(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        if ($course->status !== Course::STATUS_SUBMITTED) {
+        $pendingStatuses = [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value];
+
+        if (! in_array($course->status, $pendingStatuses, true)) {
             return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được duyệt.');
         }
 
-        $course->update([
-            'status' => Course::STATUS_PUBLISHED,
-            'is_published' => true,
-            'published_at' => now(),
-            'reject_reason' => null,
-            'rejection_reason' => null,
-        ]);
-        ActivityLogService::log(auth()->id(), 'approve_course', Course::class, $course->id, null, $request);
+        if ($course->status === Course::STATUS_SUBMITTED) {
+            $course->update(['status' => CourseStatus::PendingReview->value]);
+            $course->refresh();
+        }
+
+        $this->authorize('approve', $course);
+
+        $checklist = collect(config('course.admin_review_checklist', []))
+            ->mapWithKeys(fn ($label, $key) => [$key => true])
+            ->all();
+
+        $reviewService->approve($course, $request->user(), $checklist, true);
 
         return back()->with('success', "Đã duyệt khóa học \"{$course->title}\".");
     }
 
-    public function reject(Request $request, Course $course): RedirectResponse
+    public function reject(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        $request->merge([
-            'reject_reason' => $request->input('reject_reason', $request->input('reason')),
-        ]);
+        $pendingStatuses = [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value];
 
-        $validated = $request->validate(['reject_reason' => 'required|string|max:1000']);
-
-        if ($course->status !== Course::STATUS_SUBMITTED) {
+        if (! in_array($course->status, $pendingStatuses, true)) {
             return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.');
         }
 
-        $course->update([
-            'status' => Course::STATUS_REJECTED,
-            'is_published' => false,
-            'reject_reason' => $validated['reject_reason'],
-            'rejection_reason' => $validated['reject_reason'],
+        if ($course->status === Course::STATUS_SUBMITTED) {
+            $course->update(['status' => CourseStatus::PendingReview->value]);
+            $course->refresh();
+        }
+
+        $this->authorize('reject', $course);
+
+        $request->merge([
+            'comment' => $request->input('comment', $request->input('reject_reason', $request->input('reason'))),
         ]);
-        ActivityLogService::log(auth()->id(), 'reject_course', Course::class, $course->id, null, $request);
+
+        $validated = $request->validate([
+            'comment' => ['required', 'string', 'min:'.config('course.reject_reason_min_length', 10), 'max:1000'],
+        ]);
+
+        $reviewService->reject($course, $request->user(), $validated['comment']);
 
         return back()->with('success', 'Đã từ chối khóa học.');
     }
@@ -323,27 +336,25 @@ class ManageController extends Controller
      */
     public function submitReview(AdminCourseReviewRequest $request, Course $course): RedirectResponse
     {
-        if ($course->status !== Course::STATUS_SUBMITTED) {
+        if (! in_array($course->status, [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value], true)) {
             return redirect()
                 ->route('admin.courses.pending')
                 ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm duyệt.');
         }
 
-        $action  = $request->input('action');
+        $action = $request->input('action');
         $comment = $request->input('comment');
         $checklist = $request->input('checklist', []);
 
         DB::transaction(function () use ($course, $action, $comment, $checklist, $request) {
-            // 1. Lưu bản ghi review
             $courseReview = CourseReview::create([
-                'course_id'   => $course->id,
+                'course_id' => $course->id,
                 'reviewer_id' => auth()->id(),
-                'action'      => $action,
-                'comment'     => $comment ?: null,
+                'action' => $action,
+                'comment' => $comment ?: null,
                 'reviewed_at' => now(),
             ]);
 
-            // 2. Lưu từng checklist item
             foreach ($checklist as $itemKey => $data) {
                 if (! in_array($itemKey, CourseReviewItem::ADMIN_CHECKLIST_KEYS, true)) {
                     continue;
@@ -351,36 +362,31 @@ class ManageController extends Controller
 
                 CourseReviewItem::create([
                     'course_review_id' => $courseReview->id,
-                    'item_key'         => $itemKey,
-                    'status'           => $data['status'] ?? 'pass',
-                    'note'             => $data['note'] ?? null,
+                    'item_key' => $itemKey,
+                    'status' => $data['status'] ?? 'pass',
+                    'note' => $data['note'] ?? null,
                 ]);
             }
 
-            // 3. Cập nhật trạng thái khóa học
             $statusMap = [
-                CourseReview::ACTION_APPROVED      => Course::STATUS_APPROVED,
+                CourseReview::ACTION_APPROVED => Course::STATUS_APPROVED,
                 CourseReview::ACTION_NEED_REVISION => Course::STATUS_NEED_REVISION,
-                CourseReview::ACTION_REJECTED      => Course::STATUS_REJECTED,
+                CourseReview::ACTION_REJECTED => Course::STATUS_REJECTED,
             ];
 
             $newStatus = $statusMap[$action];
-
             $courseUpdate = ['status' => $newStatus];
 
             if ($action === CourseReview::ACTION_APPROVED) {
-                // Approved: xóa lý do từ chối cũ (nếu có)
-                $courseUpdate['reject_reason']    = null;
+                $courseUpdate['reject_reason'] = null;
                 $courseUpdate['rejection_reason'] = null;
             } elseif (in_array($action, [CourseReview::ACTION_NEED_REVISION, CourseReview::ACTION_REJECTED], true)) {
-                // Ghi lý do vào cột cũ để giảng viên vẫn thấy trên edit page (backward-compat)
-                $courseUpdate['reject_reason']    = $comment;
+                $courseUpdate['reject_reason'] = $comment;
                 $courseUpdate['rejection_reason'] = $comment;
             }
 
             $course->update($courseUpdate);
 
-            // 4. Activity log
             ActivityLogService::log(
                 auth()->id(),
                 "review_course_{$action}",
@@ -392,9 +398,9 @@ class ManageController extends Controller
         });
 
         $actionLabels = [
-            CourseReview::ACTION_APPROVED      => 'Đã duyệt',
+            CourseReview::ACTION_APPROVED => 'Đã duyệt',
             CourseReview::ACTION_NEED_REVISION => 'Đã yêu cầu chỉnh sửa',
-            CourseReview::ACTION_REJECTED      => 'Đã từ chối',
+            CourseReview::ACTION_REJECTED => 'Đã từ chối',
         ];
 
         $label = $actionLabels[$action] ?? 'Đã xử lý';
@@ -414,7 +420,7 @@ class ManageController extends Controller
         }
 
         $course->update([
-            'status'       => Course::STATUS_PUBLISHED,
+            'status' => Course::STATUS_PUBLISHED,
             'is_published' => true,
             'published_at' => now(),
         ]);
@@ -558,6 +564,7 @@ class ManageController extends Controller
         return [
             Course::STATUS_DRAFT => 'bg-slate-50 text-slate-700 ring-1 ring-slate-200',
             Course::STATUS_SUBMITTED => 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+            CourseStatus::PendingReview->value => 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
             Course::STATUS_NEED_REVISION => 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
             Course::STATUS_APPROVED => 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
             Course::STATUS_PUBLISHED => 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',

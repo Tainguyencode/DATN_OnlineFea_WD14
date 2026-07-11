@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
+use App\Services\EmailVerificationService;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
@@ -105,13 +107,19 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(TwoFactorCode::class);
     }
 
-    /**
-     * Relationship: User có nhiều LessonProgress records
-     * (Theo dõi tiến độ học của user cho từng lesson)
-     */
     public function lessonProgress(): HasMany
     {
         return $this->hasMany(LessonProgress::class);
+    }
+
+    public function emailVerificationCodes(): HasMany
+    {
+        return $this->hasMany(EmailVerificationCode::class);
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        app(EmailVerificationService::class)->sendCode($this);
     }
 
     public function roles(): BelongsToMany
@@ -119,11 +127,30 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Role::class);
     }
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    public function syncPrimaryRole(?string $roleSlug = null): void
+    {
+        app(\App\Services\RoleSyncService::class)->syncPrimaryRole($this, $roleSlug);
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (User $user): void {
+            if ($user->wasRecentlyCreated || $user->wasChanged('role')) {
+                $user->syncPrimaryRole();
+            }
+        });
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    public function instructorApplication(): HasOne
+    {
+        return $this->hasOne(InstructorApplication::class);
+    }
+
     protected function casts(): array
     {
         return [
@@ -143,7 +170,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isInstructor(): bool
     {
-        return in_array($this->role, ['instructor', 'admin']);
+        return in_array($this->role, ['instructor', 'admin'], true);
     }
 
     public function isStudent(): bool

@@ -3,8 +3,7 @@
 @php
     $statusStyles = [
         'draft' => 'bg-slate-100 text-slate-700 border-slate-200',
-        'submitted' => 'bg-amber-50 text-amber-700 border-amber-200',
-        'need_revision' => 'bg-orange-50 text-orange-700 border-orange-200',
+        'pending_review' => 'bg-amber-50 text-amber-700 border-amber-200',
         'approved' => 'bg-sky-50 text-sky-700 border-sky-200',
         'published' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
         'rejected' => 'bg-rose-50 text-rose-700 border-rose-200',
@@ -50,14 +49,14 @@
                         @csrf
                         <button type="submit"
                                 class="inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
-                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                            {{ in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
                         </button>
                     </form>
                 @endif
             </div>
         </div>
 
-        @if(in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
+        @if($course->status === 'rejected' && $course->rejectionReasonText())
             <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
                 <strong>Lý do từ chối:</strong> {{ $course->rejectionReasonText() }}
             </div>
@@ -75,7 +74,7 @@
         @endif
     </div>
 
-    @if(in_array($course->status, ['need_revision', 'rejected'], true))
+    @if($course->status === 'rejected')
         @include('instructor.courses.partials.ai-moderation-results', ['course' => $course])
     @endif
 
@@ -111,11 +110,12 @@
     {{-- ===== LỊCH SỬ KIỂM DUYỆT ===== --}}
     @if($courseReviews->isNotEmpty())
     @php
-        $actionBadge = [
-            \App\Models\CourseReview::ACTION_APPROVED      => ['bg-emerald-50 text-emerald-700 border-emerald-200', '✓ Đã duyệt'],
-            \App\Models\CourseReview::ACTION_NEED_REVISION => ['bg-amber-50 text-amber-700 border-amber-200',   '✎ Yêu cầu chỉnh sửa'],
-            \App\Models\CourseReview::ACTION_REJECTED      => ['bg-rose-50 text-rose-700 border-rose-200',       '✗ Từ chối'],
+        $statusBadge = [
+            \App\Enums\CourseReviewStatus::Approved->value => ['bg-emerald-50 text-emerald-700 border-emerald-200', '✓ Đã duyệt'],
+            \App\Enums\CourseReviewStatus::Rejected->value => ['bg-rose-50 text-rose-700 border-rose-200', '✗ Từ chối'],
+            \App\Enums\CourseReviewStatus::Pending->value => ['bg-amber-50 text-amber-700 border-amber-200', 'Chờ duyệt'],
         ];
+        $checklistLabels = config('course.admin_review_checklist', []);
     @endphp
 
     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -126,7 +126,7 @@
             </div>
 
             {{-- Nút Gửi duyệt lại khi status = need_revision --}}
-            @if($course->status === \App\Models\Course::STATUS_NEED_REVISION && $submissionCheck->passes())
+            @if($course->status === 'rejected' && $submissionCheck->passes())
                 <form method="POST" action="{{ route('instructor.courses.submit', $course) }}"
                       onsubmit="return confirm('Gửi duyệt lại khóa học này?')">
                     @csrf
@@ -146,8 +146,9 @@
         <div class="mt-5 space-y-6">
             @foreach($courseReviews as $review)
             @php
-                [$badgeClass, $badgeLabel] = $actionBadge[$review->action] ?? ['bg-slate-50 text-slate-700 border-slate-200', $review->action];
-                $itemsByKey = $review->items->keyBy('item_key');
+                $statusValue = $review->status instanceof \App\Enums\CourseReviewStatus ? $review->status->value : (string) $review->status;
+                [$badgeClass, $badgeLabel] = $statusBadge[$statusValue] ?? ['bg-slate-50 text-slate-700 border-slate-200', $review->statusLabel()];
+                $checklist = $review->checklist_json ?? [];
             @endphp
             <article class="overflow-hidden rounded-xl border border-slate-200">
                 {{-- Header --}}
@@ -161,7 +162,7 @@
                         </span>
                     </div>
                     <span class="text-xs text-slate-500">
-                        {{ $review->reviewed_at?->format('d/m/Y H:i') ?? '—' }}
+                        Lần {{ $review->submission_number }} · {{ $review->reviewed_at?->format('d/m/Y H:i') ?? $review->submitted_at?->format('d/m/Y H:i') ?? '—' }}
                     </span>
                 </div>
 
@@ -174,8 +175,7 @@
                     </div>
                     @endif
 
-                    {{-- Checklist --}}
-                    @if($review->items->isNotEmpty())
+                    @if(! empty($checklist))
                     <div class="px-5 py-4">
                         <p class="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Kết quả checklist</p>
                         <div class="overflow-hidden rounded-lg border border-slate-200">
@@ -184,34 +184,19 @@
                                     <tr>
                                         <th class="px-4 py-2.5">Mục kiểm tra</th>
                                         <th class="w-24 px-4 py-2.5">Kết quả</th>
-                                        <th class="px-4 py-2.5">Ghi chú</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
-                                    @foreach(\App\Models\CourseReviewItem::ADMIN_CHECKLIST_KEYS as $key)
-                                    @php
-                                        $item = $itemsByKey->get($key);
-                                        $isPass = $item && $item->status === \App\Models\CourseReviewItem::STATUS_PASS;
-                                        $isFail = $item && $item->status === \App\Models\CourseReviewItem::STATUS_FAIL;
-                                        $label  = \App\Models\CourseReviewItem::ITEM_LABELS[$key] ?? $key;
-                                    @endphp
+                                    @foreach($checklistLabels as $key => $label)
+                                    @php $passed = ! empty($checklist[$key]); @endphp
                                     <tr>
                                         <td class="px-4 py-3 font-medium text-slate-900">{{ $label }}</td>
                                         <td class="px-4 py-3">
-                                            @if($isPass)
-                                                <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                                                    ✓ PASS
-                                                </span>
-                                            @elseif($isFail)
-                                                <span class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">
-                                                    ✗ FAIL
-                                                </span>
+                                            @if($passed)
+                                                <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">✓ PASS</span>
                                             @else
-                                                <span class="text-xs text-slate-400">—</span>
+                                                <span class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">✗ FAIL</span>
                                             @endif
-                                        </td>
-                                        <td class="px-4 py-3 text-sm text-slate-600">
-                                            {{ $item?->note ?: '—' }}
                                         </td>
                                     </tr>
                                     @endforeach

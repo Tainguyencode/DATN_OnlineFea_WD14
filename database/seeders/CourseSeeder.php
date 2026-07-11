@@ -196,6 +196,83 @@ class CourseSeeder extends Seeder
             ],
         ];
 
+        $courses = array_map(function (array $course) {
+            $course['short_description'] = $course['short_description'] ?? Str::limit($course['description'], 120);
+            $course['target_audience'] = $course['target_audience'] ?? 'Sinh viên và người mới bắt đầu.';
+            $course['requirements'] = $course['requirements'] ?? 'Máy tính có kết nối internet.';
+            $course['is_published'] = ($course['status'] ?? '') === 'published';
+            $course['discount_price'] = $course['sale_price'] ?? null;
+            $course['submitted_at'] = $course['submitted_at'] ?? null;
+            $course['submission_count'] = $course['submission_count'] ?? 0;
+
+            return $course;
+        }, $courses);
+
+        // Thêm khóa học nháp và chờ duyệt
+        $courses[] = [
+            'id' => 5,
+            'instructor_id' => 2,
+            'category_id' => 1,
+            'title' => 'Node.js Backend (Nháp)',
+            'slug' => Str::slug('Node.js Backend Nháp'),
+            'short_description' => 'Khóa học Node.js đang soạn thảo.',
+            'description' => 'Nội dung đang được giảng viên biên soạn.',
+            'objectives' => 'Hiểu Node.js và Express.',
+            'target_audience' => 'Backend developers.',
+            'requirements' => 'Biết JavaScript cơ bản.',
+            'thumbnail' => 'nodejs_draft.png',
+            'preview_video' => null,
+            'level' => 'intermediate',
+            'price' => 399000,
+            'sale_price' => null,
+            'discount_price' => null,
+            'status' => 'draft',
+            'is_published' => false,
+            'rejection_reason' => null,
+            'rating_avg' => 0,
+            'rating_count' => 0,
+            'enrollment_count' => 0,
+            'duration_minutes' => 0,
+            'tags' => json_encode(['nodejs']),
+            'is_featured' => false,
+            'published_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        $courses[] = [
+            'id' => 6,
+            'instructor_id' => 3,
+            'category_id' => 2,
+            'title' => 'Figma Prototype (Chờ duyệt)',
+            'slug' => Str::slug('Figma Prototype Pending'),
+            'short_description' => 'Khóa học Figma chờ admin duyệt.',
+            'description' => 'Học thiết kế prototype tương tác với Figma từ cơ bản đến nâng cao.',
+            'objectives' => 'Tạo prototype chuyên nghiệp.',
+            'target_audience' => 'Designer và Product Owner.',
+            'requirements' => 'Tài khoản Figma.',
+            'thumbnail' => 'figma_pending.png',
+            'preview_video' => 'https://example.com/videos/figma.mp4',
+            'level' => 'beginner',
+            'price' => 299000,
+            'sale_price' => 199000,
+            'discount_price' => 199000,
+            'status' => 'pending_review',
+            'is_published' => false,
+            'submitted_at' => now()->subDays(2),
+            'submission_count' => 1,
+            'rejection_reason' => null,
+            'rating_avg' => 0,
+            'rating_count' => 0,
+            'enrollment_count' => 0,
+            'duration_minutes' => 180,
+            'tags' => json_encode(['figma', 'ui']),
+            'is_featured' => false,
+            'published_at' => null,
+            'created_at' => now()->subDays(3),
+            'updated_at' => now(),
+        ];
+
         DB::table('courses')->insert($courses);
 
         // 2. Tạo Chương học mẫu (Chapters)
