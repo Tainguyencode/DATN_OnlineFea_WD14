@@ -219,7 +219,7 @@
                                                 <div class="ai-result-area mt-4 {{ $lesson->videoModeration ? '' : 'hidden' }}">
                                                     @if($lesson->videoModeration)
                                                         @php $mod = $lesson->videoModeration; @endphp
-                                                        <div class="rounded-lg border {{ ($mod->violence || $mod->adult || $mod->weapon || $mod->copyright_risk === 'high') ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50' }} p-4 shadow-sm">
+                                                        <div class="rounded-lg border {{ $mod->hasViolations() ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50' }} p-4 shadow-sm">
                                                             <h6 class="font-bold text-slate-900 mb-2">Kết quả quét xong</h6>
                                                             <div class="flex flex-wrap gap-2 mb-3">
                                                                 <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->violence ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Bạo lực: {{ $mod->violence ? 'Có' : 'Không' }}</span>
@@ -234,27 +234,17 @@
                                                                 <p class="text-sm text-slate-700 mb-3"><span class="font-semibold">Tóm tắt:</span> {{ $mod->summary }}</p>
                                                             @endif
                                                             
-                                                            @if(is_array($mod->details) && count($mod->details) > 0)
-                                                                <div class="text-xs text-slate-600 bg-white rounded border border-slate-200 p-2 max-h-32 overflow-y-auto">
-                                                                    <p class="font-semibold mb-1">Chi tiết lỗi các khung hình:</p>
-                                                                    <ul class="list-disc pl-4">
-                                                                    @foreach($mod->details as $d)
-                                                                        @php
-                                                                            $violations = [];
-                                                                            if(!empty($d['violence'])) $violations[] = 'Bạo lực';
-                                                                            if(!empty($d['adult'])) $violations[] = 'Nội dung 18+';
-                                                                            if(!empty($d['weapon'])) $violations[] = 'Vũ khí';
-                                                                            if(!empty($d['tiktok_logo'])) $violations[] = 'TikTok';
-                                                                            if(!empty($d['youtube_logo'])) $violations[] = 'YouTube';
-                                                                            if(!empty($d['watermark'])) $violations[] = 'Watermark';
-                                                                            if(isset($d['copyright_risk']) && $d['copyright_risk'] === 'high') $violations[] = 'Nguy cơ bản quyền Cao';
-                                                                        @endphp
-                                                                        @if(count($violations) > 0)
-                                                                            <li>
-                                                                                <span class="font-bold">{{ gmdate("H:i:s", $d['timestamp'] ?? 0) }}</span>: {{ implode(', ', $violations) }}
-                                                                                @if(!empty($d['reason'])) - {{ $d['reason'] }} @endif
-                                                                            </li>
-                                                                        @endif
+                                                            @php $violatedFrames = $mod->violatedFrameDetails(); @endphp
+                                                            @if(!empty($violatedFrames))
+                                                                <div class="text-xs text-slate-600 bg-white rounded border border-slate-200 p-2 max-h-32 overflow-y-auto mt-3">
+                                                                    <p class="font-semibold mb-1 text-slate-900">Chi tiết lỗi các khung hình:</p>
+                                                                    <ul class="list-disc pl-4 space-y-1">
+                                                                    @foreach($violatedFrames as $vf)
+                                                                        <li>
+                                                                            <span class="font-bold text-slate-800">{{ $vf['timestamp'] }}</span>: 
+                                                                            <span class="text-rose-700 font-semibold">{{ implode(', ', $vf['labels']) }}</span>
+                                                                            @if(!empty($vf['reason'])) - <span class="text-slate-600">{{ $vf['reason'] }}</span> @endif
+                                                                        </li>
                                                                     @endforeach
                                                                     </ul>
                                                                 </div>
