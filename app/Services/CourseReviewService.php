@@ -33,7 +33,6 @@ class CourseReviewService
                 'submitted_at' => now(),
                 'submission_count' => $submissionNumber,
                 'reject_reason' => null,
-                'rejection_reason' => null,
             ]);
 
             $this->notifyAdmins($course, 'course_submitted', 'Khóa học chờ duyệt', "Giảng viên đã gửi khóa học \"{$course->title}\" lần {$submissionNumber}.");
@@ -66,7 +65,6 @@ class CourseReviewService
                 'is_published' => $publishImmediately,
                 'approved_at' => now(),
                 'reject_reason' => null,
-                'rejection_reason' => null,
             ];
 
             if ($publishImmediately) {
@@ -109,7 +107,6 @@ class CourseReviewService
                 'status' => CourseStatus::Rejected->value,
                 'is_published' => false,
                 'reject_reason' => $comment,
-                'rejection_reason' => $comment,
             ]);
 
             $this->notifyInstructor($course, 'course_rejected', 'Khóa học bị từ chối',

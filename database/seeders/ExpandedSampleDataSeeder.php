@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\Course;
 use App\Models\Chapter;
-use App\Models\Lesson;
+use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Lesson;
 use App\Models\LessonProgress;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class ExpandedSampleDataSeeder extends Seeder
@@ -23,9 +23,9 @@ class ExpandedSampleDataSeeder extends Seeder
         // 1. THÊM USERS (30 người)
         // ========================
         echo "\n▶ Tạo 30 users...\n";
-        
+
         $users = [];
-        
+
         // Admin & Instructors (already exist, but add more)
         $instructors = [
             ['name' => 'Nguyễn Văn A', 'email' => 'instructor.a@edu.com', 'role' => 'instructor'],
@@ -56,8 +56,8 @@ class ExpandedSampleDataSeeder extends Seeder
         for ($i = 0; $i < 20; $i++) {
             $firstName = $firstNames[array_rand($firstNames)];
             $lastName = $lastNames[$i % count($lastNames)];
-            $email = strtolower(str_replace(' ', '.', "$firstName.$lastName") . ".student" . ($i+1) . "@edu.com");
-            
+            $email = strtolower(str_replace(' ', '.', "$firstName.$lastName").'.student'.($i + 1).'@edu.com');
+
             $user = User::firstOrCreate(
                 ['email' => $email],
                 [
@@ -75,7 +75,7 @@ class ExpandedSampleDataSeeder extends Seeder
         // 2. THÊM COURSES (12 khóa học)
         // ========================
         echo "\n▶ Tạo 12 courses...\n";
-        
+
         $coursesData = [
             ['title' => 'Laravel từ Zero đến Hero', 'description' => 'Tìm hiểu Laravel từ cơ bản đến nâng cao', 'instructor_id' => $users[0]->id, 'price' => 500000],
             ['title' => 'React.js Masterclass', 'description' => 'Thành thạo React.js', 'instructor_id' => $users[1]->id, 'price' => 450000],
@@ -95,7 +95,10 @@ class ExpandedSampleDataSeeder extends Seeder
         foreach ($coursesData as $courseData) {
             $course = Course::firstOrCreate(
                 ['title' => $courseData['title']],
-                $courseData
+                [
+                    ...$courseData,
+                    'slug' => \Illuminate\Support\Str::slug($courseData['title']),
+                ]
             );
             $courses[] = $course;
         }
@@ -111,9 +114,8 @@ class ExpandedSampleDataSeeder extends Seeder
             $chaptersPerCourse = rand(3, 5);
             for ($i = 1; $i <= $chaptersPerCourse; $i++) {
                 Chapter::firstOrCreate(
-                    ['course_id' => $course->id, 'title' => "Chapter $i: " . ucfirst(\Str::random(10))],
+                    ['course_id' => $course->id, 'title' => "Chapter $i: ".ucfirst(\Str::random(10))],
                     [
-                        'description' => "Nội dung chương $i của khóa {$course->title}",
                         'sort_order' => $i,
                     ]
                 );
@@ -129,17 +131,17 @@ class ExpandedSampleDataSeeder extends Seeder
 
         $lessonCount = 0;
         $chapters = Chapter::all();
-        
+
         foreach ($chapters as $chapter) {
             $lessonsPerChapter = rand(4, 8);
             for ($i = 1; $i <= $lessonsPerChapter; $i++) {
                 $lesson = Lesson::firstOrCreate(
                     [
                         'chapter_id' => $chapter->id,
-                        'title' => "Lesson $i: " . ucfirst(\Str::random(15))
+                        'title' => "Lesson $i: ".ucfirst(\Str::random(15)),
                     ],
                     [
-                        'description' => "Bài học $i trong chương {$chapter->title}",
+                        'content' => "Bài học $i trong chương {$chapter->title}",
                         'type' => $this->randomLessonType(),
                         'duration_seconds' => rand(600, 3600),
                         'sort_order' => $i,
@@ -157,12 +159,12 @@ class ExpandedSampleDataSeeder extends Seeder
         echo "\n▶ Tạo enrollments...\n";
 
         $enrollmentCount = 0;
-        $students = $users->slice(5); // Skip admin & instructors
+        $students = collect($users)->slice(5); // Skip admin & instructors
 
         foreach ($courses as $course) {
             $enrollmentsPerCourse = rand(4, 12);
             $randomStudents = $students->random(min($enrollmentsPerCourse, count($students)));
-            
+
             foreach ($randomStudents as $student) {
                 $enrollment = Enrollment::firstOrCreate(
                     [
@@ -186,14 +188,14 @@ class ExpandedSampleDataSeeder extends Seeder
 
         $progressCount = 0;
         $lessons = Lesson::all();
-        
+
         foreach ($lessons as $lesson) {
             $course = $lesson->chapter->course;
             $enrolledStudents = Enrollment::where('course_id', $course->id)->pluck('user_id');
-            
+
             foreach ($enrolledStudents as $userId) {
                 $isCompleted = rand(1, 100) <= 60; // 60% chance of completion
-                
+
                 $progress = LessonProgress::updateOrCreate(
                     [
                         'user_id' => $userId,
@@ -215,12 +217,12 @@ class ExpandedSampleDataSeeder extends Seeder
         // 7. SUMMARY
         // ========================
         echo "\n========== HOÀN THÀNH ==========\n";
-        echo "✓ Users: " . User::count() . "\n";
-        echo "✓ Courses: " . Course::count() . "\n";
-        echo "✓ Chapters: " . Chapter::count() . "\n";
-        echo "✓ Lessons: " . Lesson::count() . "\n";
-        echo "✓ Enrollments: " . Enrollment::count() . "\n";
-        echo "✓ Lesson Progress: " . LessonProgress::count() . "\n";
+        echo '✓ Users: '.User::count()."\n";
+        echo '✓ Courses: '.Course::count()."\n";
+        echo '✓ Chapters: '.Chapter::count()."\n";
+        echo '✓ Lessons: '.Lesson::count()."\n";
+        echo '✓ Enrollments: '.Enrollment::count()."\n";
+        echo '✓ Lesson Progress: '.LessonProgress::count()."\n";
         echo "\n✨ Dữ liệu mẫu bổ sung đã được tạo thành công!\n\n";
     }
 
@@ -229,6 +231,6 @@ class ExpandedSampleDataSeeder extends Seeder
      */
     private function randomLessonType(): string
     {
-        return collect(['video', 'article', 'quiz', 'assignment', 'discussion'])->random();
+        return collect(['video', 'document', 'quiz', 'assignment'])->random();
     }
 }
