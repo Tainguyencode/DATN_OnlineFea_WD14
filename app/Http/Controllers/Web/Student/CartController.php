@@ -39,7 +39,20 @@ class CartController extends Controller
         $cart = $this->getCart()->load(['courses.instructor:id,name']);
         $total = $cart->courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
 
-        return view('student.cart.index', compact('cart', 'total'));
+        // Lấy danh sách mã giảm giá khả dụng để hiển thị trên UI
+        $activeCoupons = Coupon::where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses');
+            })
+            ->get();
+
+        return view('student.cart.index', compact('cart', 'total', 'activeCoupons'));
     }
 
     /**
@@ -121,11 +134,19 @@ class CartController extends Controller
 
         if (! empty($validated['coupon_code'])) {
             $coupon = Coupon::where('code', $validated['coupon_code'])->first();
-            if ($coupon && $coupon->isValid() && $subtotal >= $coupon->min_order_amount) {
-                $discount = $coupon->type === 'percent'
-                    ? $subtotal * ($coupon->value / 100)
-                    : min($coupon->value, $subtotal);
+            if (! $coupon || ! $coupon->isValid()) {
+                return back()->with('error', 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
             }
+            if ($coupon->isUsedByUser(auth()->id())) {
+                return back()->with('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
+            }
+            if ($subtotal < $coupon->min_order_amount) {
+                return back()->with('error', 'Đơn hàng chưa đạt giá trị tối thiểu để áp dụng mã giảm giá này.');
+            }
+            $isPercentage = $coupon->type === 'percent' || $coupon->type === 'percentage';
+            $discount = $isPercentage
+                ? $subtotal * ($coupon->value / 100)
+                : min($coupon->value, $subtotal);
         }
 
         $total = max(0, $subtotal - $discount);
@@ -232,10 +253,6 @@ class CartController extends Controller
                 ]);
             }
 
-            if ($coupon) {
-                $coupon->increment('used_count');
-            }
-
             return $order;
         });
 
@@ -243,6 +260,85 @@ class CartController extends Controller
         $paymentUrl = $paymentService->getPaymentUrl($order);
 
         return redirect($paymentUrl);
+    }
+
+    /**
+     * Áp dụng mã giảm giá và tính toán số tiền qua AJAX.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function applyCoupon(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'coupon_code' => 'required|string',
+            'course_ids' => 'required|array',
+            'course_ids.*' => 'required|integer|exists:courses,id',
+        ]);
+
+        $couponCode = $validated['coupon_code'];
+        $courseIds = $validated['course_ids'];
+
+        $coupon = Coupon::where('code', $couponCode)->first();
+
+        if (! $coupon) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mã giảm giá không tồn tại.',
+            ]);
+        }
+
+        if (! $coupon->isValid()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mã giảm giá đã hết hạn hoặc hết lượt sử dụng.',
+            ]);
+        }
+
+        if ($coupon->isUsedByUser(auth()->id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.',
+            ]);
+        }
+
+        $courses = Course::whereIn('id', $courseIds)->get();
+        if ($courses->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không tìm thấy khóa học nào để áp dụng mã giảm giá.',
+            ]);
+        }
+
+        $subtotal = $courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
+
+        if ($subtotal < $coupon->min_order_amount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Đơn học chưa đạt giá trị tối thiểu ' . number_format($coupon->min_order_amount, 0, ',', '.') . 'đ để áp dụng mã này.',
+            ]);
+        }
+
+        // Tính số tiền giảm giá
+        $isPercentage = $coupon->type === 'percent' || $coupon->type === 'percentage';
+        $discount = $isPercentage
+            ? $subtotal * ($coupon->value / 100)
+            : min($coupon->value, $subtotal);
+
+        $total = max(0, $subtotal - $discount);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Áp dụng mã giảm giá thành công!',
+            'discount_amount' => (float)$discount,
+            'new_total' => (float)$total,
+            'coupon' => [
+                'code' => $coupon->code,
+                'type' => $coupon->type,
+                'value' => (float) $coupon->value,
+                'min_order_amount' => (float) $coupon->min_order_amount,
+            ]
+        ]);
     }
 
     /**

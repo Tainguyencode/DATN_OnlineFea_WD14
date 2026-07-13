@@ -14,19 +14,14 @@ return new class extends Migration
         Schema::create('coupons', function (Blueprint $table) {
             $table->id();
             $table->string('code')->unique();
-            $table->enum('type', ['percentage', 'fixed'])->default('percentage');
+            $table->enum('type', ['percent', 'fixed'])->default('percent');
             $table->decimal('value', 12, 2)->default(0);
-             $table->unsignedInteger('used_count')
-                  ->default(0);
-
-            $table->timestamp('starts_at')
-                  ->nullable();
-
-            $table->timestamp('expires_at')
-                  ->nullable();
-
-            $table->boolean('is_active')
-                  ->default(true);
+            $table->decimal('min_order_amount', 12, 2)->default(0.00);
+            $table->unsignedInteger('max_uses')->nullable();
+            $table->unsignedInteger('used_count')->default(0);
+            $table->timestamp('starts_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

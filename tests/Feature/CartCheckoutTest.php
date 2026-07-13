@@ -330,4 +330,67 @@ class CartCheckoutTest extends TestCase
         // Khóa học thứ hai VẪN PHẢI NẰM trong giỏ hàng
         $this->assertTrue($cart->courses->contains($course2->id));
     }
+
+    /**
+     * Test học viên không thể sử dụng lại mã giảm giá đã thanh toán thành công trước đó.
+     */
+    public function test_student_cannot_reuse_coupon_already_used(): void
+    {
+        // 1. Tạo một coupon mẫu
+        $coupon = \App\Models\Coupon::create([
+            'code' => 'TESTVOUCHER',
+            'type' => 'fixed',
+            'value' => 20000,
+            'min_order_amount' => 50000,
+            'starts_at' => now()->subDay(),
+            'expires_at' => now()->addDay(),
+            'is_active' => true,
+        ]);
+
+        // 2. Tạo một đơn hàng đã thanh toán thành công sử dụng coupon này
+        Order::create([
+            'order_code' => 'ORD-OLD-PAID',
+            'user_id' => $this->student->id,
+            'coupon_id' => $coupon->id,
+            'subtotal' => 100000,
+            'discount_amount' => 20000,
+            'total_amount' => 80000,
+            'status' => 'paid',
+            'payment_method' => 'bank_transfer',
+            'items' => [
+                [
+                    'course_id' => $this->course->id,
+                    'title' => $this->course->title,
+                    'price' => 100000,
+                ]
+            ],
+        ]);
+
+        // 3. Thêm khóa học vào giỏ hàng và thử áp dụng lại coupon vừa sử dụng
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach($this->course->id);
+
+        // Thử áp dụng bằng AJAX (applyCoupon)
+        $responseAjax = $this->actingAs($this->student)
+            ->post(route('student.cart.coupon.apply'), [
+                'coupon_code' => 'TESTVOUCHER',
+                'course_ids' => [$this->course->id],
+            ]);
+
+        $responseAjax->assertJson([
+            'success' => false,
+            'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.',
+        ]);
+
+        // Thử thực hiện checkout với mã giảm giá đó
+        $responseCheckout = $this->actingAs($this->student)
+            ->post(route('student.cart.checkout'), [
+                'payment_method' => 'bank_transfer',
+                'coupon_code' => 'TESTVOUCHER',
+                'course_ids' => [$this->course->id],
+            ]);
+
+        $responseCheckout->assertRedirect();
+        $responseCheckout->assertSessionHas('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
+    }
 }

@@ -42,6 +42,10 @@ class PaymentController extends Controller
                 return $this->error('Mã giảm giá không hợp lệ hoặc đã hết hạn', 422);
             }
 
+            if ($coupon->isUsedByUser($request->user()->id)) {
+                return $this->error('Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó', 422);
+            }
+
             if ($subtotal < $coupon->min_order_amount) {
                 return $this->error('Đơn hàng chưa đạt giá trị tối thiểu', 422);
             }
@@ -159,6 +163,10 @@ class PaymentController extends Controller
 
         if (! $coupon || ! $coupon->isValid()) {
             return $this->error('Mã giảm giá không hợp lệ', 422);
+        }
+
+        if ($coupon->isUsedByUser($request->user()->id)) {
+            return $this->error('Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó', 422);
         }
 
         if ($validated['subtotal'] < $coupon->min_order_amount) {

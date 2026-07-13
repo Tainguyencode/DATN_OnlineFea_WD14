@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\UserController;
+use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\CourseController;
@@ -133,6 +134,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
+    Route::post('/cart/coupon/apply', [CartController::class, 'applyCoupon'])->name('cart.coupon.apply');
     Route::get('/checkout/{order_code}/pay', [CartController::class, 'showPaymentPage'])->name('checkout.pay');
     Route::get('/checkout/mock-gateway/{order_code}', [CartController::class, 'mockGateway'])->name('checkout.mock_gateway');
     Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->name('checkout.simulate');
@@ -211,6 +213,8 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])->name('categories.update');
     Route::post('/categories/{category}/toggle-status', [AdminCategoryController::class, 'toggleStatus'])->name('categories.toggle-status');
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
+    Route::resource('coupons', AdminCouponController::class)->except(['show']);
+    Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
     Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/course-reviews', [CourseReviewController::class, 'index'])->name('course-reviews.index');
     Route::get('/course-reviews/{course}', [CourseReviewController::class, 'show'])->name('course-reviews.show');
