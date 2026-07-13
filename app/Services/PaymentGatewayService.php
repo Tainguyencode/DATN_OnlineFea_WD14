@@ -80,6 +80,11 @@ class PaymentGatewayService
             // 4. Xóa các khóa học đã thanh toán thành công khỏi giỏ hàng
             $this->clearCart($order);
 
+            // 5. Tăng lượt sử dụng mã giảm giá nếu có
+            if ($order->coupon) {
+                $order->coupon->increment('used_count');
+            }
+
             return true;
         } else {
             // Trường hợp thanh toán thất bại hoặc người dùng hủy giao dịch
