@@ -30,3 +30,6 @@
 ### Commit 10: fix: xu ly cac rang buoc khoa ngoai va validation form (2026-07-11 16:45:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 11: refactor: chuan hoa cau truc thu muc va dinh dang ma nguon du an (2026-07-13 09:45:10 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
