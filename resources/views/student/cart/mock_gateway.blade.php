@@ -100,7 +100,7 @@
                             @csrf
                             <input type="hidden" name="status" value="success">
                             <button type="submit" class="w-full text-white bg-emerald-600 hover:bg-emerald-700 font-bold py-2.5 rounded-xl transition duration-150 shadow-sm text-center cursor-pointer">
-                                Giả lập Thanh toán thành công
+                                Thanh toán thành công
                             </button>
                         </form>
 
@@ -108,7 +108,7 @@
                             @csrf
                             <input type="hidden" name="status" value="failed">
                             <button type="submit" class="w-full text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 font-bold py-2.5 rounded-xl transition duration-150 shadow-sm text-center cursor-pointer">
-                                Giả lập Giao dịch thất bại
+                                Thanh toán thất bại
                             </button>
                         </form>
                     </div>
@@ -218,7 +218,7 @@
                         @csrf
                         <input type="hidden" name="status" value="success">
                         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-6 rounded-lg transition duration-150 shadow-sm">
-                            Giả lập Thanh toán thành công
+                            Thanh toán thành công
                         </button>
                     </form>
 
@@ -227,7 +227,7 @@
                         @csrf
                         <input type="hidden" name="status" value="failed">
                         <button type="submit" class="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 px-6 rounded-lg transition duration-150 shadow-sm">
-                            Giả lập Thanh toán thất bại
+                            Thanh toán thất bại
                         </button>
                     </form>
                 </div>
