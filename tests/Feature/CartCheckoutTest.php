@@ -142,6 +142,7 @@ class CartCheckoutTest extends TestCase
         $response = $this->actingAs($this->student)
             ->post(route('student.cart.checkout'), [
                 'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
             ]);
 
         // Sẽ chuyển hướng đến trang thanh toán
@@ -171,6 +172,7 @@ class CartCheckoutTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('student.cart.checkout'), [
                 'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
             ]);
 
         $order = Order::where('user_id', $this->student->id)->first();
@@ -214,6 +216,7 @@ class CartCheckoutTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('student.cart.checkout'), [
                 'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
             ]);
 
         $order = Order::where('user_id', $this->student->id)->first();
@@ -223,7 +226,7 @@ class CartCheckoutTest extends TestCase
                 'status' => 'failed',
             ]);
 
-        $response->assertRedirect(route('student.dashboard'));
+        $response->assertRedirect(route('student.checkout.failed', $order->order_code));
         
         $order->refresh();
         $this->assertEquals('failed', $order->status);
@@ -236,5 +239,158 @@ class CartCheckoutTest extends TestCase
             ->where('course_id', $this->course->id)
             ->first();
         $this->assertNull($enrollment);
+    }
+
+    /**
+     * Test học viên có thể xem trang thanh toán thất bại.
+     */
+    public function test_student_can_view_failed_page(): void
+    {
+        // Tạo đơn hàng ở trạng thái failed
+        $order = Order::create([
+            'order_code' => 'ORD-FAILED',
+            'user_id' => $this->student->id,
+            'subtotal' => 100000,
+            'discount_amount' => 0,
+            'total_amount' => 100000,
+            'status' => 'failed',
+            'payment_method' => 'bank_transfer',
+            'items' => [
+                [
+                    'course_id' => $this->course->id,
+                    'title' => $this->course->title,
+                    'price' => 100000,
+                ]
+            ],
+        ]);
+
+        $response = $this->actingAs($this->student)
+            ->get(route('student.checkout.failed', $order->order_code));
+
+        $response->assertStatus(200);
+        $response->assertSee('Thanh toán không thành công!');
+        $response->assertSee($order->order_code);
+    }
+
+    /**
+     * Test học viên tích chọn một số khóa học để thanh toán, khóa học còn lại giữ nguyên trong giỏ.
+     */
+    public function test_student_can_checkout_partial_cart_items(): void
+    {
+        // Tạo thêm khóa học thứ hai
+        $course2 = Course::create([
+            'instructor_id' => $this->instructor->id,
+            'category_id' => $this->category->id,
+            'title' => 'Lập trình Vue.js',
+            'slug' => 'lap-trinh-vue-js',
+            'short_description' => 'Mô tả ngắn Vue',
+            'description' => 'Mô tả chi tiết Vue',
+            'price' => 150000,
+            'status' => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+        ]);
+
+        // Thêm cả 2 khóa học vào giỏ hàng
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach([$this->course->id, $course2->id]);
+
+        // Học viên tiến hành checkout chỉ tích chọn khóa học thứ nhất
+        $response = $this->actingAs($this->student)
+            ->post(route('student.cart.checkout'), [
+                'payment_method' => 'bank_transfer',
+                'course_ids' => [$this->course->id],
+            ]);
+
+        $order = Order::where('user_id', $this->student->id)->first();
+        $this->assertNotNull($order);
+        $this->assertEquals(100000, $order->total_amount); // Chỉ tính tiền khóa học thứ nhất
+
+        // Giả lập thanh toán thành công
+        $this->actingAs($this->student)
+            ->post(route('student.checkout.simulate', $order->order_code), [
+                'status' => 'success',
+            ]);
+
+        // Khóa học thứ nhất đã được ghi danh
+        $enrollment = Enrollment::where('user_id', $this->student->id)
+            ->where('course_id', $this->course->id)
+            ->first();
+        $this->assertNotNull($enrollment);
+
+        // Khóa học thứ hai KHÔNG được ghi danh
+        $enrollment2 = Enrollment::where('user_id', $this->student->id)
+            ->where('course_id', $course2->id)
+            ->first();
+        $this->assertNull($enrollment2);
+
+        // Khóa học thứ nhất phải biến mất khỏi giỏ hàng
+        $cart->refresh();
+        $this->assertFalse($cart->courses->contains($this->course->id));
+
+        // Khóa học thứ hai VẪN PHẢI NẰM trong giỏ hàng
+        $this->assertTrue($cart->courses->contains($course2->id));
+    }
+
+    /**
+     * Test học viên không thể sử dụng lại mã giảm giá đã thanh toán thành công trước đó.
+     */
+    public function test_student_cannot_reuse_coupon_already_used(): void
+    {
+        // 1. Tạo một coupon mẫu
+        $coupon = \App\Models\Coupon::create([
+            'code' => 'TESTVOUCHER',
+            'type' => 'fixed',
+            'value' => 20000,
+            'min_order_amount' => 50000,
+            'starts_at' => now()->subDay(),
+            'expires_at' => now()->addDay(),
+            'is_active' => true,
+        ]);
+
+        // 2. Tạo một đơn hàng đã thanh toán thành công sử dụng coupon này
+        Order::create([
+            'order_code' => 'ORD-OLD-PAID',
+            'user_id' => $this->student->id,
+            'coupon_id' => $coupon->id,
+            'subtotal' => 100000,
+            'discount_amount' => 20000,
+            'total_amount' => 80000,
+            'status' => 'paid',
+            'payment_method' => 'bank_transfer',
+            'items' => [
+                [
+                    'course_id' => $this->course->id,
+                    'title' => $this->course->title,
+                    'price' => 100000,
+                ]
+            ],
+        ]);
+
+        // 3. Thêm khóa học vào giỏ hàng và thử áp dụng lại coupon vừa sử dụng
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach($this->course->id);
+
+        // Thử áp dụng bằng AJAX (applyCoupon)
+        $responseAjax = $this->actingAs($this->student)
+            ->post(route('student.cart.coupon.apply'), [
+                'coupon_code' => 'TESTVOUCHER',
+                'course_ids' => [$this->course->id],
+            ]);
+
+        $responseAjax->assertJson([
+            'success' => false,
+            'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.',
+        ]);
+
+        // Thử thực hiện checkout với mã giảm giá đó
+        $responseCheckout = $this->actingAs($this->student)
+            ->post(route('student.cart.checkout'), [
+                'payment_method' => 'bank_transfer',
+                'coupon_code' => 'TESTVOUCHER',
+                'course_ids' => [$this->course->id],
+            ]);
+
+        $responseCheckout->assertRedirect();
+        $responseCheckout->assertSessionHas('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
     }
 }

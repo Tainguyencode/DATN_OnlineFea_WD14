@@ -22,6 +22,8 @@
             password: '',
             emailMessage: '',
             emailOk: null,
+            phoneMessage: '',
+            phoneOk: null,
             availabilityUrl: @js(route('auth.availability')),
             get strength() {
                 let score = 0;
@@ -32,7 +34,8 @@
                 return score;
             },
             async check(field, value) {
-                if (!value || value.length < 3) return;
+                const minLength = field === 'phone' ? 8 : 3;
+                if (!value || value.length < minLength) return;
                 const response = await fetch(`${this.availabilityUrl}?field=${field}&value=${encodeURIComponent(value)}`, { headers: { 'Accept': 'application/json' }});
                 const data = await response.json();
                 this[`${field}Ok`] = data.available;
@@ -119,7 +122,12 @@
                 name="phone"
                 :value="old('phone')"
                 placeholder="0912345678"
-            />
+                x-on:input.debounce.500ms="check('phone', $event.target.value)"
+            >
+                <x-slot:hint>
+                    <p x-show="phoneMessage" x-text="phoneMessage" class="text-xs font-semibold" :class="phoneOk ? 'text-emerald-600' : 'text-red-600'"></p>
+                </x-slot:hint>
+            </x-auth.input>
 
             <x-auth.input
                 label="Mật khẩu"

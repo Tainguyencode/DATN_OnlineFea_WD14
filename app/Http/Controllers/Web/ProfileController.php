@@ -56,7 +56,7 @@ class ProfileController extends Controller
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', 'unique:users,username,'.$user->id],
-            'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/'],
+            'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/', 'unique:users,phone,'.$user->id],
             'bio' => ['nullable', 'string', 'max:1000'],
         ]);
 
