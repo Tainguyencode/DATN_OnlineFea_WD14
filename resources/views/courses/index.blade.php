@@ -17,6 +17,7 @@
         '' => 'Tất cả đánh giá',
         '4.5' => '★ 4.5 sao trở lên',
         '4.0' => '★ 4.0 sao trở lên',
+        '3.5' => '★ 3.5 sao trở lên',
         '3.0' => '★ 3.0 sao trở lên',
     ];
     $categoryCount = $categories->sum(fn ($parent) => $parent->children->count());
