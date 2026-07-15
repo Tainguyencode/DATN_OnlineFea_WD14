@@ -9,7 +9,7 @@
         data-quiz-player
         data-quiz='@json($quizContext)'
     >
-        <div data-quiz-intro class="mx-auto flex h-full max-w-2xl flex-col justify-center text-white">
+        <div data-quiz-intro class="mx-auto flex min-h-[280px] max-w-2xl flex-col justify-center py-4 text-white">
             <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">Quiz</p>
             <h2 class="mt-2 text-2xl font-bold">{{ $quizContext['title'] }}</h2>
             @if($quizContext['description'])
@@ -48,7 +48,7 @@
             @endif
         </div>
 
-        <div data-quiz-active class="mx-auto hidden max-w-2xl text-white" hidden>
+        <div data-quiz-active class="mx-auto max-w-2xl text-white" hidden>
             <div class="mb-4 flex items-center justify-between gap-3">
                 <p class="text-sm font-semibold" data-quiz-progress-label>Câu 1 / 1</p>
                 <p class="text-sm font-semibold text-violet-300" data-quiz-timer hidden></p>
@@ -63,6 +63,6 @@
             </div>
         </div>
 
-        <div data-quiz-result class="mx-auto hidden max-w-2xl text-white" hidden></div>
+        <div data-quiz-result class="mx-auto max-w-2xl text-white" hidden></div>
     </div>
 @endif
