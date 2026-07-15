@@ -25,8 +25,12 @@ class QuizController extends Controller
         $lesson->loadMissing(['section:id,course_id,title', 'chapter:id,course_id,title', 'quiz.questions.options']);
         $quiz = $this->activeQuiz($lesson);
         $isEnrolled = $this->isEnrolled($course);
+        $canBypass = auth()->check() && (
+            auth()->user()->isAdmin() || 
+            (auth()->user()->isInstructor() && $course->isOwnedBy(auth()->user()))
+        );
 
-        abort_unless($isEnrolled || $lesson->is_preview, 403);
+        abort_unless($isEnrolled || $lesson->is_preview || $canBypass, 403);
 
         $attemptsCount = auth()->check()
             ? $quiz->attempts()->where('user_id', auth()->id())->count()
