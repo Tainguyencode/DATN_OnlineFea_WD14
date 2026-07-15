@@ -569,6 +569,8 @@ class CourseController extends Controller
         $search = trim((string) $request->query('search'));
         $level = $request->query('level');
         $pricing = $request->query('pricing');
+        $minPrice = $request->filled('min_price') ? (float) $request->query('min_price') : null;
+        $maxPrice = $request->filled('max_price') ? (float) $request->query('max_price') : null;
         $rating = $request->query('rating');
         $selectedCategory ??= $this->resolveCategoryFilter($request->query('category'));
 
@@ -597,9 +599,14 @@ class CourseController extends Controller
             ->when(in_array($level, ['beginner', 'intermediate', 'advanced'], true), fn ($query) => $query->where('level', $level))
             ->when($pricing === 'free', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= 0'))
             ->when($pricing === 'paid', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0'))
-            ->when($pricing === 'under_200k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0 AND COALESCE(discount_price, sale_price, price) <= 200000'))
+            ->when(in_array($pricing, ['0_200k', 'under_200k'], true), fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 0 AND COALESCE(discount_price, sale_price, price) <= 200000'))
             ->when($pricing === '200k_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 200000 AND COALESCE(discount_price, sale_price, price) <= 500000'))
-            ->when($pricing === 'above_500k', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 500000'))
+            ->when(in_array($pricing, ['500k_1tr', '500k_1000k', 'above_500k'], true), fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 500000 AND COALESCE(discount_price, sale_price, price) <= 1000000'))
+            ->when(in_array($pricing, ['1tr_2tr', '1000k_2000k'], true), fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 1000000 AND COALESCE(discount_price, sale_price, price) <= 2000000'))
+            ->when(in_array($pricing, ['2tr_5tr', '2000k_5000k'], true), fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= 2000000 AND COALESCE(discount_price, sale_price, price) <= 5000000'))
+            ->when($pricing === 'above_2tr', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 2000000'))
+            ->when($minPrice !== null, fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= ?', [$minPrice]))
+            ->when($maxPrice !== null, fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= ?', [$maxPrice]))
             ->when(is_numeric($rating), fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
             ->orderByDesc('published_at')
             ->orderByDesc('created_at')
@@ -607,7 +614,7 @@ class CourseController extends Controller
             ->withQueryString();
 
         $showCourseOverview = ! $selectedCategory
-            && ! $request->hasAny(['search', 'category', 'level', 'pricing', 'rating', 'view']);
+            && ! $request->hasAny(['search', 'category', 'level', 'pricing', 'min_price', 'max_price', 'rating', 'view']);
         $allCoursesPreview = collect();
         $paidCoursesPreview = collect();
         $freeCoursesPreview = collect();
@@ -660,6 +667,8 @@ class CourseController extends Controller
             'selectedCategory',
             'level',
             'pricing',
+            'minPrice',
+            'maxPrice',
             'rating',
             'showCourseOverview',
             'allCoursesPreview',
