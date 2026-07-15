@@ -249,3 +249,9 @@ Route::get('/dev/login-as-admin', function () {
     return redirect()->route('admin.dashboard');
 })->name('dev.login-as-admin');
 
+Route::get('/dev/login-as-student', function () {
+    auth()->login(\App\Models\User::where('email', 'leanhtuan291111@gmail.com')->first() ?? \App\Models\User::where('role', 'student')->first());
+    return redirect()->route('dashboard');
+})->name('dev.login-as-student');
+
+
