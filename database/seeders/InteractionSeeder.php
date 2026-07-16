@@ -40,13 +40,13 @@ class InteractionSeeder extends Seeder
         $cartItems = [
             [
                 'cart_id' => 1,
-                'course_id' => 3, // Thêm khóa UI/UX vào giỏ hàng của Trần Thị Học
+                'course_id' => 1, // Thêm khóa Laravel vào giỏ hàng của Trần Thị Học
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
             [
                 'cart_id' => 2,
-                'course_id' => 4, // Thêm khóa Python vào giỏ hàng của Lê Văn Học
+                'course_id' => 2, // Thêm khóa React vào giỏ hàng của Lê Văn Học
                 'created_at' => now(),
                 'updated_at' => now(),
             ]
@@ -58,7 +58,7 @@ class InteractionSeeder extends Seeder
         $wishlists = [
             [
                 'user_id' => 4,
-                'course_id' => 4, // Trần Thị Học thích khóa Python
+                'course_id' => 1, // Trần Thị Học thích khóa Laravel
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
