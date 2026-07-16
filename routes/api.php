@@ -5,11 +5,10 @@ use Illuminate\Support\Facades\Route;
 
 /**
  * API Routes
- * 
+ *
  * Tất cả routes trong file này sẽ có prefix: /api
  * Xem app/Http/Kernel.php hoặc routes/web.php để biết cách kích hoạt
  */
-
 Route::middleware('auth:sanctum')->group(function () {
     // ============================================
     // LEARNING PROGRESS ROUTES
@@ -18,7 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /**
      * POST /api/lesson/{id}/complete
      * Đánh dấu lesson là hoàn thành
-     * 
+     *
      * Body:
      * {
      *   "watched_seconds": 1200 (optional)
@@ -30,7 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /**
      * GET /api/course/{id}/progress
      * Lấy tiến độ học của user cho một khóa học
-     * 
+     *
      * Response:
      * {
      *   "success": true,
@@ -65,7 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /**
      * POST /api/lesson/{id}/watch
      * Cập nhật số giây xem video (gọi định kỳ)
-     * 
+     *
      * Body:
      * {
      *   "watched_seconds": 600

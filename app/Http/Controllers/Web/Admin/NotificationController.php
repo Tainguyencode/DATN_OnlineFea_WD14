@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SendNotificationRequest;
 use App\Models\Course;
 use App\Models\PushNotification;
+use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
@@ -29,8 +30,8 @@ class NotificationController extends Controller
             'courses' => Course::query()->orderBy('title')->get(['id', 'title']),
             'recentBroadcasts' => $recentBroadcasts,
             'stats' => [
-                'students' => \App\Models\User::where('role', 'student')->where('is_active', true)->count(),
-                'instructors' => \App\Models\User::where('role', 'instructor')->where('is_active', true)->count(),
+                'students' => User::where('role', 'student')->where('is_active', true)->count(),
+                'instructors' => User::where('role', 'instructor')->where('is_active', true)->count(),
             ],
         ]);
     }

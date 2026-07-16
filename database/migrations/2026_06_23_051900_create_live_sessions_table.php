@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('live_sessions', function (Blueprint $table) {
             $table->id();
-             $table->foreignId('course_id')
+            $table->foreignId('course_id')
                 ->constrained('courses')
                 ->cascadeOnDelete();
 
@@ -37,7 +37,7 @@ return new class extends Migration
                 'scheduled',
                 'live',
                 'ended',
-                'cancelled'
+                'cancelled',
             ])->default('scheduled');
             $table->timestamps();
         });

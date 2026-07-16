@@ -157,8 +157,9 @@
                                             <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>
                                         @endif
                                         @if($lesson->type === 'video')
-                                            <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $lesson->video_path ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
-                                                {{ $lesson->video_path ? 'Đã có video' : 'Chưa có video' }}
+                                            @php($hasVideoContent = filled($lesson->video_path) || filled($lesson->video_url))
+                                            <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $hasVideoContent ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
+                                                {{ $hasVideoContent ? 'Đã có video' : 'Chưa có video' }}
                                             </span>
                                         @endif
                                     </div>
@@ -169,14 +170,14 @@
                                         @if($lesson->type === 'video' && $lesson->video_path)
                                             <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($lesson->video_path) }}" target="_blank" class="font-semibold text-emerald-600 hover:underline">Video file</a>
                                         @endif
-                                        @if($lesson->video_url)
+                                        @if($lesson->type === 'video' && $lesson->video_url)
                                             <a href="{{ $lesson->video_url }}" target="_blank" class="font-semibold text-indigo-600 hover:underline">Video URL</a>
                                         @endif
-                                        @if($lesson->document_file)
+                                        @if(in_array($lesson->type, ['document', 'assignment'], true) && $lesson->document_file)
                                             <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="font-semibold text-sky-600 hover:underline">Tài liệu</a>
                                         @endif
                                     </div>
-                                    @if($lesson->content)
+                                    @if($lesson->content && $lesson->type !== 'quiz')
                                         <p class="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{{ $lesson->content }}</p>
                                     @endif
                                 </div>
@@ -185,7 +186,7 @@
                                     @if($lesson->type === 'quiz')
                                         <a href="{{ route('instructor.courses.lessons.quiz.show', [$course, $lesson]) }}"
                                            class="inline-flex min-h-10 items-center justify-center rounded-lg border border-violet-200 px-4 py-2 text-sm font-bold text-violet-700 transition-colors duration-200 hover:bg-violet-50 cursor-pointer">
-                                            Quan ly cau hoi
+                                            Quản lý câu hỏi
                                         </a>
                                     @endif
                                     <details {{ $errors->hasBag('updateLesson_'.$lesson->id) ? 'open' : '' }}>

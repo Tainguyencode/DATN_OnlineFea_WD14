@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Services\EmailVerificationService;
-use App\Notifications\VerifyEmailNotification;
+use App\Services\RoleSyncService;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -57,6 +57,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function wishlists(): HasMany
     {
         return $this->hasMany(Wishlist::class);
+    }
+
+    public function recentlyViewedCourses(): HasMany
+    {
+        return $this->hasMany(RecentlyViewedCourse::class);
     }
 
     public function favoriteCourses(): BelongsToMany
@@ -130,7 +135,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function syncPrimaryRole(?string $roleSlug = null): void
     {
-        app(\App\Services\RoleSyncService::class)->syncPrimaryRole($this, $roleSlug);
+        app(RoleSyncService::class)->syncPrimaryRole($this, $roleSlug);
     }
 
     protected static function booted(): void

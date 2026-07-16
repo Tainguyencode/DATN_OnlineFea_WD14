@@ -51,7 +51,7 @@ return new class extends Migration
             Schema::table('lesson_progress', function (Blueprint $table) {
                 $table->unique(['user_id', 'lesson_id'], 'lesson_progress_user_id_lesson_id_unique');
             });
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Index may already exist.
         }
     }
