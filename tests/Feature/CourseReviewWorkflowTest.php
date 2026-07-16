@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\CourseReviewService;
 use App\Services\CourseValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CourseReviewWorkflowTest extends TestCase
@@ -96,7 +97,7 @@ class CourseReviewWorkflowTest extends TestCase
         $course = $this->makeSubmittableCourse($instructor);
         app(CourseReviewService::class)->submitForReview($course, $instructor);
 
-        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->expectException(HttpException::class);
         app(CourseReviewService::class)->reject($course->fresh(), $admin, 'short');
     }
 

@@ -1,4 +1,7 @@
 <?php
+
+use Illuminate\Support\Facades\Http;
+
 require __DIR__.'/vendor/autoload.php';
 $app = require_once __DIR__.'/bootstrap/app.php';
 $app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
@@ -10,16 +13,16 @@ $models = [
 ];
 
 foreach ($models as $model) {
-    $response = Illuminate\Support\Facades\Http::withHeaders(['Authorization' => "Bearer $key"])
+    $response = Http::withHeaders(['Authorization' => "Bearer $key"])
         ->post('https://openrouter.ai/api/v1/chat/completions', [
             'model' => $model,
             'messages' => [['role' => 'user', 'content' => 'Hello']],
-            'max_tokens' => 200
+            'max_tokens' => 200,
         ]);
-        
-    echo "Model: $model -> Status: " . $response->status() . "\n";
+
+    echo "Model: $model -> Status: ".$response->status()."\n";
     if ($response->failed()) {
-        echo $response->body() . "\n\n";
+        echo $response->body()."\n\n";
     } else {
         echo "SUCCESS!\n\n";
         break; // Stop on first success

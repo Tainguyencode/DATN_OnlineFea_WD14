@@ -2,13 +2,14 @@
 
 namespace App\Services;
 
+use FFMpeg\Coordinate\TimeCode;
 use FFMpeg\FFMpeg;
 use FFMpeg\FFProbe;
-use FFMpeg\Coordinate\TimeCode;
 
 class VideoFrameExtractor
 {
     private ?string $ffmpegBin;
+
     private ?string $ffprobeBin;
 
     public function __construct()
@@ -40,9 +41,9 @@ class VideoFrameExtractor
         $video = $ffmpeg->open($videoPath);
 
         // 3. Tạo thư mục output — dùng DIRECTORY_SEPARATOR cho Windows
-        $outputDir = storage_path('app' . DIRECTORY_SEPARATOR . 'temp_frames');
+        $outputDir = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames');
         if ($lessonId) {
-            $outputDir .= DIRECTORY_SEPARATOR . 'lesson_' . $lessonId;
+            $outputDir .= DIRECTORY_SEPARATOR.'lesson_'.$lessonId;
         }
 
         if (! is_dir($outputDir)) {
@@ -57,7 +58,7 @@ class VideoFrameExtractor
             $second = min($i, $duration - 1);
 
             // Dùng DIRECTORY_SEPARATOR để tránh mixed slash trên Windows
-            $file = $outputDir . DIRECTORY_SEPARATOR . "frame_{$i}.jpg";
+            $file = $outputDir.DIRECTORY_SEPARATOR."frame_{$i}.jpg";
 
             $video
                 ->frame(TimeCode::fromSeconds($second))

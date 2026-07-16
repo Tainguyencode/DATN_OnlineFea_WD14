@@ -21,22 +21,22 @@ class AiModerationController extends Controller
             return response()->json(['error' => 'Bài học này không có video hợp lệ.'], 400);
         }
 
-        $videoPath = storage_path('app/public/' . $lesson->video_path);
-        
-        if (!file_exists($videoPath)) {
+        $videoPath = storage_path('app/public/'.$lesson->video_path);
+
+        if (! file_exists($videoPath)) {
             return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
         }
 
         try {
             // Cắt frame mỗi 30s, truyền vào lesson_id để lưu riêng thư mục
             $frames = $extractor->extract($videoPath, 30, $lesson->id);
-            
+
             return response()->json([
                 'frames' => $frames,
-                'total' => count($frames)
+                'total' => count($frames),
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Lỗi khi cắt frame: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Lỗi khi cắt frame: '.$e->getMessage()], 500);
         }
     }
 
@@ -47,20 +47,20 @@ class AiModerationController extends Controller
     {
         $request->validate([
             'frame_path' => 'required|string',
-            'timestamp' => 'required|numeric'
+            'timestamp' => 'required|numeric',
         ]);
 
         $framePath = $request->input('frame_path');
         $timestamp = $request->input('timestamp');
 
-        if (!file_exists($framePath)) {
+        if (! file_exists($framePath)) {
             return response()->json(['error' => 'Frame không tồn tại.'], 404);
         }
 
         $result = $gemini->analyzeImage($framePath);
 
         // Gắn thêm thông tin thời điểm để front-end dễ gom
-        if (!isset($result['error'])) {
+        if (! isset($result['error'])) {
             $result['timestamp'] = $timestamp;
             $result['frame_path'] = $framePath;
         }
@@ -91,7 +91,7 @@ class AiModerationController extends Controller
         $tiktok_logo = false;
         $youtube_logo = false;
         $watermark = false;
-        
+
         $copyrightRisk = 'low';
         $summary = '';
         $maxRiskValue = 0; // low=0, medium=1, high=2
@@ -99,17 +99,29 @@ class AiModerationController extends Controller
         $riskLevels = ['low' => 0, 'medium' => 1, 'high' => 2];
 
         foreach ($results as $result) {
-            if (!empty($result['violence'])) $violence = true;
-            if (!empty($result['adult'])) $adult = true;
-            if (!empty($result['weapon'])) $weapon = true;
-            if (!empty($result['tiktok_logo'])) $tiktok_logo = true;
-            if (!empty($result['youtube_logo'])) $youtube_logo = true;
-            if (!empty($result['watermark'])) $watermark = true;
+            if (! empty($result['violence'])) {
+                $violence = true;
+            }
+            if (! empty($result['adult'])) {
+                $adult = true;
+            }
+            if (! empty($result['weapon'])) {
+                $weapon = true;
+            }
+            if (! empty($result['tiktok_logo'])) {
+                $tiktok_logo = true;
+            }
+            if (! empty($result['youtube_logo'])) {
+                $youtube_logo = true;
+            }
+            if (! empty($result['watermark'])) {
+                $watermark = true;
+            }
 
             // Xử lý bản quyền
             $currentRiskStr = strtolower($result['copyright_risk'] ?? 'low');
             $currentRiskValue = $riskLevels[$currentRiskStr] ?? 0;
-            
+
             if ($currentRiskValue > $maxRiskValue) {
                 $maxRiskValue = $currentRiskValue;
                 $copyrightRisk = $currentRiskStr;
@@ -136,14 +148,14 @@ class AiModerationController extends Controller
         );
 
         // Xóa thư mục chứa frame của bài học này
-        $lessonDir = storage_path('app/temp_frames/lesson_' . $lesson->id);
+        $lessonDir = storage_path('app/temp_frames/lesson_'.$lesson->id);
         if (File::exists($lessonDir)) {
             File::deleteDirectory($lessonDir);
         }
 
         return response()->json([
             'success' => true,
-            'moderation' => $moderation
+            'moderation' => $moderation,
         ]);
     }
 }

@@ -10,9 +10,9 @@ return new class extends Migration
      * Run the migrations. BẢNG LƯU Ý: DÙNG CHO KIỂM DUYỆT VIDEO, KHÔNG DÙNG CHO KIỂM DUYỆT ẢNH (ẢNH SẼ DÙNG BẢNG IMAGE_MODERATIONS)
      */
     public function up(): void
-    {    
+    {
         Schema::create('video_moderations', function (Blueprint $table) {
-             $table->id();
+            $table->id();
 
             $table->foreignId('lesson_id')->constrained()->cascadeOnDelete();
 

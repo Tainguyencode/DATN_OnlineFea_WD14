@@ -13,21 +13,21 @@ return new class extends Migration
     {
         Schema::create('learning_paths', function (Blueprint $table) {
             $table->id();
-             $table->string('title');
+            $table->string('title');
 
             $table->string('slug')
-                  ->unique();
+                ->unique();
 
             $table->text('description')
-                  ->nullable();
+                ->nullable();
 
             $table->string('thumbnail')
-                  ->nullable();
+                ->nullable();
 
             $table->enum('level', [
                 'beginner',
                 'intermediate',
-                'advanced'
+                'advanced',
             ])->default('beginner');
             $table->timestamps();
         });

@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -210,7 +211,7 @@ class PasswordResetTest extends TestCase
         ], $overrides));
     }
 
-    private function postForgotPassword(string $email): \Illuminate\Testing\TestResponse
+    private function postForgotPassword(string $email): TestResponse
     {
         $captcha = $this->forgotPasswordCaptcha();
 
@@ -221,7 +222,7 @@ class PasswordResetTest extends TestCase
         ]);
     }
 
-    private function postPasswordReset(string $email, string $token, string $password): \Illuminate\Testing\TestResponse
+    private function postPasswordReset(string $email, string $token, string $password): TestResponse
     {
         return $this->post(route('password.update'), [
             'token' => $token,
@@ -231,7 +232,7 @@ class PasswordResetTest extends TestCase
         ]);
     }
 
-    private function postLogin(string $identifier, string $password): \Illuminate\Testing\TestResponse
+    private function postLogin(string $identifier, string $password): TestResponse
     {
         $captcha = $this->loginCaptcha();
 

@@ -11,7 +11,6 @@ use App\Models\Lesson;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CurriculumController extends Controller

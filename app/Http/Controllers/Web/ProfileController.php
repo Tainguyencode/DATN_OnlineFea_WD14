@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 use Throwable;
@@ -116,7 +117,7 @@ class ProfileController extends Controller
         $user->forceFill([
             'password' => $validated['password'],
             'password_changed_at' => now(),
-            'remember_token' => \Illuminate\Support\Str::random(60),
+            'remember_token' => Str::random(60),
         ])->save();
 
         Auth::logoutOtherDevices($validated['current_password']);

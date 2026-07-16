@@ -45,8 +45,8 @@ class CouponController extends Controller
                 'type' => 'percent',
                 'is_active' => true,
                 'min_order_amount' => 0,
-                'value' => 0
-            ])
+                'value' => 0,
+            ]),
         ]);
     }
 
@@ -134,7 +134,7 @@ class CouponController extends Controller
         // Chặn xóa nếu mã giảm giá đã được áp dụng trong bất kỳ đơn hàng nào
         $orderCount = Order::where('coupon_id', $coupon->id)->count();
         if ($orderCount > 0) {
-            return back()->with('error', 'Không thể xóa mã giảm giá này vì đã có ' . $orderCount . ' đơn hàng sử dụng mã. Vui lòng tắt trạng thái hoạt động thay vì xóa.');
+            return back()->with('error', 'Không thể xóa mã giảm giá này vì đã có '.$orderCount.' đơn hàng sử dụng mã. Vui lòng tắt trạng thái hoạt động thay vì xóa.');
         }
 
         $couponId = $coupon->id;

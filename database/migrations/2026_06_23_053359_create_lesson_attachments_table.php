@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('lesson_attachments', function (Blueprint $table) {
             $table->id();
-             $table->foreignId('lesson_id')
+            $table->foreignId('lesson_id')
                 ->constrained('lessons')
                 ->cascadeOnDelete();
 

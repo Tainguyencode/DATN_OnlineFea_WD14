@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('users', function (Blueprint $table) {
+        Schema::create('users', function (Blueprint $table) {
             $table->id();
 
             $table->string('name');
@@ -25,7 +25,7 @@ return new class extends Migration
             $table->enum('role', [
                 'student',
                 'instructor',
-                'admin'
+                'admin',
             ])->default('student');
 
             $table->string('avatar')->nullable();
@@ -39,13 +39,13 @@ return new class extends Migration
             $table->string('facebook_id')->nullable();
 
             $table->boolean('two_factor_enabled')
-                  ->default(false);
+                ->default(false);
 
             $table->string('two_factor_secret')
-                  ->nullable();
+                ->nullable();
 
             $table->boolean('is_active')
-                  ->default(true);
+                ->default(true);
 
             $table->rememberToken();
 

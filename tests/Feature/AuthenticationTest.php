@@ -4,15 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\VerifyEmailCodeNotification;
 use App\Services\CaptchaService;
 use App\Services\RoleSyncService;
-use App\Notifications\VerifyEmailCodeNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -371,7 +372,7 @@ class AuthenticationTest extends TestCase
     /**
      * @param  array<string, mixed>  $overrides
      */
-    private function postRegister(string $role, array $overrides = []): \Illuminate\Testing\TestResponse
+    private function postRegister(string $role, array $overrides = []): TestResponse
     {
         $captcha = $this->registerCaptcha();
 
@@ -398,7 +399,7 @@ class AuthenticationTest extends TestCase
         ], $overrides);
     }
 
-    private function postLogin(string $identifier, string $password, bool $remember = false): \Illuminate\Testing\TestResponse
+    private function postLogin(string $identifier, string $password, bool $remember = false): TestResponse
     {
         $captcha = $this->loginCaptcha();
 

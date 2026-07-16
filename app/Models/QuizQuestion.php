@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class QuizQuestion extends Model
 {
     public const TYPE_SINGLE = 'single';
+
     public const TYPE_MULTIPLE = 'multiple';
+
     public const TYPE_TRUE_FALSE = 'true_false';
 
     protected $fillable = [
