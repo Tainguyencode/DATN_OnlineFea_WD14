@@ -49,11 +49,11 @@ class QuizController extends Controller
 
             if (isset($validated['answers'][$questionId])) {
                 $selectedIndex = $validated['answers'][$questionId];
-                
+
                 // Find correct option index in options array
                 $correctIndex = null;
                 foreach (($question['options'] ?? []) as $idx => $opt) {
-                    if (!empty($opt['is_correct'])) {
+                    if (! empty($opt['is_correct'])) {
                         $correctIndex = $idx;
                         break;
                     }

@@ -2,15 +2,14 @@
 
 use App\Http\Controllers\Web\Admin\AiModerationController;
 use App\Http\Controllers\Web\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\UserController;
-use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\AuthController;
-use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
@@ -19,9 +18,11 @@ use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboa
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
+use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
 use Illuminate\Support\Facades\Route;
@@ -143,6 +144,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::get('/certificates', fn () => redirect(route('student.dashboard').'#certificates'))->name('certificates');
+    Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
     Route::get('/orders', fn () => redirect(route('student.dashboard').'#orders'))->name('orders');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -245,13 +247,13 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
 
 // Dev helper login route
 Route::get('/dev/login-as-admin', function () {
-    auth()->login(\App\Models\User::where('role', 'admin')->first());
+    auth()->login(User::where('role', 'admin')->first());
+
     return redirect()->route('admin.dashboard');
 })->name('dev.login-as-admin');
 
 Route::get('/dev/login-as-student', function () {
-    auth()->login(\App\Models\User::where('email', 'leanhtuan291111@gmail.com')->first() ?? \App\Models\User::where('role', 'student')->first());
+    auth()->login(User::where('email', 'leanhtuan291111@gmail.com')->first() ?? User::where('role', 'student')->first());
+
     return redirect()->route('dashboard');
 })->name('dev.login-as-student');
-
-

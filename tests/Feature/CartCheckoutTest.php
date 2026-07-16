@@ -3,8 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Cart;
-use App\Models\Course;
 use App\Models\Category;
+use App\Models\Coupon;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
@@ -17,8 +18,11 @@ class CartCheckoutTest extends TestCase
     use RefreshDatabase;
 
     protected User $student;
+
     protected User $instructor;
+
     protected Course $course;
+
     protected Category $category;
 
     protected function setUp(): void
@@ -227,7 +231,7 @@ class CartCheckoutTest extends TestCase
             ]);
 
         $response->assertRedirect(route('student.checkout.failed', $order->order_code));
-        
+
         $order->refresh();
         $this->assertEquals('failed', $order->status);
 
@@ -260,7 +264,7 @@ class CartCheckoutTest extends TestCase
                     'course_id' => $this->course->id,
                     'title' => $this->course->title,
                     'price' => 100000,
-                ]
+                ],
             ],
         ]);
 
@@ -337,7 +341,7 @@ class CartCheckoutTest extends TestCase
     public function test_student_cannot_reuse_coupon_already_used(): void
     {
         // 1. Tạo một coupon mẫu
-        $coupon = \App\Models\Coupon::create([
+        $coupon = Coupon::create([
             'code' => 'TESTVOUCHER',
             'type' => 'fixed',
             'value' => 20000,
@@ -362,7 +366,7 @@ class CartCheckoutTest extends TestCase
                     'course_id' => $this->course->id,
                     'title' => $this->course->title,
                     'price' => 100000,
-                ]
+                ],
             ],
         ]);
 
