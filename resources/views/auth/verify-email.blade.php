@@ -110,6 +110,7 @@
                 @foreach([
                     ['href' => '#overview', 'label' => 'Tổng quan'],
                     ['href' => '#courses', 'label' => 'Khóa học'],
+                    ['href' => '#recently-viewed', 'label' => 'Đã xem gần đây'],
                     ['href' => '#cart', 'label' => 'Giỏ hàng'],
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
@@ -209,6 +210,34 @@
                                     </a>
                                 </div>
                             </article>
+                        @endforeach
+                    </div>
+                @endif
+            </section>
+
+            <section id="recently-viewed" class="scroll-mt-24 pt-8">
+                <div class="mb-4 flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Khóa học đã xem gần đây</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $recentlyViewedCourses->count() }} khóa học mới truy cập</p>
+                    </div>
+                    <a href="{{ route('student.recently-viewed.index') }}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Xem tất cả</a>
+                </div>
+
+                @if($recentlyViewedCourses->isEmpty())
+                    <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                        <p class="font-medium">Bạn chưa xem khóa học nào gần đây</p>
+                        <a href="{{ route('courses.index') }}" class="mt-5 inline-flex h-10 items-center justify-center rounded-xl bg-[#0056D2] px-5 text-sm font-bold text-white transition hover:bg-[#0046B8]">
+                            Khám phá khóa học
+                        </a>
+                    </div>
+                @else
+                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                        @foreach($recentlyViewedCourses as $history)
+                            <x-recently-viewed-course-card
+                                :history="$history"
+                                :enrollment="$recentEnrollmentMap->get($history->course_id)"
+                            />
                         @endforeach
                     </div>
                 @endif

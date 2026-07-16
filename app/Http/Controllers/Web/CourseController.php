@@ -11,6 +11,7 @@ use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
+use App\Services\RecentlyViewedCourseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class CourseController extends Controller
         return $this->catalog($request, $category);
     }
 
-    public function show(string $slug): View
+    public function show(string $slug, RecentlyViewedCourseService $recentlyViewedCourseService): View
     {
         $course = Course::query()
             ->where('slug', $slug)
@@ -97,6 +98,8 @@ class CourseController extends Controller
             ? Enrollment::where('user_id', auth()->id())->where('course_id', $course->id)->first()
             : null;
 
+        $recentlyViewedCourseService->record(auth()->user(), $course);
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -114,8 +117,12 @@ class CourseController extends Controller
         ));
     }
 
-    public function lesson(Course $course, Lesson $lesson, LearningPlayerService $playerService): View
-    {
+    public function lesson(
+        Course $course,
+        Lesson $lesson,
+        LearningPlayerService $playerService,
+        RecentlyViewedCourseService $recentlyViewedCourseService
+    ): View {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
 
         $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
@@ -136,6 +143,10 @@ class CourseController extends Controller
             : null;
 
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
+
+        if ($player['canAccessLesson'] || $player['isEnrolled']) {
+            $recentlyViewedCourseService->record($user, $course);
+        }
 
         return view('courses.lesson', [
             'course' => $course,
