@@ -110,7 +110,19 @@
                                 Vào học
                             </a>
                             <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
-                            <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
+                            @if($enrollment)
+                                <div class="mt-4">
+                                    <div class="mb-1 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                                        <span>Tiến độ học tập</span>
+                                        <span class="text-emerald-600">{{ $enrollment->progress_percent }}%</span>
+                                    </div>
+                                    <div class="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                        <div class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width: {{ $enrollment->progress_percent }}%"></div>
+                                    </div>
+                                </div>
+                            @else
+                                <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
+                            @endif
                         @elseif(auth()->check())
                             @if(auth()->user()->isStudent())
                                 @if($isFree)

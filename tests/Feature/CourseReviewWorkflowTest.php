@@ -50,6 +50,7 @@ class CourseReviewWorkflowTest extends TestCase
             'language' => 'vi',
             'status' => CourseStatus::Draft->value,
             'is_published' => false,
+            'copyright_agreed' => true,
         ]);
 
         $validation = app(CourseValidationService::class)->validateForSubmission($course);
@@ -148,6 +149,7 @@ class CourseReviewWorkflowTest extends TestCase
             'level' => 'beginner',
             'status' => CourseStatus::Draft->value,
             'is_published' => false,
+            'copyright_agreed' => true,
         ]);
     }
 
@@ -185,5 +187,28 @@ class CourseReviewWorkflowTest extends TestCase
             'language' => 'vi',
             'level' => 'beginner',
         ];
+    }
+
+    public function test_cannot_submit_course_for_review_without_copyright_agreement(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor']);
+        $course = $this->makeSubmittableCourse($instructor);
+        $course->update(['copyright_agreed' => false]);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->expectExceptionMessage('Bạn phải đồng ý với cam kết bản quyền trước khi gửi duyệt.');
+
+        app(CourseReviewService::class)->submitForReview($course, $instructor);
+    }
+
+    public function test_controller_validates_copyright_agreement_input(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor', 'email_verified_at' => now()]);
+        $course = $this->makeSubmittableCourse($instructor);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.courses.submit', $course), [])
+            ->assertSessionHasErrors('copyright_agreed');
     }
 }
