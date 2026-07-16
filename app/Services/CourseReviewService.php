@@ -22,6 +22,7 @@ class CourseReviewService
 
             $review = CourseReview::create([
                 'course_id' => $course->id,
+                'reviewer_id' => null,
                 'submission_number' => $submissionNumber,
                 'status' => CourseReviewStatus::Pending,
                 'submitted_at' => now(),

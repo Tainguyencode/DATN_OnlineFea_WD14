@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\CourseReviewService;
 use App\Services\CourseValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CourseReviewWorkflowTest extends TestCase
@@ -61,6 +62,13 @@ class CourseReviewWorkflowTest extends TestCase
 
         $this->assertEquals(CourseStatus::PendingReview->value, $course->fresh()->status);
         $this->assertEquals(1, $review->submission_number);
+        $this->assertNull($review->reviewer_id);
+        $this->assertDatabaseHas('course_reviews', [
+            'course_id' => $course->id,
+            'submission_number' => 1,
+            'status' => 'pending',
+            'reviewer_id' => null,
+        ]);
     }
 
     public function test_course_with_enough_content_can_be_submitted(): void
@@ -72,6 +80,7 @@ class CourseReviewWorkflowTest extends TestCase
 
         $this->assertEquals(CourseStatus::PendingReview->value, $course->fresh()->status);
         $this->assertEquals(1, $review->submission_number);
+        $this->assertNull($review->reviewer_id);
     }
 
     public function test_admin_can_approve_course(): void
@@ -83,10 +92,12 @@ class CourseReviewWorkflowTest extends TestCase
 
         $checklist = collect(config('course.admin_review_checklist'))->mapWithKeys(fn ($l, $k) => [$k => true])->all();
 
-        app(CourseReviewService::class)->approve($course->fresh(), $admin, $checklist, true);
+        $review = app(CourseReviewService::class)->approve($course->fresh(), $admin, $checklist, true);
 
         $this->assertEquals(CourseStatus::Published->value, $course->fresh()->status);
         $this->assertTrue($course->fresh()->is_published);
+        $this->assertEquals($admin->id, $review->reviewer_id);
+        $this->assertNotNull($review->reviewed_at);
     }
 
     public function test_admin_reject_requires_minimum_comment_length(): void
@@ -113,6 +124,47 @@ class CourseReviewWorkflowTest extends TestCase
         $this->assertEquals(CourseStatus::Rejected->value, $course->status);
         $this->assertStringContainsString('âm thanh', $course->rejectionReasonText());
         $this->assertEquals(1, $course->courseReviews()->where('status', 'rejected')->count());
+    }
+
+    public function test_admin_reject_assigns_reviewer_only_when_reviewed(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $instructor = User::factory()->create(['role' => 'instructor']);
+        $course = $this->makeSubmittableCourse($instructor);
+        $pendingReview = app(CourseReviewService::class)->submitForReview($course, $instructor);
+
+        $this->assertNull($pendingReview->reviewer_id);
+
+        $review = app(CourseReviewService::class)->reject($course->fresh(), $admin, 'Video lesson audio is not clear enough.');
+
+        $this->assertEquals($admin->id, $review->reviewer_id);
+        $this->assertNotNull($review->reviewed_at);
+        $this->assertEquals('rejected', $review->status->value);
+    }
+
+    public function test_course_reviews_reviewer_id_column_allows_null(): void
+    {
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'mysql') {
+            $column = DB::selectOne(
+                <<<'SQL'
+                SELECT IS_NULLABLE
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = ?
+                    AND COLUMN_NAME = ?
+                SQL,
+                ['course_reviews', 'reviewer_id'],
+            );
+
+            $this->assertSame('YES', $column->IS_NULLABLE ?? null);
+
+            return;
+        }
+
+        $this->assertTrue(collect(DB::select('PRAGMA table_info(course_reviews)'))
+            ->contains(fn (object $column) => ($column->name ?? null) === 'reviewer_id' && (int) ($column->notnull ?? 1) === 0));
     }
 
     public function test_review_history_is_not_overwritten_on_resubmit(): void
