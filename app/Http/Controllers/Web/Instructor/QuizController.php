@@ -8,6 +8,7 @@ use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
+use App\Http\Requests\Instructor\StoreQuizRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,25 +41,11 @@ class QuizController extends Controller
         ]);
     }
 
-    public function store(Request $request, Course $course, Lesson $lesson): RedirectResponse
+    public function store(StoreQuizRequest $request, Course $course, Lesson $lesson): RedirectResponse
     {
         $this->authorizeLesson($course, $lesson);
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
-            'pass_score' => ['required', 'integer', 'min:0', 'max:100'],
-            'time_limit_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
-            'max_attempts' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'is_active' => ['sometimes', 'boolean'],
-        ]);
-
-        $quiz = $lesson->quiz()->with('questions.options')->first();
-        if (! $quiz || ! $this->quizHasCorrectAnswers($quiz)) {
-            return back()
-                ->withErrors(['quiz' => 'Moi cau hoi can co it nhat 1 dap an dung truoc khi luu quiz.'])
-                ->withInput();
-        }
+        $validated = $request->validated();
 
         DB::transaction(function () use ($lesson, $validated, $request) {
             Quiz::updateOrCreate(
