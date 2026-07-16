@@ -48,7 +48,7 @@
     :pageTitle="$pageTitle"
     :breadcrumb="$breadcrumb"
 >
-    @if(auth()->check() && ! auth()->user()->hasVerifiedEmail())
+    @if(config('auth.email_verification_enabled', true) && auth()->check() && ! auth()->user()->hasVerifiedEmail())
         <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
