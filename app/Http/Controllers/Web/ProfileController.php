@@ -113,13 +113,15 @@ class ProfileController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
         ]);
 
+        $newPassword = $validated['password'];
+
         $user->forceFill([
-            'password' => $validated['password'],
+            'password' => Hash::make($newPassword),
             'password_changed_at' => now(),
             'remember_token' => \Illuminate\Support\Str::random(60),
         ])->save();
 
-        Auth::logoutOtherDevices($validated['current_password']);
+        Auth::logoutOtherDevices($newPassword);
         ActivityLogService::log($user->id, 'update_password', User::class, $user->id, null, $request);
 
         return back()->with('success', 'Mật khẩu đã được cập nhật.');
