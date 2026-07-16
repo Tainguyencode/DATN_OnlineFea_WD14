@@ -36,7 +36,7 @@ return new class extends Migration
                 'paid',
                 'failed',
                 'cancelled',
-                'refunded'
+                'refunded',
             ])->default('pending');
 
             $table->string('payment_method')->nullable();

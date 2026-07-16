@@ -67,7 +67,7 @@ return [
     'gemini' => [
         'api_key' => env('OPENROUTER_API_KEY'),
     ],
-        'openrouter' => [
+    'openrouter' => [
         'api_key' => env('OPENROUTER_API_KEY'),
     ],
 

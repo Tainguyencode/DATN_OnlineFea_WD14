@@ -187,7 +187,11 @@
                                 <div class="p-5">
                                     <div class="flex items-center justify-between gap-3">
                                         <span class="truncate text-xs font-bold uppercase text-[#0056D2] dark:text-blue-300">{{ $course->category?->name ?? 'Khóa học' }}</span>
-                                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">Đang học</span>
+                                        @if($enrollment->status === \App\Models\Enrollment::STATUS_COMPLETED || $enrollment->completed_at !== null)
+                                            <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">Hoàn thành</span>
+                                        @else
+                                            <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900">Đang học</span>
+                                        @endif
                                     </div>
                                     <h3 class="mt-3 line-clamp-2 text-lg font-extrabold leading-snug text-slate-950 dark:text-white">{{ $course->title }}</h3>
                                     <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Giảng viên: {{ $course->instructor?->name ?? 'FEA Instructor' }}</p>
@@ -335,7 +339,14 @@
                                 <span class="text-xs font-extrabold uppercase text-amber-700 dark:text-amber-200">Chứng chỉ hoàn thành</span>
                                 <h3 class="mt-2 text-xl font-extrabold text-slate-950 dark:text-white">{{ $cert->course?->title }}</h3>
                                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Mã: <span class="font-mono font-bold">{{ $cert->certificate_code }}</span></p>
-                                <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Cấp ngày: {{ $cert->issued_at?->format('d/m/Y') }}</p>
+                                <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 mb-4">Cấp ngày: {{ $cert->issued_at?->format('d/m/Y') }}</p>
+                                <a
+                                    href="{{ route('student.certificates.pdf', $cert) }}"
+                                    target="_blank"
+                                    class="inline-flex h-9 items-center justify-center rounded-xl bg-purple-600 px-4 text-xs font-bold text-white transition hover:bg-purple-700 shadow-sm"
+                                >
+                                    Xem chứng chỉ (PDF)
+                                </a>
                             </article>
                         @endforeach
                     </div>

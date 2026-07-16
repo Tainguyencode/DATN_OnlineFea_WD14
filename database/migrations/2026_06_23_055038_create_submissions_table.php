@@ -36,7 +36,7 @@ return new class extends Migration
             $table->enum('status', [
                 'submitted',
                 'graded',
-                'returned'
+                'returned',
             ])->default('submitted');
 
             $table->timestamp('submitted_at')

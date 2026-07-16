@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Cart;
+use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Enrollment;
-use App\Models\Cart;
 use Illuminate\Support\Str;
 
 /**
@@ -16,9 +16,6 @@ class PaymentGatewayService
 {
     /**
      * Lấy URL thanh toán tương ứng cho đơn hàng.
-     * 
-     * @param Order $order
-     * @return string
      */
     public function getPaymentUrl(Order $order): string
     {
@@ -30,20 +27,18 @@ class PaymentGatewayService
         // Đối với VNPay hoặc MoMo, dẫn tới trang cổng thanh toán giả lập (Mock Gateway)
         return route('student.checkout.mock_gateway', [
             'order_code' => $order->order_code,
-            'gateway' => $order->payment_method
+            'gateway' => $order->payment_method,
         ]);
     }
 
     /**
      * Xử lý kết quả giao dịch (Thành công / Thất bại).
      * Áp dụng cho cả chuyển khoản giả lập lẫn callback từ các cổng VNPay, MoMo.
-     * 
-     * @param Order $order
-     * @param string $status ('success' hoặc 'failed')
-     * @param string|null $transactionId Mã giao dịch thực tế hoặc giả lập
-     * @return bool
+     *
+     * @param  string  $status  ('success' hoặc 'failed')
+     * @param  string|null  $transactionId  Mã giao dịch thực tế hoặc giả lập
      */
-    public function processMockPayment(Order $order, string $status, string $transactionId = null): bool
+    public function processMockPayment(Order $order, string $status, ?string $transactionId = null): bool
     {
         // Nếu đơn hàng đã thanh toán trước đó, không xử lý lại để tránh trùng lặp ghi danh
         if ($order->status === 'paid') {
@@ -51,7 +46,7 @@ class PaymentGatewayService
         }
 
         if ($status === 'success') {
-            $txn = $transactionId ?? 'TXN-' . strtoupper(Str::random(10));
+            $txn = $transactionId ?? 'TXN-'.strtoupper(Str::random(10));
 
             // 1. Cập nhật trạng thái đơn hàng sang đã thanh toán (paid)
             $order->update([
@@ -70,7 +65,7 @@ class PaymentGatewayService
                         'message' => 'Thanh toán giả lập thành công.',
                         'simulated_at' => now()->toDateTimeString(),
                         'gateway' => $order->payment_method,
-                    ]
+                    ],
                 ]);
             }
 
@@ -98,7 +93,7 @@ class PaymentGatewayService
                         'message' => 'Giao dịch bị hủy hoặc thất bại.',
                         'simulated_at' => now()->toDateTimeString(),
                         'gateway' => $order->payment_method,
-                    ]
+                    ],
                 ]);
             }
 
@@ -108,8 +103,6 @@ class PaymentGatewayService
 
     /**
      * Đăng ký ghi danh cho học viên khi thanh toán thành công.
-     * 
-     * @param Order $order
      */
     protected function enrollStudent(Order $order): void
     {
@@ -140,8 +133,6 @@ class PaymentGatewayService
 
     /**
      * Xóa các khóa học đã mua khỏi giỏ hàng của người dùng.
-     * 
-     * @param Order $order
      */
     protected function clearCart(Order $order): void
     {

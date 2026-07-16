@@ -13,16 +13,16 @@ return new class extends Migration
     {
         Schema::create('learning_path_courses', function (Blueprint $table) {
             $table->id();
-             $table->foreignId('learning_path_id')
-                  ->constrained('learning_paths')
-                  ->cascadeOnDelete();
+            $table->foreignId('learning_path_id')
+                ->constrained('learning_paths')
+                ->cascadeOnDelete();
 
             $table->foreignId('course_id')
-                  ->constrained('courses')
-                  ->cascadeOnDelete();
+                ->constrained('courses')
+                ->cascadeOnDelete();
 
             $table->unsignedInteger('sort_order')
-                  ->default(0);
+                ->default(0);
 
             $table->unique(['learning_path_id', 'course_id']);
         });

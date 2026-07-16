@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initVideoProgress();
     initQuizPlayer();
     initMarkComplete();
+    initCertificateDropdown();
 });
 
 function getCsrfToken() {
@@ -387,4 +388,29 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function initCertificateDropdown() {
+    const dropdown = document.querySelector('[data-certificate-dropdown]');
+    if (!dropdown) return;
+
+    const trigger = dropdown.querySelector('[data-cert-dropdown-trigger]');
+    const panel = dropdown.querySelector('[data-cert-dropdown-panel]');
+    if (!trigger || !panel) return;
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = panel.classList.contains('hidden');
+        if (isHidden) {
+            panel.classList.remove('hidden');
+        } else {
+            panel.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target)) {
+            panel.classList.add('hidden');
+        }
+    });
 }

@@ -27,7 +27,7 @@ return new class extends Migration
             $table->decimal('price', 12, 2)->default(0.00);
             $table->decimal('discount_price', 12, 2)->nullable();
             $table->decimal('sale_price', 12, 2)->nullable();
-            $table->enum('status', ['draft', 'submitted', 'need_revision','approved', 'published', 'rejected'])->default('draft');
+            $table->enum('status', ['draft', 'submitted', 'need_revision', 'approved', 'published', 'rejected'])->default('draft');
             $table->boolean('is_published')->default(false);
             $table->decimal('rating_avg', 3, 2)->default(0.00);
             $table->unsignedInteger('rating_count')->default(0);

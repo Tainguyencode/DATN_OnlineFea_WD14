@@ -12,6 +12,7 @@ use App\Services\CourseReviewService;
 use App\Services\CourseValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CourseReviewWorkflowTest extends TestCase
@@ -108,7 +109,7 @@ class CourseReviewWorkflowTest extends TestCase
         $course = $this->makeSubmittableCourse($instructor);
         app(CourseReviewService::class)->submitForReview($course, $instructor);
 
-        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->expectException(HttpException::class);
         app(CourseReviewService::class)->reject($course->fresh(), $admin, 'short');
     }
 
@@ -247,7 +248,7 @@ class CourseReviewWorkflowTest extends TestCase
         $course = $this->makeSubmittableCourse($instructor);
         $course->update(['copyright_agreed' => false]);
 
-        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->expectException(HttpException::class);
         $this->expectExceptionMessage('Bạn phải đồng ý với cam kết bản quyền trước khi gửi duyệt.');
 
         app(CourseReviewService::class)->submitForReview($course, $instructor);

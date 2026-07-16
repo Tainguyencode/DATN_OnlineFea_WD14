@@ -62,7 +62,7 @@ class SystemSeeder extends Seeder
                 'user_agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X)',
                 'created_at' => now()->subDay(),
                 'updated_at' => now()->subDay(),
-            ]
+            ],
         ];
 
         DB::table('activity_logs')->insert($activityLogs);
@@ -134,7 +134,7 @@ class SystemSeeder extends Seeder
                 'description' => 'Vượt qua bài trắc nghiệm Chương 1 khóa Laravel.',
                 'created_at' => now()->subDays(2),
                 'updated_at' => now()->subDays(2),
-            ]
+            ],
         ];
 
         DB::table('user_points')->insert($userPoints);
@@ -155,7 +155,7 @@ class SystemSeeder extends Seeder
                 'earned_at' => now()->subDays(2),
                 'created_at' => now()->subDays(2),
                 'updated_at' => now()->subDays(2),
-            ]
+            ],
         ];
 
         DB::table('user_badges')->insert($userBadges);
@@ -166,12 +166,12 @@ class SystemSeeder extends Seeder
             [
                 'user_id' => 5,
                 'course_id' => 1,
-                'certificate_code' => 'CERT-LARAVEL-' . Str::upper(Str::random(8)),
+                'certificate_code' => 'CERT-LARAVEL-'.Str::upper(Str::random(8)),
                 'file_path' => 'certificates/cert-laravel-user-5.pdf',
                 'issued_at' => now()->subDay(),
                 'created_at' => now()->subDay(),
                 'updated_at' => now()->subDay(),
-            ]
+            ],
         ];
 
         DB::table('certificates')->insert($certificates);
@@ -250,7 +250,7 @@ class SystemSeeder extends Seeder
                 'viewed_at' => now()->subDays(1),
                 'created_at' => now()->subDays(1),
                 'updated_at' => now()->subDays(1),
-            ]
+            ],
         ];
 
         DB::table('recently_viewed_courses')->insert($recentlyViewed);

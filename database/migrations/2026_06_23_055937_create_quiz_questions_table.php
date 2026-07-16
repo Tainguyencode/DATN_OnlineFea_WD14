@@ -21,7 +21,7 @@ return new class extends Migration
 
             $table->enum('type', [
                 'single',
-                'multiple'
+                'multiple',
             ])->default('single');
 
             $table->unsignedInteger('points')

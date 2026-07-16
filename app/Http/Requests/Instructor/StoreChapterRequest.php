@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Instructor;
 
 use App\Models\Course;
-use App\Models\CourseSection;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreChapterRequest extends FormRequest
@@ -19,7 +18,7 @@ class StoreChapterRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if ($this->route('section')) {
-            $this->errorBag = 'updateSection_' . $this->route('section')->id;
+            $this->errorBag = 'updateSection_'.$this->route('section')->id;
         } else {
             $this->errorBag = 'storeSection';
         }
@@ -31,7 +30,7 @@ class StoreChapterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title'       => ['required', 'string', 'max:255'],
+            'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -43,11 +42,11 @@ class StoreChapterRequest extends FormRequest
     {
         return [
             'title.required' => 'Vui lòng nhập tên chương.',
-            'title.string'   => 'Tên chương phải là chuỗi ký tự.',
-            'title.max'      => 'Tên chương không được vượt quá :max ký tự.',
+            'title.string' => 'Tên chương phải là chuỗi ký tự.',
+            'title.max' => 'Tên chương không được vượt quá :max ký tự.',
 
             'description.string' => 'Mô tả chương phải là chuỗi ký tự.',
-            'description.max'    => 'Mô tả chương không được vượt quá :max ký tự.',
+            'description.max' => 'Mô tả chương không được vượt quá :max ký tự.',
         ];
     }
 
@@ -57,7 +56,7 @@ class StoreChapterRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'title'       => 'Tên chương',
+            'title' => 'Tên chương',
             'description' => 'Mô tả chương',
         ];
     }

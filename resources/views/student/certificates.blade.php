@@ -13,7 +13,14 @@
                     <div class="text-amber-600 text-sm font-bold uppercase tracking-wider mb-2">Chứng chỉ hoàn thành</div>
                     <h3 class="text-xl font-bold text-slate-900 mb-1">{{ $cert->course->title }}</h3>
                     <p class="text-sm text-slate-500">Mã: <span class="font-mono font-medium">{{ $cert->certificate_code }}</span></p>
-                    <p class="text-sm text-slate-500 mt-1">Cấp ngày: {{ $cert->issued_at->format('d/m/Y') }}</p>
+                    <p class="text-sm text-slate-500 mt-1 mb-4">Cấp ngày: {{ $cert->issued_at->format('d/m/Y') }}</p>
+                    <a
+                        href="{{ route('student.certificates.pdf', $cert) }}"
+                        target="_blank"
+                        class="inline-flex h-9 items-center justify-center rounded-xl bg-purple-600 px-4 text-xs font-bold text-white transition hover:bg-purple-700 shadow-sm"
+                    >
+                        Xem chứng chỉ (PDF)
+                    </a>
                 </div>
             </div>
         @endforeach
