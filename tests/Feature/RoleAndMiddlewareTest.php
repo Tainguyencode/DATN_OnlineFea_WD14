@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\CaptchaService;
@@ -154,6 +155,145 @@ class RoleAndMiddlewareTest extends TestCase
         $this->actingAsVerified($admin)
             ->get(route('admin.dashboard'))
             ->assertOk();
+    }
+
+    public function test_admin_can_open_roles_index_with_dynamic_counts(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create(['role' => 'student']);
+        $role = Role::query()->create([
+            'name' => 'Course Operator',
+            'slug' => 'course-operator',
+            'description' => 'Quản lý vận hành khóa học.',
+        ]);
+        $permissions = Permission::query()->whereIn('slug', ['courses.view', 'roles.view'])->get();
+
+        $role->users()->attach($user);
+        $role->permissions()->attach($permissions->pluck('id'));
+
+        $response = $this->actingAsVerified($admin)
+            ->get(route('admin.roles.index'))
+            ->assertOk()
+            ->assertSee('Course Operator')
+            ->assertSee('course-operator')
+            ->assertSee('2 quyền');
+
+        $listedRole = collect($response->viewData('roles')->items())
+            ->firstWhere('id', $role->id);
+
+        $this->assertSame(1, $listedRole->users_count);
+        $this->assertSame(2, $listedRole->permissions_count);
+    }
+
+    public function test_student_cannot_open_roles_index(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+
+        $this->actingAsVerified($student)
+            ->get(route('admin.roles.index'))
+            ->assertRedirect($student->dashboardUrl())
+            ->assertSessionHas('error');
+    }
+
+    public function test_admin_can_create_role_with_permissions(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $permissions = Permission::query()->whereIn('slug', ['users.view', 'roles.view'])->get();
+
+        $this->actingAsVerified($admin)
+            ->post(route('admin.roles.store'), [
+                'name' => 'Support Manager',
+                'slug' => 'support-manager',
+                'description' => 'Quản lý hỗ trợ học viên.',
+                'permissions' => $permissions->pluck('id')->all(),
+            ])
+            ->assertRedirect(route('admin.roles.index'))
+            ->assertSessionHas('success');
+
+        $role = Role::query()->where('slug', 'support-manager')->firstOrFail();
+
+        $this->assertSame('Support Manager', $role->name);
+        $this->assertFalse($role->is_system);
+        $this->assertEqualsCanonicalizing(
+            $permissions->pluck('id')->all(),
+            $role->permissions()->pluck('permissions.id')->all()
+        );
+    }
+
+    public function test_admin_cannot_create_duplicate_role_name_or_slug(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Role::query()->create([
+            'name' => 'Support Manager',
+            'slug' => 'support-manager',
+        ]);
+
+        $this->actingAsVerified($admin)
+            ->post(route('admin.roles.store'), [
+                'name' => 'Support Manager',
+                'slug' => 'support-manager',
+            ])
+            ->assertSessionHasErrors(['name', 'slug']);
+    }
+
+    public function test_admin_updates_role_permissions_with_sync(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $role = Role::query()->create([
+            'name' => 'Review Operator',
+            'slug' => 'review-operator',
+        ]);
+        $usersView = Permission::query()->where('slug', 'users.view')->firstOrFail();
+        $rolesView = Permission::query()->where('slug', 'roles.view')->firstOrFail();
+
+        $role->permissions()->attach([$usersView->id, $rolesView->id]);
+
+        $this->actingAsVerified($admin)
+            ->put(route('admin.roles.update', $role), [
+                'name' => 'Review Operator',
+                'slug' => 'review-operator',
+                'description' => 'Chỉ giữ quyền xem vai trò.',
+                'permissions' => [$rolesView->id],
+            ])
+            ->assertRedirect(route('admin.roles.edit', $role))
+            ->assertSessionHas('success');
+
+        $role->refresh();
+
+        $this->assertSame('Chỉ giữ quyền xem vai trò.', $role->description);
+        $this->assertFalse($role->permissions()->whereKey($usersView->id)->exists());
+        $this->assertTrue($role->permissions()->whereKey($rolesView->id)->exists());
+    }
+
+    public function test_admin_cannot_delete_system_role(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $systemRole = Role::query()->where('slug', 'admin')->firstOrFail();
+
+        $this->actingAsVerified($admin)
+            ->delete(route('admin.roles.destroy', $systemRole))
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseHas('roles', ['id' => $systemRole->id]);
+    }
+
+    public function test_admin_cannot_delete_role_that_has_users(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create(['role' => 'student']);
+        $role = Role::query()->create([
+            'name' => 'Learning Support',
+            'slug' => 'learning-support',
+        ]);
+
+        $role->users()->attach($user);
+
+        $this->actingAsVerified($admin)
+            ->delete(route('admin.roles.destroy', $role))
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseHas('roles', ['id' => $role->id]);
     }
 
     public function test_inactive_user_is_logged_out_and_cannot_access_protected_routes(): void
