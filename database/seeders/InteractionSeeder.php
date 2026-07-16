@@ -31,7 +31,7 @@ class InteractionSeeder extends Seeder
                 'user_id' => 6, // Phạm Minh Tuấn
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('carts')->insert($carts);
@@ -49,7 +49,7 @@ class InteractionSeeder extends Seeder
                 'course_id' => 2, // Thêm khóa React vào giỏ hàng của Lê Văn Học
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('cart_items')->insert($cartItems);
@@ -67,7 +67,7 @@ class InteractionSeeder extends Seeder
                 'course_id' => 2, // Lê Văn Học thích khóa React
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('wishlists')->insert($wishlists);
@@ -112,7 +112,7 @@ class InteractionSeeder extends Seeder
                 'payment_method' => 'bank_transfer',
                 'created_at' => now()->subHours(5),
                 'updated_at' => now()->subHours(5),
-            ]
+            ],
         ];
 
         DB::table('orders')->insert($orders);
@@ -149,7 +149,7 @@ class InteractionSeeder extends Seeder
                 'price' => 399000.00,
                 'created_at' => now()->subHours(5),
                 'updated_at' => now()->subHours(5),
-            ]
+            ],
         ];
 
         DB::table('order_items')->insert($orderItems);
@@ -177,7 +177,7 @@ class InteractionSeeder extends Seeder
                 'paid_at' => now()->subDays(3),
                 'created_at' => now()->subDays(3),
                 'updated_at' => now()->subDays(3),
-            ]
+            ],
         ];
 
         DB::table('payments')->insert($payments);
@@ -255,7 +255,7 @@ class InteractionSeeder extends Seeder
                 'completed_at' => null,
                 'created_at' => now()->subDays(3),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('enrollments')->insert($enrollments);
@@ -413,7 +413,7 @@ class InteractionSeeder extends Seeder
                 'completed_at' => null,
                 'created_at' => now()->subDays(3),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('lesson_progress')->insert($progress);
@@ -428,7 +428,7 @@ class InteractionSeeder extends Seeder
                 'answers' => json_encode([
                     '1' => [1],
                     '2' => [2],
-                    '3' => [1, 2] // Sai 1 ý
+                    '3' => [1, 2], // Sai 1 ý
                 ]),
                 'started_at' => now()->subDays(2)->subMinutes(12),
                 'completed_at' => now()->subDays(2),
@@ -443,13 +443,13 @@ class InteractionSeeder extends Seeder
                 'answers' => json_encode([
                     '1' => [1],
                     '2' => [2],
-                    '3' => [1, 2, 4] // Đúng hết
+                    '3' => [1, 2, 4], // Đúng hết
                 ]),
                 'started_at' => now()->subDays(2)->subMinutes(8),
                 'completed_at' => now()->subDays(2),
                 'created_at' => now()->subDays(2),
                 'updated_at' => now()->subDays(2),
-            ]
+            ],
         ];
 
         DB::table('quiz_attempts')->insert($attempts);
@@ -481,7 +481,7 @@ class InteractionSeeder extends Seeder
                 'graded_at' => now()->subDay(),
                 'created_at' => now()->subDays(2),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('submissions')->insert($submissions);
@@ -497,7 +497,7 @@ class InteractionSeeder extends Seeder
                 'is_resolved' => true,
                 'created_at' => now()->subDays(4),
                 'updated_at' => now()->subDays(3),
-            ]
+            ],
         ];
 
         DB::table('discussions')->insert($discussions);
@@ -519,7 +519,7 @@ class InteractionSeeder extends Seeder
                 'is_instructor_answer' => false,
                 'created_at' => now()->subDays(3),
                 'updated_at' => now()->subDays(3),
-            ]
+            ],
         ];
 
         DB::table('discussion_replies')->insert($discussionReplies);
@@ -541,7 +541,7 @@ class InteractionSeeder extends Seeder
                 'comment' => 'Bài giảng rất hay và thực tế, tuy nhiên phần nâng cao thầy nói hơi nhanh một chút. Tổng quan vẫn vô cùng đáng tiền mua.',
                 'created_at' => now()->subDays(2),
                 'updated_at' => now()->subDays(2),
-            ]
+            ],
         ];
 
         DB::table('reviews')->insert($reviews);
@@ -575,7 +575,7 @@ class InteractionSeeder extends Seeder
                 'status' => 'ended',
                 'created_at' => now()->subDays(3),
                 'updated_at' => now()->subDays(2),
-            ]
+            ],
         ];
 
         DB::table('live_sessions')->insert($liveSessions);
@@ -590,7 +590,7 @@ class InteractionSeeder extends Seeder
                 'max_members' => 30,
                 'created_at' => now()->subDays(4),
                 'updated_at' => now()->subDays(4),
-            ]
+            ],
         ];
 
         DB::table('study_groups')->insert($studyGroups);
@@ -612,7 +612,7 @@ class InteractionSeeder extends Seeder
                 'content' => 'Lệnh tạo controller có sẵn resource: php artisan make:controller Web/HomeController --resource',
                 'created_at' => now()->subDays(3),
                 'updated_at' => now()->subDays(3),
-            ]
+            ],
         ];
 
         DB::table('video_notes')->insert($videoNotes);
@@ -634,7 +634,7 @@ class InteractionSeeder extends Seeder
                 'content' => 'Bạn có thể sử dụng lệnh Artisan sau trong Terminal:\n`php artisan make:migration add_deleted_at_to_courses_table --table=courses`\n\nSau đó trong file migration mới tạo, ở hàm `up()` viết:\n`$table->softDeletes();` và ở hàm `down()` viết:\n`$table->dropSoftDeletes();` nhé!',
                 'created_at' => now()->subHours(2)->addMinute(),
                 'updated_at' => now()->subHours(2)->addMinute(),
-            ]
+            ],
         ];
 
         DB::table('ai_chat_messages')->insert($aiChatMessages);
@@ -650,7 +650,7 @@ class InteractionSeeder extends Seeder
                 'priority' => 'medium',
                 'created_at' => now()->subDays(2),
                 'updated_at' => now()->subDay(),
-            ]
+            ],
         ];
 
         DB::table('support_tickets')->insert($supportTickets);
@@ -670,7 +670,7 @@ class InteractionSeeder extends Seeder
                 'message' => 'Chào bạn Học, Ban hỗ trợ đã tiếp nhận thông tin. Yêu cầu của bạn đã được chuyển tới bộ phận kế toán để xử lý và sẽ phản hồi hóa đơn qua email trong vòng 24 giờ làm việc nhé!',
                 'created_at' => now()->subDay(),
                 'updated_at' => now()->subDay(),
-            ]
+            ],
         ];
 
         DB::table('support_ticket_messages')->insert($supportTicketMessages);

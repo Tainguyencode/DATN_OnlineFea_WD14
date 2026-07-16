@@ -272,7 +272,7 @@ class AuthController extends Controller
 
         try {
             $emailVerificationService->sendCode($request->user());
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             return back()
                 ->withErrors($exception->errors())
                 ->with('resend_after', $emailVerificationService->resendCooldownSeconds($request->user()));
@@ -364,6 +364,7 @@ class AuthController extends Controller
 
         return redirect()->intended($user->dashboardUrl());
     }
+
     private function isSafeRedirect(string $redirect): bool
     {
         if ($redirect === '') {

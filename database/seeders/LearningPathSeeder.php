@@ -34,7 +34,7 @@ class LearningPathSeeder extends Seeder
                 'level' => 'beginner',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('learning_paths')->insert($paths);
@@ -52,7 +52,12 @@ class LearningPathSeeder extends Seeder
                 'course_id' => 2,
                 'sort_order' => 2,
             ],
-
+            // Lộ trình UI/UX (Path 2) gồm Khóa UI/UX Fundamentals (ID: 3)
+            [
+                'learning_path_id' => 2,
+                'course_id' => 3,
+                'sort_order' => 1,
+            ],
         ];
 
         DB::table('learning_path_courses')->insert($pathCourses);

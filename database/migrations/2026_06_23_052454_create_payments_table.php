@@ -20,7 +20,7 @@ return new class extends Migration
             $table->enum('gateway', [
                 'momo',
                 'vnpay',
-                'bank_transfer'
+                'bank_transfer',
             ])->default('vnpay');
 
             $table->string('transaction_id')
@@ -31,7 +31,7 @@ return new class extends Migration
             $table->enum('status', [
                 'pending',
                 'success',
-                'failed'
+                'failed',
             ])->default('pending');
 
             $table->json('gateway_response')

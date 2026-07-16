@@ -4,16 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
-use App\Models\Assignment;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
-use App\Models\Submission;
+use App\Models\Order;
 use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class InstructorController extends Controller
@@ -145,7 +143,7 @@ class InstructorController extends Controller
     public function revenue(Request $request): JsonResponse
     {
         $courseIds = Course::where('instructor_id', $request->user()->id)->pluck('id')->toArray();
-        $orders = \App\Models\Order::where('status', 'paid')->get();
+        $orders = Order::where('status', 'paid')->get();
 
         $totalRevenue = 0;
         $totalSales = 0;
@@ -160,7 +158,7 @@ class InstructorController extends Controller
                     $totalRevenue += $price;
                     $totalSales += 1;
 
-                    if (!isset($monthlyRevenue[$month])) {
+                    if (! isset($monthlyRevenue[$month])) {
                         $monthlyRevenue[$month] = 0;
                     }
                     $monthlyRevenue[$month] += $price;

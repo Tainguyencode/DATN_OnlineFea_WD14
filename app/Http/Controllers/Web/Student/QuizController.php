@@ -9,7 +9,9 @@ use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizQuestion;
+use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
+use App\Services\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,7 +28,7 @@ class QuizController extends Controller
         $quiz = $this->activeQuiz($lesson);
         $isEnrolled = $this->isEnrolled($course);
         $canBypass = auth()->check() && (
-            auth()->user()->isAdmin() || 
+            auth()->user()->isAdmin() ||
             (auth()->user()->isInstructor() && $course->isOwnedBy(auth()->user()))
         );
 
@@ -77,7 +79,7 @@ class QuizController extends Controller
             'answers' => ['nullable', 'array'],
         ]);
 
-        $graded = app(\App\Services\QuizService::class)->grade($quiz, $validated['answers'] ?? []);
+        $graded = app(QuizService::class)->grade($quiz, $validated['answers'] ?? []);
 
         $attempt = DB::transaction(function () use ($quiz, $request, $graded) {
             $attempt = QuizAttempt::create([
@@ -160,7 +162,7 @@ class QuizController extends Controller
             'answers' => ['nullable', 'array'],
         ]);
 
-        $graded = app(\App\Services\QuizService::class)->grade($quiz, $validated['answers'] ?? []);
+        $graded = app(QuizService::class)->grade($quiz, $validated['answers'] ?? []);
 
         $attempt = DB::transaction(function () use ($quiz, $request, $graded) {
             $attempt = QuizAttempt::create([
@@ -248,7 +250,7 @@ class QuizController extends Controller
 
     private function nextLessonUrl(Course $course, Lesson $lesson): ?string
     {
-        $service = app(\App\Services\LearningPlayerService::class);
+        $service = app(LearningPlayerService::class);
         $sections = $service->curriculumSections($course->loadMissing(['courseSections.lessons', 'chapters.lessons']));
         $ordered = $service->orderedLessons($sections);
         $index = $ordered->search(fn (Lesson $l) => (int) $l->id === (int) $lesson->id);

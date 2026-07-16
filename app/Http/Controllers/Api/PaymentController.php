@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
 use App\Models\Cart;
 use App\Models\Coupon;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Order;
+use App\Notifications\OrderPaidNotification;
 use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -110,7 +112,7 @@ class PaymentController extends Controller
             return $this->error('Unauthorized', 403);
         }
 
-        DB::transaction(function () use ($order, $request) {
+        DB::transaction(function () use ($order) {
             $order->update([
                 'status' => 'paid',
                 'transaction_id' => 'TXN-'.strtoupper(Str::random(12)),
@@ -127,7 +129,7 @@ class PaymentController extends Controller
                     ]
                 );
 
-                $course = \App\Models\Course::find($item['course_id']);
+                $course = Course::find($item['course_id']);
                 if ($course && $enrollment->wasRecentlyCreated) {
                     $course->increment('enrollment_count');
                 }
@@ -136,7 +138,7 @@ class PaymentController extends Controller
             Cart::where('user_id', $order->user_id)->first()?->items()->delete();
         });
 
-        $request->user()->notify(new \App\Notifications\OrderPaidNotification($order));
+        $request->user()->notify(new OrderPaidNotification($order));
 
         ActivityLogService::log($request->user()->id, 'payment_success', Order::class, $order->id, null, $request);
 
