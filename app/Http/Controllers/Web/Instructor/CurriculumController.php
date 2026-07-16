@@ -11,7 +11,6 @@ use App\Models\Lesson;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CurriculumController extends Controller
@@ -21,8 +20,8 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
 
         $course->load([
-            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
-            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with(['videoModeration', 'assignment']),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with(['videoModeration', 'assignment']),
         ]);
 
         return view('instructor.courses.curriculum', [
@@ -71,23 +70,22 @@ class CurriculumController extends Controller
         $this->authorizeSection($course, $section);
 
         $validated = $request->validated();
-
-        if ($request->hasFile('document_file')) {
-            $validated['document_file'] = $request->file('document_file')->store('lesson-documents', 'public');
-        }
-
-        $validated = $this->storeLessonVideo($request, $validated);
+        $lessonData = $this->lessonData($validated);
+        $lessonData = $this->storeLessonDocument($request, $lessonData);
+        $lessonData = $this->storeLessonVideo($request, $lessonData);
 
         $lesson = Lesson::create([
-            ...$validated,
+            ...$lessonData,
             'course_id' => $course->id,
             'section_id' => $section->id,
             'chapter_id' => null,
-            'duration_seconds' => $validated['duration'] ?? 0,
+            'duration_seconds' => $lessonData['duration'] ?? 0,
             'is_preview' => $request->boolean('is_preview'),
-            'sort_order' => $validated['sort_order'] ?? $section->lessons()->count(),
-            'status' => $validated['status'] ?? 'draft',
+            'sort_order' => $lessonData['sort_order'] ?? $section->lessons()->count(),
+            'status' => $lessonData['status'] ?? 'draft',
         ]);
+
+        $this->syncAssignment($lesson, $validated);
 
         if ($lesson->type === 'quiz') {
             return redirect()
@@ -103,21 +101,20 @@ class CurriculumController extends Controller
         $this->authorizeLesson($course, $lesson);
 
         $validated = $request->validated();
-
-        if ($request->hasFile('document_file')) {
-            $this->deleteLessonDocument($lesson);
-            $validated['document_file'] = $request->file('document_file')->store('lesson-documents', 'public');
-        }
-
-        $validated = $this->storeLessonVideo($request, $validated, $lesson);
+        $lessonData = $this->lessonData($validated);
+        $lessonData = $this->storeLessonDocument($request, $lessonData, $lesson);
+        $lessonData = $this->storeLessonVideo($request, $lessonData, $lesson);
 
         $lesson->update([
-            ...$validated,
-            'duration_seconds' => $validated['duration'] ?? 0,
+            ...$lessonData,
+            'duration_seconds' => $lessonData['duration'] ?? 0,
             'is_preview' => $request->boolean('is_preview'),
-            'sort_order' => $validated['sort_order'] ?? $lesson->sort_order,
-            'status' => $validated['status'] ?? 'draft',
+            'sort_order' => $lessonData['sort_order'] ?? $lesson->sort_order,
+            'status' => $lessonData['status'] ?? 'draft',
         ]);
+
+        $lesson->refresh();
+        $this->syncAssignment($lesson, $validated);
 
         if ($lesson->type === 'quiz') {
             return redirect()
@@ -162,11 +159,50 @@ class CurriculumController extends Controller
         }
     }
 
+    private function lessonData(array $validated): array
+    {
+        unset(
+            $validated['video_file'],
+            $validated['document_file'],
+            $validated['assignment_due_days'],
+            $validated['assignment_max_score'],
+            $validated['assignment_passing_score']
+        );
+
+        if (($validated['type'] ?? null) !== 'video') {
+            unset($validated['video_url']);
+        }
+
+        if (! in_array($validated['type'] ?? null, ['video', 'document', 'assignment'], true)) {
+            unset($validated['content']);
+        }
+
+        return $validated;
+    }
+
+    private function storeLessonDocument(Request $request, array $validated, ?Lesson $lesson = null): array
+    {
+        if (! in_array($validated['type'] ?? null, ['document', 'assignment'], true) || ! $request->hasFile('document_file')) {
+            return $validated;
+        }
+
+        $path = $request->file('document_file')->store('lesson-documents', 'public');
+
+        if ($lesson) {
+            $this->deleteLessonDocument($lesson);
+        }
+
+        return [
+            ...$validated,
+            'document_file' => $path,
+        ];
+    }
+
     private function storeLessonVideo(Request $request, array $validated, ?Lesson $lesson = null): array
     {
         unset($validated['video_file']);
 
-        if (! $request->hasFile('video_file')) {
+        if (($validated['type'] ?? null) !== 'video' || ! $request->hasFile('video_file')) {
             return $validated;
         }
 
@@ -184,6 +220,33 @@ class CurriculumController extends Controller
             'video_mime' => $file->getClientMimeType(),
             'video_size' => $file->getSize(),
         ];
+    }
+
+    private function syncAssignment(Lesson $lesson, array $validated): void
+    {
+        if ($lesson->type !== 'assignment') {
+            return;
+        }
+
+        $lesson->loadMissing('assignment');
+        $description = trim((string) ($validated['content'] ?? ''));
+        $existing = $lesson->assignment;
+
+        $lesson->assignment()->updateOrCreate(
+            ['lesson_id' => $lesson->id],
+            [
+                'course_id' => $lesson->course_id,
+                'title' => $lesson->title,
+                'description' => $description !== '' ? $description : $lesson->title,
+                'instructions' => $description !== '' ? $description : null,
+                'max_score' => $validated['assignment_max_score'] ?? $existing?->max_score ?? 100,
+                'passing_score' => $validated['assignment_passing_score'] ?? $existing?->passing_score ?? 70,
+                'due_days' => $validated['assignment_due_days'] ?? $existing?->due_days,
+                'is_required' => true,
+                'allowed_file_types' => $existing?->allowed_file_types ?? 'pdf,doc,docx,ppt,pptx,xls,xlsx,txt,zip,rar',
+                'maximum_file_size' => $existing?->maximum_file_size ?? 10240,
+            ],
+        );
     }
 
     private function deleteLessonFiles(Lesson $lesson): void
