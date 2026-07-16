@@ -15,18 +15,7 @@ class CourseReviewSeeder extends Seeder
         }
 
         DB::table('course_reviews')->insert([
-            [
-                'course_id' => 6,
-                'reviewer_id' => 1,
-                'submission_number' => 1,
-                'status' => CourseReviewStatus::Pending->value,
-                'comment' => null,
-                'checklist_json' => null,
-                'submitted_at' => now()->subDays(2),
-                'reviewed_at' => null,
-                'created_at' => now()->subDays(2),
-                'updated_at' => now()->subDays(2),
-            ],
+
             [
                 'course_id' => 1,
                 'reviewer_id' => 1,

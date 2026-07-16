@@ -37,6 +37,16 @@ return new class extends Migration
             $table->boolean('is_featured')->default(false);
             $table->timestamp('published_at')->nullable();
             $table->timestamp('submitted_at')->nullable();
+            $table->boolean('copyright_agreed')
+                ->default(false);
+
+            $table->timestamp('copyright_agreed_at')
+                ->nullable();
+
+            $table->foreignId('copyright_agreed_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
             $table->timestamps();
         });
     }

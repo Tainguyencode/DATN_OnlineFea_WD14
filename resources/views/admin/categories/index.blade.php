@@ -100,7 +100,7 @@
                             </td>
                             <td class="px-4 py-3 align-middle text-slate-600">{{ $category->slug }}</td>
                             <td class="px-4 py-3 align-middle">
-                                <span class="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600">
+                                <span class="inline-block whitespace-nowrap rounded-full border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600">
                                     {{ $category->parent_id ? 'Danh mục con' : 'Danh mục cha' }}
                                 </span>
                             </td>

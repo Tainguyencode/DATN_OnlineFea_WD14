@@ -65,6 +65,7 @@ class Course extends Model
         'published_at', 'submitted_at', 'approved_at', 'suspended_at', 'submission_count',
         'required_video_percent', 'required_lesson_percent', 'minimum_quiz_score',
         'require_all_quizzes', 'require_all_assignments', 'certificate_enabled',
+        'copyright_agreed', 'copyright_agreed_at', 'copyright_agreed_by',
     ];
 
     protected function casts(): array
@@ -80,16 +81,23 @@ class Course extends Model
             'require_all_quizzes' => 'boolean',
             'require_all_assignments' => 'boolean',
             'certificate_enabled' => 'boolean',
+            'copyright_agreed' => 'boolean',
             'published_at' => 'datetime',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
             'suspended_at' => 'datetime',
+            'copyright_agreed_at' => 'datetime',
         ];
     }
 
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'instructor_id');
+    }
+
+    public function copyrightAgreedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'copyright_agreed_by');
     }
 
     public function category(): BelongsTo

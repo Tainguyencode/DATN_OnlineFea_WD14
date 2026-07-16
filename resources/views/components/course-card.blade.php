@@ -18,6 +18,18 @@
     $gradient = $gradients[$course->id % count($gradients)];
     $lessonCount = $course->lessons_count ?? 0;
     $isFavorited = (bool) ($favorited ?? ($course->is_favorited ?? false));
+
+    $isEnrolled = false;
+    if (auth()->check() && auth()->user()->isStudent()) {
+        static $userEnrollments = null;
+        if ($userEnrollments === null) {
+            $userEnrollments = \App\Models\Enrollment::where('user_id', auth()->id())
+                ->whereIn('status', ['active', 'completed'])
+                ->pluck('course_id')
+                ->toArray();
+        }
+        $isEnrolled = in_array($course->id, $userEnrollments);
+    }
 @endphp
 
 <article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white transition-all duration-300 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 dark:border-slate-800/80 dark:bg-[#161615] dark:hover:border-indigo-500/50 dark:hover:shadow-none">
@@ -75,7 +87,9 @@
 
         <div class="mt-auto">
             <div>
-                @if($price == 0)
+                @if($isEnrolled)
+                    <span class="text-base font-bold text-indigo-600 dark:text-indigo-400">Đã thanh toán</span>
+                @elseif($price == 0)
                     <span class="text-base font-bold text-emerald-600 dark:text-emerald-400">Miễn phí</span>
                 @else
                     <span class="text-base font-bold text-slate-900 dark:text-white">{{ number_format($price, 0, ',', '.') }}đ</span>
