@@ -31,7 +31,7 @@
         [
             'route' => 'admin.categories.index',
             'active' => ['admin.categories.index', 'admin.categories.*'],
-            'label' => 'Danh má»¥c khÃ³a há»c',
+            'label' => 'Danh mục khóa học',
             'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h6M4 10h6m-6 4h6m6-8h4m-4 4h4m-4 4h4M4 18h16"/></svg>'
         ],
         [

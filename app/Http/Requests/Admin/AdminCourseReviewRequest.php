@@ -25,7 +25,7 @@ class AdminCourseReviewRequest extends FormRequest
         $checklistRules = [];
         foreach ($checklistKeys as $key) {
             $checklistRules["checklist.{$key}.status"] = ['required', Rule::in(['pass', 'fail'])];
-            $checklistRules["checklist.{$key}.note"]   = ['nullable', 'string', 'max:500'];
+            $checklistRules["checklist.{$key}.note"] = ['nullable', 'string', 'max:500'];
         }
 
         return array_merge($checklistRules, [
@@ -49,8 +49,8 @@ class AdminCourseReviewRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'action.required'  => 'Vui lòng chọn quyết định duyệt.',
-            'action.in'        => 'Quyết định duyệt không hợp lệ.',
+            'action.required' => 'Vui lòng chọn quyết định duyệt.',
+            'action.in' => 'Quyết định duyệt không hợp lệ.',
             'comment.required' => 'Lý do / ghi chú bắt buộc khi yêu cầu chỉnh sửa hoặc từ chối.',
         ];
     }
@@ -61,7 +61,7 @@ class AdminCourseReviewRequest extends FormRequest
     public function attributes(): array
     {
         $attrs = [
-            'action'  => 'Quyết định',
+            'action' => 'Quyết định',
             'comment' => 'Lý do / ghi chú',
         ];
 

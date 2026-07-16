@@ -6,12 +6,13 @@ use App\Models\EmailVerificationCode;
 use App\Models\User;
 use App\Notifications\VerifyEmailCodeNotification;
 use App\Services\CaptchaService;
-use App\Services\EmailVerificationService;
 use App\Services\RoleSyncService;
 use App\Services\TwoFactorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class EmailVerificationTest extends TestCase
@@ -37,6 +38,23 @@ class EmailVerificationTest extends TestCase
             'user_id' => $user->id,
         ]);
         $this->assertNull($user->email_verified_at);
+    }
+
+    public function test_registration_skips_email_verification_when_disabled(): void
+    {
+        config(['auth.email_verification_enabled' => false]);
+        Notification::fake();
+
+        $this->postRegister('student', ['email' => 'otp-disabled@example.com'])
+            ->assertRedirect(route('student.dashboard'));
+
+        $user = User::query()->where('email', 'otp-disabled@example.com')->firstOrFail();
+
+        $this->assertDatabaseMissing('email_verification_codes', [
+            'user_id' => $user->id,
+        ]);
+        $this->assertNull($user->email_verified_at);
+        Notification::assertNothingSent();
     }
 
     public function test_otp_is_six_digits_in_notification(): void
@@ -271,6 +289,31 @@ class EmailVerificationTest extends TestCase
             ->assertRedirect(route('verification.notice'));
     }
 
+    public function test_unverified_student_can_access_dashboard_when_email_verification_is_disabled(): void
+    {
+        config(['auth.email_verification_enabled' => false]);
+
+        $student = User::factory()->unverified()->create(['role' => 'student']);
+
+        $this->actingAsStudent($student)
+            ->get(route('student.dashboard'))
+            ->assertOk()
+            ->assertViewHas('emailVerified', true);
+    }
+
+    public function test_unverified_instructor_does_not_see_verification_banner_when_email_verification_is_disabled(): void
+    {
+        config(['auth.email_verification_enabled' => false]);
+
+        $instructor = User::factory()->unverified()->create(['role' => 'instructor']);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('instructor.dashboard'))
+            ->assertOk()
+            ->assertDontSee('email/verification-notification');
+    }
+
     public function test_verified_student_can_access_dashboard(): void
     {
         $student = User::factory()->create([
@@ -315,7 +358,7 @@ class EmailVerificationTest extends TestCase
     /**
      * @param  array<string, mixed>  $overrides
      */
-    private function postRegister(string $role, array $overrides = []): \Illuminate\Testing\TestResponse
+    private function postRegister(string $role, array $overrides = []): TestResponse
     {
         $captcha = $this->registerCaptcha();
 
@@ -331,7 +374,7 @@ class EmailVerificationTest extends TestCase
         ], $overrides));
     }
 
-    private function createActiveCode(User $user, string $plainCode, ?\Illuminate\Support\Carbon $expiresAt = null, ?\Illuminate\Support\Carbon $lastSentAt = null): EmailVerificationCode
+    private function createActiveCode(User $user, string $plainCode, ?Carbon $expiresAt = null, ?Carbon $lastSentAt = null): EmailVerificationCode
     {
         return EmailVerificationCode::create([
             'user_id' => $user->id,
