@@ -89,7 +89,7 @@ class CourseController extends Controller
             'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
             'category.parent',
-            'courseReviews' => fn ($q) => $q->orderByDesc('submission_number'),
+            'courseReviews',
             'courseReviews.reviewer:id,name,email',
         ]);
         $categories = $this->categoryGroups();

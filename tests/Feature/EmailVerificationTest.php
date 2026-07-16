@@ -39,6 +39,23 @@ class EmailVerificationTest extends TestCase
         $this->assertNull($user->email_verified_at);
     }
 
+    public function test_registration_skips_email_verification_when_disabled(): void
+    {
+        config(['auth.email_verification_enabled' => false]);
+        Notification::fake();
+
+        $this->postRegister('student', ['email' => 'otp-disabled@example.com'])
+            ->assertRedirect(route('student.dashboard'));
+
+        $user = User::query()->where('email', 'otp-disabled@example.com')->firstOrFail();
+
+        $this->assertDatabaseMissing('email_verification_codes', [
+            'user_id' => $user->id,
+        ]);
+        $this->assertNull($user->email_verified_at);
+        Notification::assertNothingSent();
+    }
+
     public function test_otp_is_six_digits_in_notification(): void
     {
         Notification::fake();
@@ -269,6 +286,31 @@ class EmailVerificationTest extends TestCase
         $this->actingAsStudent($student)
             ->get(route('student.dashboard'))
             ->assertRedirect(route('verification.notice'));
+    }
+
+    public function test_unverified_student_can_access_dashboard_when_email_verification_is_disabled(): void
+    {
+        config(['auth.email_verification_enabled' => false]);
+
+        $student = User::factory()->unverified()->create(['role' => 'student']);
+
+        $this->actingAsStudent($student)
+            ->get(route('student.dashboard'))
+            ->assertOk()
+            ->assertViewHas('emailVerified', true);
+    }
+
+    public function test_unverified_instructor_does_not_see_verification_banner_when_email_verification_is_disabled(): void
+    {
+        config(['auth.email_verification_enabled' => false]);
+
+        $instructor = User::factory()->unverified()->create(['role' => 'instructor']);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('instructor.dashboard'))
+            ->assertOk()
+            ->assertDontSee('email/verification-notification');
     }
 
     public function test_verified_student_can_access_dashboard(): void
