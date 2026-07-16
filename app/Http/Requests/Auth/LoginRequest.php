@@ -33,22 +33,22 @@ class LoginRequest extends FormRequest
     {
         return [
             'identifier.required' => 'Vui lòng nhập email hoặc tên đăng nhập.',
-            'identifier.string'   => 'Email hoặc tên đăng nhập không hợp lệ.',
-            'identifier.max'      => 'Email hoặc tên đăng nhập không được vượt quá 255 ký tự.',
-            'password.required'   => 'Vui lòng nhập mật khẩu.',
-            'password.string'     => 'Mật khẩu không hợp lệ.',
-            'captcha_token.required'  => 'Phiên xác nhận đã hết hạn, vui lòng tải lại trang.',
+            'identifier.string' => 'Email hoặc tên đăng nhập không hợp lệ.',
+            'identifier.max' => 'Email hoặc tên đăng nhập không được vượt quá 255 ký tự.',
+            'password.required' => 'Vui lòng nhập mật khẩu.',
+            'password.string' => 'Mật khẩu không hợp lệ.',
+            'captcha_token.required' => 'Phiên xác nhận đã hết hạn, vui lòng tải lại trang.',
             'captcha_answer.required' => 'Vui lòng nhập kết quả phép tính xác nhận.',
-            'captcha_answer.string'   => 'Kết quả xác nhận không hợp lệ.',
-            'captcha_answer.max'      => 'Kết quả xác nhận không hợp lệ.',
+            'captcha_answer.string' => 'Kết quả xác nhận không hợp lệ.',
+            'captcha_answer.max' => 'Kết quả xác nhận không hợp lệ.',
         ];
     }
 
     public function attributes(): array
     {
         return [
-            'identifier'     => 'email / tên đăng nhập',
-            'password'       => 'mật khẩu',
+            'identifier' => 'email / tên đăng nhập',
+            'password' => 'mật khẩu',
             'captcha_answer' => 'mã xác nhận',
         ];
     }

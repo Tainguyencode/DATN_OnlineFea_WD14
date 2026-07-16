@@ -6,12 +6,13 @@ use App\Models\EmailVerificationCode;
 use App\Models\User;
 use App\Notifications\VerifyEmailCodeNotification;
 use App\Services\CaptchaService;
-use App\Services\EmailVerificationService;
 use App\Services\RoleSyncService;
 use App\Services\TwoFactorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class EmailVerificationTest extends TestCase
@@ -315,7 +316,7 @@ class EmailVerificationTest extends TestCase
     /**
      * @param  array<string, mixed>  $overrides
      */
-    private function postRegister(string $role, array $overrides = []): \Illuminate\Testing\TestResponse
+    private function postRegister(string $role, array $overrides = []): TestResponse
     {
         $captcha = $this->registerCaptcha();
 
@@ -331,7 +332,7 @@ class EmailVerificationTest extends TestCase
         ], $overrides));
     }
 
-    private function createActiveCode(User $user, string $plainCode, ?\Illuminate\Support\Carbon $expiresAt = null, ?\Illuminate\Support\Carbon $lastSentAt = null): EmailVerificationCode
+    private function createActiveCode(User $user, string $plainCode, ?Carbon $expiresAt = null, ?Carbon $lastSentAt = null): EmailVerificationCode
     {
         return EmailVerificationCode::create([
             'user_id' => $user->id,

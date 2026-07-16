@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
@@ -92,6 +93,10 @@ class CourseController extends Controller
             && $course->isFavoritedBy(auth()->user());
         $learningEntryUrl = $canAccessFullCourse ? $course->learningEntryUrl() : null;
 
+        $enrollment = auth()->check()
+            ? Enrollment::where('user_id', auth()->id())->where('course_id', $course->id)->first()
+            : null;
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -104,7 +109,8 @@ class CourseController extends Controller
             'canManageCourse',
             'canAccessFullCourse',
             'isFavorited',
-            'learningEntryUrl'
+            'learningEntryUrl',
+            'enrollment'
         ));
     }
 
@@ -218,21 +224,36 @@ class CourseController extends Controller
         }
 
         $created = false;
+        $reEnrolled = false;
 
-        DB::transaction(function () use ($course, $user, &$created) {
-            $enrollment = Enrollment::firstOrCreate(
-                [
+        DB::transaction(function () use ($course, $user, &$created, &$reEnrolled) {
+            $enrollment = Enrollment::where('user_id', $user->id)
+                ->where('course_id', $course->id)
+                ->first();
+
+            if ($enrollment) {
+                if ($enrollment->status === Enrollment::STATUS_COMPLETED || $enrollment->completed_at !== null) {
+                    $enrollment->update([
+                        'status' => Enrollment::STATUS_ACTIVE,
+                        'progress_percent' => 0,
+                        'completed_at' => null,
+                        'enrolled_at' => now(),
+                    ]);
+
+                    LessonProgress::where('user_id', $user->id)
+                        ->where('course_id', $course->id)
+                        ->delete();
+
+                    $reEnrolled = true;
+                }
+            } else {
+                Enrollment::create([
                     'user_id' => $user->id,
                     'course_id' => $course->id,
-                ],
-                [
                     'status' => Enrollment::STATUS_ACTIVE,
                     'progress_percent' => 0,
                     'enrolled_at' => now(),
-                ]
-            );
-
-            if ($enrollment->wasRecentlyCreated) {
+                ]);
                 $course->increment('enrollment_count');
                 $created = true;
             }
@@ -240,11 +261,16 @@ class CourseController extends Controller
 
         $learningUrl = $course->learningEntryUrl();
 
+        $message = 'Bạn đã đăng ký khóa học này trước đó.';
+        if ($created) {
+            $message = 'Đăng ký khóa học thành công. Bạn có thể bắt đầu học ngay.';
+        } elseif ($reEnrolled) {
+            $message = 'Đã đăng ký lại thành công! Bạn có thể bắt đầu học lại từ đầu.';
+        }
+
         return redirect()
             ->to($learningUrl ?? route('student.courses'))
-            ->with('success', $created
-                ? 'Đăng ký khóa học thành công. Bạn có thể bắt đầu học ngay.'
-                : 'Bạn đã đăng ký khóa học này trước đó.');
+            ->with('success', $message);
     }
 
     private function catalog(Request $request, ?Category $selectedCategory = null): View

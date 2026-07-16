@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * ProgressController
- * 
+ *
  * Quản lý tiến độ học của user
  * - Đánh dấu lesson hoàn thành
  * - Lấy tiến độ khóa học
@@ -22,11 +22,9 @@ class ProgressController
 {
     /**
      * Đánh dấu lesson là hoàn thành
-     * 
-     * @param Request $request
-     * @param int $lessonId
+     *
      * @return JsonResponse
-     * 
+     *
      * Các bước:
      * 1. Kiểm tra user đã đăng nhập
      * 2. Lấy thông tin lesson
@@ -38,19 +36,19 @@ class ProgressController
     {
         // 1. Kiểm tra user đã đăng nhập
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Vui lòng đăng nhập để thực hiện hành động này'
+                'message' => 'Vui lòng đăng nhập để thực hiện hành động này',
             ], 401);
         }
 
         // 2. Lấy thông tin lesson
         $lesson = Lesson::find($lessonId);
-        if (!$lesson) {
+        if (! $lesson) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bài học không tồn tại'
+                'message' => 'Bài học không tồn tại',
             ], 404);
         }
 
@@ -60,10 +58,10 @@ class ProgressController
             ->where('course_id', $lesson->course_id)
             ->first();
 
-        if (!$enrollment) {
+        if (! $enrollment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn chưa đăng ký khóa học này. Vui lòng đăng ký trước khi học.'
+                'message' => 'Bạn chưa đăng ký khóa học này. Vui lòng đăng ký trước khi học.',
             ], 403);
         }
 
@@ -71,12 +69,12 @@ class ProgressController
         $progress = LessonProgress::updateOrCreate(
             [
                 'user_id' => $user->id,
-                'lesson_id' => $lessonId
+                'lesson_id' => $lessonId,
             ],
             [
                 'is_completed' => true,
                 'completed_at' => now(),
-                'watched_seconds' => $request->input('watched_seconds', 0)
+                'watched_seconds' => $request->input('watched_seconds', 0),
             ]
         );
 
@@ -94,7 +92,7 @@ class ProgressController
         if ($totalLessons > 0 && $completedLessons === $totalLessons) {
             $enrollment->update([
                 'completed_at' => now(),
-                'progress_percent' => 100
+                'progress_percent' => 100,
             ]);
 
             return response()->json([
@@ -104,8 +102,8 @@ class ProgressController
                     'lesson_id' => $lessonId,
                     'is_completed' => true,
                     'course_completed' => true,
-                    'progress_percent' => 100
-                ]
+                    'progress_percent' => 100,
+                ],
             ], 200);
         }
 
@@ -121,17 +119,16 @@ class ProgressController
                 'is_completed' => true,
                 'completed_at' => $progress->completed_at,
                 'course_completed' => false,
-                'course_progress' => round($progressPercent, 2)
-            ]
+                'course_progress' => round($progressPercent, 2),
+            ],
         ], 200);
     }
 
     /**
      * Lấy tiến độ của user cho một khóa học
-     * 
-     * @param int $courseId
+     *
      * @return JsonResponse
-     * 
+     *
      * Trả về:
      * - Tổng số lessons
      * - Số lessons đã hoàn thành
@@ -141,19 +138,19 @@ class ProgressController
     public function getCourseProgress(int $courseId): JsonResponse
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Vui lòng đăng nhập'
+                'message' => 'Vui lòng đăng nhập',
             ], 401);
         }
 
         // Lấy course
         $course = Course::with('lessons')->find($courseId);
-        if (!$course) {
+        if (! $course) {
             return response()->json([
                 'success' => false,
-                'message' => 'Khóa học không tồn tại'
+                'message' => 'Khóa học không tồn tại',
             ], 404);
         }
 
@@ -162,10 +159,10 @@ class ProgressController
             ->where('course_id', $courseId)
             ->first();
 
-        if (!$enrollment) {
+        if (! $enrollment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn chưa đăng ký khóa học này'
+                'message' => 'Bạn chưa đăng ký khóa học này',
             ], 403);
         }
 
@@ -183,8 +180,8 @@ class ProgressController
                     'total_lessons' => 0,
                     'completed_lessons' => 0,
                     'progress_percent' => 0,
-                    'lessons' => []
-                ]
+                    'lessons' => [],
+                ],
             ], 200);
         }
 
@@ -208,7 +205,7 @@ class ProgressController
                 'type' => $lesson->type,
                 'sort_order' => $lesson->sort_order,
                 'is_completed' => $userProgress[$lesson->id] ?? false,
-                'duration_seconds' => $lesson->duration_seconds ?? 0
+                'duration_seconds' => $lesson->duration_seconds ?? 0,
             ];
         })->values();
 
@@ -225,24 +222,22 @@ class ProgressController
                 'enrollment' => [
                     'enrolled_at' => $enrollment->created_at,
                     'completed_at' => $enrollment->completed_at,
-                    'status' => $enrollment->completed_at ? 'completed' : 'in_progress'
-                ]
-            ]
+                    'status' => $enrollment->completed_at ? 'completed' : 'in_progress',
+                ],
+            ],
         ], 200);
     }
 
     /**
      * Lấy danh sách tất cả khóa học mà user đã đăng ký kèm tiến độ
-     * 
-     * @return JsonResponse
      */
     public function getUserEnrollments(): JsonResponse
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Vui lòng đăng nhập'
+                'message' => 'Vui lòng đăng nhập',
             ], 401);
         }
 
@@ -274,38 +269,35 @@ class ProgressController
                     'progress_percent' => round($progress, 2),
                     'enrolled_at' => $enrollment->created_at,
                     'completed_at' => $enrollment->completed_at,
-                    'status' => $enrollment->completed_at ? 'completed' : 'in_progress'
+                    'status' => $enrollment->completed_at ? 'completed' : 'in_progress',
                 ];
             });
 
         return response()->json([
             'success' => true,
             'message' => 'Lấy danh sách khóa học thành công',
-            'data' => $enrollments
+            'data' => $enrollments,
         ], 200);
     }
 
     /**
      * Lấy chi tiết tiến độ của user cho một lesson cụ thể
-     * 
-     * @param int $lessonId
-     * @return JsonResponse
      */
     public function getLessonProgress(int $lessonId): JsonResponse
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Vui lòng đăng nhập'
+                'message' => 'Vui lòng đăng nhập',
             ], 401);
         }
 
         $lesson = Lesson::find($lessonId);
-        if (!$lesson) {
+        if (! $lesson) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bài học không tồn tại'
+                'message' => 'Bài học không tồn tại',
             ], 404);
         }
 
@@ -314,10 +306,10 @@ class ProgressController
             ->where('course_id', $lesson->course_id)
             ->first();
 
-        if (!$enrollment) {
+        if (! $enrollment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn chưa có quyền xem bài học này'
+                'message' => 'Bạn chưa có quyền xem bài học này',
             ], 403);
         }
 
@@ -326,13 +318,13 @@ class ProgressController
             ->where('lesson_id', $lessonId)
             ->first();
 
-        if (!$progress) {
+        if (! $progress) {
             // Chưa có progress, tạo record mới
             $progress = LessonProgress::create([
                 'user_id' => $user->id,
                 'lesson_id' => $lessonId,
                 'is_completed' => false,
-                'watched_seconds' => 0
+                'watched_seconds' => 0,
             ]);
         }
 
@@ -349,39 +341,35 @@ class ProgressController
                 'watched_seconds' => $progress->watched_seconds,
                 'duration_seconds' => $lesson->duration_seconds ?? 0,
                 'completed_at' => $progress->completed_at,
-                'progress_percentage' => $lesson->duration_seconds > 0 
+                'progress_percentage' => $lesson->duration_seconds > 0
                     ? round(($progress->watched_seconds / $lesson->duration_seconds) * 100, 2)
-                    : 0
-            ]
+                    : 0,
+            ],
         ], 200);
     }
 
     /**
      * Cập nhật số giây xem video (gọi định kỳ khi user xem video)
-     * 
-     * @param Request $request
-     * @param int $lessonId
-     * @return JsonResponse
      */
     public function updateWatchedSeconds(Request $request, int $lessonId): JsonResponse
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Vui lòng đăng nhập'
+                'message' => 'Vui lòng đăng nhập',
             ], 401);
         }
 
         $validated = $request->validate([
-            'watched_seconds' => 'required|integer|min:0'
+            'watched_seconds' => 'required|integer|min:0',
         ]);
 
         $lesson = Lesson::find($lessonId);
-        if (!$lesson) {
+        if (! $lesson) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bài học không tồn tại'
+                'message' => 'Bài học không tồn tại',
             ], 404);
         }
 
@@ -390,20 +378,20 @@ class ProgressController
             ->where('course_id', $lesson->course_id)
             ->first();
 
-        if (!$enrollment) {
+        if (! $enrollment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn chưa có quyền xem bài học này'
+                'message' => 'Bạn chưa có quyền xem bài học này',
             ], 403);
         }
 
         $progress = LessonProgress::updateOrCreate(
             [
                 'user_id' => $user->id,
-                'lesson_id' => $lessonId
+                'lesson_id' => $lessonId,
             ],
             [
-                'watched_seconds' => $validated['watched_seconds']
+                'watched_seconds' => $validated['watched_seconds'],
             ]
         );
 
@@ -416,8 +404,8 @@ class ProgressController
                 'duration_seconds' => $lesson->duration_seconds,
                 'watch_percentage' => $lesson->duration_seconds > 0
                     ? round(($progress->watched_seconds / $lesson->duration_seconds) * 100, 2)
-                    : 0
-            ]
+                    : 0,
+            ],
         ], 200);
     }
 }

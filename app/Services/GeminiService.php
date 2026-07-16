@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -23,7 +24,7 @@ class GeminiService
         'google/gemini-3.1-flash-lite-image',
         'google/gemini-3-pro-image',
         'google/gemini-3.1-flash-lite',
-        'google/gemini-flash-latest'
+        'google/gemini-flash-latest',
     ];
 
     public function analyzeImage(string $imagePath): array
@@ -35,8 +36,8 @@ class GeminiService
 
         // 2. Đọc & encode ảnh sang Base64
         $imageData = base64_encode(file_get_contents($imagePath));
-        $mimeType  = mime_content_type($imagePath) ?: 'image/jpeg';
-        
+        $mimeType = mime_content_type($imagePath) ?: 'image/jpeg';
+
         // Lấy API key (đã trỏ sang OPENROUTER_API_KEY trong config)
         $apiKey = config('services.gemini.api_key');
 
@@ -141,27 +142,27 @@ PROMPT;
                         'content' => [
                             [
                                 'type' => 'text',
-                                'text' => $prompt
+                                'text' => $prompt,
                             ],
                             [
                                 'type' => 'image_url',
                                 'image_url' => [
-                                    'url' => "data:{$mimeType};base64,{$imageData}"
-                                ]
-                            ]
-                        ]
-                    ]
+                                    'url' => "data:{$mimeType};base64,{$imageData}",
+                                ],
+                            ],
+                        ],
+                    ],
                 ],
                 'temperature' => 0.1,
                 'max_tokens' => 500,
                 // Định dạng JSON nếu OpenRouter model support
-                'response_format' => ['type' => 'json_object']
+                'response_format' => ['type' => 'json_object'],
             ];
 
             try {
                 $response = Http::timeout(30)
                     ->withHeaders([
-                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Authorization' => 'Bearer '.$apiKey,
                         'HTTP-Referer' => url('/'),
                         'X-Title' => config('app.name'),
                     ])
@@ -172,14 +173,16 @@ PROMPT;
                     $msg = $response->json('error.message') ?? $response->body();
                     Log::warning("OpenRouter skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
                     $lastError = "[{$model}] {$response->status()}: {$msg}";
+
                     continue;
                 }
 
                 if ($response->failed()) {
                     $msg = $response->json('error.message') ?? $response->body();
                     Log::error("OpenRouter error [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
-                    
+
                     $lastError = "[{$model}] {$response->status()}: {$msg}";
+
                     continue;
                 }
 
@@ -197,18 +200,20 @@ PROMPT;
 
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     Log::warning('OpenRouter JSON parse failed', ['raw' => $rawText, 'model' => $model]);
+
                     return ['error' => 'Không parse được JSON từ OpenRouter.', 'raw' => $rawText];
                 }
 
                 $result['_model_used'] = $model; // Ghi chú model nào đã thành công
+
                 return $result;
 
-            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            } catch (ConnectionException $e) {
                 Log::error('OpenRouter connection error', ['msg' => $e->getMessage()]);
-                $lastError = 'Connection error: ' . $e->getMessage();
+                $lastError = 'Connection error: '.$e->getMessage();
             }
         }
 
-        return ['error' => 'Tất cả model OpenRouter đều thất bại. Lỗi cuối: ' . $lastError];
+        return ['error' => 'Tất cả model OpenRouter đều thất bại. Lỗi cuối: '.$lastError];
     }
 }

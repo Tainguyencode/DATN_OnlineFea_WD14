@@ -15,11 +15,11 @@ return new class extends Migration
             $table->id();
 
             $table->foreignId('course_id')
-                  ->constrained('courses')
-                  ->cascadeOnDelete();
+                ->constrained('courses')
+                ->cascadeOnDelete();
             $table->string('title');
             $table->unsignedInteger('sort_order')
-                  ->default(0);
+                ->default(0);
             $table->timestamps();
         });
     }

@@ -42,16 +42,12 @@ class Coupon extends Model
 
     /**
      * Kiểm tra xem người dùng đã từng sử dụng mã giảm giá này chưa.
-     *
-     * @param int $userId
-     * @return bool
      */
     public function isUsedByUser(int $userId): bool
     {
-        return \App\Models\Order::where('user_id', $userId)
+        return Order::where('user_id', $userId)
             ->where('coupon_id', $this->id)
             ->where('status', 'paid')
             ->exists();
     }
 }
-

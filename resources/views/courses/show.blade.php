@@ -106,11 +106,25 @@
                             </a>
                             <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn là giảng viên sở hữu khóa học này.</p>
                         @elseif($isEnrolled)
-                            <a href="{{ $learningEntryUrl ?? route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
-                                Vào học
-                            </a>
-                            <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
-                            <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
+                            @if($enrollment && ($enrollment->status === \App\Models\Enrollment::STATUS_COMPLETED || $enrollment->completed_at !== null))
+                                <a href="{{ $learningEntryUrl ?? route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
+                                    Vào học (Xem lại)
+                                </a>
+                                <form method="POST" action="{{ route('courses.enroll', $course) }}" class="mt-3">
+                                    @csrf
+                                    <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
+                                        Học lại từ đầu (Đăng ký lại)
+                                    </button>
+                                </form>
+                                <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
+                                <p class="mt-3 text-center text-xs text-emerald-600 dark:text-emerald-400">Chúc mừng! Bạn đã hoàn thành khóa học này.</p>
+                            @else
+                                <a href="{{ $learningEntryUrl ?? route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
+                                    Vào học
+                                </a>
+                                <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
+                                <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bạn đã đăng ký khóa học này.</p>
+                            @endif
                         @elseif(auth()->check())
                             @if(auth()->user()->isStudent())
                                 @if($isFree)
@@ -320,11 +334,24 @@
                     @if(auth()->user()->isStudent())
                         <div class="mt-6 space-y-3">
                             @if($isEnrolled && ($learningEntryUrl ?? null))
-                                <a href="{{ $learningEntryUrl }}" class="ui-button-primary flex w-full items-center justify-center gap-2">
-                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
-                                    Vào học ngay
-                                </a>
-                                <p class="text-center text-xs text-emerald-600 dark:text-emerald-400">Bạn đã sở hữu khóa học này</p>
+                                @if($enrollment && ($enrollment->status === \App\Models\Enrollment::STATUS_COMPLETED || $enrollment->completed_at !== null))
+                                    <a href="{{ $learningEntryUrl }}" class="ui-button-primary flex w-full items-center justify-center gap-2">
+                                        Vào học (Xem lại)
+                                    </a>
+                                    <form method="POST" action="{{ route('courses.enroll', $course) }}">
+                                        @csrf
+                                        <button type="submit" class="ui-button-secondary w-full">
+                                            Học lại từ đầu (Đăng ký lại)
+                                        </button>
+                                    </form>
+                                    <p class="text-center text-xs text-emerald-600 dark:text-emerald-400">Bạn đã hoàn thành khóa học này</p>
+                                @else
+                                    <a href="{{ $learningEntryUrl }}" class="ui-button-primary flex w-full items-center justify-center gap-2">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                                        Vào học ngay
+                                    </a>
+                                    <p class="text-center text-xs text-emerald-600 dark:text-emerald-400">Bạn đã sở hữu khóa học này</p>
+                                @endif
                             @else
                                 <form method="POST" action="{{ route('student.cart.add', $course) }}">
                                     @csrf
