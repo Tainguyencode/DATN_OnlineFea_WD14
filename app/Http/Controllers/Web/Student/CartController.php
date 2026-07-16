@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Web\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
-use App\Models\Course;
 use App\Models\Coupon;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Services\PaymentGatewayService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +22,6 @@ class CartController extends Controller
 {
     /**
      * Lấy hoặc tạo mới giỏ hàng của học viên hiện tại.
-     *
-     * @return Cart
      */
     protected function getCart(): Cart
     {
@@ -31,8 +30,6 @@ class CartController extends Controller
 
     /**
      * Hiển thị trang giỏ hàng.
-     *
-     * @return View
      */
     public function index(): View
     {
@@ -57,9 +54,6 @@ class CartController extends Controller
 
     /**
      * Thêm một khóa học vào giỏ hàng.
-     *
-     * @param Course $course
-     * @return RedirectResponse
      */
     public function add(Course $course): RedirectResponse
     {
@@ -90,9 +84,6 @@ class CartController extends Controller
 
     /**
      * Xóa khóa học khỏi giỏ hàng.
-     *
-     * @param int $courseId
-     * @return RedirectResponse
      */
     public function remove(int $courseId): RedirectResponse
     {
@@ -104,10 +95,6 @@ class CartController extends Controller
 
     /**
      * Xử lý quy trình checkout và tạo đơn hàng chờ thanh toán.
-     *
-     * @param Request $request
-     * @param PaymentGatewayService $paymentService
-     * @return RedirectResponse
      */
     public function checkout(Request $request, PaymentGatewayService $paymentService): RedirectResponse
     {
@@ -158,7 +145,7 @@ class CartController extends Controller
             'price' => (float) ($c->discount_price ?? $c->sale_price ?? $c->price),
         ])->toArray();
 
-        $orderCode = 'ORD-' . strtoupper(Str::random(8));
+        $orderCode = 'ORD-'.strtoupper(Str::random(8));
 
         // Nếu tổng tiền là 0 (Ví dụ coupon giảm 100%), thực hiện hoàn tất thanh toán ngay lập tức
         if ($total <= 0) {
@@ -172,7 +159,7 @@ class CartController extends Controller
                     'total_amount' => 0,
                     'status' => 'paid',
                     'payment_method' => $validated['payment_method'],
-                    'transaction_id' => 'FREE-' . strtoupper(Str::random(10)),
+                    'transaction_id' => 'FREE-'.strtoupper(Str::random(10)),
                     'items' => $itemsSnapshot,
                 ]);
 
@@ -264,11 +251,8 @@ class CartController extends Controller
 
     /**
      * Áp dụng mã giảm giá và tính toán số tiền qua AJAX.
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
      */
-    public function applyCoupon(Request $request): \Illuminate\Http\JsonResponse
+    public function applyCoupon(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'coupon_code' => 'required|string',
@@ -315,7 +299,7 @@ class CartController extends Controller
         if ($subtotal < $coupon->min_order_amount) {
             return response()->json([
                 'success' => false,
-                'message' => 'Đơn học chưa đạt giá trị tối thiểu ' . number_format($coupon->min_order_amount, 0, ',', '.') . 'đ để áp dụng mã này.',
+                'message' => 'Đơn học chưa đạt giá trị tối thiểu '.number_format($coupon->min_order_amount, 0, ',', '.').'đ để áp dụng mã này.',
             ]);
         }
 
@@ -330,21 +314,20 @@ class CartController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Áp dụng mã giảm giá thành công!',
-            'discount_amount' => (float)$discount,
-            'new_total' => (float)$total,
+            'discount_amount' => (float) $discount,
+            'new_total' => (float) $total,
             'coupon' => [
                 'code' => $coupon->code,
                 'type' => $coupon->type,
                 'value' => (float) $coupon->value,
                 'min_order_amount' => (float) $coupon->min_order_amount,
-            ]
+            ],
         ]);
     }
 
     /**
      * Hiển thị giao diện thanh toán chuyển khoản ngân hàng.
      *
-     * @param string $orderCode
      * @return View|RedirectResponse
      */
     public function showPaymentPage(string $orderCode)
@@ -368,7 +351,6 @@ class CartController extends Controller
     /**
      * Hiển thị giao diện giả lập VNPay hoặc MoMo.
      *
-     * @param string $orderCode
      * @return View|RedirectResponse
      */
     public function mockGateway(string $orderCode)
@@ -392,11 +374,6 @@ class CartController extends Controller
 
     /**
      * Xử lý mô phỏng kết quả thanh toán từ phía người dùng.
-     *
-     * @param Request $request
-     * @param string $orderCode
-     * @param PaymentGatewayService $paymentService
-     * @return RedirectResponse
      */
     public function simulatePayment(Request $request, string $orderCode, PaymentGatewayService $paymentService): RedirectResponse
     {
@@ -422,7 +399,6 @@ class CartController extends Controller
     /**
      * Hiển thị trang kết quả thanh toán thành công.
      *
-     * @param string $orderCode
      * @return View|RedirectResponse
      */
     public function successPage(string $orderCode)
@@ -444,7 +420,6 @@ class CartController extends Controller
     /**
      * Hiển thị trang kết quả thanh toán thất bại.
      *
-     * @param string $orderCode
      * @return View|RedirectResponse
      */
     public function failedPage(string $orderCode)
@@ -463,4 +438,3 @@ class CartController extends Controller
         return view('student.cart.failed', compact('order', 'orderItems'));
     }
 }
-

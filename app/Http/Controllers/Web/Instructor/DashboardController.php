@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Instructor;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Order;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -14,7 +15,7 @@ class DashboardController extends Controller
         $user = auth()->user();
         $courseIds = Course::where('instructor_id', $user->id)->pluck('id');
 
-        $orders = \App\Models\Order::where('status', 'paid')->get();
+        $orders = Order::where('status', 'paid')->get();
         $revenue = 0;
         foreach ($orders as $order) {
             foreach (($order->items ?? []) as $item) {

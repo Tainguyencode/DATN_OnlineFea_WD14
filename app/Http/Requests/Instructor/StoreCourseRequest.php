@@ -40,7 +40,7 @@ class StoreCourseRequest extends FormRequest
             'price' => ['required', 'numeric', 'min:0', 'max:999999999'],
             'discount_price' => ['nullable', 'numeric', 'min:0', 'lte:price'],
             'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
-            'language' => ['required', 'string', 'max:10'],
+            'language' => ['sometimes', 'string', 'max:10'],
         ];
     }
 

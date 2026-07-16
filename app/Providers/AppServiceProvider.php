@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Permission;
 use App\Services\NotificationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
@@ -35,7 +36,7 @@ class AppServiceProvider extends ServiceProvider
 
         try {
             if (Schema::hasTable('permissions')) {
-                foreach (\App\Models\Permission::pluck('slug') as $permission) {
+                foreach (Permission::pluck('slug') as $permission) {
                     Gate::define($permission, fn ($user) => $user->hasPermissionTo($permission));
                 }
             }

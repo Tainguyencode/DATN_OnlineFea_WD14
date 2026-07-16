@@ -9,7 +9,12 @@
     data-course-progress="{{ $courseProgress }}"
     data-progress-url="{{ $progressUrl }}"
 >
-    <x-learning.header :course="$course" :course-progress="$courseProgress" />
+    <x-learning.header
+        :course="$course"
+        :course-progress="$courseProgress"
+        :completed-lessons="$completedLessons"
+        :total-lessons="$totalLessons"
+    />
 
     <div class="learning-player-body flex min-h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
         <main class="learning-main min-w-0 flex-1" data-learning-main>
