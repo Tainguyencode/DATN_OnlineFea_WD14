@@ -92,6 +92,11 @@ class CourseController extends Controller
             && $course->isFavoritedBy(auth()->user());
         $learningEntryUrl = $canAccessFullCourse ? $course->learningEntryUrl() : null;
 
+        $enrollment = null;
+        if ($isEnrolled && auth()->check()) {
+            $enrollment = Enrollment::where('user_id', auth()->id())->where('course_id', $course->id)->first();
+        }
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -104,7 +109,8 @@ class CourseController extends Controller
             'canManageCourse',
             'canAccessFullCourse',
             'isFavorited',
-            'learningEntryUrl'
+            'learningEntryUrl',
+            'enrollment'
         ));
     }
 

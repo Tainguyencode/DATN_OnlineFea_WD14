@@ -32,7 +32,7 @@ class CourseController extends Controller
         $status = $request->query('status');
 
         $courses = Course::where('instructor_id', auth()->id())
-            ->with(['category:id,parent_id,name', 'category.parent:id,name'])
+            ->with(['category:id,parent_id,name,status', 'category.parent:id,name,status'])
             ->withCount('enrollments')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -188,9 +188,15 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm bài giảng.');
     }
 
-    public function submit(Course $course, CourseReviewService $reviewService): RedirectResponse
+    public function submit(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
         $this->authorize('submit', $course);
+
+        $request->validate([
+            'copyright_agreed' => ['required', 'accepted'],
+        ], [
+            'copyright_agreed.accepted' => 'Bạn phải đọc và đồng ý với cam kết bản quyền trước khi gửi duyệt.',
+        ]);
 
         if (! $course->submissionCheck()->passes()) {
             return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');
