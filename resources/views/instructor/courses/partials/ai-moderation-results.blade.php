@@ -35,6 +35,21 @@
         </div>
     </div>
 
+    <!-- Copyright Disclaimer Alert -->
+    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div class="flex items-start gap-2.5">
+            <span class="text-base" aria-hidden="true">⚠️</span>
+            <div>
+                <p class="font-bold">Lưu ý</p>
+                <div class="mt-1.5 space-y-1.5 text-xs text-amber-700 leading-relaxed font-medium">
+                    <p>• AI chỉ hỗ trợ phát hiện các dấu hiệu vi phạm như logo, watermark, nội dung nhạy cảm, bạo lực... AI không thể đảm bảo phát hiện mọi hành vi vi phạm bản quyền.</p>
+                    <p>• Kết quả "Không phát hiện vi phạm" không đồng nghĩa với việc nội dung hoàn toàn hợp pháp.</p>
+                    <p>• Giảng viên vẫn chịu hoàn toàn trách nhiệm về tính hợp pháp của video, tài liệu và các nội dung đã tải lên.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     @if ($lessonItems->isEmpty())
         <p class="mt-5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
             Khóa học chưa có bài học video để kiểm duyệt.

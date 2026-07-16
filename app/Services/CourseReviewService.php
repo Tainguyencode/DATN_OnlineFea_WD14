@@ -17,7 +17,10 @@ class CourseReviewService
         abort_unless($course->isOwnedBy($instructor), 403);
         abort_unless($course->isEditable(), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
-        return DB::transaction(function () use ($course) {
+        $hasAgreement = $course->copyright_agreed || request()->boolean('copyright_agreed');
+        abort_unless($hasAgreement, 422, 'Bạn phải đồng ý với cam kết bản quyền trước khi gửi duyệt.');
+
+        return DB::transaction(function () use ($course, $instructor) {
             $submissionNumber = (int) $course->submission_count + 1;
 
             $review = CourseReview::create([
@@ -33,9 +36,26 @@ class CourseReviewService
                 'submitted_at' => now(),
                 'submission_count' => $submissionNumber,
                 'reject_reason' => null,
+                'copyright_agreed' => true,
+                'copyright_agreed_at' => now(),
+                'copyright_agreed_by' => $instructor->id,
             ]);
 
             $this->notifyAdmins($course, 'course_submitted', 'Khóa học chờ duyệt', "Giảng viên đã gửi khóa học \"{$course->title}\" lần {$submissionNumber}.");
+
+            ActivityLogService::log(
+                $instructor->id,
+                'copyright_agreed',
+                Course::class,
+                $course->id,
+                [
+                    'agreed_at' => now()->toDateTimeString(),
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                ],
+                request(),
+                "Giảng viên đồng ý cam kết bản quyền cho khóa học \"{$course->title}\""
+            );
 
             ActivityLogService::log($course->instructor_id, 'submit_course_review', Course::class, $course->id);
 
