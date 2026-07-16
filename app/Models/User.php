@@ -59,6 +59,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Wishlist::class);
     }
 
+    public function recentlyViewedCourses(): HasMany
+    {
+        return $this->hasMany(RecentlyViewedCourse::class);
+    }
+
     public function favoriteCourses(): BelongsToMany
     {
         return $this->belongsToMany(Course::class, 'wishlists')->withTimestamps();

@@ -233,21 +233,21 @@ class SystemSeeder extends Seeder
             [
                 'user_id' => 4, // Trần Thị Học
                 'course_id' => 1, // Khóa Laravel
-                'viewed_at' => now()->subHours(1),
+                'last_viewed_at' => now()->subHours(1),
                 'created_at' => now()->subHours(1),
                 'updated_at' => now()->subHours(1),
             ],
             [
                 'user_id' => 4, // Trần Thị Học
                 'course_id' => 2, // Khóa React
-                'viewed_at' => now()->subHours(3),
+                'last_viewed_at' => now()->subHours(3),
                 'created_at' => now()->subHours(3),
                 'updated_at' => now()->subHours(3),
             ],
             [
                 'user_id' => 5, // Lê Văn Học
                 'course_id' => 1, // Khóa Laravel
-                'viewed_at' => now()->subDays(1),
+                'last_viewed_at' => now()->subDays(1),
                 'created_at' => now()->subDays(1),
                 'updated_at' => now()->subDays(1),
             ],

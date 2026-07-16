@@ -22,6 +22,7 @@ use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
+use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
 use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
@@ -131,6 +132,9 @@ Route::get('/dashboard', function () {
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
+    Route::get('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'index'])->name('recently-viewed.index');
+    Route::delete('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'clear'])->name('recently-viewed.clear');
+    Route::delete('/recently-viewed-courses/{recentlyViewedCourse}', [RecentlyViewedCourseController::class, 'destroy'])->name('recently-viewed.destroy');
     Route::get('/cart', [CartController::class, 'index'])->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');

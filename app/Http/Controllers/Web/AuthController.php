@@ -20,6 +20,7 @@ use App\Services\ActivityLogService;
 use App\Services\AuthService;
 use App\Services\CaptchaService;
 use App\Services\EmailVerificationService;
+use App\Services\RecentlyViewedCourseService;
 use App\Services\TwoFactorService;
 use App\Support\MailErrorFormatter;
 use Illuminate\Auth\Events\Registered;
@@ -418,6 +419,16 @@ class AuthController extends Controller
             ->limit(6)
             ->get();
 
+        $recentlyViewedCourses = app(RecentlyViewedCourseService::class)
+            ->latestVisibleForUser($user, 6);
+
+        $recentEnrollmentMap = Enrollment::query()
+            ->where('user_id', $user->id)
+            ->whereIn('course_id', $recentlyViewedCourses->pluck('course_id')->filter()->unique()->values())
+            ->withLearningAccess()
+            ->get()
+            ->keyBy('course_id');
+
         $certificates = Certificate::where('user_id', $user->id)
             ->with('course:id,title,slug,thumbnail')
             ->orderByDesc('issued_at')
@@ -450,6 +461,8 @@ class AuthController extends Controller
             'cart' => $cart,
             'cartTotal' => $cartTotal,
             'wishlistItems' => $wishlistItems,
+            'recentlyViewedCourses' => $recentlyViewedCourses,
+            'recentEnrollmentMap' => $recentEnrollmentMap,
             'certificates' => $certificates,
             'orders' => $orders,
         ];
