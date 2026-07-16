@@ -15,14 +15,15 @@ class InstructorCourseCreateTest extends TestCase
     public function test_instructor_can_create_course_without_language_field_in_form(): void
     {
         $instructor = User::factory()->create(['role' => 'instructor']);
-        $category = Category::create(['name' => 'Web', 'slug' => 'web']);
+        $parentCategory = Category::create(['name' => 'IT', 'slug' => 'it', 'status' => true]);
+        $category = Category::create(['name' => 'Web', 'slug' => 'web', 'parent_id' => $parentCategory->id, 'status' => true]);
 
         $response = $this->actingAs($instructor)->post(route('instructor.courses.store'), [
             'title' => 'Khóa học mới test',
             'category_id' => $category->id,
             'description' => 'Mô tả khóa học đủ dài để lưu vào database.',
             'price' => 199000,
-            'sale_price' => 99000,
+            'discount_price' => 99000,
             'level' => 'beginner',
         ]);
 

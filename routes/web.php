@@ -2,15 +2,14 @@
 
 use App\Http\Controllers\Web\Admin\AiModerationController;
 use App\Http\Controllers\Web\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\UserController;
-use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\AuthController;
-use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
@@ -19,9 +18,12 @@ use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboa
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
+use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
+use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
 use Illuminate\Support\Facades\Route;
@@ -130,6 +132,9 @@ Route::get('/dashboard', function () {
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
+    Route::get('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'index'])->name('recently-viewed.index');
+    Route::delete('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'clear'])->name('recently-viewed.clear');
+    Route::delete('/recently-viewed-courses/{recentlyViewedCourse}', [RecentlyViewedCourseController::class, 'destroy'])->name('recently-viewed.destroy');
     Route::get('/cart', [CartController::class, 'index'])->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
@@ -143,6 +148,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::get('/certificates', fn () => redirect(route('student.dashboard').'#certificates'))->name('certificates');
+    Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
     Route::get('/orders', fn () => redirect(route('student.dashboard').'#orders'))->name('orders');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -203,7 +209,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
     Route::delete('/users/{user}/force', [UserController::class, 'forceDelete'])->name('users.force-delete');
     Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+    Route::get('/roles/create', [RoleController::class, 'create'])->name('roles.create');
     Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
+    Route::get('/roles/{role}/edit', [RoleController::class, 'edit'])->name('roles.edit');
     Route::put('/roles/{role}', [RoleController::class, 'update'])->name('roles.update');
     Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
     Route::get('/categories', [AdminCategoryController::class, 'index'])->name('categories.index');
@@ -245,13 +253,13 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
 
 // Dev helper login route
 Route::get('/dev/login-as-admin', function () {
-    auth()->login(\App\Models\User::where('role', 'admin')->first());
+    auth()->login(User::where('role', 'admin')->first());
+
     return redirect()->route('admin.dashboard');
 })->name('dev.login-as-admin');
 
 Route::get('/dev/login-as-student', function () {
-    auth()->login(\App\Models\User::where('email', 'leanhtuan291111@gmail.com')->first() ?? \App\Models\User::where('role', 'student')->first());
+    auth()->login(User::where('email', 'leanhtuan291111@gmail.com')->first() ?? User::where('role', 'student')->first());
+
     return redirect()->route('dashboard');
 })->name('dev.login-as-student');
-
-

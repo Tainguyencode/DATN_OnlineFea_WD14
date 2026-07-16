@@ -23,7 +23,7 @@ class LearningProgressTest extends TestCase
         $lesson = $course->lessons->first();
 
         $this->actingAs($student)
-            ->postJson(route('student.courses.lessons.progress', [$course, $lesson]), [
+            ->postJson(route('courses.lessons.progress', [$course, $lesson]), [
                 'watched_seconds' => 100,
                 'duration_seconds' => 300,
             ])
@@ -44,7 +44,7 @@ class LearningProgressTest extends TestCase
         ]);
 
         $response = $this->actingAs($student)
-            ->postJson(route('student.courses.lessons.progress', [$course, $lesson]), [
+            ->postJson(route('courses.lessons.progress', [$course, $lesson]), [
                 'watched_seconds' => 240,
                 'duration_seconds' => 300,
             ]);
@@ -99,7 +99,7 @@ class LearningProgressTest extends TestCase
             ->assertOk();
 
         $this->actingAs($student)
-            ->postJson(route('student.courses.lessons.progress', [$course, $lesson]), [
+            ->postJson(route('courses.lessons.progress', [$course, $lesson]), [
                 'watched_seconds' => 120,
                 'duration_seconds' => 300,
             ])

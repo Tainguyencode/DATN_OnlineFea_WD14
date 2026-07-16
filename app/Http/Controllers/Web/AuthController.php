@@ -20,6 +20,7 @@ use App\Services\ActivityLogService;
 use App\Services\AuthService;
 use App\Services\CaptchaService;
 use App\Services\EmailVerificationService;
+use App\Services\RecentlyViewedCourseService;
 use App\Services\TwoFactorService;
 use App\Support\MailErrorFormatter;
 use Illuminate\Auth\Events\Registered;
@@ -106,13 +107,16 @@ class AuthController extends Controller
 
         $user = $authService->register($data, $request);
 
-        event(new Registered($user));
-
         Auth::login($user);
         $request->session()->regenerate();
 
+        if (! config('auth.email_verification_enabled', true)) {
+            return $this->redirectAfterAuthentication($user, $request)
+                ->with('success', 'Đăng ký thành công.');
+        }
+
         try {
-            $emailVerificationService->sendCode($user, ignoreCooldown: true);
+            event(new Registered($user));
         } catch (ValidationException $exception) {
             return redirect()->route('verification.notice')
                 ->withErrors($exception->errors())
@@ -207,7 +211,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user?->hasVerifiedEmail()) {
+        if (! config('auth.email_verification_enabled', true) || $user?->hasVerifiedEmail()) {
             return $this->redirectAfterAuthentication($user, $request);
         }
 
@@ -230,7 +234,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user->hasVerifiedEmail()) {
+        if (! config('auth.email_verification_enabled', true) || $user->hasVerifiedEmail()) {
             return redirect()->intended($user->dashboardUrl());
         }
 
@@ -249,7 +253,7 @@ class AuthController extends Controller
 
     public function verifyEmail(EmailVerificationRequest $request): RedirectResponse
     {
-        if ($request->user()->hasVerifiedEmail()) {
+        if (! config('auth.email_verification_enabled', true) || $request->user()->hasVerifiedEmail()) {
             return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
@@ -263,13 +267,13 @@ class AuthController extends Controller
 
     public function resendVerification(Request $request, EmailVerificationService $emailVerificationService): RedirectResponse
     {
-        if ($request->user()->hasVerifiedEmail()) {
+        if (! config('auth.email_verification_enabled', true) || $request->user()->hasVerifiedEmail()) {
             return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
         try {
             $emailVerificationService->sendCode($request->user());
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             return back()
                 ->withErrors($exception->errors())
                 ->with('resend_after', $emailVerificationService->resendCooldownSeconds($request->user()));
@@ -361,6 +365,7 @@ class AuthController extends Controller
 
         return redirect()->intended($user->dashboardUrl());
     }
+
     private function isSafeRedirect(string $redirect): bool
     {
         if ($redirect === '') {
@@ -414,6 +419,16 @@ class AuthController extends Controller
             ->limit(6)
             ->get();
 
+        $recentlyViewedCourses = app(RecentlyViewedCourseService::class)
+            ->latestVisibleForUser($user, 6);
+
+        $recentEnrollmentMap = Enrollment::query()
+            ->where('user_id', $user->id)
+            ->whereIn('course_id', $recentlyViewedCourses->pluck('course_id')->filter()->unique()->values())
+            ->withLearningAccess()
+            ->get()
+            ->keyBy('course_id');
+
         $certificates = Certificate::where('user_id', $user->id)
             ->with('course:id,title,slug,thumbnail')
             ->orderByDesc('issued_at')
@@ -437,7 +452,7 @@ class AuthController extends Controller
 
         return [
             'studentHub' => true,
-            'emailVerified' => $user->hasVerifiedEmail(),
+            'emailVerified' => ! config('auth.email_verification_enabled', true) || $user->hasVerifiedEmail(),
             'user' => $user,
             'enrollments' => $enrollments,
             'courseEnrollments' => $courseEnrollments,
@@ -446,6 +461,8 @@ class AuthController extends Controller
             'cart' => $cart,
             'cartTotal' => $cartTotal,
             'wishlistItems' => $wishlistItems,
+            'recentlyViewedCourses' => $recentlyViewedCourses,
+            'recentEnrollmentMap' => $recentEnrollmentMap,
             'certificates' => $certificates,
             'orders' => $orders,
         ];

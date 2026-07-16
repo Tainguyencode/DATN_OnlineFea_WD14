@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -16,7 +17,7 @@ class UpdateUserRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator): void {
-            /** @var \App\Models\User|null $user */
+            /** @var User|null $user */
             $user = $this->route('user');
             $authUser = $this->user();
 

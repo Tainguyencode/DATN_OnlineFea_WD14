@@ -7,6 +7,8 @@ use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\Order;
 use App\Models\Wishlist;
+use App\Notifications\CertificateIssuedNotification;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -88,12 +90,20 @@ class MiscController extends Controller
         return $this->storeFavorite($request, $course);
     }
 
-    public function certificates(): View
+    public function certificates(Request $request)
     {
         $certificates = Certificate::where('user_id', auth()->id())
             ->with('course:id,title,thumbnail')
             ->orderByDesc('issued_at')
             ->get();
+
+        if ($request->has('send_email')) {
+            foreach ($certificates as $cert) {
+                auth()->user()->notify(new CertificateIssuedNotification($cert->course, $cert));
+            }
+
+            return redirect()->route('student.certificates')->with('success', 'Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+        }
 
         return view('student.certificates', compact('certificates'));
     }
@@ -141,5 +151,49 @@ class MiscController extends Controller
         }
 
         return back()->with($status < 400 ? 'success' : 'error', $message);
+    }
+
+    public function viewCertificatePdf(Certificate $certificate)
+    {
+        abort_unless((int) $certificate->user_id === (int) auth()->id(), 403);
+
+        $certificate->load(['course', 'user']);
+
+        $pdf = Pdf::loadView('pdf.certificate', [
+            'certificate' => $certificate,
+            'course' => $certificate->course,
+            'user' => $certificate->user,
+        ]);
+
+        return $pdf->stream('certificate-'.$certificate->certificate_code.'.pdf');
+    }
+
+    public function publicCertificate(string $code)
+    {
+        $certificate = Certificate::where('certificate_code', $code)
+            ->with(['course', 'user'])
+            ->firstOrFail();
+
+        return view('pdf.certificate', [
+            'certificate' => $certificate,
+            'course' => $certificate->course,
+            'user' => $certificate->user,
+            'isPublic' => true,
+        ]);
+    }
+
+    public function publicCertificatePdf(string $code)
+    {
+        $certificate = Certificate::where('certificate_code', $code)
+            ->with(['course', 'user'])
+            ->firstOrFail();
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.certificate', [
+            'certificate' => $certificate,
+            'course' => $certificate->course,
+            'user' => $certificate->user,
+        ]);
+
+        return $pdf->stream('certificate-' . $certificate->certificate_code . '.pdf');
     }
 }

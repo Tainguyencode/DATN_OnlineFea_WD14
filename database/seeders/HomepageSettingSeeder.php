@@ -21,7 +21,7 @@ class HomepageSettingSeeder extends Seeder
                     'subtitle' => 'Hệ thống học lập trình trực tuyến hiện đại với các lộ trình chuyên nghiệp và bài tập thực hành phong phú.',
                     'banner_url' => 'https://example.com/images/hero-banner.jpg',
                     'cta_text' => 'Bắt đầu học ngay',
-                    'cta_url' => '/courses'
+                    'cta_url' => '/courses',
                 ]),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -32,7 +32,7 @@ class HomepageSettingSeeder extends Seeder
                 'value' => json_encode([
                     'course_ids' => [1, 2, 3],
                     'title' => 'Khóa Học Nổi Bật',
-                    'subtitle' => 'Những khóa học được đánh giá cao và thu hút nhiều học viên tham gia nhất.'
+                    'subtitle' => 'Những khóa học được đánh giá cao và thu hút nhiều học viên tham gia nhất.',
                 ]),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -44,11 +44,11 @@ class HomepageSettingSeeder extends Seeder
                     'students_count' => '15,000+',
                     'courses_count' => '120+',
                     'instructors_count' => '30+',
-                    'rating_avg' => '4.8/5'
+                    'rating_avg' => '4.8/5',
                 ]),
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]
+            ],
         ];
 
         DB::table('homepage_settings')->insert($settings);

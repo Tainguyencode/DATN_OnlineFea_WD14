@@ -42,6 +42,7 @@ class DatabaseSeeder extends Seeder
             'lesson_attachments',
             'lessons',
             'chapters',
+            'course_sections',
             'learning_path_courses',
             'learning_paths',
             'courses',
@@ -90,13 +91,47 @@ class DatabaseSeeder extends Seeder
 
             // Bảng phụ thuộc cấp 2 (Phụ thuộc vào khóa học và bài học)
             LearningPathSeeder::class, // Phụ thuộc vào courses qua bảng pivot
-            InteractionSeeder::class,  // Phụ thuộc vào users, courses, lessons, quizzes, assignments, v.v.
+            // InteractionSeeder::class,  // Đã comment vì thiếu mock data users/courses
 
             // Bảng ghi chép lịch sử và hoạt động hệ thống
-            SystemSeeder::class, // Phụ thuộc vào users, badges, courses
+            // SystemSeeder::class, // Đã comment vì thiếu mock data users/courses
 
             // Thêm dữ liệu mẫu bổ sung cho progress tracking
-            ExpandedSampleDataSeeder::class,
+            // ExpandedSampleDataSeeder::class,
         ]);
+
+        // 3. Tự động đồng bộ course_sections và cập nhật lessons (course_id, section_id) từ chapters
+        $this->backfillCourseSections();
+    }
+
+    /**
+     * Tự động đồng bộ hóa dữ liệu từ chapters sang course_sections và cập nhật lessons
+     */
+    private function backfillCourseSections(): void
+    {
+        echo "\n========== ĐỒNG BỘ HÓA COURSE SECTIONS ==========\n";
+
+        $chapters = DB::table('chapters')->orderBy('id')->get();
+
+        foreach ($chapters as $chapter) {
+            $sectionId = DB::table('course_sections')->insertGetId([
+                'course_id' => $chapter->course_id,
+                'title' => $chapter->title,
+                'description' => null,
+                'sort_order' => $chapter->sort_order,
+                'created_at' => $chapter->created_at ?? now(),
+                'updated_at' => $chapter->updated_at ?? now(),
+            ]);
+
+            DB::table('lessons')
+                ->where('chapter_id', $chapter->id)
+                ->update([
+                    'course_id' => $chapter->course_id,
+                    'section_id' => $sectionId,
+                    'duration' => DB::raw('COALESCE(duration, duration_seconds)'),
+                ]);
+        }
+
+        echo '✓ Đồng bộ thành công '.count($chapters)." chương học sang course_sections!\n\n";
     }
 }

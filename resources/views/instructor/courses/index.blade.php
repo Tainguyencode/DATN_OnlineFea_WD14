@@ -180,6 +180,11 @@
                                             class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">
                                             {{ $statusOptions[$course->status] ?? $course->status }}
                                         </span>
+                                        @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) && $course->copyright_agreed)
+                                            <div class="mt-1.5 flex items-center gap-0.5 text-[10px] font-bold text-emerald-700">
+                                                <span>✔ Đã cam kết bản quyền</span>
+                                            </div>
+                                        @endif
                                     </td>
                                     <td class="px-5 py-4">
                                         <div class="font-bold text-slate-900">
@@ -209,15 +214,10 @@
                                                     trước</span>
                                             @endif
                                             @if ($canSubmit && $isReady)
-                                                <form method="POST"
-                                                    action="{{ route('instructor.courses.submit', $course) }}"
-                                                    onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
-                                                    @csrf
-                                                    <button type="submit"
-                                                        class="rounded-lg px-3 py-2 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
-                                                        {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
-                                                    </button>
-                                                </form>
+                                                <a href="{{ route('instructor.courses.edit', $course) }}"
+                                                    class="rounded-lg px-3 py-2 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
+                                                    {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                                </a>
                                             @elseif ($canSubmit)
                                                 <span class="rounded-lg px-3 py-2 text-xs font-bold text-slate-400"
                                                     title="Hoàn thiện điều kiện gửi duyệt trước">Chưa đủ điều kiện</span>
@@ -284,6 +284,11 @@
                                 <p class="mt-1 text-xs text-slate-500">
                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
                                     {{ $course->created_at?->format('d/m/Y') }}</p>
+                                @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) && $course->copyright_agreed)
+                                    <div class="mt-1 flex items-center gap-0.5 text-[10px] font-bold text-emerald-700">
+                                        <span>✔ Đã cam kết bản quyền</span>
+                                    </div>
+                                @endif
                                 @if (in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
                                     <p
                                         class="mt-2 rounded-lg bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-700">
@@ -327,14 +332,10 @@
                                         trước</span>
                                 @endif
                                 @if ($canSubmit && $isReady)
-                                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}"
-                                        onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
-                                        @csrf
-                                        <button type="submit"
-                                            class="w-full rounded-lg border border-amber-200 px-3 py-2 text-center text-xs font-bold text-amber-700">
-                                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
-                                        </button>
-                                    </form>
+                                    <a href="{{ route('instructor.courses.edit', $course) }}"
+                                       class="rounded-lg bg-amber-500 px-3 py-2 text-center text-xs font-bold text-white">
+                                        {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                    </a>
                                 @elseif ($canSubmit)
                                     <span
                                         class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">

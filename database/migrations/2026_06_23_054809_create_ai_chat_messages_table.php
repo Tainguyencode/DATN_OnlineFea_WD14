@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('ai_chat_messages', function (Blueprint $table) {
             $table->id();
-              $table->foreignId('user_id')
+            $table->foreignId('user_id')
                 ->constrained('users')
                 ->cascadeOnDelete();
 
@@ -24,7 +24,7 @@ return new class extends Migration
 
             $table->enum('role', [
                 'user',
-                'assistant'
+                'assistant',
             ])->default('user');
 
             $table->text('content');

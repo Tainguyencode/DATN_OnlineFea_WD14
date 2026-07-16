@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\SocialAuthException;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Services\SocialAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
@@ -300,7 +300,7 @@ class SocialAuthenticationTest extends TestCase
 
         $socialUser = $this->mockSocialiteUser('google-conflict', 'other@example.com', 'Conflict User');
 
-        $this->expectException(\App\Exceptions\SocialAuthException::class);
+        $this->expectException(SocialAuthException::class);
 
         app(SocialAuthService::class)->resolveUser('google', $socialUser);
     }

@@ -82,6 +82,29 @@
                         <dd class="mt-1 text-sm font-bold text-slate-950">{{ $formatDuration($totalVideoDurationSeconds) }}</dd>
                     </div>
                 </dl>
+
+                <div class="mt-5 border-t border-slate-100 pt-4">
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500">Cam kết bản quyền</h4>
+                    @if($course->copyright_agreed)
+                        <div class="mt-1.5 flex items-center gap-1.5 text-sm text-emerald-700 font-bold">
+                            <span class="text-emerald-600">✔</span> <span>Đã cam kết</span>
+                        </div>
+                        <div class="mt-2 grid gap-4 sm:grid-cols-2 text-xs">
+                            <div>
+                                <span class="block font-medium text-slate-500 uppercase tracking-wider">Thời gian:</span>
+                                <strong class="text-slate-900">{{ $course->copyright_agreed_at?->format('d/m/Y H:i') }}</strong>
+                            </div>
+                            <div>
+                                <span class="block font-medium text-slate-500 uppercase tracking-wider">Người xác nhận:</span>
+                                <strong class="text-slate-900">{{ $course->copyrightAgreedBy?->name ?? $course->instructor?->name }}</strong>
+                            </div>
+                        </div>
+                    @else
+                        <div class="mt-1.5 flex items-center gap-1.5 text-sm text-rose-700 font-bold">
+                            <span class="text-rose-600">✖</span> <span>Chưa cam kết</span>
+                        </div>
+                    @endif
+                </div>
             </div>
 
             <div class="flex flex-col gap-2">
