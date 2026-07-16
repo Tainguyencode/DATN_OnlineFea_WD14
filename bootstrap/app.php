@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => \App\Http\Middleware\EnsureAccountIsActive::class,
             'role' => \App\Http\Middleware\CheckRole::class,
+            'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
             '2fa' => \App\Http\Middleware\EnsureTwoFactorIsVerified::class,
         ]);
     })
