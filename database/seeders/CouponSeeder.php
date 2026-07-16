@@ -16,7 +16,7 @@ class CouponSeeder extends Seeder
             [
                 'id' => 1,
                 'code' => 'WELCOME20',
-                'type' => 'percentage',
+                'type' => 'percent',
                 'value' => 20.00,
                 'used_count' => 5,
                 'starts_at' => now()->subDays(10),
@@ -40,7 +40,7 @@ class CouponSeeder extends Seeder
             [
                 'id' => 3,
                 'code' => 'PROMO50',
-                'type' => 'percentage',
+                'type' => 'percent',
                 'value' => 50.00,
                 'used_count' => 0,
                 'starts_at' => now(),
