@@ -54,6 +54,9 @@ class PushNotification extends Model
             'new_enrollment' => 'Ghi danh mới',
             'order_paid' => 'Thanh toán',
             'certificate_issued' => 'Chứng chỉ',
+            'course_review_created' => 'Đánh giá mới',
+            'course_review_replied' => 'Phản hồi đánh giá',
+            'course_review_moderated' => 'Kiểm duyệt đánh giá',
             default => 'Thông báo',
         };
     }
@@ -69,6 +72,8 @@ class PushNotification extends Model
             'new_enrollment' => 'bg-cyan-100 text-cyan-700',
             'order_paid' => 'bg-indigo-100 text-indigo-700',
             'certificate_issued' => 'bg-teal-100 text-teal-700',
+            'course_review_created', 'course_review_replied' => 'bg-amber-100 text-amber-700',
+            'course_review_moderated' => 'bg-fuchsia-100 text-fuchsia-700',
             default => 'bg-slate-100 text-slate-700',
         };
     }
