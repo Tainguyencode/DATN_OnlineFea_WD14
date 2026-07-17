@@ -6,6 +6,7 @@ use App\Models\Cart;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -40,65 +41,71 @@ class PaymentGatewayService
      */
     public function processMockPayment(Order $order, string $status, ?string $transactionId = null): bool
     {
-        // Nếu đơn hàng đã thanh toán trước đó, không xử lý lại để tránh trùng lặp ghi danh
-        if ($order->status === 'paid') {
-            return true;
-        }
+        return DB::transaction(function () use ($order, $status, $transactionId): bool {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
 
-        if ($status === 'success') {
+            // A repeated callback for a completed order must be a no-op.
+            if ($lockedOrder->status === 'paid') {
+                return true;
+            }
+
+            $payment = $lockedOrder->payment()->lockForUpdate()->first();
+
+            if ($status !== 'success') {
+                $this->markPaymentFailed($lockedOrder, $payment, 'Giao dịch bị hủy hoặc thất bại.');
+
+                return false;
+            }
+
+            $coupon = null;
+            if ($lockedOrder->coupon_id) {
+                $coupon = $lockedOrder->coupon()->lockForUpdate()->first();
+
+                if (! $coupon || ! $coupon->isValid() || $coupon->isUsedByUser($lockedOrder->user_id)) {
+                    $this->markPaymentFailed($lockedOrder, $payment, 'Mã giảm giá đã hết hiệu lực hoặc hết lượt sử dụng.');
+
+                    return false;
+                }
+            }
+
             $txn = $transactionId ?? 'TXN-'.strtoupper(Str::random(10));
 
-            // 1. Cập nhật trạng thái đơn hàng sang đã thanh toán (paid)
-            $order->update([
+            $lockedOrder->update([
                 'status' => 'paid',
                 'transaction_id' => $txn,
             ]);
 
-            // 2. Cập nhật trạng thái bản ghi Payment tương ứng
-            $payment = $order->payment;
-            if ($payment) {
-                $payment->update([
-                    'status' => 'success',
-                    'transaction_id' => $txn,
-                    'paid_at' => now(),
-                    'gateway_response' => [
-                        'message' => 'Thanh toán giả lập thành công.',
-                        'simulated_at' => now()->toDateTimeString(),
-                        'gateway' => $order->payment_method,
-                    ],
-                ]);
-            }
+            $payment?->update([
+                'status' => 'success',
+                'transaction_id' => $txn,
+                'paid_at' => now(),
+                'gateway_response' => [
+                    'message' => 'Thanh toán giả lập thành công.',
+                    'simulated_at' => now()->toDateTimeString(),
+                    'gateway' => $lockedOrder->payment_method,
+                ],
+            ]);
 
-            // 3. Tự động ghi danh học viên vào các khóa học có trong đơn hàng
-            $this->enrollStudent($order);
-
-            // 4. Xóa các khóa học đã thanh toán thành công khỏi giỏ hàng
-            $this->clearCart($order);
-
-            // 5. Tăng lượt sử dụng mã giảm giá nếu có
-            if ($order->coupon) {
-                $order->coupon->increment('used_count');
-            }
+            $this->enrollStudent($lockedOrder);
+            $this->clearCart($lockedOrder);
+            $coupon?->increment('used_count');
 
             return true;
-        } else {
-            // Trường hợp thanh toán thất bại hoặc người dùng hủy giao dịch
-            $order->update(['status' => 'failed']);
+        });
+    }
 
-            $payment = $order->payment;
-            if ($payment) {
-                $payment->update([
-                    'status' => 'failed',
-                    'gateway_response' => [
-                        'message' => 'Giao dịch bị hủy hoặc thất bại.',
-                        'simulated_at' => now()->toDateTimeString(),
-                        'gateway' => $order->payment_method,
-                    ],
-                ]);
-            }
+    protected function markPaymentFailed(Order $order, ?Payment $payment, string $message): void
+    {
+        $order->update(['status' => 'failed']);
 
-            return false;
-        }
+        $payment?->update([
+            'status' => 'failed',
+            'gateway_response' => [
+                'message' => $message,
+                'simulated_at' => now()->toDateTimeString(),
+                'gateway' => $order->payment_method,
+            ],
+        ]);
     }
 
     /**
