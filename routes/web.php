@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardControll
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
+use App\Http\Controllers\Web\Admin\StudentReviewController as AdminStudentReviewController;
 use App\Http\Controllers\Web\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
@@ -16,13 +17,17 @@ use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseCont
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
+use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\ReviewController;
+use App\Http\Controllers\Web\ReviewHelpfulController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
+use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
 use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
@@ -67,6 +72,14 @@ Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizContro
 
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
 Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
+Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:6,1'])->group(function () {
+    Route::post('/courses/{course}/reviews', [ReviewController::class, 'store'])->name('courses.reviews.store');
+    Route::put('/courses/{course}/reviews/{review}', [ReviewController::class, 'update'])->name('courses.reviews.update');
+    Route::delete('/courses/{course}/reviews/{review}', [ReviewController::class, 'destroy'])->name('courses.reviews.destroy');
+});
+Route::post('/reviews/{review}/helpful', [ReviewHelpfulController::class, 'toggle'])
+    ->middleware(['auth', 'active', 'verified', 'throttle:20,1'])
+    ->name('reviews.helpful.toggle');
 Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');
 
 Route::middleware('guest')->group(function () {
@@ -133,6 +146,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
     Route::get('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'index'])->name('recently-viewed.index');
+    Route::get('/reviews', [StudentReviewController::class, 'index'])->name('reviews.index');
     Route::delete('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'clear'])->name('recently-viewed.clear');
     Route::delete('/recently-viewed-courses/{recentlyViewedCourse}', [RecentlyViewedCourseController::class, 'destroy'])->name('recently-viewed.destroy');
     Route::get('/cart', [CartController::class, 'index'])->name('cart');
@@ -165,10 +179,14 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
     Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
     Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
+    Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     Route::middleware('verified')->group(function () {
+        Route::post('/courses/{course}/reviews/{review}/reply', [InstructorReviewController::class, 'reply'])->middleware('throttle:12,1')->name('reviews.reply');
+        Route::put('/courses/{course}/reviews/{review}/reply', [InstructorReviewController::class, 'reply'])->middleware('throttle:12,1')->name('reviews.reply.update');
+        Route::delete('/courses/{course}/reviews/{review}/reply', [InstructorReviewController::class, 'destroyReply'])->name('reviews.reply.destroy');
         Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
         Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
         Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
@@ -228,6 +246,13 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/course-reviews/{course}', [CourseReviewController::class, 'show'])->name('course-reviews.show');
     Route::post('/course-reviews/{course}/approve', [CourseReviewController::class, 'approve'])->name('course-reviews.approve');
     Route::post('/course-reviews/{course}/reject', [CourseReviewController::class, 'reject'])->name('course-reviews.reject');
+    Route::get('/student-reviews', [AdminStudentReviewController::class, 'index'])->name('student-reviews.index');
+    Route::get('/student-reviews/{review}', [AdminStudentReviewController::class, 'show'])->name('student-reviews.show');
+    Route::patch('/student-reviews/{review}/approve', [AdminStudentReviewController::class, 'approve'])->name('student-reviews.approve');
+    Route::patch('/student-reviews/{review}/reject', [AdminStudentReviewController::class, 'reject'])->name('student-reviews.reject');
+    Route::patch('/student-reviews/{review}/hide', [AdminStudentReviewController::class, 'hide'])->name('student-reviews.hide');
+    Route::patch('/student-reviews/{review}/restore', [AdminStudentReviewController::class, 'restore'])->name('student-reviews.restore');
+    Route::delete('/student-reviews/{review}', [AdminStudentReviewController::class, 'destroy'])->name('student-reviews.destroy');
     Route::get('/courses/pending', fn () => redirect()->route('admin.course-reviews.index'))->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
