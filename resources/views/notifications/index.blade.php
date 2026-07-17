@@ -1,10 +1,13 @@
-@extends('layouts.app')
+@php
+    $layout = match (auth()->user()?->role) {
+        'admin' => 'admin-layout',
+        'instructor' => 'instructor-layout',
+        default => 'student-layout',
+    };
+@endphp
 
-@section('title', 'Thông báo')
-
-@section('content')
-<div class="ui-container py-8">
-    <div class="mx-auto max-w-3xl space-y-6">
+<x-dynamic-component :component="$layout" title="Thông báo" page-title="Thông báo" breadcrumb="Cập nhật thông tin và hoạt động mới nhất">
+    <div class="mx-auto max-w-4xl space-y-6">
 
         {{-- Header --}}
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -84,5 +87,4 @@
             <div>{{ $notifications->links() }}</div>
         @endif
     </div>
-</div>
-@endsection
+</x-dynamic-component>
