@@ -36,3 +36,6 @@
 ### Commit 12: docs: cap nhat huong dan cai dat va van hanh moi truong phat trien (2026-07-15 15:30:25 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 13: test: bo sung kiem thu don vi cho middleware xac thuc va phan quyen (2026-07-17 10:20:15 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
