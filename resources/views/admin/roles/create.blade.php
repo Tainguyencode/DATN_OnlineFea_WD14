@@ -7,7 +7,7 @@
             </div>
 
             <a href="{{ route('admin.roles.index') }}" class="role-btn role-btn-secondary">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                <svg class="w-5 h-5 shrink-0 inline-block" aria-hidden="true" viewBox="0 0 24 24" fill="none">
                     <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 Quay lại
