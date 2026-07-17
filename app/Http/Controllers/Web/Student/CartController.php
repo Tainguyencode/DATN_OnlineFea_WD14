@@ -149,7 +149,16 @@ class CartController extends Controller
 
         // Nếu tổng tiền là 0 (Ví dụ coupon giảm 100%), thực hiện hoàn tất thanh toán ngay lập tức
         if ($total <= 0) {
-            DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds) {
+            $completed = DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds): bool {
+                $lockedCoupon = null;
+                if ($coupon) {
+                    $lockedCoupon = Coupon::query()->lockForUpdate()->find($coupon->id);
+
+                    if (! $lockedCoupon || ! $lockedCoupon->isValid() || $lockedCoupon->isUsedByUser(auth()->id())) {
+                        return false;
+                    }
+                }
+
                 $order = Order::create([
                     'order_code' => $orderCode,
                     'user_id' => auth()->id(),
@@ -197,13 +206,17 @@ class CartController extends Controller
                     }
                 }
 
-                if ($coupon) {
-                    $coupon->increment('used_count');
-                }
+                $lockedCoupon?->increment('used_count');
 
                 // Xóa các khóa học đã mua khỏi giỏ hàng
                 $cart->courses()->detach($selectedCourseIds);
+
+                return true;
             });
+
+            if (! $completed) {
+                return back()->with('error', 'Mã giảm giá không còn lượt sử dụng. Vui lòng kiểm tra lại đơn hàng.');
+            }
 
             return redirect()->route('student.checkout.success', $orderCode)
                 ->with('success', 'Đơn hàng miễn phí đã được kích hoạt thành công!');
@@ -355,6 +368,8 @@ class CartController extends Controller
      */
     public function mockGateway(string $orderCode)
     {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', auth()->id())
             ->firstOrFail();
@@ -377,6 +392,8 @@ class CartController extends Controller
      */
     public function simulatePayment(Request $request, string $orderCode, PaymentGatewayService $paymentService): RedirectResponse
     {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
         $request->validate([
             'status' => 'required|in:success,failed',
         ]);
