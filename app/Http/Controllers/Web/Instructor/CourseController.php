@@ -283,7 +283,7 @@ class CourseController extends Controller
             }
         }
 
-        $courseRevenue = collect($courseSales)->values();
+        $courseRevenue = collect($courseSales)->map(fn ($item) => (object) $item)->values();
         $filters = [
             'start_date' => $request->input('start_date'),
             'end_date' => $request->input('end_date'),
