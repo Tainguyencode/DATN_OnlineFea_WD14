@@ -37,22 +37,23 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+if (app()->environment('local')) {
+    Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+        $frames = $extractor->extract(
+            storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
+        );
 
-    $frames = $extractor->extract(
-        storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
-    );
+        return $frames;
+    });
 
-    return $frames;
-});
+    Route::get('/test-gemini', function (GeminiService $gemini) {
+        $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
 
-Route::get('/test-gemini', function (GeminiService $gemini) {
-    $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
+        $result = $gemini->analyzeImage($framePath);
 
-    $result = $gemini->analyzeImage($framePath);
-
-    return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-});
+        return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    });
+}
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
@@ -98,7 +99,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])
         ->whereIn('provider', ['google', 'facebook'])
         ->name('social.callback');
-    Route::post('/quick-login/{role}', [AuthController::class, 'quickLogin'])->name('quick-login');
+    if (app()->environment('local')) {
+        Route::post('/quick-login/{role}', [AuthController::class, 'quickLogin'])
+            ->whereIn('role', ['admin', 'instructor', 'student'])
+            ->name('quick-login');
+    }
 });
 
 Route::get('/auth/availability', [AuthController::class, 'availability'])->middleware('throttle:30,1')->name('auth.availability');
@@ -276,15 +281,19 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
-// Dev helper login route
-Route::get('/dev/login-as-admin', function () {
-    auth()->login(User::where('role', 'admin')->first());
+if (app()->environment('local')) {
+    Route::get('/dev/login-as-admin', function () {
+        auth()->login(User::where('role', 'admin')->firstOrFail());
 
-    return redirect()->route('admin.dashboard');
-})->name('dev.login-as-admin');
+        return redirect()->route('admin.dashboard');
+    })->name('dev.login-as-admin');
 
-Route::get('/dev/login-as-student', function () {
-    auth()->login(User::where('email', 'leanhtuan291111@gmail.com')->first() ?? User::where('role', 'student')->first());
+    Route::get('/dev/login-as-student', function () {
+        $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
+            ?? User::where('role', 'student')->firstOrFail();
 
-    return redirect()->route('dashboard');
-})->name('dev.login-as-student');
+        auth()->login($user);
+
+        return redirect()->route('dashboard');
+    })->name('dev.login-as-student');
+}
