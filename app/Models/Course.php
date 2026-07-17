@@ -140,6 +140,11 @@ class Course extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function approvedReviews(): HasMany
+    {
+        return $this->reviews()->approved();
+    }
+
     public function courseReviews(): HasMany
     {
         return $this->hasMany(CourseReview::class)->orderByDesc('submission_number');
