@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\ResetPasswordNotification;
 use App\Services\EmailVerificationService;
 use App\Services\RoleSyncService;
 use Database\Factories\UserFactory;
@@ -131,6 +132,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function sendEmailVerificationNotification(): void
     {
         app(EmailVerificationService::class)->sendCode($this);
+    }
+
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 
     public function roles(): BelongsToMany
