@@ -52,6 +52,54 @@ class VideoModeration extends Model
     }
 
     /**
+     * Trả về true nếu có bất kỳ dấu hiệu nào AI phát hiện (bao gồm cả logo/watermark ở mức low).
+     */
+    public function hasDetectedSigns(): bool
+    {
+        if ($this->violence || $this->adult || $this->weapon) {
+            return true;
+        }
+
+        if ($this->watermark || $this->tiktok_logo || $this->youtube_logo) {
+            return true;
+        }
+
+        $risk = strtolower((string) ($this->copyright_risk ?? 'none'));
+        return in_array($risk, ['low', 'medium', 'high'], true);
+    }
+
+    /**
+     * Badge mức risk bản quyền theo kiểu detection-only (Udemy/Coursera style).
+     */
+    public function copyrightRiskBadge(): array
+    {
+        $risk = strtolower((string) ($this->copyright_risk ?? 'none'));
+
+        return match ($risk) {
+            'high'   => [
+                'label' => 'AI đánh giá mức nghi ngờ cao – cần admin xác minh',
+                'tone'  => 'red',
+                'emoji' => '🔴',
+            ],
+            'medium' => [
+                'label' => 'Nên xem lại video',
+                'tone'  => 'orange',
+                'emoji' => '🟠',
+            ],
+            'low'    => [
+                'label' => 'Có dấu hiệu cần kiểm tra',
+                'tone'  => 'yellow',
+                'emoji' => '🟡',
+            ],
+            default  => [
+                'label' => 'Không phát hiện dấu hiệu',
+                'tone'  => 'green',
+                'emoji' => '🟢',
+            ],
+        };
+    }
+
+    /**
      * @return list<array{label: string, tone: string, emoji: string}>
      */
     public function summaryBadgeItems(): array
@@ -59,37 +107,37 @@ class VideoModeration extends Model
         $items = [];
 
         if ($this->violence) {
-            $items[] = ['label' => 'Bạo lực', 'tone' => 'red', 'emoji' => '🔴'];
+            $items[] = ['label' => 'Phát hiện: Bạo lực', 'tone' => 'red', 'emoji' => '🔴'];
         }
 
         if ($this->adult) {
-            $items[] = ['label' => 'Nội dung 18+', 'tone' => 'red', 'emoji' => '🔴'];
+            $items[] = ['label' => 'Phát hiện: Nội dung 18+', 'tone' => 'red', 'emoji' => '🔴'];
         }
 
         if ($this->weapon) {
-            $items[] = ['label' => 'Vũ khí', 'tone' => 'orange', 'emoji' => '🟠'];
+            $items[] = ['label' => 'Phát hiện: Vũ khí', 'tone' => 'orange', 'emoji' => '🟠'];
         }
 
         if ($this->watermark) {
-            $items[] = ['label' => 'Watermark', 'tone' => 'orange', 'emoji' => '🟠'];
+            $items[] = ['label' => 'Dấu hiệu: Watermark', 'tone' => 'yellow', 'emoji' => '🟡'];
         }
 
         if ($this->tiktok_logo) {
-            $items[] = ['label' => 'Logo TikTok', 'tone' => 'orange', 'emoji' => '🟠'];
+            $items[] = ['label' => 'Dấu hiệu: Logo TikTok', 'tone' => 'yellow', 'emoji' => '🟡'];
         }
 
         if ($this->youtube_logo) {
-            $items[] = ['label' => 'Logo YouTube', 'tone' => 'orange', 'emoji' => '🟠'];
+            $items[] = ['label' => 'Dấu hiệu: Logo YouTube', 'tone' => 'yellow', 'emoji' => '🟡'];
         }
 
-        $risk = strtolower((string) ($this->copyright_risk ?? 'low'));
+        $risk = strtolower((string) ($this->copyright_risk ?? 'none'));
 
         if ($risk === 'high') {
-            $items[] = ['label' => 'Nguy cơ bản quyền Cao', 'tone' => 'red', 'emoji' => '🔴'];
+            $items[] = ['label' => 'AI nghi ngờ cao – cần admin xác minh', 'tone' => 'red', 'emoji' => '🔴'];
         } elseif ($risk === 'medium') {
-            $items[] = ['label' => 'Nguy cơ bản quyền Trung bình', 'tone' => 'yellow', 'emoji' => '🟡'];
-        } elseif ($risk === 'low' && $this->hasViolations()) {
-            $items[] = ['label' => 'Nguy cơ bản quyền Thấp', 'tone' => 'green', 'emoji' => '🟢'];
+            $items[] = ['label' => 'Nên xem lại video', 'tone' => 'orange', 'emoji' => '🟠'];
+        } elseif ($risk === 'low') {
+            $items[] = ['label' => 'Có dấu hiệu cần kiểm tra', 'tone' => 'yellow', 'emoji' => '🟡'];
         }
 
         return $items;
@@ -119,8 +167,8 @@ class VideoModeration extends Model
 
             $frames[] = [
                 'timestamp' => self::formatTimestamp($detail['timestamp'] ?? 0),
-                'labels' => $labels,
-                'reason' => trim((string) ($detail['reason'] ?? '')),
+                'labels'    => $labels,
+                'reason'    => trim((string) ($detail['reason'] ?? '')),
             ];
         }
 
@@ -144,35 +192,37 @@ class VideoModeration extends Model
         $labels = [];
 
         if (! empty($detail['violence'])) {
-            $labels[] = 'Bạo lực';
+            $labels[] = 'Phát hiện: Bạo lực';
         }
 
         if (! empty($detail['adult'])) {
-            $labels[] = 'Nội dung 18+';
+            $labels[] = 'Phát hiện: Nội dung 18+';
         }
 
         if (! empty($detail['weapon'])) {
-            $labels[] = 'Vũ khí';
+            $labels[] = 'Phát hiện: Vũ khí';
         }
 
         if (! empty($detail['watermark'])) {
-            $labels[] = 'Watermark';
+            $labels[] = 'Dấu hiệu: Watermark bên thứ ba';
         }
 
         if (! empty($detail['tiktok_logo'])) {
-            $labels[] = 'Logo TikTok';
+            $labels[] = 'Dấu hiệu: Logo TikTok';
         }
 
         if (! empty($detail['youtube_logo'])) {
-            $labels[] = 'Logo YouTube';
+            $labels[] = 'Dấu hiệu: Logo YouTube';
         }
 
-        $risk = strtolower((string) ($detail['copyright_risk'] ?? 'low'));
+        $risk = strtolower((string) ($detail['copyright_risk'] ?? 'none'));
 
         if ($risk === 'high') {
-            $labels[] = 'Nguy cơ bản quyền cao';
+            $labels[] = 'Mức nghi ngờ: Cao – AI nghi ngờ phát lại từ nguồn khác';
         } elseif ($risk === 'medium') {
-            $labels[] = 'Nguy cơ bản quyền trung bình';
+            $labels[] = 'Mức nghi ngờ: Trung bình – Nên xem lại';
+        } elseif ($risk === 'low') {
+            $labels[] = 'Mức nghi ngờ: Thấp – Có dấu hiệu cần kiểm tra';
         }
 
         return $labels;
