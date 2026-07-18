@@ -21,7 +21,9 @@
     </div>
 
     <div class="flex-1 overflow-y-auto">
+        @php $sectionIndex = 0; @endphp
         @forelse($sections as $section)
+            @php $sectionIndex++; @endphp
             <div class="border-b border-[#d1d7dc]" x-data="{ open: {{ $section['is_open'] ? 'true' : 'false' }} }">
                 <button
                     type="button"
@@ -30,7 +32,8 @@
                     :aria-expanded="open"
                 >
                     <div class="min-w-0">
-                        <p class="text-sm font-bold text-[#1c1d1f]">{{ $section['title'] }}</p>
+                        <p class="text-xs font-bold uppercase tracking-wide text-indigo-600">Chương {{ $sectionIndex }}</p>
+                        <p class="mt-0.5 text-sm font-bold text-[#1c1d1f]">{{ $section['title'] }}</p>
                         <p class="mt-0.5 text-xs text-[#6a6f73]">
                             {{ $section['completed_count'] }}/{{ $section['total_count'] }} bài
                             @if($section['duration_label'])
