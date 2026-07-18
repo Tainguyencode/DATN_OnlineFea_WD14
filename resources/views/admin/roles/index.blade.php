@@ -8,7 +8,7 @@
 
             @can('roles.create')
                 <a href="{{ route('admin.roles.create') }}" class="role-btn role-btn-primary">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                    <svg class="w-5 h-5 shrink-0 inline-block" aria-hidden="true" viewBox="0 0 24 24" fill="none">
                         <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                     Thêm vai trò
