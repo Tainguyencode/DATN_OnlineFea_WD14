@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ProgressController;
+use App\Http\Controllers\Api\StudyGroupController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -79,4 +80,16 @@ Route::middleware('auth:sanctum')->group(function () {
      */
     Route::get('/my-enrollments', [ProgressController::class, 'getUserEnrollments'])
         ->name('user.enrollments');
+
+    // ============================================
+    // STUDY GROUP ROUTES
+    // ============================================
+    Route::get('/study-groups', [StudyGroupController::class, 'index'])->name('api.study-groups.index');
+    Route::post('/study-groups', [StudyGroupController::class, 'store'])->name('api.study-groups.store');
+    Route::get('/study-groups/{studyGroup}', [StudyGroupController::class, 'show'])->name('api.study-groups.show');
+    Route::put('/study-groups/{studyGroup}', [StudyGroupController::class, 'update'])->name('api.study-groups.update');
+    Route::delete('/study-groups/{studyGroup}', [StudyGroupController::class, 'destroy'])->name('api.study-groups.destroy');
+    Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('api.study-groups.join');
+    Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('api.study-groups.leave');
+    Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('api.study-groups.members');
 });

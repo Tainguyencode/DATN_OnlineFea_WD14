@@ -115,6 +115,7 @@
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
                     ['href' => '#orders', 'label' => 'Đơn hàng'],
+                    ['href' => route('study-groups.index'), 'label' => 'Nhóm học tập', 'external' => true],
                     ['href' => route('student.profile'), 'label' => 'Hồ sơ', 'external' => true],
                 ] as $item)
                     <a href="{{ $item['href'] }}" class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
