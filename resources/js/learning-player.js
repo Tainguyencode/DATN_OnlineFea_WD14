@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initQuizPlayer();
     initMarkComplete();
     initCertificateDropdown();
+    initLessonAi();
 });
 
 function getCsrfToken() {
@@ -413,4 +414,173 @@ function initCertificateDropdown() {
             panel.classList.add('hidden');
         }
     });
+}
+
+function initLessonAi() {
+    const root = document.querySelector('[data-lesson-ai]');
+    if (!root || root.dataset.canUseAi !== '1') return;
+
+    const summaryUrl = root.dataset.aiSummaryUrl;
+    const explainUrl = root.dataset.aiExplainUrl;
+    const summaryBox = root.querySelector('[data-ai-summary-box]');
+    const keyPointsEl = root.querySelector('[data-ai-key-points]');
+    const takeawaysEl = root.querySelector('[data-ai-takeaways]');
+    const summaryStatus = root.querySelector('[data-ai-summary-status]');
+    const summaryError = root.querySelector('[data-ai-summary-error]');
+    const generateBtn = root.querySelector('[data-ai-generate-summary]');
+    const askForm = root.querySelector('[data-ai-ask-form]');
+    const askInput = root.querySelector('[data-ai-question-input]');
+    const askSubmit = root.querySelector('[data-ai-ask-submit]');
+    const askStatus = root.querySelector('[data-ai-ask-status]');
+    const chatLog = root.querySelector('[data-ai-chat-log]');
+
+    let summaryInFlight = false;
+    let askInFlight = false;
+
+    const renderList = (el, items) => {
+        if (!el) return;
+        el.innerHTML = '';
+        (items || []).forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            el.appendChild(li);
+        });
+    };
+
+    const showSummaryError = (message) => {
+        if (!summaryError) return;
+        if (!message) {
+            summaryError.textContent = '';
+            summaryError.classList.add('hidden');
+            return;
+        }
+        summaryError.textContent = message;
+        summaryError.classList.remove('hidden');
+    };
+
+    const renderSummary = (data) => {
+        if (summaryBox) {
+            summaryBox.textContent = data.summary || data.message || 'Chưa có bản tóm tắt.';
+        }
+        renderList(keyPointsEl, data.key_points || []);
+        renderList(takeawaysEl, data.takeaways || []);
+        if (summaryStatus) {
+            summaryStatus.textContent = data.summary
+                ? (data.cached ? 'Đang dùng bản tóm tắt đã lưu.' : 'Đã tạo tóm tắt mới.')
+                : '';
+        }
+    };
+
+    const appendChat = (role, text) => {
+        if (!chatLog) return;
+        const item = document.createElement('div');
+        item.className = role === 'user'
+            ? 'rounded bg-[#eef5ff] px-3 py-2 text-sm text-[#1c1d1f]'
+            : 'rounded bg-[#f7f9fa] px-3 py-2 text-sm text-[#1c1d1f]';
+        item.innerHTML = `<strong class="block text-xs uppercase tracking-wide text-[#6a6f73]">${role === 'user' ? 'Bạn' : 'AI'}</strong><span class="mt-1 block whitespace-pre-line">${escapeHtml(text)}</span>`;
+        chatLog.appendChild(item);
+        chatLog.scrollTop = chatLog.scrollHeight;
+    };
+
+    const fetchSummary = async (generate = false) => {
+        if (!summaryUrl) return;
+        const url = generate ? `${summaryUrl}${summaryUrl.includes('?') ? '&' : '?'}generate=1` : summaryUrl;
+        const response = await fetch(url, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await response.json();
+        return { response, data };
+    };
+
+    const loadSummary = async () => {
+        try {
+            const { response, data } = await fetchSummary(false);
+            if (!response.ok || !data.success) {
+                if (summaryBox) summaryBox.textContent = data.message || 'Không tải được tóm tắt.';
+                return;
+            }
+            renderSummary(data);
+        } catch (error) {
+            if (summaryBox) summaryBox.textContent = 'Không tải được tóm tắt. Vui lòng thử lại.';
+        }
+    };
+
+    generateBtn?.addEventListener('click', async () => {
+        if (summaryInFlight) return;
+        summaryInFlight = true;
+        generateBtn.disabled = true;
+        showSummaryError('');
+        if (summaryStatus) summaryStatus.textContent = 'Đang tạo tóm tắt...';
+
+        try {
+            const { response, data } = await fetchSummary(true);
+            if (!response.ok || !data.success) {
+                showSummaryError(data.message || 'Không tạo được tóm tắt.');
+                if (summaryStatus) summaryStatus.textContent = '';
+                showToast(data.message || 'Không tạo được tóm tắt.', 'error');
+                return;
+            }
+            renderSummary(data);
+            showToast(data.cached ? 'Đã tải bản tóm tắt đã lưu.' : 'Đã tạo tóm tắt bài học.');
+        } catch (error) {
+            showSummaryError('Không tạo được tóm tắt do lỗi mạng hoặc máy chủ.');
+            showToast('Không tạo được tóm tắt.', 'error');
+        } finally {
+            summaryInFlight = false;
+            generateBtn.disabled = false;
+        }
+    });
+
+    askForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!explainUrl || askInFlight || !askInput) return;
+
+        const question = askInput.value.trim();
+        if (!question) {
+            if (askStatus) askStatus.textContent = 'Vui lòng nhập câu hỏi.';
+            return;
+        }
+        if (question.length > 1000) {
+            if (askStatus) askStatus.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+            return;
+        }
+
+        askInFlight = true;
+        if (askSubmit) askSubmit.disabled = true;
+        if (askStatus) askStatus.textContent = 'Đang giải thích...';
+        appendChat('user', question);
+
+        try {
+            const response = await fetch(explainUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ question }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                const message = data.message || 'Không nhận được giải thích từ AI.';
+                appendChat('assistant', message);
+                if (askStatus) askStatus.textContent = message;
+                showToast(message, 'error');
+                return;
+            }
+            appendChat('assistant', data.answer);
+            askInput.value = '';
+            if (askStatus) askStatus.textContent = '';
+        } catch (error) {
+            appendChat('assistant', 'Không kết nối được AI. Vui lòng thử lại.');
+            if (askStatus) askStatus.textContent = 'Lỗi kết nối.';
+            showToast('Không hỏi được AI.', 'error');
+        } finally {
+            askInFlight = false;
+            if (askSubmit) askSubmit.disabled = false;
+        }
+    });
+
+    loadSummary();
 }
