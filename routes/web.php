@@ -24,6 +24,7 @@ use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ReviewHelpfulController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
+use App\Http\Controllers\Web\Student\LessonAiController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
@@ -69,6 +70,15 @@ Route::middleware(['auth', 'active', 'role:student'])->group(function () {
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
+
+Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(function () {
+    Route::get('/courses/{course}/lessons/{lesson}/ai-summary', [LessonAiController::class, 'summary'])
+        ->middleware('throttle:6,1')
+        ->name('courses.lessons.ai-summary');
+    Route::post('/courses/{course}/lessons/{lesson}/ai-explain', [LessonAiController::class, 'explain'])
+        ->middleware('throttle:10,1')
+        ->name('courses.lessons.ai-explain');
+});
 
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
 Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
