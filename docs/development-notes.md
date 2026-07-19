@@ -39,3 +39,6 @@
 ### Commit 13: test: bo sung kiem thu don vi cho middleware xac thuc va phan quyen (2026-07-17 10:20:15 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 14: feat: tich hop module AI giai thich khoa hoc (2026-07-19 09:30:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
