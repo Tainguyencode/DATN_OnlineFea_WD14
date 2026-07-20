@@ -18,6 +18,7 @@
     $gradient = $gradients[$course->id % count($gradients)];
     $lessonCount = $course->lessons_count ?? 0;
     $isFavorited = (bool) ($favorited ?? ($course->is_favorited ?? false));
+    $recommendationReason = $course->recommendation_reason ?? null;
 
     $isEnrolled = false;
     if (auth()->check() && auth()->user()->isStudent()) {
@@ -72,6 +73,12 @@
         <p class="mb-1.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
             {{ $course->instructor?->name ?? 'Giảng viên FEA' }}
         </p>
+
+        @if($recommendationReason)
+            <p class="mb-2 line-clamp-1 rounded bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+                {{ $recommendationReason }}
+            </p>
+        @endif
 
         <div class="mb-1.5 flex items-center gap-1">
             <span class="text-sm font-bold text-amber-600 dark:text-amber-400">{{ number_format((float) $course->rating_avg, 1) }}</span>
