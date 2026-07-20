@@ -28,6 +28,7 @@ use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
 use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
+use App\Http\Controllers\Api\StudyGroupController;
 use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
@@ -60,6 +61,16 @@ Route::get('/courses/category/{category:slug}', [CourseController::class, 'categ
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
+
+    // Study Groups
+    Route::get('/study-groups', [StudyGroupController::class, 'index'])->name('study-groups.index');
+    Route::post('/study-groups', [StudyGroupController::class, 'store'])->name('study-groups.store');
+    Route::get('/study-groups/{studyGroup}', [StudyGroupController::class, 'show'])->name('study-groups.show');
+    Route::put('/study-groups/{studyGroup}', [StudyGroupController::class, 'update'])->name('study-groups.update');
+    Route::delete('/study-groups/{studyGroup}', [StudyGroupController::class, 'destroy'])->name('study-groups.destroy');
+    Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('study-groups.join');
+    Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('study-groups.leave');
+    Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('study-groups.members');
 });
 Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
