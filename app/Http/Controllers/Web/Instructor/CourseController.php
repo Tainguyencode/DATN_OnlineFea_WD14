@@ -7,14 +7,22 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Instructor\StoreChapterRequest;
 use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
+use App\Models\Assignment;
+use App\Models\AssignmentSubmission;
 use App\Models\Category;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonProgress;
 use App\Models\Order;
+use App\Models\Quiz;
+use App\Models\QuizAttempt;
+use App\Models\User;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
+use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,6 +30,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CourseController extends Controller
 {
@@ -219,16 +228,89 @@ class CourseController extends Controller
         return redirect()->route('instructor.courses.index');
     }
 
-    public function students(Course $course): View
+    public function students(Course $course, Request $request): View
     {
         $this->ensureOwned($course);
 
-        $enrollments = Enrollment::where('course_id', $course->id)
-            ->with('user:id,name,email,avatar')
-            ->orderByDesc('created_at')
-            ->paginate(20);
+        $search = trim((string) $request->query('search'));
+        $enrollments = $this->enrollmentQuery($course, $request)->paginate(20)->withQueryString();
+        $stats = $this->studentStatsForCourse($course, $enrollments->pluck('user_id'));
 
-        return view('instructor.courses.students', compact('course', 'enrollments'));
+        return view('instructor.courses.students', [
+            'course' => $course,
+            'enrollments' => $enrollments,
+            'search' => $search,
+            'latestProgress' => $stats['latestProgress'],
+            'quizStats' => $stats['quizStats'],
+            'labStats' => $stats['labStats'],
+        ]);
+    }
+
+    public function exportStudents(Course $course, Request $request): StreamedResponse
+    {
+        $this->ensureOwned($course);
+
+        $enrollments = $this->enrollmentQuery($course, $request)->get();
+        $stats = $this->studentStatsForCourse($course, $enrollments->pluck('user_id'));
+        $filename = 'hoc-vien-'.Str::slug($course->title).'-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($enrollments, $stats) {
+            $handle = fopen('php://output', 'w');
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($handle, ['Tên học viên', 'Email', 'Ngày ghi danh', 'Tiến độ (%)', 'Bài học gần nhất', 'Trạng thái hoàn thành']);
+
+            foreach ($enrollments as $enrollment) {
+                $userId = $enrollment->user_id;
+                $progress = $stats['latestProgress']->get($userId);
+                $enrolledAt = $enrollment->enrolled_at ?? $enrollment->created_at;
+
+                fputcsv($handle, [
+                    $enrollment->user->name,
+                    $enrollment->user->email,
+                    $enrolledAt?->format('d/m/Y') ?? '',
+                    number_format((float) $enrollment->progress_percent, 0),
+                    $progress?->lesson?->title ?? 'Chưa học bài nào',
+                    $this->completionLabel($enrollment),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function sendNotification(Request $request, Course $course, User $student, NotificationService $notificationService): JsonResponse
+    {
+        $this->ensureOwned($course);
+
+        $enrolled = Enrollment::query()
+            ->where('course_id', $course->id)
+            ->where('user_id', $student->id)
+            ->exists();
+
+        abort_unless($enrolled, 404);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'message' => ['required', 'string', 'max:2000'],
+        ], [
+            'title.required' => 'Vui lòng nhập tiêu đề thông báo.',
+            'message.required' => 'Vui lòng nhập nội dung thông báo.',
+        ]);
+
+        $notificationService->send(
+            $student,
+            $validated['title'],
+            $validated['message'],
+            'announcement',
+            route('student.dashboard')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã gửi thông báo thành công.',
+        ]);
     }
 
     public function revenue(Request $request): View
@@ -297,6 +379,127 @@ class CourseController extends Controller
     protected function ensureOwned(Course $course): void
     {
         abort_unless($course->isOwnedBy(auth()->user()), 403);
+    }
+
+    private function enrollmentQuery(Course $course, Request $request)
+    {
+        $search = trim((string) $request->query('search'));
+
+        return Enrollment::query()
+            ->where('course_id', $course->id)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->whereHas('user', function ($userQuery) use ($search) {
+                    $userQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->with('user:id,name,email,avatar')
+            ->orderByDesc('enrolled_at')
+            ->orderByDesc('created_at');
+    }
+
+    /**
+     * @param  Collection<int, int>|array<int, int>  $userIds
+     * @return array{latestProgress: Collection<int, LessonProgress>, quizStats: Collection<int, float|null>, labStats: Collection<int, array{score: int, max: int}|null>}
+     */
+    private function studentStatsForCourse(Course $course, Collection|array $userIds): array
+    {
+        $userIds = collect($userIds)->filter()->unique()->values();
+
+        if ($userIds->isEmpty()) {
+            return [
+                'latestProgress' => collect(),
+                'quizStats' => collect(),
+                'labStats' => collect(),
+            ];
+        }
+
+        $latestProgress = LessonProgress::query()
+            ->where('course_id', $course->id)
+            ->whereIn('user_id', $userIds)
+            ->with('lesson:id,title')
+            ->orderByDesc('last_watched_at')
+            ->orderByDesc('updated_at')
+            ->get()
+            ->unique('user_id')
+            ->keyBy('user_id');
+
+        $quizIds = Quiz::query()
+            ->whereHas('lesson', fn ($query) => $query->where('course_id', $course->id))
+            ->pluck('id');
+
+        $quizStats = collect();
+        if ($quizIds->isNotEmpty()) {
+            $attempts = QuizAttempt::query()
+                ->whereIn('user_id', $userIds)
+                ->whereIn('quiz_id', $quizIds)
+                ->get()
+                ->groupBy('user_id');
+
+            foreach ($userIds as $userId) {
+                $userAttempts = $attempts->get($userId, collect());
+                if ($userAttempts->isEmpty()) {
+                    $quizStats[$userId] = null;
+                    continue;
+                }
+
+                $bestByQuiz = $userAttempts
+                    ->groupBy('quiz_id')
+                    ->map(fn (Collection $group) => (float) $group->max('percent'));
+
+                $quizStats[$userId] = round($bestByQuiz->avg(), 0);
+            }
+        }
+
+        $assignments = Assignment::query()
+            ->where('course_id', $course->id)
+            ->get(['id', 'max_score']);
+
+        $labStats = collect();
+        if ($assignments->isNotEmpty()) {
+            $submissions = AssignmentSubmission::query()
+                ->whereIn('user_id', $userIds)
+                ->whereIn('assignment_id', $assignments->pluck('id'))
+                ->whereNotNull('score')
+                ->get()
+                ->groupBy('user_id');
+
+            foreach ($userIds as $userId) {
+                $userSubmissions = $submissions->get($userId, collect());
+                if ($userSubmissions->isEmpty()) {
+                    $labStats[$userId] = null;
+                    continue;
+                }
+
+                $bestByAssignment = $userSubmissions
+                    ->groupBy('assignment_id')
+                    ->map(fn (Collection $group) => (int) $group->max('score'));
+
+                $maxPossible = $assignments
+                    ->whereIn('id', $bestByAssignment->keys())
+                    ->sum('max_score') ?: $assignments->sum('max_score') ?: 10;
+
+                $labStats[$userId] = [
+                    'score' => $bestByAssignment->sum(),
+                    'max' => (int) $maxPossible,
+                ];
+            }
+        }
+
+        return [
+            'latestProgress' => $latestProgress,
+            'quizStats' => $quizStats,
+            'labStats' => $labStats,
+        ];
+    }
+
+    private function completionLabel(Enrollment $enrollment): string
+    {
+        return $enrollment->status === Enrollment::STATUS_COMPLETED
+            || $enrollment->isCourseCompleted()
+            || (float) $enrollment->progress_percent >= 100
+            ? 'Hoàn thành'
+            : 'Đang học';
     }
 
     private function uniqueSlug(string $title): string
