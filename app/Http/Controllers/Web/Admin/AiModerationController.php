@@ -13,6 +13,30 @@ use Illuminate\Support\Facades\File;
 class AiModerationController extends Controller
 {
     /**
+     * Stream video bài học với hỗ trợ HTTP Range requests (cho phép seek).
+     * Chỉ dùng cho trang Admin Review – giúp admin nhảy đến đoạn AI phát hiện.
+     */
+    public function streamVideo(Lesson $lesson)
+    {
+        if (empty($lesson->video_path)) {
+            abort(404, 'Bài học này không có video.');
+        }
+
+        $path = storage_path('app/public/'.$lesson->video_path);
+
+        if (! file_exists($path)) {
+            abort(404, 'File video không tồn tại trên máy chủ.');
+        }
+
+        // response()->file() tự động xử lý HTTP Range requests
+        // → browser có thể seek video đúng cách (seekable range đầy đủ)
+        return response()->file($path, [
+            'Content-Type'  => 'video/mp4',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /**
      * Bước 1: Cắt frame từ video của Lesson và trả về danh sách file để frontend xử lý.
      */
     public function extractFrames(Lesson $lesson, VideoFrameExtractor $extractor)
@@ -92,11 +116,11 @@ class AiModerationController extends Controller
         $youtube_logo = false;
         $watermark = false;
 
-        $copyrightRisk = 'low';
+        $copyrightRisk = 'none';
         $summary = '';
-        $maxRiskValue = 0; // low=0, medium=1, high=2
+        $maxRiskValue = 0; // none=0, low=1, medium=2, high=3
 
-        $riskLevels = ['low' => 0, 'medium' => 1, 'high' => 2];
+        $riskLevels = ['none' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
 
         foreach ($results as $result) {
             if (! empty($result['violence'])) {
@@ -118,8 +142,9 @@ class AiModerationController extends Controller
                 $watermark = true;
             }
 
-            // Xử lý bản quyền
-            $currentRiskStr = strtolower($result['copyright_risk'] ?? 'low');
+            // Xử lý mức nghi ngờ bản quyền
+            $currentRiskStr = strtolower($result['copyright_risk'] ?? 'none');
+            // Tương thích ngược: 'low' từ dữ liệu cũ giữ nguyên ý nghĩa
             $currentRiskValue = $riskLevels[$currentRiskStr] ?? 0;
 
             if ($currentRiskValue > $maxRiskValue) {
@@ -128,6 +153,21 @@ class AiModerationController extends Controller
                 $summary = $result['summary'] ?? '';
             } elseif ($currentRiskValue === $maxRiskValue && empty($summary)) {
                 $summary = $result['summary'] ?? '';
+            }
+        }
+
+        // Nếu không có summary từ AI, tự động tạo summary mô tả tổng hợp
+        if (empty($summary)) {
+            $signs = [];
+            if ($tiktok_logo) $signs[] = 'logo TikTok';
+            if ($youtube_logo) $signs[] = 'logo YouTube';
+            if ($watermark) $signs[] = 'watermark';
+            if ($violence) $signs[] = 'nội dung bạo lực';
+            if ($adult) $signs[] = 'nội dung người lớn';
+            if ($weapon) $signs[] = 'vũ khí';
+
+            if (!empty($signs)) {
+                $summary = 'AI phát hiện dấu hiệu cần kiểm tra: ' . implode(', ', $signs) . '. Gợi ý: Có thể chỉ là video minh họa, admin nên xem lại trước khi quyết định.';
             }
         }
 
