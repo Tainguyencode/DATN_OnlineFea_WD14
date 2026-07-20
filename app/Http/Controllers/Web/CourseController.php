@@ -10,6 +10,7 @@ use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Models\ReviewHelpful;
+use App\Services\CourseRecommendationService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use App\Services\RecentlyViewedCourseService;
@@ -38,7 +39,12 @@ class CourseController extends Controller
         return $this->catalog($request, $category);
     }
 
-    public function show(Request $request, string $slug, RecentlyViewedCourseService $recentlyViewedCourseService): View
+    public function show(
+        Request $request,
+        string $slug,
+        RecentlyViewedCourseService $recentlyViewedCourseService,
+        CourseRecommendationService $courseRecommendations
+    ): View
     {
         $course = Course::query()
             ->where('slug', $slug)
@@ -68,15 +74,7 @@ class CourseController extends Controller
         ]);
         $course->loadCount('lessons');
 
-        $relatedCourses = $this->withFavoriteState($this->publishedCoursesQuery()
-            ->where('id', '!=', $course->id)
-            ->when($course->category_id, fn ($query) => $query->where('category_id', $course->category_id))
-            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-            ->withCount('lessons'))
-            ->orderByDesc('rating_avg')
-            ->orderByDesc('published_at')
-            ->limit(4)
-            ->get();
+        $relatedCourses = $courseRecommendations->getRelatedCourses($course, 4, auth()->user());
 
         $reviewRating = $request->integer('review_rating');
         $reviewRating = $reviewRating >= 1 && $reviewRating <= 5 ? $reviewRating : null;
