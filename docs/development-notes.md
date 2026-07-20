@@ -42,3 +42,6 @@
 ### Commit 14: feat: tich hop module AI giai thich khoa hoc (2026-07-19 09:30:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 15: fix: xu ly loi SMTP khi gui email kich hoat tai khoan (2026-07-20 14:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
