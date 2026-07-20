@@ -2,11 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ReviewStatus;
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\Enrollment;
+use App\Models\RecentlyViewedCourse;
+use App\Models\Review;
 use App\Models\User;
+use App\Models\Wishlist;
 use App\Services\CourseRecommendationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -15,6 +21,13 @@ class RelatedCoursesTest extends TestCase
     use RefreshDatabase;
 
     private int $courseSequence = 1;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Cache::flush();
+    }
 
     public function test_related_courses_are_scored_filtered_and_limited(): void
     {
@@ -270,6 +283,252 @@ class RelatedCoursesTest extends TestCase
         $this->assertLessThanOrEqual(5, $queryCount);
     }
 
+    public function test_personalized_recommendations_exclude_owned_courses_and_use_wishlist_signals(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $category = $this->category('Backend');
+        $ownedCategory = $this->category('Already Owned');
+        $wishlistCategory = $this->category('Frontend');
+        $current = $this->course(['category_id' => $category->id, 'tags' => ['laravel']]);
+
+        $ownedCourse = $this->course([
+            'category_id' => $ownedCategory->id,
+            'tags' => ['devops'],
+            'rating_avg' => 5,
+            'enrollment_count' => 1000,
+        ]);
+        Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $ownedCourse->id,
+            'status' => Enrollment::STATUS_ACTIVE,
+            'enrolled_at' => now(),
+        ]);
+
+        $wishlistSource = $this->course([
+            'category_id' => $wishlistCategory->id,
+            'tags' => ['react'],
+            'rating_avg' => 3,
+        ]);
+        Wishlist::query()->create(['user_id' => $student->id, 'course_id' => $wishlistSource->id]);
+
+        $wishlistMatch = $this->course([
+            'category_id' => $wishlistCategory->id,
+            'tags' => ['react', 'ui'],
+            'rating_avg' => 4,
+        ]);
+        $genericMatch = $this->course([
+            'category_id' => $category->id,
+            'tags' => ['php'],
+            'rating_avg' => 4.8,
+        ]);
+
+        $related = app(CourseRecommendationService::class)->getPersonalizedRecommendations($current, $student, 4);
+        $ids = $related->pluck('id')->all();
+
+        $this->assertNotContains($current->id, $ids);
+        $this->assertNotContains($ownedCourse->id, $ids);
+        $this->assertContains($wishlistMatch->id, $ids);
+        $this->assertLessThan(
+            array_search($genericMatch->id, $ids, true),
+            array_search($wishlistMatch->id, $ids, true)
+        );
+        $this->assertNotEmpty($related->firstWhere('id', $wishlistMatch->id)?->recommendation_reason);
+    }
+
+    public function test_recent_views_use_time_decay(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $freshCategory = $this->category('Fresh Interest');
+        $oldCategory = $this->category('Old Interest');
+        $current = $this->course(['category_id' => null, 'tags' => []]);
+
+        $freshViewed = $this->course(['category_id' => $freshCategory->id, 'rating_avg' => 3.5]);
+        $oldViewed = $this->course(['category_id' => $oldCategory->id, 'rating_avg' => 3.5]);
+        RecentlyViewedCourse::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $freshViewed->id,
+            'last_viewed_at' => now()->subDays(2),
+        ]);
+        RecentlyViewedCourse::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $oldViewed->id,
+            'last_viewed_at' => now()->subDays(120),
+        ]);
+
+        $freshCandidate = $this->course(['category_id' => $freshCategory->id, 'rating_avg' => 4]);
+        $oldCandidate = $this->course(['category_id' => $oldCategory->id, 'rating_avg' => 4]);
+
+        $ids = app(CourseRecommendationService::class)
+            ->getPersonalizedRecommendations($current, $student, 4)
+            ->pluck('id')
+            ->all();
+
+        $this->assertLessThan(
+            array_search($oldCandidate->id, $ids, true),
+            array_search($freshCandidate->id, $ids, true)
+        );
+    }
+
+    public function test_reviews_boost_good_preferences_and_penalize_low_rated_preferences_without_excluding_them(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $goodCategory = $this->category('Loved Topic');
+        $badCategory = $this->category('Weak Topic');
+        $current = $this->course(['category_id' => null, 'tags' => []]);
+
+        $goodSource = $this->course(['category_id' => $goodCategory->id, 'tags' => ['api']]);
+        $badSource = $this->course(['category_id' => $badCategory->id, 'tags' => ['legacy']]);
+        $this->review($student, $goodSource, 5);
+        $this->review($student, $badSource, 1);
+
+        $goodCandidate = $this->course(['category_id' => $goodCategory->id, 'tags' => ['api'], 'rating_avg' => 4]);
+        $badCandidate = $this->course(['category_id' => $badCategory->id, 'tags' => ['legacy'], 'rating_avg' => 4]);
+
+        $ids = app(CourseRecommendationService::class)
+            ->getPersonalizedRecommendations($current, $student, 4)
+            ->pluck('id')
+            ->all();
+
+        $this->assertContains($badCandidate->id, $ids);
+        $this->assertLessThan(
+            array_search($badCandidate->id, $ids, true),
+            array_search($goodCandidate->id, $ids, true)
+        );
+    }
+
+    public function test_collaborative_filtering_recommends_courses_from_similar_students(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $current = $this->course(['category_id' => null, 'tags' => []]);
+        $seed = $this->course(['category_id' => $this->category('Shared Seed')->id, 'rating_avg' => 3]);
+        $target = $this->course([
+            'category_id' => $this->category('Collaborative Target')->id,
+            'tags' => ['team-pick'],
+            'rating_avg' => 3.8,
+            'enrollment_count' => 3,
+        ]);
+
+        Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $seed->id,
+            'status' => Enrollment::STATUS_ACTIVE,
+            'enrolled_at' => now(),
+        ]);
+
+        for ($i = 0; $i < 3; $i++) {
+            $similarStudent = User::factory()->create(['role' => 'student']);
+            Enrollment::query()->create([
+                'user_id' => $similarStudent->id,
+                'course_id' => $seed->id,
+                'status' => Enrollment::STATUS_ACTIVE,
+                'enrolled_at' => now(),
+            ]);
+            Enrollment::query()->create([
+                'user_id' => $similarStudent->id,
+                'course_id' => $target->id,
+                'status' => Enrollment::STATUS_ACTIVE,
+                'enrolled_at' => now(),
+            ]);
+        }
+
+        $related = app(CourseRecommendationService::class)->getPersonalizedRecommendations($current, $student, 4);
+        $targetRecommendation = $related->firstWhere('id', $target->id);
+
+        $this->assertNotNull($targetRecommendation);
+        $this->assertSame('collaborative', $targetRecommendation->recommendation_type);
+        $this->assertNotEmpty($targetRecommendation->recommendation_reason);
+    }
+
+    public function test_new_user_and_guest_still_receive_cold_start_recommendations(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $category = $this->category('Cold Start');
+        $current = $this->course(['category_id' => $category->id, 'tags' => ['starter']]);
+        $candidate = $this->course([
+            'category_id' => $category->id,
+            'tags' => ['starter'],
+            'rating_avg' => 4.8,
+            'enrollment_count' => 100,
+        ]);
+
+        $studentIds = app(CourseRecommendationService::class)
+            ->getPersonalizedRecommendations($current, $student, 4)
+            ->pluck('id')
+            ->all();
+        $guestIds = app(CourseRecommendationService::class)
+            ->getPersonalizedRecommendations($current, null, 4)
+            ->pluck('id')
+            ->all();
+
+        $this->assertContains($candidate->id, $studentIds);
+        $this->assertContains($candidate->id, $guestIds);
+    }
+
+    public function test_recommendation_cache_is_used_and_refreshed_when_user_signals_change(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $current = $this->course(['category_id' => null, 'tags' => []]);
+        $popular = $this->course(['rating_avg' => 5, 'rating_count' => 200, 'enrollment_count' => 1200]);
+        $wishlistTarget = $this->course([
+            'category_id' => $this->category('Cache Wishlist')->id,
+            'tags' => ['cache-target'],
+            'rating_avg' => 3,
+            'enrollment_count' => 0,
+        ]);
+
+        $service = app(CourseRecommendationService::class);
+        $first = $service->getPersonalizedRecommendations($current, $student, 2);
+        $this->assertSame($popular->id, $first->first()->id);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $service->getPersonalizedRecommendations($current, $student, 2);
+        $cachedQueryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        Wishlist::query()->create(['user_id' => $student->id, 'course_id' => $wishlistTarget->id]);
+
+        $refreshed = $service->getPersonalizedRecommendations($current, $student, 2);
+
+        $this->assertLessThan(10, $cachedQueryCount);
+        $this->assertSame($wishlistTarget->id, $refreshed->first()->id);
+        $this->assertTrue((bool) $refreshed->first()->is_favorited);
+    }
+
+    public function test_personalized_recommendations_do_not_issue_query_per_candidate(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $category = $this->category('Personalized Performance');
+        $current = $this->course(['category_id' => $category->id, 'tags' => ['perf']]);
+        $viewed = $this->course(['category_id' => $category->id, 'tags' => ['perf']]);
+
+        RecentlyViewedCourse::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $viewed->id,
+            'last_viewed_at' => now(),
+        ]);
+
+        for ($i = 0; $i < 20; $i++) {
+            $this->course([
+                'category_id' => $category->id,
+                'tags' => ['perf'],
+                'rating_avg' => 4 + ($i / 100),
+                'enrollment_count' => $i * 10,
+            ]);
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $related = app(CourseRecommendationService::class)->getPersonalizedRecommendations($current, $student, 4);
+
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertCount(4, $related);
+        $this->assertLessThanOrEqual(24, $queryCount);
+    }
+
     private function category(string $name): Category
     {
         return Category::query()->create([
@@ -312,5 +571,17 @@ class RelatedCoursesTest extends TestCase
             'tags' => [],
             'published_at' => now()->subDays(30 + $sequence),
         ], $overrides));
+    }
+
+    private function review(User $user, Course $course, int $rating): Review
+    {
+        return Review::query()->create([
+            'user_id' => $user->id,
+            'course_id' => $course->id,
+            'rating' => $rating,
+            'comment' => 'Review content for recommendation tests',
+            'status' => ReviewStatus::Approved->value,
+            'verified_purchase' => true,
+        ]);
     }
 }
