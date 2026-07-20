@@ -166,7 +166,7 @@
                                     <h4 class="mt-2 font-bold text-slate-950">{{ $lesson->title }}</h4>
                                     <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
                                         <span>Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
-                                        <span>sort_order: {{ $lesson->sort_order }}</span>
+                                        <span>Bài {{ $lesson->sort_order }}</span>
                                         @if($lesson->type === 'video' && $lesson->video_path)
                                             <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($lesson->video_path) }}" target="_blank" class="font-semibold text-emerald-600 hover:underline">Video file</a>
                                         @endif
