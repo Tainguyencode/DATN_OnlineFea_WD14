@@ -178,6 +178,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
     Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
     Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
+    Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
+    Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
     Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
     Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
