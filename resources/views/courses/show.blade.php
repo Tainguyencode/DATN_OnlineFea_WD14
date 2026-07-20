@@ -432,8 +432,8 @@
         <div class="mx-auto mt-12 max-w-7xl px-4 sm:px-6 lg:px-8">
             <div class="flex items-end justify-between">
                 <div>
-                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">Khóa học liên quan</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Một vài lựa chọn gần với chủ đề, trình độ và nhu cầu học của bạn.</p>
+                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">{{ $recommendationTitle ?? 'Khóa học liên quan' }}</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $recommendationSubtitle ?? 'Một vài lựa chọn gần với chủ đề, trình độ và nhu cầu học của bạn.' }}</p>
                 </div>
                 <a href="{{ route('courses.index') }}" class="hidden text-sm font-bold text-indigo-600 hover:underline dark:text-indigo-300 sm:inline">Xem tất cả</a>
             </div>

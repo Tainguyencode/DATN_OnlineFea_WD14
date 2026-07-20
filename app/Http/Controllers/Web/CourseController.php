@@ -75,6 +75,12 @@ class CourseController extends Controller
         $course->loadCount('lessons');
 
         $relatedCourses = $courseRecommendations->getRelatedCourses($course, 4, auth()->user());
+        $hasPersonalizedRecommendations = auth()->user()?->isStudent()
+            && $relatedCourses->contains(fn ($related) => in_array($related->recommendation_type, ['personal', 'behavior', 'collaborative'], true));
+        $recommendationTitle = $hasPersonalizedRecommendations ? 'Đề xuất dành cho bạn' : 'Khóa học liên quan';
+        $recommendationSubtitle = $hasPersonalizedRecommendations
+            ? 'Gợi ý dựa trên khóa bạn đã xem, đã học, yêu thích và các sở thích tương tự.'
+            : 'Một vài lựa chọn gần với chủ đề, trình độ và nhu cầu học của bạn.';
 
         $reviewRating = $request->integer('review_rating');
         $reviewRating = $reviewRating >= 1 && $reviewRating <= 5 ? $reviewRating : null;
@@ -163,7 +169,9 @@ class CourseController extends Controller
             'canAccessFullCourse',
             'isFavorited',
             'learningEntryUrl',
-            'enrollment'
+            'enrollment',
+            'recommendationTitle',
+            'recommendationSubtitle',
         ));
     }
 
