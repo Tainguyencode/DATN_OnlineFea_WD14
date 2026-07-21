@@ -5,7 +5,7 @@
 @section('content')
     {{-- HERO BANNER CAROUSEL --}}
     <section class="bg-slate-50 py-4 sm:py-5 dark:bg-slate-950">
-        <div class="ui-container">
+        <div class="mx-auto w-full max-w-[1680px] px-3 sm:px-5 lg:px-6">
             <div class="grid grid-cols-12 gap-2 sm:gap-3">
                 <div class="relative col-span-12 aspect-video overflow-hidden rounded-xl bg-slate-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 sm:aspect-[1942/809] dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
             <style>
