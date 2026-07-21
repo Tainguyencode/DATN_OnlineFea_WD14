@@ -607,7 +607,14 @@ class CourseController extends Controller
             ->when($pricing === 'above_2tr', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 2000000'))
             ->when($minPrice !== null, fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= ?', [$minPrice]))
             ->when($maxPrice !== null, fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= ?', [$maxPrice]))
-            ->when(is_numeric($rating), fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
+            ->when(in_array((string) $rating, ['1', '2', '3', '4', '5'], true), function ($query) use ($rating) {
+                $star = (int) $rating;
+                $query->where('rating_avg', '>=', $star);
+
+                if ($star < 5) {
+                    $query->where('rating_avg', '<', $star + 1);
+                }
+            })
             ->orderByDesc('published_at')
             ->orderByDesc('created_at')
             ->paginate(12)
