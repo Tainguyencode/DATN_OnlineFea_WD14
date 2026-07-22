@@ -222,10 +222,17 @@
                                         @endif
 
                                         @if($lesson->type === 'video' && $lesson->video_path)
+                                            @php
+                                                $isHls = !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4');
+                                            @endphp
                                             <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
                                                 <video
                                                     id="admin-video-{{ $lesson->id }}"
-                                                    src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
+                                                    @if($isHls)
+                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', $lesson) }}"
+                                                    @else
+                                                        src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
+                                                    @endif
                                                     controls
                                                     preload="metadata"
                                                     class="h-full w-full"
@@ -350,7 +357,7 @@
                                             <a href="{{ $lesson->video_url }}" target="_blank" class="rounded-lg border border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">Xem video URL</a>
                                         @endif
                                         @if($lesson->video_path)
-                                            <a href="{{ asset('storage/'.$lesson->video_path) }}" target="_blank" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50">Tải video file</a>
+                                            <span class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700">Video file ({{ \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4') ? 'Chưa bảo mật HLS' : 'Đã bảo mật' }})</span>
                                         @endif
                                         @if($lesson->document_file)
                                             <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-50">Xem tài liệu</a>
@@ -543,8 +550,21 @@
         </form>
     </section>
 
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Khởi tạo các video HLS (nếu có)
+    document.querySelectorAll('video[data-hls-src]').forEach(function (video) {
+        var hlsSrc = video.getAttribute('data-hls-src');
+        if (Hls.isSupported()) {
+            var hls = new Hls();
+            hls.loadSource(hlsSrc);
+            hls.attachMedia(video);
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = hlsSrc;
+        }
+    });
+
     // 1. Logic duyệt khóa học
     var form     = document.getElementById('course-review-form');
     var actionInput = document.getElementById('review-action-input');

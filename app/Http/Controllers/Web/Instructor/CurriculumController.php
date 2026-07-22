@@ -85,6 +85,10 @@ class CurriculumController extends Controller
             'status' => $lessonData['status'] ?? 'draft',
         ]);
 
+        if ($request->hasFile('video_file') && $lesson->type === 'video') {
+            \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+        }
+
         $this->syncAssignment($lesson, $validated);
 
         if ($lesson->type === 'quiz') {
@@ -93,7 +97,7 @@ class CurriculumController extends Controller
                 ->with('success', 'Đã tạo bài quiz. Bạn có thể thêm câu hỏi ngay bên dưới.');
         }
 
-        return back()->with('success', 'Đã thêm bài học.');
+        return back()->with('success', 'Đã thêm bài học. Video đang được xử lý ngầm, vui lòng đợi trong giây lát.');
     }
 
     public function updateLesson(StoreLessonRequest $request, Course $course, Lesson $lesson): RedirectResponse
@@ -113,6 +117,10 @@ class CurriculumController extends Controller
             'status' => $lessonData['status'] ?? 'draft',
         ]);
 
+        if ($request->hasFile('video_file') && $lesson->type === 'video') {
+            \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+        }
+
         $lesson->refresh();
         $this->syncAssignment($lesson, $validated);
 
@@ -122,7 +130,7 @@ class CurriculumController extends Controller
                 ->with('success', 'Đã cập nhật bài quiz. Bạn có thể quản lý câu hỏi tại đây.');
         }
 
-        return back()->with('success', 'Đã cập nhật bài học.');
+        return back()->with('success', 'Đã cập nhật bài học. Nếu có video mới, video đang được xử lý ngầm.');
     }
 
     public function destroyLesson(Course $course, Lesson $lesson): RedirectResponse
@@ -207,7 +215,8 @@ class CurriculumController extends Controller
         }
 
         $file = $request->file('video_file');
-        $path = $file->store('lesson-videos', 'public');
+        // Store the original MP4 file in local disk so it's private
+        $path = $file->store('lesson-videos-mp4', 'local');
 
         if ($lesson) {
             $this->deleteLessonVideo($lesson);
@@ -258,7 +267,13 @@ class CurriculumController extends Controller
     private function deleteLessonVideo(Lesson $lesson): void
     {
         if ($lesson->video_path) {
-            Storage::disk('public')->delete($lesson->video_path);
+            Storage::disk('local')->delete($lesson->video_path);
+        }
+        
+        // Delete HLS directory if exists
+        $hlsDir = 'lesson-hls/' . $lesson->id;
+        if (Storage::disk('local')->exists($hlsDir)) {
+            Storage::disk('local')->deleteDirectory($hlsDir);
         }
     }
 
