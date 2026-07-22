@@ -71,6 +71,8 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('study-groups.join');
     Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('study-groups.leave');
     Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('study-groups.members');
+    Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('study-groups.messages.store');
+    Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('study-groups.members.remove');
 });
 Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
