@@ -57,7 +57,13 @@
                                     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                         <div class="space-y-1.5 flex-1 min-w-0">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <h3 class="font-bold text-slate-900 dark:text-white text-lg truncate">{{ $group->name }}</h3>
+                                                @if($group->hasMember(Auth::id()))
+                                                    <a href="{{ route('study-groups.show', $group) }}" class="font-bold text-slate-900 dark:text-white text-lg truncate hover:text-[#0056D2] transition" title="Vào phòng chat">
+                                                        {{ $group->name }}
+                                                    </a>
+                                                @else
+                                                    <h3 class="font-bold text-slate-900 dark:text-white text-lg truncate">{{ $group->name }}</h3>
+                                                @endif
                                                 <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-300">
                                                     {{ $group->course->title }}
                                                 </span>
@@ -97,6 +103,10 @@
                                             @endif
 
                                             @if($group->hasMember(Auth::id()))
+                                                {{-- Chat Button --}}
+                                                <a href="{{ route('study-groups.show', $group) }}" class="inline-flex h-9 items-center justify-center rounded-lg bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8] dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer">
+                                                    Vào chat
+                                                </a>
                                                 @if($group->creator_id !== Auth::id())
                                                     {{-- Leave Form --}}
                                                     <form action="{{ route('study-groups.leave', $group) }}" method="POST" class="inline">

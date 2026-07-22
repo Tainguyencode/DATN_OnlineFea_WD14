@@ -57,4 +57,9 @@ class StudyGroup extends Model
     {
         return $this->members()->where('users.id', $userId)->exists();
     }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(StudyGroupMessage::class);
+    }
 }

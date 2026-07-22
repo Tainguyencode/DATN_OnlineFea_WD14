@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\StudyGroup;
+use App\Models\StudyGroupMessage;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class StudyGroupController extends Controller
@@ -118,13 +120,91 @@ class StudyGroupController extends Controller
      */
     public function show(StudyGroup $studyGroup, Request $request)
     {
+        $user = auth()->user();
+
+        // Check if user is a member of the group, or admin
+        if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
+            $message = 'Bạn không phải là thành viên của nhóm này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->route('study-groups.index')->with('error', $message);
+        }
+
+        // Load study group creator, members, and messages with user sorted by created_at asc
+        $studyGroup->load([
+            'creator',
+            'members',
+            'messages' => function ($query) {
+                $query->with('user')->orderBy('created_at', 'asc');
+            }
+        ]);
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'data' => $studyGroup->load(['creator', 'members'])
+                'data' => $studyGroup
             ]);
         }
         return view('student.study_groups.show', compact('studyGroup'));
+    }
+
+    /**
+     * Store a new message in the study group.
+     */
+    public function storeMessage(Request $request, StudyGroup $studyGroup)
+    {
+        $user = auth()->user();
+
+        // Check if user is member of the group
+        if (!$studyGroup->hasMember($user->id)) {
+            $message = 'Bạn không phải là thành viên của nhóm này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->route('study-groups.index')->with('error', $message);
+        }
+
+        // Validate message input manually
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'message' => 'required|string|min:1',
+        ], [
+            'message.required' => 'Nội dung tin nhắn không được để trống.',
+        ]);
+
+        if ($validator->fails()) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nội dung tin nhắn không được để trống.',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
+
+        // Create the message
+        $studyGroupMessage = $studyGroup->messages()->create([
+            'user_id' => $user->id,
+            'message' => $request->input('message'),
+        ]);
+
+        $messageText = 'Gửi tin nhắn thành công.';
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $messageText,
+                'data' => $studyGroupMessage->load('user')
+            ], 201);
+        }
+
+        return redirect()->route('study-groups.show', $studyGroup)->with('success', $messageText);
     }
 
     /**
@@ -316,5 +396,61 @@ class StudyGroupController extends Controller
             'success' => true,
             'data' => $members
         ]);
+    }
+
+    /**
+     * Remove a member from the study group (Kick).
+     */
+    public function removeMember(StudyGroup $studyGroup, User $user, Request $request)
+    {
+        $currentUser = auth()->user();
+
+        // Check if current user is group creator or admin
+        if ($currentUser->id !== $studyGroup->creator_id && $currentUser->role !== 'admin') {
+            $message = 'Bạn không có quyền xóa thành viên khỏi nhóm này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Creator cannot remove themselves (they must delete the group)
+        if ($user->id === $studyGroup->creator_id) {
+            $message = 'Trưởng nhóm không thể bị xóa khỏi nhóm. Hãy xóa nhóm nếu muốn giải tán.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Check if user is a member of the group
+        if (!$studyGroup->hasMember($user->id)) {
+            $message = 'Người này không phải là thành viên của nhóm.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Detach the user from the group
+        $studyGroup->members()->detach($user->id);
+
+        $message = "Đã xóa thành viên {$user->name} ra khỏi nhóm.";
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ]);
+        }
+        return redirect()->back()->with('success', $message);
     }
 }
