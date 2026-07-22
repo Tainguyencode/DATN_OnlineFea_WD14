@@ -14,6 +14,7 @@ use App\Models\Course;
 use App\Models\EmailVerificationCode;
 use App\Models\Enrollment;
 use App\Models\Order;
+use App\Models\StudyGroup;
 use App\Models\User;
 use App\Models\Wishlist;
 use App\Services\ActivityLogService;
