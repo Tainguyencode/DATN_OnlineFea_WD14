@@ -22,7 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => CheckRole::class,
             'verified' => EnsureEmailIsVerified::class,
             '2fa' => EnsureTwoFactorIsVerified::class,
+            'single.session' => \App\Http\Middleware\SingleSessionMiddleware::class,
         ]);
+        
+        $middleware->appendToGroup('web', \App\Http\Middleware\SingleSessionMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
