@@ -48,3 +48,6 @@
 ### Commit 16: feat: hoan thien chuc nang cap chung chi truc tuyen (2026-07-21 10:15:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 17: feat: bo sung he thong ticket ho tro tu dong cho hoc vien (2026-07-22 16:30:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
