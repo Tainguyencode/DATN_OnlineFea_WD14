@@ -22,9 +22,14 @@ class AiModerationController extends Controller
             abort(404, 'Bài học này không có video.');
         }
 
-        $path = storage_path('app/public/'.$lesson->video_path);
+        $path = null;
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path)) {
+            $path = \Illuminate\Support\Facades\Storage::disk('local')->path($lesson->video_path);
+        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path)) {
+            $path = \Illuminate\Support\Facades\Storage::disk('public')->path($lesson->video_path);
+        }
 
-        if (! file_exists($path)) {
+        if (!$path || !file_exists($path)) {
             abort(404, 'File video không tồn tại trên máy chủ.');
         }
 
@@ -32,6 +37,45 @@ class AiModerationController extends Controller
         // → browser có thể seek video đúng cách (seekable range đầy đủ)
         return response()->file($path, [
             'Content-Type'  => 'video/mp4',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /**
+     * Stream HLS Playlist for Admin Review
+     */
+    public function streamHlsPlaylist(Lesson $lesson)
+    {
+        $hlsDir = 'lesson-hls/' . $lesson->id;
+        $m3u8Path = $hlsDir . '/playlist.m3u8';
+
+        if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($m3u8Path)) {
+            abort(404, 'HLS Playlist not found.');
+        }
+
+        $content = \Illuminate\Support\Facades\Storage::disk('local')->get($m3u8Path);
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+
+    /**
+     * Stream HLS Segment (.ts) for Admin Review
+     */
+    public function streamHlsSegment(Lesson $lesson, $segment)
+    {
+        $segmentPath = 'lesson-hls/' . $lesson->id . '/' . $segment;
+
+        if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($segmentPath)) {
+            abort(404, 'Segment not found.');
+        }
+
+        $path = \Illuminate\Support\Facades\Storage::disk('local')->path($segmentPath);
+
+        return response()->file($path, [
+            'Content-Type' => 'video/MP2T',
             'Cache-Control' => 'no-store',
         ]);
     }
@@ -45,9 +89,14 @@ class AiModerationController extends Controller
             return response()->json(['error' => 'Bài học này không có video hợp lệ.'], 400);
         }
 
-        $videoPath = storage_path('app/public/'.$lesson->video_path);
+        $videoPath = null;
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path)) {
+            $videoPath = \Illuminate\Support\Facades\Storage::disk('local')->path($lesson->video_path);
+        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path)) {
+            $videoPath = \Illuminate\Support\Facades\Storage::disk('public')->path($lesson->video_path);
+        }
 
-        if (! file_exists($videoPath)) {
+        if (!$videoPath || !file_exists($videoPath)) {
             return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
         }
 

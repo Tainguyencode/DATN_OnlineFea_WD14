@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
  * Tất cả routes trong file này sẽ có prefix: /api
  * Xem app/Http/Kernel.php hoặc routes/web.php để biết cách kích hoạt
  */
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['web', 'auth'])->group(function () {
     // ============================================
     // LEARNING PROGRESS ROUTES
     // ============================================
@@ -79,4 +79,40 @@ Route::middleware('auth:sanctum')->group(function () {
      */
     Route::get('/my-enrollments', [ProgressController::class, 'getUserEnrollments'])
         ->name('user.enrollments');
+
+    // HLS Token API (Requires Auth & Enrolled)
+    // Rate limit: 20 tokens per minute
+    Route::middleware('throttle:20,1')->get('/video/{lesson}/token', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'getToken'])
+        ->name('video.token');
+
+    // Update Progress API (Called every 10s by frontend)
+    // Rate limit: 20 requests per minute
+    Route::middleware('throttle:20,1')->post('/video/{lesson}/progress', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'updateProgress'])
+        ->name('video.progress');
+
+    // Get Progress API
+    Route::get('/video/{lesson}/progress', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'getProgress'])
+        ->name('video.progress.get');
+});
+
+// Session check endpoint (Called every 10-15s by frontend)
+// Bọc trong middleware web để SingleSessionMiddleware có thể bắt được session id.
+Route::middleware(['web'])->get('/session/check', function (Illuminate\Http\Request $request) {
+    if (!Illuminate\Support\Facades\Auth::check()) {
+        return response()->json(['active' => false, 'message' => 'Chưa đăng nhập.']);
+    }
+    // SingleSessionMiddleware will intercept and return active=false if invalid.
+    // If it reaches here, the session is active.
+    return response()->json(['active' => true]);
+})->name('session.check');
+
+// HLS Streaming API (No auth:sanctum required, protected by ?token=)
+// Rate limit: 300 requests per minute to allow downloading many .ts segments
+Route::middleware('throttle:300,1')->group(function () {
+    Route::get('/video/hls/{lesson}/playlist.m3u8', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'playlist'])
+        ->name('video.hls.playlist');
+        
+    Route::get('/video/hls/{lesson}/{segment}', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'segment'])
+        ->where('segment', '.*\.ts$')
+        ->name('video.hls.segment');
 });

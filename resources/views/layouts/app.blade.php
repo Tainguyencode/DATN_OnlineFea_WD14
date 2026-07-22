@@ -232,5 +232,30 @@
             </button>
         </div>
     </div>
+    
+    @auth
+    <script>
+        // Poll for session validity every 15 seconds
+        setInterval(function() {
+            fetch('/api/session/check', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(response => {
+                if (response.status === 401) {
+                    alert('Tài khoản đã được đăng nhập trên thiết bị khác.');
+                    window.location.href = '/login';
+                }
+                return response.json();
+            }).then(data => {
+                if (data && data.active === false) {
+                    alert(data.message || 'Tài khoản đã được đăng nhập trên thiết bị khác.');
+                    window.location.href = '/login';
+                }
+            }).catch(e => console.error(e));
+        }, 15000);
+    </script>
+    @endauth
 </body>
 </html>

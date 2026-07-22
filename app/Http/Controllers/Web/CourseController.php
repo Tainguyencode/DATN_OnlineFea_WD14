@@ -133,9 +133,18 @@ class CourseController extends Controller
 
         $videoSource = null;
         if ($player['canAccessLesson'] && $lesson->type === 'video') {
-            $videoSource = $lesson->video_path
-                ? Storage::disk('public')->url($lesson->video_path)
-                : $lesson->video_url;
+            if ($lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')) {
+                // Sử dụng Cache để tránh gọi Job nhiều lần vì status DB không hỗ trợ 'processing'
+                $cacheKey = 'video_processing_' . $lesson->id;
+                if (!\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                    \Illuminate\Support\Facades\Cache::put($cacheKey, true, now()->addMinutes(30));
+                    \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+                }
+            } else {
+                $videoSource = $lesson->video_path
+                    ? Storage::disk('public')->url($lesson->video_path)
+                    : $lesson->video_url;
+            }
         }
 
         $progressUrl = $player['isEnrolled']
