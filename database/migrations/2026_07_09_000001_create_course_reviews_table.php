@@ -9,11 +9,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('course_reviews')) {
-            $this->upgradeExistingTable();
-
-            return;
-        }
+        Schema::disableForeignKeyConstraints();
+        Schema::dropIfExists('course_reviews');
+        Schema::enableForeignKeyConstraints();
 
         Schema::create('course_reviews', function (Blueprint $table) {
             $table->id();
