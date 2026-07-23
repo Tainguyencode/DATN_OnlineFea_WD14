@@ -173,26 +173,40 @@ class StudyGroupController extends Controller
 
         // Validate message input manually
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'message' => 'required|string|min:1',
+            'message' => 'nullable|string',
+            'image' => 'nullable|image|max:5120',
         ], [
-            'message.required' => 'Nội dung tin nhắn không được để trống.',
+            'image.image' => 'Tập tin tải lên phải là hình ảnh.',
+            'image.max' => 'Kích thước ảnh tối đa là 5MB.',
         ]);
+
+        $validator->after(function ($validator) use ($request) {
+            if (!$request->filled('message') && !$request->hasFile('image')) {
+                $validator->errors()->add('message', 'Nội dung tin nhắn hoặc hình ảnh không được để trống.');
+            }
+        });
 
         if ($validator->fails()) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Nội dung tin nhắn không được để trống.',
+                    'message' => $validator->errors()->first(),
                     'errors' => $validator->errors()
                 ], 422);
             }
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('study-group-messages', 'public');
+        }
+
         // Create the message
         $studyGroupMessage = $studyGroup->messages()->create([
             'user_id' => $user->id,
             'message' => $request->input('message'),
+            'image_path' => $imagePath,
         ]);
 
         $messageText = 'Gửi tin nhắn thành công.';
