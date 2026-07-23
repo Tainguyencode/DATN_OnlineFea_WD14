@@ -8,6 +8,22 @@ class MailErrorFormatter
 {
     public static function verificationSendFailure(Throwable $exception): string
     {
+        return self::format(
+            $exception,
+            'Không thể gửi mã xác thực. Vui lòng kiểm tra cấu hình SMTP và thử lại sau.'
+        );
+    }
+
+    public static function passwordResetSendFailure(Throwable $exception): string
+    {
+        return self::format(
+            $exception,
+            'Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau.'
+        );
+    }
+
+    private static function format(Throwable $exception, string $fallback): string
+    {
         $message = $exception->getMessage();
 
         if (str_contains($message, 'scheme is not supported') && str_contains($message, 'tls')) {
@@ -31,6 +47,6 @@ class MailErrorFormatter
             return 'Không kết nối được máy chủ SMTP. Kiểm tra MAIL_HOST, MAIL_PORT và kết nối mạng.';
         }
 
-        return 'Không thể gửi mã xác thực. Vui lòng kiểm tra cấu hình SMTP và thử lại sau.';
+        return $fallback;
     }
 }
