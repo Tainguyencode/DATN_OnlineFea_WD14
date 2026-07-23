@@ -125,6 +125,11 @@ class Course extends Model
         return $this->hasMany(Enrollment::class);
     }
 
+    public function studyGroups(): HasMany
+    {
+        return $this->hasMany(StudyGroup::class);
+    }
+
     public function wishlists(): HasMany
     {
         return $this->hasMany(Wishlist::class);
@@ -138,6 +143,11 @@ class Course extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->reviews()->approved();
     }
 
     public function courseReviews(): HasMany

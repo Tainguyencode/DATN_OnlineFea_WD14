@@ -83,6 +83,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Review::class);
     }
 
+    public function helpfulCourseReviews(): BelongsToMany
+    {
+        return $this->belongsToMany(Review::class, 'review_helpful')->withTimestamps();
+    }
+
     public function courseReviewsAsReviewer(): HasMany
     {
         return $this->hasMany(CourseReview::class, 'reviewer_id');
@@ -117,6 +122,24 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(LessonProgress::class);
     }
+
+    public function studyGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(StudyGroup::class, 'study_group_members')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function createdStudyGroups(): HasMany
+    {
+        return $this->hasMany(StudyGroup::class, 'creator_id');
+    }
+
+    public function studyGroupMessages(): HasMany
+    {
+        return $this->hasMany(StudyGroupMessage::class);
+    }
+
 
     public function emailVerificationCodes(): HasMany
     {

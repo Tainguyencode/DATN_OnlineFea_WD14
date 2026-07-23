@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ProgressController;
+use App\Http\Controllers\Api\StudyGroupController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -93,6 +94,20 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Get Progress API
     Route::get('/video/{lesson}/progress', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'getProgress'])
         ->name('video.progress.get');
+
+    // ============================================
+    // STUDY GROUP ROUTES
+    // ============================================
+    Route::get('/study-groups', [StudyGroupController::class, 'index'])->name('api.study-groups.index');
+    Route::post('/study-groups', [StudyGroupController::class, 'store'])->name('api.study-groups.store');
+    Route::get('/study-groups/{studyGroup}', [StudyGroupController::class, 'show'])->name('api.study-groups.show');
+    Route::put('/study-groups/{studyGroup}', [StudyGroupController::class, 'update'])->name('api.study-groups.update');
+    Route::delete('/study-groups/{studyGroup}', [StudyGroupController::class, 'destroy'])->name('api.study-groups.destroy');
+    Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('api.study-groups.join');
+    Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('api.study-groups.leave');
+    Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('api.study-groups.members');
+    Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('api.study-groups.messages.store');
+    Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('api.study-groups.members.remove');
 });
 
 // Session check endpoint (Called every 10-15s by frontend)

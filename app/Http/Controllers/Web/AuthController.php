@@ -14,6 +14,7 @@ use App\Models\Course;
 use App\Models\EmailVerificationCode;
 use App\Models\Enrollment;
 use App\Models\Order;
+use App\Models\StudyGroup;
 use App\Models\User;
 use App\Models\Wishlist;
 use App\Services\ActivityLogService;
@@ -340,12 +341,13 @@ class AuthController extends Controller
 
     public function quickLogin(Request $request, string $role): RedirectResponse
     {
-        abort_if(app()->environment('production'), Response::HTTP_NOT_FOUND);
+        abort_unless(app()->environment('local'), Response::HTTP_NOT_FOUND);
 
         $email = match ($role) {
             'admin' => 'admin@example.com',
             'instructor' => 'instructor@example.com',
-            default => 'student@example.com',
+            'student' => 'student@example.com',
+            default => abort(Response::HTTP_NOT_FOUND),
         };
 
         $user = User::where('email', $email)->firstOrFail();
