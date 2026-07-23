@@ -1,7 +1,7 @@
 <x-student-layout title="Voucher của tôi" page-title="Voucher của tôi" breadcrumb="Chỉ hiển thị voucher đã được lưu hoặc cấp cho tài khoản của bạn.">
     <div class="mb-5 flex flex-wrap gap-2" aria-label="Lọc voucher">
         @foreach(['all' => 'Tất cả', 'active' => 'Còn hiệu lực', 'used' => 'Đã sử dụng', 'expired' => 'Hết hạn'] as $key => $label)
-            <a href="{{ route('student.vouchers.index', ['status' => $key]) }}" @if($status === $key) aria-current="page" @endif class="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold {{ $status === $key ? 'bg-[#0056D2] text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300' }}"><span>{{ $label }}</span><span class="rounded-full bg-black/10 px-2 py-0.5 text-xs">{{ $counts[$key] }}</span></a>
+            <a href="{{ route('student.vouchers.index', ['status' => $key]) }}" @if($status === $key) aria-current="page" @endif class="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 {{ $status === $key ? 'bg-[#0056D2] text-white shadow-blue-500/20 hover:bg-[#0046B8]' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}"><span>{{ $label }}</span><span class="rounded-full bg-black/10 px-2 py-0.5 text-xs">{{ $counts[$key] }}</span></a>
         @endforeach
     </div>
 

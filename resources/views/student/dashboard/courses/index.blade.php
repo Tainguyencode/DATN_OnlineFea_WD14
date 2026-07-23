@@ -2,7 +2,7 @@
     <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex flex-wrap gap-2" role="navigation" aria-label="Lọc khóa học">
             @foreach(['all' => 'Tất cả', 'in_progress' => 'Đang học', 'completed' => 'Hoàn thành'] as $key => $label)
-                <a href="{{ route('student.courses', ['status' => $key]) }}" @if($status === $key) aria-current="page" @endif class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-bold {{ $status === $key ? 'bg-[#0056D2] text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300' }}">{{ $label }}</a>
+                <a href="{{ route('student.courses', ['status' => $key]) }}" @if($status === $key) aria-current="page" @endif class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 {{ $status === $key ? 'bg-[#0056D2] text-white shadow-blue-500/20 hover:bg-[#0046B8]' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}">{{ $label }}</a>
             @endforeach
         </div>
         <span class="text-sm font-semibold text-slate-500">{{ $enrollments->total() }} khóa học</span>
