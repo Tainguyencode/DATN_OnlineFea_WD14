@@ -20,10 +20,12 @@ use App\Models\Wishlist;
 use App\Services\ActivityLogService;
 use App\Services\AuthService;
 use App\Services\CaptchaService;
+use App\Services\DatabaseSessionInvalidator;
 use App\Services\EmailVerificationService;
 use App\Services\RecentlyViewedCourseService;
 use App\Services\TwoFactorService;
 use App\Support\MailErrorFormatter;
+use App\Support\SensitiveData;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
@@ -175,11 +177,38 @@ class AuthController extends Controller
     {
         $request->validateCaptcha();
 
-        Password::sendResetLink($request->only('email'));
+        $email = (string) $request->input('email');
+        $neutralMessage = 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu sẽ được gửi.';
+        $throttleSeconds = (int) config('auth.passwords.users.throttle', 60);
 
+        try {
+            $status = Password::broker('users')->sendResetLink(
+                $request->only('email')
+            );
+        } catch (Throwable $exception) {
+            Log::error('Password reset email could not be sent.', [
+                'user_id' => User::query()->where('email', $email)->value('id'),
+                'email_masked' => SensitiveData::maskEmail($email),
+                'exception' => $exception::class,
+            ]);
+
+            return back()->withErrors([
+                'email' => MailErrorFormatter::passwordResetSendFailure($exception),
+            ]);
+        }
+
+        if ($status === Password::RESET_THROTTLED) {
+            return back()
+                ->withErrors([
+                    'email' => 'Vui lòng đợi trước khi yêu cầu gửi lại liên kết đặt lại mật khẩu.',
+                ])
+                ->with('resend_after', $throttleSeconds);
+        }
+
+        // RESET_LINK_SENT and INVALID_USER share one response to avoid email enumeration.
         return back()
-            ->with('success', 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu sẽ được gửi.')
-            ->with('resend_after', 60);
+            ->with('success', $neutralMessage)
+            ->with('resend_after', $throttleSeconds);
     }
 
     public function showResetPassword(Request $request, string $token): View
@@ -190,22 +219,42 @@ class AuthController extends Controller
         ]);
     }
 
-    public function resetPassword(ResetPasswordRequest $request): RedirectResponse
-    {
-        $status = Password::reset(
+    public function resetPassword(
+        ResetPasswordRequest $request,
+        DatabaseSessionInvalidator $sessionInvalidator,
+    ): RedirectResponse {
+        $status = Password::broker('users')->reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function (User $user, string $password): void {
+            function (User $user, string $password) use ($sessionInvalidator): void {
                 $user->forceFill([
                     'password' => $password,
                     'remember_token' => Str::random(60),
                     'password_changed_at' => now(),
                 ])->save();
+
+                // Guest reset cannot call logoutOtherDevices(); purge DB sessions by user_id.
+                $sessionInvalidator->invalidateForUser($user->id);
             }
         );
 
-        return $status === Password::PASSWORD_RESET
-            ? redirect()->route('login')->with('success', 'Mật khẩu đã được cập nhật. Bạn có thể đăng nhập lại.')
-            : back()->withErrors(['email' => __($status)]);
+        if ($status === Password::PASSWORD_RESET) {
+            return redirect()->route('login')
+                ->with('success', 'Mật khẩu đã được cập nhật. Bạn có thể đăng nhập lại.');
+        }
+
+        return back()->withErrors([
+            'email' => $this->passwordResetFailureMessage($status),
+        ]);
+    }
+
+    private function passwordResetFailureMessage(string $status): string
+    {
+        return match ($status) {
+            Password::INVALID_TOKEN => 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.',
+            Password::INVALID_USER => 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.',
+            Password::RESET_THROTTLED => 'Vui lòng đợi trước khi thử đặt lại mật khẩu lại.',
+            default => 'Không thể đặt lại mật khẩu. Vui lòng thử lại.',
+        };
     }
 
     public function verificationNotice(Request $request, EmailVerificationService $emailVerificationService): View|RedirectResponse

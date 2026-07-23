@@ -74,6 +74,9 @@
                     :lesson-state="$lessonState"
                     :is-enrolled="$isEnrolled"
                     :can-access-lesson="$canAccessLesson"
+                    :can-use-lesson-ai="$canUseLessonAi"
+                    :ai-summary-url="$aiSummaryUrl"
+                    :ai-explain-url="$aiExplainUrl"
                 />
             @endif
         </main>

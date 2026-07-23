@@ -59,10 +59,17 @@
 
                     @if($isEligible)
                         <a
-                            href="{{ route('student.certificates', ['send_email' => 1]) }}"
+                            href="{{ route('student.certificates.pdf', $certificate) }}"
+                            target="_blank"
                             class="flex w-full items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-purple-700"
                         >
-                            Nhận giấy chứng nhận
+                            Xem chứng chỉ (PDF)
+                        </a>
+                        <a
+                            href="{{ route('student.certificates', ['send_email' => 1, 'certificate_id' => $certificate->id]) }}"
+                            class="mt-2 flex w-full items-center justify-center rounded-lg border border-purple-200 bg-white px-4 py-2 text-center text-sm font-semibold text-purple-700 transition hover:bg-purple-50"
+                        >
+                            Gửi lại email chứng chỉ
                         </a>
                     @else
                         <button

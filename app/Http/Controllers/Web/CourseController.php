@@ -209,6 +209,19 @@ class CourseController extends Controller
             ? route('courses.lessons.progress', [$course, $lesson])
             : null;
 
+        $canUseLessonAi = (bool) $user && (
+            $player['isEnrolled']
+            || ($user->isInstructor() && $course->isOwnedBy($user))
+            || $user->isAdmin()
+        );
+
+        $aiSummaryUrl = $canUseLessonAi
+            ? route('courses.lessons.ai-summary', [$course, $lesson])
+            : null;
+        $aiExplainUrl = $canUseLessonAi
+            ? route('courses.lessons.ai-explain', [$course, $lesson])
+            : null;
+
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
 
         if ($player['canAccessLesson'] || $player['isEnrolled']) {
@@ -221,6 +234,9 @@ class CourseController extends Controller
             'enrollment' => $player['enrollment'],
             'isEnrolled' => $player['isEnrolled'],
             'canAccessLesson' => $player['canAccessLesson'],
+            'canUseLessonAi' => $canUseLessonAi,
+            'aiSummaryUrl' => $aiSummaryUrl,
+            'aiExplainUrl' => $aiExplainUrl,
             'videoSource' => $videoSource,
             'progressUrl' => $progressUrl,
             'sectionTitle' => $sectionTitle,

@@ -72,4 +72,24 @@ class Lesson extends Model
     {
         return $this->hasMany(LessonProgress::class);
     }
+
+    public function aiSummaries(): HasMany
+    {
+        return $this->hasMany(AiSummary::class);
+    }
+
+    public function aiSummary(): HasOne
+    {
+        return $this->hasOne(AiSummary::class)->where('language', 'vi');
+    }
+
+    public function lessonAiSummary(): HasOne
+    {
+        return $this->hasOne(LessonAiSummary::class);
+    }
+
+    public function aiChatMessages(): HasMany
+    {
+        return $this->hasMany(AiChatMessage::class);
+    }
 }
