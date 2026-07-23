@@ -8,11 +8,14 @@ use App\Models\Course;
 use App\Models\Order;
 use App\Models\Wishlist;
 use App\Notifications\CertificateIssuedNotification;
+use App\Services\CertificatePdfService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Throwable;
 
 class MiscController extends Controller
 {
@@ -98,11 +101,33 @@ class MiscController extends Controller
             ->get();
 
         if ($request->has('send_email')) {
-            foreach ($certificates as $cert) {
-                auth()->user()->notify(new CertificateIssuedNotification($cert->course, $cert));
+            $toSend = $certificates;
+            if ($request->filled('certificate_id')) {
+                $toSend = $certificates->where('id', (int) $request->integer('certificate_id'))->values();
             }
 
-            return redirect()->route('student.certificates')->with('success', 'Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+            $sent = 0;
+            foreach ($toSend as $cert) {
+                try {
+                    app(CertificatePdfService::class)->ensureStored($cert);
+                    auth()->user()->notify(new CertificateIssuedNotification($cert->course, $cert->fresh()));
+                    $sent++;
+                } catch (Throwable $exception) {
+                    Log::warning('Resend certificate email failed.', [
+                        'certificate_id' => $cert->id,
+                        'exception' => $exception::class,
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($sent > 0) {
+                return redirect()->route('student.certificates')
+                    ->with('success', 'Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+            }
+
+            return redirect()->route('student.certificates')
+                ->with('error', 'Không gửi được email chứng chỉ. Vui lòng thử lại sau.');
         }
 
         return view('student.certificates', compact('certificates'));
@@ -153,11 +178,25 @@ class MiscController extends Controller
         return back()->with($status < 400 ? 'success' : 'error', $message);
     }
 
-    public function viewCertificatePdf(Certificate $certificate)
+    public function viewCertificatePdf(Request $request, Certificate $certificate)
     {
         abort_unless((int) $certificate->user_id === (int) auth()->id(), 403);
 
         $certificate->load(['course', 'user']);
+        $pdfService = app(CertificatePdfService::class);
+        $certificate = $pdfService->ensureStored($certificate);
+
+        $absolutePath = $pdfService->absolutePath($certificate);
+        $fileName = 'certificate-'.$certificate->certificate_code.'.pdf';
+
+        if ($absolutePath) {
+            $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
+            return response()->file($absolutePath, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => $disposition.'; filename="'.$fileName.'"',
+            ]);
+        }
 
         $pdf = Pdf::loadView('pdf.certificate', [
             'certificate' => $certificate,
@@ -165,7 +204,9 @@ class MiscController extends Controller
             'user' => $certificate->user,
         ]);
 
-        return $pdf->stream('certificate-'.$certificate->certificate_code.'.pdf');
+        return $request->boolean('download')
+            ? $pdf->download($fileName)
+            : $pdf->stream($fileName);
     }
 
     public function publicCertificate(string $code)
