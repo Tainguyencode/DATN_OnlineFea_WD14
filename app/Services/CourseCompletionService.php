@@ -11,7 +11,9 @@ use App\Models\PushNotification;
 use App\Models\QuizAttempt;
 use App\Models\User;
 use App\Notifications\CertificateIssuedNotification;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class CourseCompletionService
 {
@@ -65,14 +67,16 @@ class CourseCompletionService
                     'status' => Enrollment::STATUS_COMPLETED,
                 ]);
 
-                $this->issueCertificate($userId, $course);
+                $certificate = $this->issueCertificate($userId, $course);
 
                 PushNotification::create([
                     'user_id' => $userId,
                     'title' => 'Hoàn thành khóa học',
                     'message' => "Chúc mừng! Bạn đã hoàn thành khóa học \"{$course->title}\".",
-                    'type' => 'certificate_issued',
-                    'url' => route('student.certificates'),
+                    'type' => $certificate ? 'certificate_issued' : 'course_completed',
+                    'url' => $certificate
+                        ? route('student.certificates')
+                        : route('student.dashboard'),
                     'is_read' => false,
                 ]);
             } elseif ($enrollment->status !== Enrollment::STATUS_COMPLETED) {
@@ -90,8 +94,12 @@ class CourseCompletionService
         ];
     }
 
-    private function issueCertificate(int $userId, Course $course): void
+    private function issueCertificate(int $userId, Course $course): ?Certificate
     {
+        if (! $course->certificate_enabled) {
+            return null;
+        }
+
         $certificate = Certificate::firstOrCreate(
             ['user_id' => $userId, 'course_id' => $course->id],
             [
@@ -100,11 +108,35 @@ class CourseCompletionService
             ]
         );
 
-        if ($certificate->wasRecentlyCreated) {
+        $wasRecentlyCreated = $certificate->wasRecentlyCreated;
+
+        app(CertificatePdfService::class)->ensureStored($certificate);
+        $certificate->refresh();
+
+        if ($wasRecentlyCreated) {
+            $this->sendCertificateEmail($userId, $course, $certificate);
+        }
+
+        return $certificate;
+    }
+
+    private function sendCertificateEmail(int $userId, Course $course, Certificate $certificate): void
+    {
+        try {
             $user = User::find($userId);
-            if ($user) {
-                $user->notify(new CertificateIssuedNotification($course, $certificate));
+            if (! $user) {
+                return;
             }
+
+            $user->notify(new CertificateIssuedNotification($course, $certificate));
+        } catch (Throwable $exception) {
+            Log::warning('Certificate email failed; certificate remains issued.', [
+                'user_id' => $userId,
+                'course_id' => $course->id,
+                'certificate_id' => $certificate->id,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 }

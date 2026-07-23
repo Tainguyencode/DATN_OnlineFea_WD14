@@ -21,6 +21,12 @@
                     >
                         Xem chứng chỉ (PDF)
                     </a>
+                    <a
+                        href="{{ route('student.certificates.pdf', $cert) }}?download=1"
+                        class="ml-2 inline-flex h-9 items-center justify-center rounded-xl border border-purple-200 bg-white px-4 text-xs font-bold text-purple-700 transition hover:bg-purple-50 shadow-sm"
+                    >
+                        Tải PDF
+                    </a>
                 </div>
             </div>
         @endforeach
