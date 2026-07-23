@@ -184,15 +184,12 @@ class LessonAiService
         }
 
         if (! empty($result['error'])) {
+            $code = (string) ($result['code'] ?? 'ai_error');
+
             throw new LessonAiException(
                 (string) $result['error'],
-                (string) ($result['code'] ?? 'ai_error'),
-                match ($result['code'] ?? null) {
-                    'missing_api_key' => 503,
-                    'timeout' => 503,
-                    'empty_response' => 502,
-                    default => 503,
-                }
+                $code,
+                $this->httpStatusForCode($code)
             );
         }
 
@@ -324,6 +321,19 @@ PROMPT;
         $clean = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
         return trim(preg_replace("/[ \t]+/u", ' ', $clean) ?? $clean);
+    }
+
+    private function httpStatusForCode(string $code): int
+    {
+        return match ($code) {
+            'no_source', 'validation', 'content_blocked', 'invalid_request' => 422,
+            'forbidden' => 403,
+            'lesson_mismatch' => 404,
+            'quota_exceeded' => 429,
+            'empty_response', 'invalid_response', 'response_truncated' => 502,
+            'missing_api_key', 'invalid_model', 'timeout', 'ssl_error', 'connection_error', 'ai_unavailable' => 503,
+            default => 503,
+        };
     }
 
     private function lessonBelongsToCourse(Course $course, Lesson $lesson): bool
