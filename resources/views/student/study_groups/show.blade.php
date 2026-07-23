@@ -119,7 +119,15 @@
                                             ? 'bg-[#0056D2] text-white rounded-tr-none' 
                                             : 'bg-white text-slate-900 border border-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-750 rounded-tl-none' 
                                         }}">
-                                        {{ $msg->message }}
+                                        @if($msg->image_path)
+                                            <img src="{{ Storage::disk('public')->url($msg->image_path) }}" 
+                                                 class="max-w-full max-h-[250px] rounded-lg cursor-zoom-in mb-1 object-cover hover:opacity-95 transition" 
+                                                 onclick="showLightbox('{{ Storage::disk('public')->url($msg->image_path) }}')" 
+                                                 alt="Chat Image">
+                                        @endif
+                                        @if($msg->message)
+                                            <div>{{ $msg->message }}</div>
+                                        @endif
                                     </div>
                                 </div>
                             @endforeach
@@ -128,14 +136,44 @@
 
                     {{-- Chat input form --}}
                     <div class="border-t border-slate-100 dark:border-slate-800 p-4 bg-white dark:bg-slate-900">
-                        <form id="send-form" class="flex gap-3" onsubmit="handleSendMessage(event)">
+                        {{-- Preview container --}}
+                        <div id="image-preview-container" class="hidden mb-3 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl flex items-center justify-between border border-slate-200 dark:border-slate-800">
+                            <div class="flex items-center gap-3">
+                                <img id="image-preview" src="#" alt="Preview" class="h-16 w-16 object-cover rounded-lg border border-slate-300 dark:border-slate-700">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[200px]" id="image-preview-name">image.png</p>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400" id="image-preview-size">0 KB</p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="clearSelectedImage()" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+
+                        <form id="send-form" class="flex gap-3 items-center" onsubmit="handleSendMessage(event)">
                             @csrf
-                            <input type="text" 
-                                   id="message-input" 
-                                   placeholder="Nhập nội dung tin nhắn..." 
-                                   autocomplete="off"
-                                   required
-                                   class="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white transition">
+                            <div class="relative flex-1 flex items-center">
+                                {{-- Attachment Button --}}
+                                <button type="button" 
+                                        onclick="document.getElementById('image-input').click()"
+                                        class="absolute left-3 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 p-1.5 rounded-lg transition cursor-pointer"
+                                        title="Đính kèm hình ảnh">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                </button>
+                                
+                                <input type="file" 
+                                       id="image-input" 
+                                       name="image" 
+                                       accept="image/png, image/jpeg, image/gif, image/webp" 
+                                       class="hidden" 
+                                       onchange="handleImageSelect(event)">
+
+                                <input type="text" 
+                                       id="message-input" 
+                                       placeholder="Nhập nội dung tin nhắn..." 
+                                       autocomplete="off"
+                                       class="flex-1 rounded-xl border border-slate-300 bg-white pl-12 pr-4 py-3 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white transition">
+                            </div>
                             <button type="submit" 
                                     id="send-button"
                                     class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0056D2] px-6 text-sm font-bold text-white transition hover:bg-[#0046B8] dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer disabled:opacity-50">
@@ -160,6 +198,13 @@
     const sendButton = document.getElementById('send-button');
     const sendForm = document.getElementById('send-form');
     
+    // Image attachment elements
+    const imageInput = document.getElementById('image-input');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    const imagePreview = document.getElementById('image-preview');
+    const imagePreviewName = document.getElementById('image-preview-name');
+    const imagePreviewSize = document.getElementById('image-preview-size');
+
     // Track the last loaded message ID
     let lastMessageId = {{ $studyGroup->messages->last()->id ?? 0 }};
 
@@ -187,6 +232,7 @@
 
     // Escape HTML to prevent XSS
     function escapeHtml(text) {
+        if (!text) return '';
         const map = {
             '&': '&amp;',
             '<': '&lt;',
@@ -195,6 +241,56 @@
             "'": '&#039;'
         };
         return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+
+    // Image Selection handling
+    function handleImageSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            alert('Vui lòng chọn một tệp hình ảnh hợp lệ.');
+            imageInput.value = '';
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Kích thước ảnh tối đa là 5MB.');
+            imageInput.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imagePreview.src = e.target.result;
+            imagePreviewName.textContent = file.name;
+            const sizeKb = (file.size / 1024).toFixed(1);
+            imagePreviewSize.textContent = `${sizeKb} KB`;
+            imagePreviewContainer.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Clear Selected Image preview
+    function clearSelectedImage() {
+        imageInput.value = '';
+        imagePreview.src = '#';
+        imagePreviewContainer.classList.add('hidden');
+    }
+
+    // Lightbox Modal Controls
+    function showLightbox(src) {
+        const lightbox = document.getElementById('lightbox-modal');
+        const img = document.getElementById('lightbox-img');
+        img.src = src;
+        lightbox.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        const lightbox = document.getElementById('lightbox-modal');
+        lightbox.classList.add('hidden');
+        document.body.style.overflow = '';
     }
 
     // Append a message to the chat box
@@ -206,7 +302,6 @@
         }
 
         const dateStr = formatMessageDate(msg.created_at);
-        const escapedMsg = escapeHtml(msg.message);
         
         const messageDiv = document.createElement('div');
         messageDiv.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`;
@@ -214,6 +309,16 @@
         let headerHtml = '';
         if (!isMe) {
             headerHtml = `<span class="font-bold text-slate-700 dark:text-slate-300">${escapeHtml(msg.user.name)}</span>`;
+        }
+
+        let imageHtml = '';
+        if (msg.image_url) {
+            imageHtml = `<img src="${msg.image_url}" class="max-w-full max-h-[250px] rounded-lg cursor-zoom-in mb-1 object-cover hover:opacity-95 transition" onclick="showLightbox('${msg.image_url}')" alt="Chat Image">`;
+        }
+
+        let textHtml = '';
+        if (msg.message) {
+            textHtml = `<div>${escapeHtml(msg.message)}</div>`;
         }
 
         messageDiv.innerHTML = `
@@ -226,7 +331,8 @@
                     ? 'bg-[#0056D2] text-white rounded-tr-none' 
                     : 'bg-white text-slate-900 border border-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-750 rounded-tl-none' 
                 }">
-                ${escapedMsg}
+                ${imageHtml}
+                ${textHtml}
             </div>
         `;
         
@@ -239,29 +345,39 @@
         event.preventDefault();
         
         const message = messageInput.value.trim();
-        if (!message) return;
+        const hasImage = imageInput.files.length > 0;
+        
+        if (!message && !hasImage) return;
 
         // Disable input during submission
         messageInput.disabled = true;
         sendButton.disabled = true;
 
+        const formData = new FormData();
+        if (message) {
+            formData.append('message', message);
+        }
+        if (hasImage) {
+            formData.append('image', imageInput.files[0]);
+        }
+
         try {
             const response = await fetch(`/study-groups/${groupId}/messages`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ message: message })
+                body: formData
             });
 
             const result = await response.json();
             
             if (response.ok && result.success) {
-                // Clear input
+                // Clear inputs
                 messageInput.value = '';
+                clearSelectedImage();
                 // Append message and update lastMessageId
                 appendMessage(result.data, true);
                 lastMessageId = result.data.id;
@@ -313,7 +429,20 @@
     setInterval(pollMessages, 4000);
 </script>
 
+{{-- Image Lightbox Modal --}}
+<div id="lightbox-modal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300" onclick="closeLightbox()">
+    <button type="button" class="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition cursor-pointer hover:bg-white/10 rounded-full" onclick="closeLightbox()">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <img id="lightbox-img" src="#" alt="Phóng to ảnh" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl transition duration-300" onclick="event.stopPropagation()">
+</div>
+
 <style>
+    /* Custom cursor and hover properties */
+    .cursor-zoom-in {
+        cursor: zoom-in;
+    }
+    
     /* Custom simple scrollbar style for chat list and message box */
     .chat-scroll::-webkit-scrollbar {
         width: 4px;
