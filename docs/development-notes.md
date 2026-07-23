@@ -51,3 +51,6 @@
 ### Commit 17: feat: bo sung he thong ticket ho tro tu dong cho hoc vien (2026-07-22 16:30:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 18: fix: bat loi xac thuc phien lam viec SingleSessionMiddleware (2026-07-23 09:45:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
