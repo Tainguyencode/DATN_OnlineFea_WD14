@@ -437,6 +437,52 @@ function initLessonAi() {
     let summaryInFlight = false;
     let askInFlight = false;
 
+    const aiErrorMessage = (data, fallback) => {
+        if (data?.message) return data.message;
+
+        const codeMessages = {
+            missing_api_key: 'Chưa cấu hình hoặc khóa API Gemini không hợp lệ.',
+            invalid_model: 'Model Gemini không hợp lệ. Hãy kiểm tra GEMINI_MODEL trong .env.',
+            quota_exceeded: 'Gemini đã hết hạn mức. Hãy thử lại sau vài phút.',
+            timeout: 'Kết nối AI bị quá thời gian chờ. Vui lòng thử lại.',
+            ssl_error: 'Lỗi chứng chỉ SSL khi gọi Gemini. Kiểm tra cấu hình PHP/Laragon.',
+            connection_error: 'Không kết nối được dịch vụ AI. Kiểm tra mạng rồi thử lại.',
+            no_source: 'Bài học chưa có đủ nội dung văn bản để dùng AI.',
+            content_blocked: 'Nội dung bị Gemini chặn bởi bộ lọc an toàn.',
+            response_truncated: 'Phản hồi AI bị cắt vì quá dài. Hãy hỏi ngắn hơn.',
+            empty_response: 'AI không trả về nội dung. Vui lòng thử lại.',
+            invalid_response: 'Phản hồi AI không hợp lệ. Vui lòng thử lại.',
+            invalid_request: 'Yêu cầu gửi tới AI không hợp lệ.',
+            ai_unavailable: 'Dịch vụ Gemini đang gián đoạn. Vui lòng thử lại sau.',
+            forbidden: 'Bạn không có quyền dùng AI hỗ trợ bài học.',
+            lesson_mismatch: 'Bài học không thuộc khóa học này.',
+            validation: 'Dữ liệu câu hỏi không hợp lệ.',
+            too_many_requests: 'Bạn thao tác quá nhanh. Hãy đợi một lát rồi thử lại.',
+        };
+
+        if (data?.code && codeMessages[data.code]) {
+            return codeMessages[data.code];
+        }
+
+        return fallback;
+    };
+
+    const parseJsonSafe = async (response) => {
+        const raw = await response.text();
+        if (!raw) return {};
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            return {
+                success: false,
+                code: 'invalid_response',
+                message: response.status === 429
+                    ? 'Bạn thao tác quá nhanh. Hãy đợi một lát rồi thử lại.'
+                    : 'Máy chủ trả về phản hồi không hợp lệ.',
+            };
+        }
+    };
+
     const renderList = (el, items) => {
         if (!el) return;
         el.innerHTML = '';
@@ -483,25 +529,29 @@ function initLessonAi() {
     };
 
     const fetchSummary = async (generate = false) => {
-        if (!summaryUrl) return;
+        if (!summaryUrl) return { response: null, data: { success: false, message: 'Thiếu URL tóm tắt.' } };
         const url = generate ? `${summaryUrl}${summaryUrl.includes('?') ? '&' : '?'}generate=1` : summaryUrl;
         const response = await fetch(url, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
-        const data = await response.json();
+        const data = await parseJsonSafe(response);
+        if (response.status === 429 && !data.code) {
+            data.code = 'too_many_requests';
+            data.message = data.message || aiErrorMessage({ code: 'too_many_requests' }, 'Thao tác quá nhanh.');
+        }
         return { response, data };
     };
 
     const loadSummary = async () => {
         try {
             const { response, data } = await fetchSummary(false);
-            if (!response.ok || !data.success) {
-                if (summaryBox) summaryBox.textContent = data.message || 'Không tải được tóm tắt.';
+            if (!response?.ok || !data.success) {
+                if (summaryBox) summaryBox.textContent = aiErrorMessage(data, 'Không tải được tóm tắt.');
                 return;
             }
             renderSummary(data);
         } catch (error) {
-            if (summaryBox) summaryBox.textContent = 'Không tải được tóm tắt. Vui lòng thử lại.';
+            if (summaryBox) summaryBox.textContent = 'Không tải được tóm tắt do lỗi mạng. Vui lòng thử lại.';
         }
     };
 
@@ -514,17 +564,20 @@ function initLessonAi() {
 
         try {
             const { response, data } = await fetchSummary(true);
-            if (!response.ok || !data.success) {
-                showSummaryError(data.message || 'Không tạo được tóm tắt.');
+            if (!response?.ok || !data.success) {
+                const message = aiErrorMessage(data, 'Không tạo được tóm tắt.');
+                showSummaryError(message);
                 if (summaryStatus) summaryStatus.textContent = '';
-                showToast(data.message || 'Không tạo được tóm tắt.', 'error');
+                showToast(message, 'error');
                 return;
             }
             renderSummary(data);
+            showSummaryError('');
             showToast(data.cached ? 'Đã tải bản tóm tắt đã lưu.' : 'Đã tạo tóm tắt bài học.');
         } catch (error) {
             showSummaryError('Không tạo được tóm tắt do lỗi mạng hoặc máy chủ.');
-            showToast('Không tạo được tóm tắt.', 'error');
+            if (summaryStatus) summaryStatus.textContent = '';
+            showToast('Không tạo được tóm tắt do lỗi mạng.', 'error');
         } finally {
             summaryInFlight = false;
             generateBtn.disabled = false;
@@ -561,9 +614,12 @@ function initLessonAi() {
                 },
                 body: JSON.stringify({ question }),
             });
-            const data = await response.json();
+            const data = await parseJsonSafe(response);
+            if (response.status === 429 && !data.code) {
+                data.code = 'too_many_requests';
+            }
             if (!response.ok || !data.success) {
-                const message = data.message || 'Không nhận được giải thích từ AI.';
+                const message = aiErrorMessage(data, 'Không nhận được giải thích từ AI.');
                 appendChat('assistant', message);
                 if (askStatus) askStatus.textContent = message;
                 showToast(message, 'error');
@@ -574,8 +630,8 @@ function initLessonAi() {
             if (askStatus) askStatus.textContent = '';
         } catch (error) {
             appendChat('assistant', 'Không kết nối được AI. Vui lòng thử lại.');
-            if (askStatus) askStatus.textContent = 'Lỗi kết nối.';
-            showToast('Không hỏi được AI.', 'error');
+            if (askStatus) askStatus.textContent = 'Lỗi kết nối mạng.';
+            showToast('Không hỏi được AI do lỗi mạng.', 'error');
         } finally {
             askInFlight = false;
             if (askSubmit) askSubmit.disabled = false;

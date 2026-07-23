@@ -142,6 +142,68 @@ class LessonAiTest extends TestCase
             ->assertJsonPath('code', 'ai_error');
     }
 
+    public function test_quota_exceeded_returns_429_with_exact_code(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->andReturn([
+                'error' => 'Gemini đã hết hạn mức (quota).',
+                'code' => 'quota_exceeded',
+            ]);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $this->actingAs($student)
+            ->getJson(route('courses.lessons.ai-summary', [$course, $lesson]).'?generate=1')
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'quota_exceeded')
+            ->assertJsonPath('success', false);
+    }
+
+    public function test_invalid_model_returns_503_with_exact_code(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->andReturn([
+                'error' => 'Model Gemini không tồn tại.',
+                'code' => 'invalid_model',
+            ]);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-explain', [$course, $lesson]), [
+                'question' => 'Giải thích phần này?',
+            ])
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'invalid_model');
+    }
+
+    public function test_content_blocked_returns_422_with_exact_code(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->andReturn([
+                'error' => 'Nội dung bị chặn bởi bộ lọc an toàn.',
+                'code' => 'content_blocked',
+            ]);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-explain', [$course, $lesson]), [
+                'question' => 'Giải thích phần này?',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'content_blocked');
+    }
+
     public function test_empty_or_too_long_question_is_validated(): void
     {
         [$student, $course, $lesson] = $this->enrolledLessonSetup();

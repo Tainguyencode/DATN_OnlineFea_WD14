@@ -76,7 +76,7 @@ return [
     // Lesson AI explain/summary (Google Gemini API).
     'lesson_ai' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 45),
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
