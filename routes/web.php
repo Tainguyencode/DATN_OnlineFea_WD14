@@ -171,7 +171,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/checkout/{order_code}/failed', [CartController::class, 'failedPage'])->name('checkout.failed');
     Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
-    Route::get('/certificates', fn () => redirect(route('student.dashboard').'#certificates'))->name('certificates');
+    Route::get('/certificates', [StudentMiscController::class, 'certificates'])->name('certificates');
     Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
     Route::get('/orders', fn () => redirect(route('student.dashboard').'#orders'))->name('orders');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
