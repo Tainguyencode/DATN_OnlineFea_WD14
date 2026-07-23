@@ -286,4 +286,287 @@ class StudyGroupTest extends TestCase
         $response->assertOk()
             ->assertJsonCount(2, 'data');
     }
+
+    public function test_non_member_cannot_view_messages(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student1);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Active Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+
+        // Student2 is not a member of the group
+        $response = $this->actingAs($student2)
+            ->getJson(route('study-groups.show', $studyGroup));
+
+        $response->assertStatus(403);
+    }
+
+    public function test_member_can_view_messages(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Active Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        // Send a message first
+        $studyGroup->messages()->create([
+            'user_id' => $student->id,
+            'message' => 'Hello team!',
+        ]);
+
+        $response = $this->actingAs($student)
+            ->getJson(route('study-groups.show', $studyGroup));
+
+        $response->assertOk()
+            ->assertJsonPath('data.messages.0.message', 'Hello team!')
+            ->assertJsonPath('data.messages.0.user.name', $student->name);
+    }
+
+    public function test_non_member_cannot_send_message(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student1);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Active Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+
+        $response = $this->actingAs($student2)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => 'Hello',
+            ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseCount('study_group_messages', 0);
+    }
+
+    public function test_member_can_send_message(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Active Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        $response = $this->actingAs($student)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => 'Hello world',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.message', 'Hello world');
+
+        $this->assertDatabaseHas('study_group_messages', [
+            'study_group_id' => $studyGroup->id,
+            'user_id' => $student->id,
+            'message' => 'Hello world',
+        ]);
+    }
+
+    public function test_cannot_send_empty_message(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Active Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        // Empty message
+        $response = $this->actingAs($student)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => '',
+            ]);
+        $response->assertStatus(422);
+
+        // Whitespace only message
+        $response = $this->actingAs($student)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => '   ',
+            ]);
+        $response->assertStatus(422);
+
+        $this->assertDatabaseCount('study_group_messages', 0);
+    }
+
+    public function test_left_member_cannot_send_message(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student1);
+
+        Enrollment::create([
+            'user_id' => $student2->id,
+            'course_id' => $course->id,
+            'status' => Enrollment::STATUS_ACTIVE,
+            'enrolled_at' => now(),
+        ]);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Active Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+        
+        // Student2 joins then leaves
+        $studyGroup->members()->attach($student2->id, ['role' => 'member']);
+        $studyGroup->members()->detach($student2->id);
+
+        $response = $this->actingAs($student2)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => 'Hello after leaving',
+            ]);
+
+        $response->assertStatus(403);
+        $this->assertDatabaseCount('study_group_messages', 0);
+    }
+
+    public function test_deleting_group_deletes_all_messages(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Team to Delete',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        // Send a message
+        $studyGroup->messages()->create([
+            'user_id' => $student->id,
+            'message' => 'Goodbye world!',
+        ]);
+
+        $this->assertDatabaseCount('study_group_messages', 1);
+
+        // Delete group
+        $studyGroup->delete();
+
+        $this->assertDatabaseCount('study_group_messages', 0);
+    }
+
+    public function test_group_creator_can_remove_member(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student1);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Kickable Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+        $studyGroup->members()->attach($student2->id, ['role' => 'member']);
+
+        $this->assertTrue($studyGroup->hasMember($student2->id));
+
+        // Creator student1 kicks student2
+        $response = $this->actingAs($student1)
+            ->deleteJson(route('study-groups.members.remove', [$studyGroup, $student2]));
+
+        $response->assertOk();
+        $this->assertFalse($studyGroup->fresh()->hasMember($student2->id));
+    }
+
+    public function test_non_creator_cannot_remove_member(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']);
+        $student3 = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student1);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Secure Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+        $studyGroup->members()->attach($student2->id, ['role' => 'member']);
+        $studyGroup->members()->attach($student3->id, ['role' => 'member']);
+
+        // student3 (member, not creator) tries to kick student2
+        $response = $this->actingAs($student3)
+            ->deleteJson(route('study-groups.members.remove', [$studyGroup, $student2]));
+
+        $response->assertStatus(403);
+        $this->assertTrue($studyGroup->fresh()->hasMember($student2->id));
+    }
+
+    public function test_creator_cannot_remove_themselves(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Self Kick Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        // Creator tries to kick themselves
+        $response = $this->actingAs($student)
+            ->deleteJson(route('study-groups.members.remove', [$studyGroup, $student]));
+
+        $response->assertStatus(400);
+        $this->assertTrue($studyGroup->fresh()->hasMember($student->id));
+    }
+
+    public function test_cannot_remove_non_member(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']); // not in group
+        $course = $this->createCourseWithEnrollment($student1);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Kick non-member Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+
+        // Try to kick student2 (who is not in the group)
+        $response = $this->actingAs($student1)
+            ->deleteJson(route('study-groups.members.remove', [$studyGroup, $student2]));
+
+        $response->assertStatus(400);
+    }
 }
