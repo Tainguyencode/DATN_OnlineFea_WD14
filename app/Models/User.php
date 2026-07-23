@@ -135,6 +135,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(StudyGroup::class, 'creator_id');
     }
 
+    public function studyGroupMessages(): HasMany
+    {
+        return $this->hasMany(StudyGroupMessage::class);
+    }
+
 
     public function emailVerificationCodes(): HasMany
     {
