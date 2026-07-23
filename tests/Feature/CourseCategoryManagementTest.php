@@ -137,10 +137,11 @@ class CourseCategoryManagementTest extends TestCase
         $this->assertSame($child->id, $course->category_id);
     }
 
-    public function test_instructor_cannot_store_parent_category_id(): void
+    public function test_instructor_cannot_store_parent_category_with_active_children(): void
     {
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
+        $this->category('Web Development', $parent);
 
         $response = $this->actingAs($instructor)
             ->from(route('instructor.courses.create'))
@@ -148,6 +149,20 @@ class CourseCategoryManagementTest extends TestCase
 
         $response->assertRedirect(route('instructor.courses.create'));
         $response->assertSessionHasErrors('category_id');
+    }
+
+    public function test_instructor_can_store_active_leaf_category(): void
+    {
+        $instructor = $this->user('instructor');
+        $leafCategory = $this->category('Programming');
+
+        $response = $this->actingAs($instructor)
+            ->post(route('instructor.courses.store'), $this->coursePayload($leafCategory->id));
+
+        $course = Course::where('title', 'Laravel Basics')->firstOrFail();
+
+        $response->assertRedirect(route('instructor.courses.edit', $course));
+        $this->assertSame($leafCategory->id, $course->category_id);
     }
 
     public function test_instructor_cannot_store_inactive_category_id(): void

@@ -9,6 +9,8 @@ use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\Review;
+use App\Models\ReviewHelpful;
+use App\Services\CourseRecommendationService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use App\Services\RecentlyViewedCourseService;
@@ -16,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -36,7 +39,12 @@ class CourseController extends Controller
         return $this->catalog($request, $category);
     }
 
-    public function show(string $slug, RecentlyViewedCourseService $recentlyViewedCourseService): View
+    public function show(
+        Request $request,
+        string $slug,
+        RecentlyViewedCourseService $recentlyViewedCourseService,
+        CourseRecommendationService $courseRecommendations
+    ): View
     {
         $course = Course::query()
             ->where('slug', $slug)
@@ -66,21 +74,60 @@ class CourseController extends Controller
         ]);
         $course->loadCount('lessons');
 
-        $relatedCourses = $this->withFavoriteState($this->publishedCoursesQuery()
-            ->where('id', '!=', $course->id)
-            ->when($course->category_id, fn ($query) => $query->where('category_id', $course->category_id))
-            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-            ->withCount('lessons'))
-            ->orderByDesc('rating_avg')
-            ->orderByDesc('published_at')
-            ->limit(4)
-            ->get();
+        $relatedCourses = $courseRecommendations->getRelatedCourses($course, 4, auth()->user());
+        $hasPersonalizedRecommendations = auth()->user()?->isStudent()
+            && $relatedCourses->contains(fn ($related) => in_array($related->recommendation_type, ['personal', 'behavior', 'collaborative'], true));
+        $recommendationTitle = $hasPersonalizedRecommendations ? 'Đề xuất dành cho bạn' : 'Khóa học liên quan';
+        $recommendationSubtitle = $hasPersonalizedRecommendations
+            ? 'Gợi ý dựa trên khóa bạn đã xem, đã học, yêu thích và các sở thích tương tự.'
+            : 'Một vài lựa chọn gần với chủ đề, trình độ và nhu cầu học của bạn.';
 
-        $reviews = Review::where('course_id', $course->id)
-            ->with('user:id,name,avatar')
-            ->orderByDesc('created_at')
-            ->limit(6)
-            ->get();
+        $reviewRating = $request->integer('review_rating');
+        $reviewRating = $reviewRating >= 1 && $reviewRating <= 5 ? $reviewRating : null;
+        $reviewSort = $request->query('review_sort') === 'helpful' ? 'helpful' : 'latest';
+
+        $reviews = Review::query()
+            ->approved()
+            ->where('course_id', $course->id)
+            ->with(['user:id,name,avatar', 'replier:id,name'])
+            ->rating($reviewRating)
+            ->when($reviewSort === 'helpful', fn ($query) => $query->mostHelpful())
+            ->when($reviewSort === 'latest', fn ($query) => $query->latest())
+            ->paginate(config('reviews.per_page', 8), ['*'], 'reviews_page')
+            ->withQueryString();
+
+        $ratingRows = Review::query()
+            ->approved()
+            ->where('course_id', $course->id)
+            ->selectRaw('rating, COUNT(*) as total')
+            ->groupBy('rating')
+            ->pluck('total', 'rating');
+        $ratingDistribution = collect(range(1, 5))->mapWithKeys(
+            fn (int $rating) => [$rating => (int) ($ratingRows[$rating] ?? 0)]
+        );
+        $ratingSummary = [
+            'average' => (float) $course->rating_avg,
+            'count' => (int) $course->rating_count,
+        ];
+
+        $userReview = auth()->check()
+            ? Review::query()->where('course_id', $course->id)->where('user_id', auth()->id())->first()
+            : null;
+        $canReview = auth()->check()
+            && Gate::forUser(auth()->user())->allows('create', [Review::class, $course]);
+        $canUpdateReview = $userReview && auth()->check()
+            ? Gate::forUser(auth()->user())->allows('update', $userReview)
+            : false;
+        $canDeleteReview = $userReview && auth()->check()
+            ? Gate::forUser(auth()->user())->allows('delete', $userReview)
+            : false;
+        $helpfulReviewIds = auth()->check()
+            ? ReviewHelpful::query()
+                ->where('user_id', auth()->id())
+                ->whereIn('review_id', $reviews->getCollection()->pluck('id'))
+                ->pluck('review_id')
+                ->all()
+            : [];
 
         $curriculumSections = $course->courseSections->isNotEmpty()
             ? $course->courseSections
@@ -105,6 +152,15 @@ class CourseController extends Controller
             'curriculumSections',
             'relatedCourses',
             'reviews',
+            'ratingDistribution',
+            'ratingSummary',
+            'reviewRating',
+            'reviewSort',
+            'userReview',
+            'canReview',
+            'canUpdateReview',
+            'canDeleteReview',
+            'helpfulReviewIds',
             'totalLessons',
             'previewLessons',
             'totalSections',
@@ -113,7 +169,9 @@ class CourseController extends Controller
             'canAccessFullCourse',
             'isFavorited',
             'learningEntryUrl',
-            'enrollment'
+            'enrollment',
+            'recommendationTitle',
+            'recommendationSubtitle',
         ));
     }
 

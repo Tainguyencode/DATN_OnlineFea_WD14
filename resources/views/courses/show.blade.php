@@ -296,29 +296,7 @@
                 </div>
             </article>
 
-            @if($reviews->isNotEmpty())
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
-                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">Đánh giá từ học viên</h2>
-                    <div class="mt-5 grid gap-4 md:grid-cols-2">
-                        @foreach($reviews as $review)
-                            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                                <div class="flex items-center gap-3">
-                                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
-                                        {{ strtoupper(substr($review->user?->name ?? 'H', 0, 1)) }}
-                                    </div>
-                                    <div>
-                                        <div class="font-bold text-slate-950 dark:text-white">{{ $review->user?->name ?? 'Học viên' }}</div>
-                                        <div class="text-xs font-semibold text-amber-500">{{ $review->rating }}/5 sao</div>
-                                    </div>
-                                </div>
-                                @if($review->comment)
-                                    <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $review->comment }}</p>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
-                </article>
-            @endif
+            @include('courses.partials.reviews')
 
             <section>
                 <h2 class="mb-6 text-2xl font-bold text-slate-900 dark:text-white">Hỏi đáp khóa học</h2>
@@ -454,8 +432,8 @@
         <div class="mx-auto mt-12 max-w-7xl px-4 sm:px-6 lg:px-8">
             <div class="flex items-end justify-between">
                 <div>
-                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">Khóa học liên quan</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Một vài lựa chọn cùng danh mục để bạn tham khảo thêm.</p>
+                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">{{ $recommendationTitle ?? 'Khóa học liên quan' }}</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $recommendationSubtitle ?? 'Một vài lựa chọn gần với chủ đề, trình độ và nhu cầu học của bạn.' }}</p>
                 </div>
                 <a href="{{ route('courses.index') }}" class="hidden text-sm font-bold text-indigo-600 hover:underline dark:text-indigo-300 sm:inline">Xem tất cả</a>
             </div>
