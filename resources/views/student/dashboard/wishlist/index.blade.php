@@ -87,10 +87,10 @@
                                 <x-student.dashboard.course-card :course="$item->course">
                                     <x-slot:actions>
                                         <div class="grid grid-cols-2 gap-2">
-                                            <a href="{{ $primaryUrl }}" class="inline-flex min-h-10 items-center justify-center rounded-xl bg-[#0056D2] px-3 text-sm font-bold text-white hover:bg-[#0046B8]">{{ $primaryLabel }}</a>
+                                            <a href="{{ $primaryUrl }}" class="inline-flex min-h-10 items-center justify-center rounded-xl bg-[#0056D2] px-3 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0046B8] hover:shadow-md active:translate-y-0 active:scale-95">{{ $primaryLabel }}</a>
                                             <button type="button"
                                                     x-on:click="removeCourse({{ (int) $item->course->id }}, @js(route('courses.favorite.destroy', $item->course)), $el)"
-                                                    class="min-h-10 w-full cursor-pointer rounded-xl border border-rose-200 px-3 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60">
+                                                    class="min-h-10 w-full cursor-pointer rounded-xl border border-rose-200 bg-white px-3 text-sm font-bold text-rose-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-50 hover:shadow active:translate-y-0 active:scale-95 disabled:opacity-60 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-400 dark:hover:bg-rose-950/30">
                                                 Bỏ lưu
                                             </button>
                                         </div>
