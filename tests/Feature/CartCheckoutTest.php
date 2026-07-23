@@ -245,6 +245,170 @@ class CartCheckoutTest extends TestCase
         $this->assertNull($enrollment);
     }
 
+    public function test_payment_simulation_is_blocked_in_production(): void
+    {
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+
+        $order = Order::create([
+            'order_code' => 'ORD-PRODUCTION-GUARD',
+            'user_id' => $this->student->id,
+            'subtotal' => 100000,
+            'discount_amount' => 0,
+            'total_amount' => 100000,
+            'status' => 'pending',
+            'payment_method' => 'bank_transfer',
+            'items' => [[
+                'course_id' => $this->course->id,
+                'title' => $this->course->title,
+                'price' => 100000,
+            ]],
+        ]);
+
+        $originalEnvironment = app()->environment();
+
+        try {
+            app()->detectEnvironment(fn () => 'production');
+
+            $this->actingAs($this->student)
+                ->post(route('student.checkout.simulate', $order->order_code), ['status' => 'success'])
+                ->assertNotFound();
+        } finally {
+            app()->detectEnvironment(fn () => $originalEnvironment);
+        }
+
+        $this->assertSame('pending', $order->fresh()->status);
+        $this->assertDatabaseMissing('enrollments', [
+            'user_id' => $this->student->id,
+            'course_id' => $this->course->id,
+        ]);
+    }
+
+    public function test_repeated_success_callback_is_idempotent(): void
+    {
+        $coupon = Coupon::create([
+            'code' => 'IDEMPOTENT',
+            'type' => 'fixed',
+            'value' => 10000,
+            'min_order_amount' => 0,
+            'max_uses' => 5,
+            'used_count' => 0,
+            'is_active' => true,
+        ]);
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach($this->course->id);
+
+        $this->actingAs($this->student)->post(route('student.cart.checkout'), [
+            'payment_method' => 'bank_transfer',
+            'coupon_code' => $coupon->code,
+            'course_ids' => [$this->course->id],
+        ]);
+
+        $order = Order::where('user_id', $this->student->id)->firstOrFail();
+
+        $this->actingAs($this->student)->post(
+            route('student.checkout.simulate', $order->order_code),
+            ['status' => 'success']
+        )->assertRedirect(route('student.checkout.success', $order->order_code));
+
+        $this->actingAs($this->student)->post(
+            route('student.checkout.simulate', $order->order_code),
+            ['status' => 'success']
+        )->assertRedirect(route('student.checkout.success', $order->order_code));
+
+        $this->assertSame(1, $coupon->fresh()->used_count);
+        $this->assertSame(1, Enrollment::where('user_id', $this->student->id)
+            ->where('course_id', $this->course->id)
+            ->count());
+    }
+
+    public function test_coupon_limit_is_rechecked_when_payment_completes(): void
+    {
+        $coupon = Coupon::create([
+            'code' => 'LASTUSE',
+            'type' => 'fixed',
+            'value' => 10000,
+            'min_order_amount' => 0,
+            'max_uses' => 1,
+            'used_count' => 0,
+            'is_active' => true,
+        ]);
+        $secondStudent = User::factory()->create([
+            'role' => 'student',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        foreach ([$this->student, $secondStudent] as $student) {
+            Cart::firstOrCreate(['user_id' => $student->id])
+                ->courses()
+                ->attach($this->course->id);
+
+            $this->actingAs($student)->post(route('student.cart.checkout'), [
+                'payment_method' => 'bank_transfer',
+                'coupon_code' => $coupon->code,
+                'course_ids' => [$this->course->id],
+            ]);
+        }
+
+        $firstOrder = Order::where('user_id', $this->student->id)->firstOrFail();
+        $secondOrder = Order::where('user_id', $secondStudent->id)->firstOrFail();
+
+        $this->actingAs($this->student)->post(
+            route('student.checkout.simulate', $firstOrder->order_code),
+            ['status' => 'success']
+        )->assertRedirect(route('student.checkout.success', $firstOrder->order_code));
+
+        $this->actingAs($secondStudent)->post(
+            route('student.checkout.simulate', $secondOrder->order_code),
+            ['status' => 'success']
+        )->assertRedirect(route('student.checkout.failed', $secondOrder->order_code));
+
+        $this->assertSame(1, $coupon->fresh()->used_count);
+        $this->assertSame('paid', $firstOrder->fresh()->status);
+        $this->assertSame('failed', $secondOrder->fresh()->status);
+        $this->assertDatabaseMissing('enrollments', [
+            'user_id' => $secondStudent->id,
+            'course_id' => $this->course->id,
+        ]);
+    }
+
+    public function test_free_checkout_does_not_exceed_coupon_limit(): void
+    {
+        $coupon = Coupon::create([
+            'code' => 'FREEONCE',
+            'type' => 'percent',
+            'value' => 100,
+            'min_order_amount' => 0,
+            'max_uses' => 1,
+            'used_count' => 0,
+            'is_active' => true,
+        ]);
+        $secondStudent = User::factory()->create([
+            'role' => 'student',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        foreach ([$this->student, $secondStudent] as $student) {
+            Cart::firstOrCreate(['user_id' => $student->id])
+                ->courses()
+                ->attach($this->course->id);
+
+            $this->actingAs($student)->post(route('student.cart.checkout'), [
+                'payment_method' => 'bank_transfer',
+                'coupon_code' => $coupon->code,
+                'course_ids' => [$this->course->id],
+            ]);
+        }
+
+        $this->assertSame(1, $coupon->fresh()->used_count);
+        $this->assertSame(1, Order::where('coupon_id', $coupon->id)->where('status', 'paid')->count());
+        $this->assertDatabaseMissing('enrollments', [
+            'user_id' => $secondStudent->id,
+            'course_id' => $this->course->id,
+        ]);
+    }
+
     /**
      * Test học viên có thể xem trang thanh toán thất bại.
      */

@@ -204,7 +204,7 @@
                                             <a href="{{ $lesson->video_url }}" target="_blank" class="rounded-lg border border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 cursor-pointer">Xem video URL</a>
                                         @endif
                                         @if($lesson->video_path)
-                                            <a href="{{ asset('storage/'.$lesson->video_path) }}" target="_blank" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 cursor-pointer">Xem video file</a>
+                                            <span class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700">Video file ({{ \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4') ? 'Chưa bảo mật HLS' : 'Đã bảo mật' }})</span>
                                         @endif
                                         @if($lesson->document_file)
                                             <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 transition-colors duration-200 hover:bg-sky-50 cursor-pointer">Xem tài liệu</a>

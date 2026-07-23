@@ -29,6 +29,7 @@ use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
 use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
+use App\Http\Controllers\Api\StudyGroupController;
 use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
@@ -38,22 +39,23 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+if (app()->environment('local')) {
+    Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+        $frames = $extractor->extract(
+            storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
+        );
 
-    $frames = $extractor->extract(
-        storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
-    );
+        return $frames;
+    });
 
-    return $frames;
-});
+    Route::get('/test-gemini', function (GeminiService $gemini) {
+        $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
 
-Route::get('/test-gemini', function (GeminiService $gemini) {
-    $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
+        $result = $gemini->analyzeImage($framePath);
 
-    $result = $gemini->analyzeImage($framePath);
-
-    return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-});
+        return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    });
+}
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
@@ -61,6 +63,18 @@ Route::get('/courses/category/{category:slug}', [CourseController::class, 'categ
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
+
+    // Study Groups
+    Route::get('/study-groups', [StudyGroupController::class, 'index'])->name('study-groups.index');
+    Route::post('/study-groups', [StudyGroupController::class, 'store'])->name('study-groups.store');
+    Route::get('/study-groups/{studyGroup}', [StudyGroupController::class, 'show'])->name('study-groups.show');
+    Route::put('/study-groups/{studyGroup}', [StudyGroupController::class, 'update'])->name('study-groups.update');
+    Route::delete('/study-groups/{studyGroup}', [StudyGroupController::class, 'destroy'])->name('study-groups.destroy');
+    Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('study-groups.join');
+    Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('study-groups.leave');
+    Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('study-groups.members');
+    Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('study-groups.messages.store');
+    Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('study-groups.members.remove');
 });
 Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
@@ -108,7 +122,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])
         ->whereIn('provider', ['google', 'facebook'])
         ->name('social.callback');
-    Route::post('/quick-login/{role}', [AuthController::class, 'quickLogin'])->name('quick-login');
+    if (app()->environment('local')) {
+        Route::post('/quick-login/{role}', [AuthController::class, 'quickLogin'])
+            ->whereIn('role', ['admin', 'instructor', 'student'])
+            ->name('quick-login');
+    }
 });
 
 Route::get('/auth/availability', [AuthController::class, 'availability'])->middleware('throttle:30,1')->name('auth.availability');
@@ -273,6 +291,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/ai-moderation/{lesson}/extract', [AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
     Route::post('/ai-moderation/analyze-frame', [AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
     Route::post('/ai-moderation/{lesson}/save', [AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
+    Route::get('/ai-moderation/{lesson}/stream-video', [AiModerationController::class, 'streamVideo'])->name('ai-moderation.stream-video');
+    Route::get('/ai-moderation/{lesson}/hls/playlist.m3u8', [AiModerationController::class, 'streamHlsPlaylist'])->name('ai-moderation.hls.playlist');
+    Route::get('/ai-moderation/{lesson}/hls/{segment}', [AiModerationController::class, 'streamHlsSegment'])->name('ai-moderation.hls.segment');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
@@ -286,15 +307,19 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
-// Dev helper login route
-Route::get('/dev/login-as-admin', function () {
-    auth()->login(User::where('role', 'admin')->first());
+if (app()->environment('local')) {
+    Route::get('/dev/login-as-admin', function () {
+        auth()->login(User::where('role', 'admin')->firstOrFail());
 
-    return redirect()->route('admin.dashboard');
-})->name('dev.login-as-admin');
+        return redirect()->route('admin.dashboard');
+    })->name('dev.login-as-admin');
 
-Route::get('/dev/login-as-student', function () {
-    auth()->login(User::where('email', 'leanhtuan291111@gmail.com')->first() ?? User::where('role', 'student')->first());
+    Route::get('/dev/login-as-student', function () {
+        $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
+            ?? User::where('role', 'student')->firstOrFail();
 
-    return redirect()->route('dashboard');
-})->name('dev.login-as-student');
+        auth()->login($user);
+
+        return redirect()->route('dashboard');
+    })->name('dev.login-as-student');
+}
