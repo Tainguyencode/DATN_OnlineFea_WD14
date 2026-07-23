@@ -201,11 +201,16 @@
                 </div>
 
                 <div class="mt-5 space-y-4">
+                    @php $sectionIndex = 0; @endphp
                     @forelse($curriculumSections as $section)
+                        @php $sectionIndex++; @endphp
                         <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
                             <div class="flex flex-col gap-1 bg-slate-50 px-4 py-3 dark:bg-slate-900/70 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <h3 class="font-bold text-slate-950 dark:text-white">{{ $section->title }}</h3>
+                                    <h3 class="font-bold text-slate-950 dark:text-white">
+                                        <span class="mr-2 rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-extrabold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">Chương {{ $sectionIndex }}</span>
+                                        {{ $section->title }}
+                                    </h3>
                                     @if($section->description)
                                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $section->description }}</p>
                                     @endif
@@ -213,9 +218,12 @@
                                 <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ $section->lessons->count() }} bài</span>
                             </div>
 
+
                             <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                                @php $lessonIndex = 0; @endphp
                                 @forelse($section->lessons as $lesson)
                                     @php
+                                        $lessonIndex++;
                                         $canAccessLesson = $canAccessFullCourse || $lesson->is_preview;
                                         $duration = $formatDuration($lesson->duration ?? $lesson->duration_seconds);
                                         $hasVideoSource = $lesson->type === 'video' && ($lesson->video_path || $lesson->video_url);
@@ -239,7 +247,9 @@
                                                     @endunless
                                                 </div>
 
-                                                <h4 class="mt-2 font-bold text-slate-950 dark:text-white">{{ $lesson->title }}</h4>
+                                                <h4 class="mt-2 font-bold text-slate-950 dark:text-white">
+                                                    <span class="mr-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500">Bài {{ $lessonIndex }}.</span>{{ $lesson->title }}
+                                                </h4>
 
                                                 @if($canAccessLesson && $lesson->content)
                                                     <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $lesson->content }}</p>
@@ -422,8 +432,8 @@
         <div class="mx-auto mt-12 max-w-7xl px-4 sm:px-6 lg:px-8">
             <div class="flex items-end justify-between">
                 <div>
-                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">Khóa học liên quan</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Một vài lựa chọn cùng danh mục để bạn tham khảo thêm.</p>
+                    <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white">{{ $recommendationTitle ?? 'Khóa học liên quan' }}</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $recommendationSubtitle ?? 'Một vài lựa chọn gần với chủ đề, trình độ và nhu cầu học của bạn.' }}</p>
                 </div>
                 <a href="{{ route('courses.index') }}" class="hidden text-sm font-bold text-indigo-600 hover:underline dark:text-indigo-300 sm:inline">Xem tất cả</a>
             </div>
