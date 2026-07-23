@@ -199,6 +199,8 @@
                                     </td>
                                     <td class="px-5 py-4">
                                         <div class="flex items-center justify-end gap-2">
+                                            <a href="{{ route('instructor.courses.students', $course) }}"
+                                                 class="rounded-lg px-3 py-2 text-xs font-bold text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer">Xem chi tiết</a>
                                             <a href="{{ route('instructor.courses.edit', $course) }}"
                                                 class="rounded-lg px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">Kết quả kiểm duyệt</a>
                                             <a href="{{ route('instructor.courses.curriculum', $course) }}"
@@ -317,6 +319,8 @@
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
+                                <a href="{{ route('instructor.courses.students', $course) }}"
+                                     class="col-span-2 rounded-lg bg-blue-600 px-3 py-2 text-center text-xs font-bold text-white">Xem chi tiết</a>
                                 <a href="{{ route('instructor.courses.edit', $course) }}"
                                     class="rounded-lg bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">Kết quả kiểm duyệt</a>
                                 <a href="{{ route('instructor.courses.curriculum', $course) }}"
