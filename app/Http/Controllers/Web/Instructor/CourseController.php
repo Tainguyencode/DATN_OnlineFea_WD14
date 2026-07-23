@@ -224,9 +224,11 @@ class CourseController extends Controller
         $this->ensureOwned($course);
 
         $enrollments = Enrollment::where('course_id', $course->id)
+            ->withLearningAccess()
             ->with('user:id,name,email,avatar')
+            ->orderByDesc('enrolled_at')
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->paginate(10);
 
         return view('instructor.courses.students', compact('course', 'enrollments'));
     }
