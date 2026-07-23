@@ -3,14 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Notifications\ResetPasswordNotification;
 use App\Services\CaptchaService;
 use App\Services\RoleSyncService;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Testing\TestResponse;
+use Mockery;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -22,6 +27,8 @@ class PasswordResetTest extends TestCase
     private const NEW_PASSWORD = 'NewPassword1!';
 
     private const NEUTRAL_RESET_MESSAGE = 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu sẽ được gửi.';
+
+    private const THROTTLE_MESSAGE = 'Vui lòng đợi trước khi yêu cầu gửi lại liên kết đặt lại mật khẩu.';
 
     protected function setUp(): void
     {
@@ -35,32 +42,39 @@ class PasswordResetTest extends TestCase
         $this->get(route('password.request'))->assertOk();
     }
 
-    public function test_password_reset_request_succeeds_for_existing_user(): void
+    public function test_student_can_request_password_reset_link(): void
     {
         Notification::fake();
 
-        $user = $this->createResettableUser();
+        $user = $this->createResettableUser([
+            'email' => 'student-reset@example.com',
+            'role' => 'student',
+        ]);
 
         $this->postForgotPassword($user->email)
             ->assertRedirect()
             ->assertSessionHas('success', self::NEUTRAL_RESET_MESSAGE);
 
-        Notification::assertSentTo($user, ResetPassword::class);
+        Notification::assertSentTo($user, ResetPasswordNotification::class);
     }
 
-    public function test_password_reset_notification_is_sent_for_existing_email(): void
+    public function test_instructor_can_request_password_reset_link(): void
     {
         Notification::fake();
 
-        $user = $this->createResettableUser(['email' => 'notify-reset@example.com']);
+        $user = $this->createResettableUser([
+            'email' => 'instructor-reset@example.com',
+            'role' => 'instructor',
+        ]);
 
-        $this->postForgotPassword('notify-reset@example.com');
+        $this->postForgotPassword($user->email)
+            ->assertRedirect()
+            ->assertSessionHas('success', self::NEUTRAL_RESET_MESSAGE);
 
-        Notification::assertSentTo($user, ResetPassword::class);
-        Notification::assertCount(1);
+        Notification::assertSentTo($user, ResetPasswordNotification::class);
     }
 
-    public function test_unknown_email_still_receives_neutral_success_message(): void
+    public function test_unknown_email_receives_neutral_success_message(): void
     {
         Notification::fake();
 
@@ -72,10 +86,90 @@ class PasswordResetTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_valid_token_resets_password_successfully(): void
+    public function test_password_reset_is_throttled_for_recent_request(): void
     {
-        $user = $this->createResettableUser(['email' => 'valid-token@example.com']);
-        $token = Password::createToken($user);
+        Notification::fake();
+
+        $user = $this->createResettableUser(['email' => 'throttle-reset@example.com']);
+
+        $this->postForgotPassword($user->email)
+            ->assertSessionHas('success', self::NEUTRAL_RESET_MESSAGE);
+
+        $this->postForgotPassword($user->email)
+            ->assertRedirect()
+            ->assertSessionHasErrors(['email' => self::THROTTLE_MESSAGE])
+            ->assertSessionHas('resend_after');
+
+        Notification::assertSentToTimes($user, ResetPasswordNotification::class, 1);
+    }
+
+    public function test_smtp_exception_returns_friendly_error_without_server_error(): void
+    {
+        Log::spy();
+
+        $user = $this->createResettableUser(['email' => 'smtp-fail@example.com']);
+
+        $broker = Mockery::mock(\Illuminate\Contracts\Auth\PasswordBroker::class);
+        $broker->shouldReceive('sendResetLink')
+            ->once()
+            ->andThrow(new TransportException('Connection timed out'));
+
+        Password::shouldReceive('broker')
+            ->once()
+            ->with('users')
+            ->andReturn($broker);
+
+        $this->postForgotPassword($user->email)
+            ->assertRedirect()
+            ->assertStatus(302)
+            ->assertSessionHasErrors('email');
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->withArgs(function (string $message, array $context = []) use ($user): bool {
+                if ($message !== 'Password reset email could not be sent.') {
+                    return false;
+                }
+
+                $serialized = (string) json_encode($context);
+
+                return ($context['user_id'] ?? null) === $user->id
+                    && ($context['email_masked'] ?? null) === 'sm*****il@example.com'
+                    && ($context['exception'] ?? null) === TransportException::class
+                    && ! str_contains($serialized, 'smtp-fail@example.com')
+                    && ! str_contains($serialized, 'Connection timed out')
+                    && ! str_contains($serialized, 'MAIL_PASSWORD')
+                    && ! array_key_exists('token', $context)
+                    && ! array_key_exists('password', $context);
+            });
+    }
+
+    public function test_reset_password_notification_is_vietnamese(): void
+    {
+        Notification::fake();
+
+        $user = $this->createResettableUser(['email' => 'vn-mail@example.com']);
+
+        $this->postForgotPassword($user->email);
+
+        Notification::assertSentTo($user, ResetPasswordNotification::class, function (ResetPasswordNotification $notification) use ($user) {
+            $mail = $notification->toMail($user);
+
+            return $mail->subject === 'Đặt lại mật khẩu OnlineFEA'
+                && collect($mail->introLines)->contains(
+                    fn (string $line) => str_contains($line, 'đặt lại mật khẩu')
+                );
+        });
+    }
+
+    public function test_valid_token_resets_password_for_student_and_redirects_to_login(): void
+    {
+        $user = $this->createResettableUser([
+            'email' => 'student-valid@example.com',
+            'role' => 'student',
+            'email_verified_at' => now(),
+        ]);
+        $token = Password::broker('users')->createToken($user);
 
         $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD)
             ->assertRedirect(route('login'))
@@ -84,6 +178,26 @@ class PasswordResetTest extends TestCase
         $user->refresh();
         $this->assertTrue(Hash::check(self::NEW_PASSWORD, $user->password));
         $this->assertNotNull($user->password_changed_at);
+
+        $this->postLogin($user->email, self::NEW_PASSWORD)
+            ->assertRedirect(route('student.dashboard'));
+    }
+
+    public function test_valid_token_resets_password_for_instructor_and_redirects_to_login(): void
+    {
+        $user = $this->createResettableUser([
+            'email' => 'instructor-valid@example.com',
+            'role' => 'instructor',
+            'email_verified_at' => now(),
+        ]);
+        $token = Password::broker('users')->createToken($user);
+
+        $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD)
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('success');
+
+        $this->postLogin($user->email, self::NEW_PASSWORD)
+            ->assertRedirect(route('instructor.dashboard'));
     }
 
     public function test_invalid_token_cannot_reset_password(): void
@@ -100,7 +214,7 @@ class PasswordResetTest extends TestCase
     public function test_used_token_cannot_be_reused(): void
     {
         $user = $this->createResettableUser(['email' => 'reuse-token@example.com']);
-        $token = Password::createToken($user);
+        $token = Password::broker('users')->createToken($user);
 
         $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD)
             ->assertRedirect(route('login'));
@@ -113,7 +227,7 @@ class PasswordResetTest extends TestCase
     public function test_password_confirmation_mismatch_is_rejected_on_reset_form(): void
     {
         $user = $this->createResettableUser(['email' => 'mismatch@example.com']);
-        $token = Password::createToken($user);
+        $token = Password::broker('users')->createToken($user);
 
         $this->post(route('password.update'), [
             'token' => $token,
@@ -128,7 +242,7 @@ class PasswordResetTest extends TestCase
     public function test_reset_password_is_hashed_in_database(): void
     {
         $user = $this->createResettableUser(['email' => 'hash-reset@example.com']);
-        $token = Password::createToken($user);
+        $token = Password::broker('users')->createToken($user);
 
         $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD);
 
@@ -144,7 +258,7 @@ class PasswordResetTest extends TestCase
             'email' => 'remember-rotate@example.com',
             'remember_token' => 'old-remember-token',
         ]);
-        $token = Password::createToken($user);
+        $token = Password::broker('users')->createToken($user);
 
         $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD);
 
@@ -152,26 +266,45 @@ class PasswordResetTest extends TestCase
         $this->assertNotEmpty($user->fresh()->remember_token);
     }
 
-    public function test_user_can_login_with_new_password_after_reset(): void
+    public function test_reset_password_deletes_database_sessions_for_user(): void
     {
-        $user = $this->createResettableUser([
-            'email' => 'login-new@example.com',
-            'email_verified_at' => now(),
+        Config::set('session.driver', 'database');
+        Config::set('session.table', 'sessions');
+
+        $user = $this->createResettableUser(['email' => 'session-purge@example.com']);
+        $other = $this->createResettableUser(['email' => 'session-keep@example.com']);
+        $token = Password::broker('users')->createToken($user);
+
+        DB::table('sessions')->insert([
+            [
+                'id' => 'session-user-a',
+                'user_id' => $user->id,
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'PHPUnit',
+                'payload' => 'payload-a',
+                'last_activity' => time(),
+            ],
+            [
+                'id' => 'session-user-b',
+                'user_id' => $other->id,
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'PHPUnit',
+                'payload' => 'payload-b',
+                'last_activity' => time(),
+            ],
         ]);
-        $token = Password::createToken($user);
 
-        $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD);
+        $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD)
+            ->assertRedirect(route('login'));
 
-        $this->postLogin('login-new@example.com', self::NEW_PASSWORD)
-            ->assertRedirect(route('student.dashboard'));
-
-        $this->assertAuthenticatedAs($user);
+        $this->assertDatabaseMissing('sessions', ['id' => 'session-user-a']);
+        $this->assertDatabaseHas('sessions', ['id' => 'session-user-b']);
     }
 
     public function test_old_password_no_longer_works_after_reset(): void
     {
         $user = $this->createResettableUser(['email' => 'old-pass@example.com']);
-        $token = Password::createToken($user);
+        $token = Password::broker('users')->createToken($user);
 
         $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD);
 
@@ -187,7 +320,7 @@ class PasswordResetTest extends TestCase
             'email' => 'locked-reset@example.com',
             'is_active' => false,
         ]);
-        $token = Password::createToken($user);
+        $token = Password::broker('users')->createToken($user);
 
         $this->postPasswordReset($user->email, $token, self::NEW_PASSWORD)
             ->assertRedirect(route('login'));
