@@ -35,10 +35,13 @@
                 @if($review->moderation_note && $review->status !== \App\Enums\ReviewStatus::Approved)
                     <p class="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-500/10 dark:text-rose-200"><strong>Lý do kiểm duyệt:</strong> {{ $review->moderation_note }}</p>
                 @endif
-                @if($review->instructor_reply)
+                @php
+                    $visibleReply = $review->replies->where('is_hidden', false)->first();
+                @endphp
+                @if($visibleReply)
                     <div class="mt-4 rounded-xl border-l-4 border-indigo-500 bg-indigo-50 p-4 dark:bg-indigo-500/10">
                         <strong class="text-sm text-slate-950 dark:text-white">Phản hồi từ giảng viên</strong>
-                        <p class="mt-2 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{{ $review->instructor_reply }}</p>
+                        <p class="mt-2 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{{ $visibleReply->comment }}</p>
                     </div>
                 @endif
                 <a href="{{ route('courses.show', $review->course->slug).'#reviews' }}" class="mt-4 inline-flex cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">Xem hoặc chỉnh sửa</a>
