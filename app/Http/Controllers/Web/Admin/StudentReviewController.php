@@ -24,7 +24,8 @@ class StudentReviewController extends Controller
         $filters = $request->only(['keyword', 'course_id', 'instructor_id', 'rating', 'status', 'date_from', 'date_to', 'reply']);
 
         $reviews = Review::query()
-            ->with(['user:id,name,email,avatar', 'course:id,instructor_id,title,slug', 'course.instructor:id,name', 'replier:id,name', 'moderator:id,name'])
+            ->whereNull('parent_id')
+            ->with(['user:id,name,email,avatar', 'course:id,instructor_id,title,slug', 'course.instructor:id,name', 'replies.user:id,name', 'moderator:id,name'])
             ->when($filters['keyword'] ?? null, function ($query, $keyword) {
                 $query->where(function ($nested) use ($keyword) {
                     $nested->where('comment', 'like', "%{$keyword}%")
@@ -38,8 +39,8 @@ class StudentReviewController extends Controller
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '<=', $date))
-            ->when(($filters['reply'] ?? null) === 'replied', fn ($query) => $query->whereNotNull('instructor_reply'))
-            ->when(($filters['reply'] ?? null) === 'unreplied', fn ($query) => $query->whereNull('instructor_reply'))
+            ->when(($filters['reply'] ?? null) === 'replied', fn ($query) => $query->whereHas('replies'))
+            ->when(($filters['reply'] ?? null) === 'unreplied', fn ($query) => $query->whereDoesntHave('replies'))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -54,7 +55,7 @@ class StudentReviewController extends Controller
     public function show(Review $review): View
     {
         Gate::authorize('course_reviews.view');
-        $review->load(['user', 'course.instructor', 'replier', 'moderator']);
+        $review->load(['user', 'course.instructor', 'replies.user', 'moderator']);
 
         return view('admin.student-reviews.show', compact('review'));
     }

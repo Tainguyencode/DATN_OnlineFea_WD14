@@ -127,13 +127,27 @@
 
                 <p class="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700 dark:text-slate-200">{{ $review->comment }}</p>
 
-                @if($review->instructor_reply)
+                @php
+                    $visibleReply = $review->replies->first(function ($reply) {
+                        if (!$reply->is_hidden) {
+                            return true;
+                        }
+                        if (auth()->check()) {
+                            $user = auth()->user();
+                            if ($user->isAdmin() || $user->id === $reply->user_id) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                @endphp
+                @if($visibleReply)
                     <div class="mt-4 rounded-xl border-l-4 border-indigo-500 bg-indigo-50 p-4 dark:bg-indigo-500/10">
                         <div class="flex flex-wrap items-center gap-2">
                             <strong class="text-sm text-slate-950 dark:text-white">Phản hồi từ giảng viên</strong>
-                            @if($review->replied_at)<time class="text-xs text-slate-500 dark:text-slate-400">{{ $review->replied_at->diffForHumans() }}</time>@endif
+                            <time class="text-xs text-slate-500 dark:text-slate-400" datetime="{{ $visibleReply->created_at->toIso8601String() }}">{{ $visibleReply->created_at->diffForHumans() }}</time>
                         </div>
-                        <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-slate-200">{{ $review->instructor_reply }}</p>
+                        <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-slate-200">{{ $visibleReply->comment }}</p>
                     </div>
                 @endif
 

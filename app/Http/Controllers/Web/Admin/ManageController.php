@@ -14,6 +14,7 @@ use App\Models\Enrollment;
 use App\Models\HomepageSetting;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Review;
 use App\Services\ActivityLogService;
 use App\Services\CourseReviewService;
 use Illuminate\Http\RedirectResponse;
@@ -571,10 +572,6 @@ class ManageController extends Controller
             }
         }
 
-        if (! Schema::hasColumn('orders', 'items')) {
-            return 0.0;
-        }
-
         return (float) Order::where('status', 'paid')
             ->get(['items'])
             ->sum(function (Order $order) use ($course) {
@@ -582,5 +579,17 @@ class ManageController extends Controller
                     ->where('course_id', $course->id)
                     ->sum(fn ($item) => (float) ($item['price'] ?? 0));
             });
+    }
+
+    public function toggleHideReply(Review $review): RedirectResponse
+    {
+        abort_unless($review->isReply(), 404);
+
+        $review->update([
+            'is_hidden' => !$review->is_hidden,
+        ]);
+
+        $statusMsg = $review->is_hidden ? 'Đã ẩn phản hồi.' : 'Đã hiển thị phản hồi.';
+        return back()->with('success', $statusMsg);
     }
 }
