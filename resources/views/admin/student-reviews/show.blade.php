@@ -7,7 +7,23 @@
             </div>
             <p class="mt-5 font-bold text-amber-600">{{ $review->rating }}/5 sao</p>
             <p class="mt-3 whitespace-pre-line text-sm leading-7 text-slate-700 dark:text-slate-200">{{ $review->comment }}</p>
-            @if($review->instructor_reply)<div class="mt-5 rounded-xl bg-indigo-50 p-4 dark:bg-indigo-500/10"><strong>Phản hồi giảng viên</strong><p class="mt-2 whitespace-pre-line text-sm">{{ $review->instructor_reply }}</p></div>@endif
+            @foreach($review->replies as $reply)
+                <div class="mt-5 rounded-xl bg-indigo-50 p-4 dark:bg-indigo-500/10">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <strong>Phản hồi giảng viên @if($reply->is_hidden) <span class="ml-1 text-xs text-rose-600 font-bold">(Đã ẩn do vi phạm)</span> @endif</strong>
+                            <p class="text-xs text-slate-500">Người gửi: {{ $reply->user?->name }} · {{ $reply->created_at->format('d/m/Y H:i') }}</p>
+                        </div>
+                        <form method="POST" action="{{ route('admin.replies.toggleHide', $reply) }}">
+                            @csrf
+                            <button type="submit" class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800 dark:text-slate-200">
+                                {{ $reply->is_hidden ? 'Hiện phản hồi' : 'Ẩn phản hồi' }}
+                            </button>
+                        </form>
+                    </div>
+                    <p class="mt-2 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{{ $reply->comment }}</p>
+                </div>
+            @endforeach
             @if($review->moderation_note)<div class="mt-5 rounded-xl bg-rose-50 p-4 text-rose-900 dark:bg-rose-500/10 dark:text-rose-100"><strong>Ghi chú kiểm duyệt</strong><p class="mt-2 whitespace-pre-line text-sm">{{ $review->moderation_note }}</p></div>@endif
             <dl class="mt-6 grid gap-3 text-sm sm:grid-cols-2"><div><dt class="text-slate-500">Đã xác minh đăng ký</dt><dd class="font-bold">{{ $review->verified_purchase ? 'Có' : 'Không' }}</dd></div><div><dt class="text-slate-500">Hữu ích</dt><dd class="font-bold">{{ $review->helpful_count }}</dd></div><div><dt class="text-slate-500">Tạo lúc</dt><dd class="font-bold">{{ $review->created_at->format('d/m/Y H:i') }}</dd></div><div><dt class="text-slate-500">Kiểm duyệt bởi</dt><dd class="font-bold">{{ $review->moderator?->name ?? '—' }}</dd></div></dl>
         </article>

@@ -88,14 +88,22 @@ class CourseFeedbackReviewTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->course();
         $this->enroll($student, $course);
-        $review = $this->review($student, $course, ReviewStatus::Approved, 5, ['instructor_reply' => 'Cảm ơn bạn']);
+        $review = $this->review($student, $course, ReviewStatus::Approved, 5);
+        \App\Models\Review::create([
+            'user_id' => $course->instructor_id,
+            'course_id' => $course->id,
+            'parent_id' => $review->id,
+            'rating' => null,
+            'comment' => 'Cảm ơn bạn',
+            'status' => ReviewStatus::Approved->value,
+        ]);
 
         $this->actingAs($student)->put(route('courses.reviews.update', [$course, $review]), $this->payload(3))->assertSessionHasNoErrors();
 
         $review->refresh();
         $this->assertSame(3, $review->rating);
         $this->assertSame(ReviewStatus::Pending, $review->status);
-        $this->assertSame('Cảm ơn bạn', $review->instructor_reply);
+        $this->assertSame('Cảm ơn bạn', $review->replies->first()->comment);
         $this->assertSame(0, $course->fresh()->rating_count);
     }
 
@@ -136,14 +144,18 @@ class CourseFeedbackReviewTest extends TestCase
         $review = $this->review($student, $course, ReviewStatus::Approved);
 
         $this->actingAsTwoFactorVerified($otherInstructor)
-            ->post(route('instructor.reviews.reply', [$course, $review]), ['instructor_reply' => 'Không hợp lệ'])
+            ->post(route('instructor.reviews.reply', $review), ['comment' => 'Không hợp lệ'])
             ->assertForbidden();
 
         $this->actingAsTwoFactorVerified($course->instructor)
-            ->post(route('instructor.reviews.reply', [$course, $review]), ['instructor_reply' => 'Cảm ơn phản hồi của bạn'])
+            ->post(route('instructor.reviews.reply', $review), ['comment' => 'Cảm ơn phản hồi của bạn'])
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('reviews', ['id' => $review->id, 'replied_by' => $course->instructor_id, 'instructor_reply' => 'Cảm ơn phản hồi của bạn']);
+        $this->assertDatabaseHas('reviews', [
+            'parent_id' => $review->id,
+            'user_id' => $course->instructor_id,
+            'comment' => 'Cảm ơn phản hồi của bạn',
+        ]);
     }
 
     public function test_admin_approval_updates_average_and_public_visibility(): void
