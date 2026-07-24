@@ -15,6 +15,10 @@ class GeminiServiceTest extends TestCase
         config([
             'services.lesson_ai.api_key' => 'test-key',
             'services.lesson_ai.model' => 'gemini-3.5-flash-lite',
+            'services.lesson_ai.fallback_models' => [
+                'gemini-flash-lite-latest',
+                'gemini-3.1-flash-lite',
+            ],
             'services.lesson_ai.base_url' => 'https://generativelanguage.googleapis.com/v1beta',
             'services.lesson_ai.timeout' => 10,
         ]);
@@ -34,6 +38,8 @@ class GeminiServiceTest extends TestCase
 
     public function test_maps_quota_exceeded_from_http_429(): void
     {
+        config(['services.lesson_ai.fallback_models' => []]);
+
         Http::fake([
             '*' => Http::response([
                 'error' => [
@@ -52,6 +58,8 @@ class GeminiServiceTest extends TestCase
 
     public function test_maps_invalid_model_from_http_404(): void
     {
+        config(['services.lesson_ai.fallback_models' => []]);
+
         Http::fake([
             '*' => Http::response([
                 'error' => [
@@ -66,6 +74,85 @@ class GeminiServiceTest extends TestCase
 
         $this->assertSame('invalid_model', $result['code']);
         $this->assertStringContainsString('gemini-3.5-flash-lite', $result['error']);
+    }
+
+    public function test_falls_back_when_primary_model_not_found(): void
+    {
+        Http::fake([
+            '*/models/gemini-3.5-flash-lite:generateContent' => Http::response([
+                'error' => [
+                    'code' => 404,
+                    'message' => 'models/gemini-3.5-flash-lite is not found',
+                    'status' => 'NOT_FOUND',
+                ],
+            ], 404),
+            '*/models/gemini-flash-lite-latest:generateContent' => Http::response([
+                'candidates' => [
+                    [
+                        'finishReason' => 'STOP',
+                        'content' => [
+                            'parts' => [
+                                ['text' => 'Fallback OK'],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $result = app(GeminiService::class)->generateText('hello');
+
+        $this->assertSame('Fallback OK', $result['text']);
+        $this->assertSame('gemini-flash-lite-latest', $result['model']);
+        $this->assertArrayNotHasKey('error', $result);
+    }
+
+    public function test_falls_back_when_primary_model_quota_exceeded(): void
+    {
+        Http::fake([
+            '*/models/gemini-3.5-flash-lite:generateContent' => Http::response([
+                'error' => [
+                    'code' => 429,
+                    'message' => 'Resource exhausted',
+                    'status' => 'RESOURCE_EXHAUSTED',
+                ],
+            ], 429),
+            '*/models/gemini-flash-lite-latest:generateContent' => Http::response([
+                'candidates' => [
+                    [
+                        'finishReason' => 'STOP',
+                        'content' => [
+                            'parts' => [
+                                ['text' => 'Quota fallback'],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $result = app(GeminiService::class)->generateText('hello');
+
+        $this->assertSame('Quota fallback', $result['text']);
+        $this->assertSame('gemini-flash-lite-latest', $result['model']);
+    }
+
+    public function test_does_not_fallback_on_invalid_api_key(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'error' => [
+                    'code' => 401,
+                    'message' => 'API key not valid',
+                    'status' => 'UNAUTHENTICATED',
+                ],
+            ], 401),
+        ]);
+
+        $result = app(GeminiService::class)->generateText('hello');
+
+        $this->assertSame('invalid_api_key', $result['code']);
+        Http::assertSentCount(1);
     }
 
     public function test_maps_safety_block_from_prompt_feedback(): void
