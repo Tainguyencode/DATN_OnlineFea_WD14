@@ -18,6 +18,7 @@ use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurric
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
+use App\Http\Controllers\Web\Instructor\ReviewReplyController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\ReviewController;
@@ -186,9 +187,9 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     Route::middleware('verified')->group(function () {
-        Route::post('/courses/{course}/reviews/{review}/reply', [InstructorReviewController::class, 'reply'])->middleware('throttle:12,1')->name('reviews.reply');
-        Route::put('/courses/{course}/reviews/{review}/reply', [InstructorReviewController::class, 'reply'])->middleware('throttle:12,1')->name('reviews.reply.update');
-        Route::delete('/courses/{course}/reviews/{review}/reply', [InstructorReviewController::class, 'destroyReply'])->name('reviews.reply.destroy');
+        Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
+        Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
+        Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
         Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
         Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
         Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
@@ -255,6 +256,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::patch('/student-reviews/{review}/hide', [AdminStudentReviewController::class, 'hide'])->name('student-reviews.hide');
     Route::patch('/student-reviews/{review}/restore', [AdminStudentReviewController::class, 'restore'])->name('student-reviews.restore');
     Route::delete('/student-reviews/{review}', [AdminStudentReviewController::class, 'destroy'])->name('student-reviews.destroy');
+    Route::post('/replies/{review}/toggle-hide', [ManageController::class, 'toggleHideReply'])->name('replies.toggleHide');
     Route::get('/courses/pending', fn () => redirect()->route('admin.course-reviews.index'))->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
