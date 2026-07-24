@@ -331,7 +331,7 @@ PROMPT;
             'lesson_mismatch' => 404,
             'quota_exceeded' => 429,
             'empty_response', 'invalid_response', 'response_truncated' => 502,
-            'missing_api_key', 'invalid_model', 'timeout', 'ssl_error', 'connection_error', 'ai_unavailable' => 503,
+            'missing_api_key', 'invalid_api_key', 'invalid_model', 'timeout', 'ssl_error', 'connection_error', 'ai_unavailable' => 503,
             default => 503,
         };
     }
