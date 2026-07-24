@@ -57,7 +57,6 @@ class PushNotification extends Model
             'course_review_created' => 'Đánh giá mới',
             'course_review_replied' => 'Phản hồi đánh giá',
             'course_review_moderated' => 'Kiểm duyệt đánh giá',
-            'support_ticket_created', 'support_ticket_replied', 'support_ticket_status', 'support_ticket_reopened' => 'Ticket hỗ trợ',
             default => 'Thông báo',
         };
     }
@@ -75,7 +74,6 @@ class PushNotification extends Model
             'certificate_issued' => 'bg-teal-100 text-teal-700',
             'course_review_created', 'course_review_replied' => 'bg-amber-100 text-amber-700',
             'course_review_moderated' => 'bg-fuchsia-100 text-fuchsia-700',
-            'support_ticket_created', 'support_ticket_replied', 'support_ticket_status', 'support_ticket_reopened' => 'bg-sky-100 text-sky-700',
             default => 'bg-slate-100 text-slate-700',
         };
     }

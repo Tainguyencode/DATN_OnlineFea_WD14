@@ -19,18 +19,21 @@
                     <span class="inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold {{ $review->status->badgeClasses() }}">{{ $review->status->label() }}</span>
                 </div>
                 <p class="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700 dark:text-slate-200">{{ $review->comment }}</p>
-                <form method="POST" action="{{ route($review->instructor_reply ? 'instructor.reviews.reply.update' : 'instructor.reviews.reply', [$review->course, $review]) }}" class="mt-5 rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
+                @php
+                    $instructorReply = $review->replies->first();
+                @endphp
+                <form method="POST" action="{{ $instructorReply ? route('instructor.replies.update', $instructorReply) : route('instructor.reviews.reply', $review) }}" class="mt-5 rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
                     @csrf
-                    @if($review->instructor_reply) @method('PUT') @endif
+                    @if($instructorReply) @method('PUT') @endif
                     <label for="reply-{{ $review->id }}" class="text-sm font-bold text-slate-800 dark:text-slate-100">Phản hồi chính thức</label>
-                    <textarea id="reply-{{ $review->id }}" name="instructor_reply" rows="3" minlength="2" maxlength="1500" required class="mt-2 w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-900">{{ old('instructor_reply', $review->instructor_reply) }}</textarea>
-                    @error('instructor_reply')<p class="mt-1 text-sm text-rose-600">{{ $message }}</p>@enderror
+                    <textarea id="reply-{{ $review->id }}" name="comment" rows="3" minlength="2" maxlength="1500" required class="mt-2 w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-900">{{ old('comment', $instructorReply?->comment) }}</textarea>
+                    @error('comment')<p class="mt-1 text-sm text-rose-600">{{ $message }}</p>@enderror
                     <div class="mt-3 flex flex-wrap gap-2">
-                        <button class="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-700">{{ $review->instructor_reply ? 'Cập nhật phản hồi' : 'Gửi phản hồi' }}</button>
+                        <button class="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-700">{{ $instructorReply ? 'Cập nhật phản hồi' : 'Gửi phản hồi' }}</button>
                     </div>
                 </form>
-                @if($review->instructor_reply)
-                    <form method="POST" action="{{ route('instructor.reviews.reply.destroy', [$review->course, $review]) }}" class="mt-2" onsubmit="return confirm('Xóa phản hồi này?')">@csrf @method('DELETE')<button class="cursor-pointer text-sm font-bold text-rose-600 hover:underline">Xóa phản hồi</button></form>
+                @if($instructorReply)
+                    <form method="POST" action="{{ route('instructor.replies.destroy', $instructorReply) }}" class="mt-2" onsubmit="return confirm('Xóa phản hồi này?')">@csrf @method('DELETE')<button class="cursor-pointer text-sm font-bold text-rose-600 hover:underline">Xóa phản hồi</button></form>
                 @endif
             </article>
         @empty
