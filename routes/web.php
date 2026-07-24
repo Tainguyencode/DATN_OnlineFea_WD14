@@ -9,7 +9,9 @@ use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\StudentReviewController as AdminStudentReviewController;
+use App\Http\Controllers\Web\Admin\SupportTicketController as AdminSupportTicketController;
 use App\Http\Controllers\Web\Admin\UserController;
+use App\Http\Controllers\Web\SupportTicketController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\HomeController;
@@ -169,6 +171,18 @@ Route::get('/dashboard', function () {
     return redirect(auth()->user()->dashboardUrl());
 })->middleware(['auth', 'active', 'verified', '2fa'])->name('dashboard');
 
+// ─── TICKET HỖ TRỢ (Student + Instructor) ───
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student,instructor'])->prefix('support')->name('support.')->group(function () {
+    Route::get('/tickets', [SupportTicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/create', [SupportTicketController::class, 'create'])->name('tickets.create');
+    Route::post('/tickets', [SupportTicketController::class, 'store'])->middleware('throttle:10,1')->name('tickets.store');
+    Route::get('/tickets/{ticket}', [SupportTicketController::class, 'show'])->name('tickets.show');
+    Route::post('/tickets/{ticket}/replies', [SupportTicketController::class, 'reply'])->middleware('throttle:20,1')->name('tickets.reply');
+    Route::post('/tickets/{ticket}/close', [SupportTicketController::class, 'close'])->name('tickets.close');
+    Route::post('/tickets/{ticket}/reopen', [SupportTicketController::class, 'reopen'])->name('tickets.reopen');
+    Route::get('/tickets/{ticket}/attachments/{attachment}', [SupportTicketController::class, 'downloadAttachment'])->name('tickets.attachments.download');
+});
+
 // ─── HỌC VIÊN ───
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
@@ -301,6 +315,11 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications', [AdminNotificationController::class, 'store'])->name('notifications.store');
+    Route::get('/support-tickets', [AdminSupportTicketController::class, 'index'])->name('support-tickets.index');
+    Route::get('/support-tickets/{ticket}', [AdminSupportTicketController::class, 'show'])->name('support-tickets.show');
+    Route::post('/support-tickets/{ticket}/replies', [AdminSupportTicketController::class, 'reply'])->middleware('throttle:30,1')->name('support-tickets.reply');
+    Route::patch('/support-tickets/{ticket}', [AdminSupportTicketController::class, 'update'])->name('support-tickets.update');
+    Route::get('/support-tickets/{ticket}/attachments/{attachment}', [AdminSupportTicketController::class, 'downloadAttachment'])->name('support-tickets.attachments.download');
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
