@@ -441,9 +441,10 @@ function initLessonAi() {
         if (data?.message) return data.message;
 
         const codeMessages = {
-            missing_api_key: 'Chưa cấu hình hoặc khóa API Gemini không hợp lệ.',
-            invalid_model: 'Model Gemini không hợp lệ. Hãy kiểm tra GEMINI_MODEL trong .env.',
-            quota_exceeded: 'Gemini đã hết hạn mức. Hãy thử lại sau vài phút.',
+            missing_api_key: 'Chưa cấu hình GEMINI_API_KEY trong .env.',
+            invalid_api_key: 'Khóa API Gemini không hợp lệ. Hãy tạo key mới tại Google AI Studio.',
+            invalid_model: 'Model Gemini không hợp lệ. Hãy kiểm tra GEMINI_MODEL / GEMINI_FALLBACK_MODELS trong .env.',
+            quota_exceeded: 'Gemini đã hết hạn mức trên các model đã thử. Hãy đợi vài phút hoặc đổi API key.',
             timeout: 'Kết nối AI bị quá thời gian chờ. Vui lòng thử lại.',
             ssl_error: 'Lỗi chứng chỉ SSL khi gọi Gemini. Kiểm tra cấu hình PHP/Laragon.',
             connection_error: 'Không kết nối được dịch vụ AI. Kiểm tra mạng rồi thử lại.',

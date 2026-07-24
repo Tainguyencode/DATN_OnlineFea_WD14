@@ -3,6 +3,7 @@
 namespace App\Services\Ai;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -28,13 +29,102 @@ class GeminiService
             ];
         }
 
-        $model = (string) config('services.lesson_ai.model', 'gemini-3.5-flash-lite');
         $timeout = (int) ($options['timeout'] ?? config('services.lesson_ai.timeout', 45));
         $temperature = (float) ($options['temperature'] ?? 0.3);
         $maxTokens = (int) ($options['max_output_tokens'] ?? 2048);
         $jsonMode = (bool) ($options['json'] ?? false);
         $baseUrl = rtrim((string) config('services.lesson_ai.base_url', 'https://generativelanguage.googleapis.com/v1beta'), '/');
 
+        $models = $this->candidateModels();
+        $lastFailure = [
+            'error' => 'Dịch vụ AI tạm thời không khả dụng. Vui lòng thử lại sau.',
+            'code' => 'ai_error',
+        ];
+
+        foreach ($models as $index => $model) {
+            $result = $this->requestModel(
+                $baseUrl,
+                $model,
+                $apiKey,
+                $prompt,
+                $timeout,
+                $temperature,
+                $maxTokens,
+                $jsonMode
+            );
+
+            if (! isset($result['error'])) {
+                if ($index > 0) {
+                    Log::info('Lesson AI Gemini succeeded with fallback model.', [
+                        'model' => $model,
+                        'attempt' => $index + 1,
+                    ]);
+                }
+
+                return $result;
+            }
+
+            $lastFailure = $result;
+            $code = (string) ($result['code'] ?? 'ai_error');
+
+            // Auth / key problems will fail for every model — stop early.
+            if (in_array($code, ['missing_api_key', 'invalid_api_key'], true)) {
+                return $result;
+            }
+
+            // Retry only for model availability / per-model quota issues.
+            if (! in_array($code, ['invalid_model', 'quota_exceeded', 'ai_unavailable'], true)) {
+                return $result;
+            }
+
+            if ($index < count($models) - 1) {
+                Log::warning('Lesson AI Gemini retrying with fallback model.', [
+                    'failed_model' => $model,
+                    'code' => $code,
+                    'next_model' => $models[$index + 1],
+                ]);
+            }
+        }
+
+        return $lastFailure;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function candidateModels(): array
+    {
+        $primary = trim((string) config('services.lesson_ai.model', 'gemini-3.5-flash-lite'));
+        $fallbacks = config('services.lesson_ai.fallback_models', []);
+
+        if (! is_array($fallbacks)) {
+            $fallbacks = [];
+        }
+
+        $models = array_values(array_unique(array_filter(
+            array_map(
+                static fn ($model): string => trim((string) $model),
+                array_merge([$primary], $fallbacks)
+            ),
+            static fn (string $model): bool => $model !== ''
+        )));
+
+        return $models !== [] ? $models : ['gemini-3.5-flash-lite'];
+    }
+
+    /**
+     * @return array{text?: string, model?: string, error?: string, code?: string}
+     */
+    private function requestModel(
+        string $baseUrl,
+        string $model,
+        string $apiKey,
+        string $prompt,
+        int $timeout,
+        float $temperature,
+        int $maxTokens,
+        bool $jsonMode
+    ): array {
         $url = "{$baseUrl}/models/{$model}:generateContent";
 
         $generationConfig = [
@@ -62,7 +152,10 @@ class GeminiService
             $response = Http::timeout($timeout)
                 ->connectTimeout(min(15, $timeout))
                 ->acceptJson()
-                ->post($url.'?key='.urlencode($apiKey), $payload);
+                ->withHeaders([
+                    'x-goog-api-key' => $apiKey,
+                ])
+                ->post($url, $payload);
         } catch (ConnectionException $exception) {
             $message = $exception->getMessage();
 
@@ -90,7 +183,7 @@ class GeminiService
         }
 
         if ($response->failed()) {
-            $mapped = $this->mapHttpFailure($response->status(), $response->json(), $model);
+            $mapped = $this->mapHttpFailure($response, $model);
 
             Log::warning('Lesson AI Gemini request failed.', [
                 'status' => $response->status(),
@@ -141,11 +234,12 @@ class GeminiService
     }
 
     /**
-     * @param  array<string, mixed>|null  $json
      * @return array{error: string, code: string}
      */
-    private function mapHttpFailure(int $status, ?array $json, string $model): array
+    private function mapHttpFailure(Response $response, string $model): array
     {
+        $status = $response->status();
+        $json = $response->json();
         $apiStatus = strtoupper((string) data_get($json, 'error.status', ''));
         $apiMessage = trim((string) data_get($json, 'error.message', ''));
         $lowerMessage = strtolower($apiMessage);
@@ -157,13 +251,13 @@ class GeminiService
 
             return [
                 'error' => 'Khóa API Gemini không hợp lệ hoặc chưa được cấp quyền.'.$hint,
-                'code' => 'missing_api_key',
+                'code' => 'invalid_api_key',
             ];
         }
 
         if ($status === 429 || $apiStatus === 'RESOURCE_EXHAUSTED') {
             return [
-                'error' => 'Gemini đã hết hạn mức (quota). Hãy đợi vài phút, đổi model, hoặc tạo API key mới tại Google AI Studio.',
+                'error' => 'Gemini đã hết hạn mức (quota). Hệ thống sẽ thử model dự phòng nếu còn; nếu vẫn lỗi hãy đợi vài phút hoặc tạo API key mới tại Google AI Studio.',
                 'code' => 'quota_exceeded',
             ];
         }
@@ -172,10 +266,11 @@ class GeminiService
             $status === 404
             || $apiStatus === 'NOT_FOUND'
             || str_contains($lowerMessage, 'is not found')
+            || str_contains($lowerMessage, 'no longer available')
             || (str_contains($lowerMessage, 'model') && str_contains($lowerMessage, 'not found'))
         ) {
             return [
-                'error' => "Model Gemini \"{$model}\" không tồn tại hoặc không khả dụng. Hãy kiểm tra GEMINI_MODEL trong .env (ví dụ gemini-3.5-flash-lite).",
+                'error' => "Model Gemini \"{$model}\" không tồn tại hoặc không khả dụng. Hãy kiểm tra GEMINI_MODEL / GEMINI_FALLBACK_MODELS trong .env (ví dụ gemini-3.5-flash-lite).",
                 'code' => 'invalid_model',
             ];
         }
@@ -184,7 +279,7 @@ class GeminiService
             if (str_contains($lowerMessage, 'api key') || str_contains($lowerMessage, 'api_key')) {
                 return [
                     'error' => 'Khóa API Gemini không hợp lệ. Hãy kiểm tra GEMINI_API_KEY trong .env.',
-                    'code' => 'missing_api_key',
+                    'code' => 'invalid_api_key',
                 ];
             }
 
