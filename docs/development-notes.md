@@ -57,3 +57,6 @@
 ### Commit 19: refactor: toi uu hoa tien trinh composer dev tren moi truong windows (2026-07-24 11:20:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 20: feat: co che tu dong fallback model AI khi qua tai quota (2026-07-24 15:10:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
