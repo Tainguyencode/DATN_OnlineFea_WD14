@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Enums\SupportTicketCategory;
 use App\Enums\SupportTicketPriority;
 use App\Enums\SupportTicketStatus;
-use App\Http\Middleware\SingleSessionMiddleware;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketAttachment;
 use App\Models\SupportTicketMessage;
@@ -28,7 +27,6 @@ class SupportTicketTest extends TestCase
     {
         parent::setUp();
         app(RoleSyncService::class)->ensurePrimaryRolesExist();
-        $this->withoutMiddleware(SingleSessionMiddleware::class);
     }
 
     public function test_student_can_create_ticket_without_duplicating_initial_message(): void
