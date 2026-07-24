@@ -27,6 +27,8 @@ class Review extends Model
         'moderated_at',
         'moderation_note',
         'verified_purchase',
+        'parent_id',
+        'is_hidden',
     ];
 
     protected function casts(): array
@@ -38,6 +40,7 @@ class Review extends Model
             'verified_purchase' => 'boolean',
             'replied_at' => 'datetime',
             'moderated_at' => 'datetime',
+            'is_hidden' => 'boolean',
         ];
     }
 
@@ -59,6 +62,21 @@ class Review extends Model
     public function moderator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'moderated_by');
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Review::class, 'parent_id');
+    }
+
+    public function replies(): HasMany
+    {
+        return $this->hasMany(Review::class, 'parent_id');
+    }
+
+    public function isReply(): bool
+    {
+        return !is_null($this->parent_id);
     }
 
     public function helpfulRecords(): HasMany
