@@ -60,3 +60,6 @@
 ### Commit 20: feat: co che tu dong fallback model AI khi qua tai quota (2026-07-24 15:10:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 21: test: bo sung test suite cho luong hoc tap va lam quiz (2026-07-25 10:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
