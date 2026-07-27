@@ -11,7 +11,7 @@
                 <div class="mt-5 rounded-xl bg-indigo-50 p-4 dark:bg-indigo-500/10">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <strong>Phản hồi giảng viên @if($reply->is_hidden) <span class="ml-1 text-xs text-rose-600 font-bold">(Đã ẩn do vi phạm)</span> @endif</strong>
+                            <strong>Phản hồi giảng viên @if($reply->is_hidden) <span class="ml-1 text-xs text-rose-600 font-bold">(Đã ẩn)</span> @endif</strong>
                             <p class="text-xs text-slate-500">Người gửi: {{ $reply->user?->name }} · {{ $reply->created_at->format('d/m/Y H:i') }}</p>
                         </div>
                         <form method="POST" action="{{ route('admin.replies.toggleHide', $reply) }}">
@@ -24,30 +24,30 @@
                     <p class="mt-2 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{{ $reply->comment }}</p>
                 </div>
             @endforeach
-            @if($review->moderation_note)<div class="mt-5 rounded-xl bg-rose-50 p-4 text-rose-900 dark:bg-rose-500/10 dark:text-rose-100"><strong>Ghi chú kiểm duyệt</strong><p class="mt-2 whitespace-pre-line text-sm">{{ $review->moderation_note }}</p></div>@endif
-            <dl class="mt-6 grid gap-3 text-sm sm:grid-cols-2"><div><dt class="text-slate-500">Đã xác minh đăng ký</dt><dd class="font-bold">{{ $review->verified_purchase ? 'Có' : 'Không' }}</dd></div><div><dt class="text-slate-500">Hữu ích</dt><dd class="font-bold">{{ $review->helpful_count }}</dd></div><div><dt class="text-slate-500">Tạo lúc</dt><dd class="font-bold">{{ $review->created_at->format('d/m/Y H:i') }}</dd></div><div><dt class="text-slate-500">Kiểm duyệt bởi</dt><dd class="font-bold">{{ $review->moderator?->name ?? '—' }}</dd></div></dl>
+            @if($review->moderation_note)<div class="mt-5 rounded-xl bg-rose-50 p-4 text-rose-900 dark:bg-rose-500/10 dark:text-rose-100"><strong>Ghi chú quản trị</strong><p class="mt-2 whitespace-pre-line text-sm">{{ $review->moderation_note }}</p></div>@endif
+            <dl class="mt-6 grid gap-3 text-sm sm:grid-cols-2"><div><dt class="text-slate-500">Đã xác minh đăng ký</dt><dd class="font-bold">{{ $review->verified_purchase ? 'Có' : 'Không' }}</dd></div><div><dt class="text-slate-500">Hữu ích</dt><dd class="font-bold">{{ $review->helpful_count }}</dd></div><div><dt class="text-slate-500">Tạo lúc</dt><dd class="font-bold">{{ $review->created_at->format('d/m/Y H:i') }}</dd></div><div><dt class="text-slate-500">Cập nhật bởi</dt><dd class="font-bold">{{ $review->moderator?->name ?? '—' }}</dd></div></dl>
         </article>
 
         <aside class="space-y-4">
             <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <h3 class="font-extrabold text-slate-950 dark:text-white">Kiểm duyệt</h3>
-                @if($review->status !== \App\Enums\ReviewStatus::Hidden)
-                    <form method="POST" action="{{ route('admin.student-reviews.hide', $review) }}" class="mt-4 space-y-2">
-                        @csrf
-                        @method('PATCH')
-                        <label class="text-sm font-bold" for="hide-note">Lý do ẩn</label>
-                        <textarea id="hide-note" name="moderation_note" rows="3" minlength="5" maxlength="1000" required class="w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea>
-                        <button class="w-full cursor-pointer rounded-xl bg-slate-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800">Ẩn đánh giá</button>
-                    </form>
-                @else
+                <h3 class="font-extrabold text-slate-950 dark:text-white">Quản lý hiển thị</h3>
+                @if($review->isHidden())
                     <form method="POST" action="{{ route('admin.student-reviews.restore', $review) }}" class="mt-4">
                         @csrf
                         @method('PATCH')
-                        <button class="w-full cursor-pointer rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Khôi phục hiển thị</button>
+                        <button class="w-full cursor-pointer rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10">Hiện lại đánh giá</button>
+                    </form>
+                @else
+                    <form method="POST" action="{{ route('admin.student-reviews.hide', $review) }}" class="mt-4 space-y-2">
+                        @csrf
+                        @method('PATCH')
+                        <label class="text-sm font-bold" for="hide-note">Ghi chú khi ẩn</label>
+                        <textarea id="hide-note" name="moderation_note" rows="3" minlength="5" maxlength="1000" class="w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea>
+                        <button class="w-full cursor-pointer rounded-xl bg-slate-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800">Ẩn đánh giá</button>
                     </form>
                 @endif
             </div>
-            <form method="POST" action="{{ route('admin.student-reviews.destroy', $review) }}" onsubmit="return confirm('Xóa đánh giá này? Hành động không thể hoàn tác từ giao diện.')">@csrf @method('DELETE')<button class="w-full cursor-pointer rounded-xl border border-rose-300 px-4 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">Xóa đánh giá</button></form>
+            <form method="POST" action="{{ route('admin.student-reviews.destroy', $review) }}" onsubmit="return confirm('Xóa mềm đánh giá này? Đánh giá sẽ không còn hiển thị trên giao diện.')">@csrf @method('DELETE')<button class="w-full cursor-pointer rounded-xl border border-rose-300 px-4 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">Xóa đánh giá</button></form>
             <a href="{{ route('admin.student-reviews.index') }}" class="block text-center text-sm font-bold text-indigo-700 hover:underline dark:text-indigo-300">Quay lại danh sách</a>
         </aside>
     </div>
