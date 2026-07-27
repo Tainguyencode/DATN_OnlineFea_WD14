@@ -296,10 +296,82 @@ class CourseFeedbackReviewTest extends TestCase
         $this->actingAsTwoFactorVerified($admin)->get(route('admin.student-reviews.show', $review))->assertOk();
     }
 
+    public function test_admin_sees_newly_created_visible_review_without_default_filters(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->course();
+        $this->enroll($student, $course);
+        $comment = 'Admin can see this new student review immediately.';
+
+        $this->actingAs($student)
+            ->post(route('courses.reviews.store', $course), [
+                'rating' => 5,
+                'comment' => $comment,
+            ])
+            ->assertRedirect(route('courses.show', $course->slug).'#reviews');
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $response = $this->actingAsTwoFactorVerified($admin)
+            ->get(route('admin.student-reviews.index'))
+            ->assertOk()
+            ->assertSee($comment);
+
+        $this->assertSame([], $response->viewData('filters'));
+        $this->assertSame(1, $response->viewData('reviews')->total());
+        $response
+            ->assertDontSee('name="instructor_id"', false)
+            ->assertDontSee('name="rating"', false)
+            ->assertDontSee('name="reply"', false)
+            ->assertDontSee('name="date_from"', false)
+            ->assertDontSee('name="date_to"', false);
+    }
+
+    public function test_admin_review_index_ignores_retired_filters_that_used_to_hide_reviews(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $course = $this->course();
+        $wrongInstructor = User::factory()->create(['role' => 'instructor']);
+
+        for ($i = 0; $i < 16; $i++) {
+            $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 5, [
+                'comment' => 'Retired filter visible review '.$i,
+            ]);
+        }
+
+        $response = $this->actingAsTwoFactorVerified($admin)
+            ->get(route('admin.student-reviews.index', [
+                'instructor_id' => $wrongInstructor->id,
+                'rating' => 1,
+                'reply' => 'replied',
+                'date_from' => now()->addDays(10)->toDateString(),
+                'date_to' => now()->addDays(10)->toDateString(),
+                'status' => 'approved',
+                'keyword' => '',
+                'course_id' => '',
+            ]))
+            ->assertOk()
+            ->assertSee('Retired filter visible review')
+            ->assertDontSee('Không có đánh giá phù hợp.');
+
+        $this->assertSame([], $response->viewData('filters'));
+        $this->assertSame(16, $response->viewData('reviews')->total());
+        $response
+            ->assertSee('page=2', false)
+            ->assertDontSee('instructor_id=', false)
+            ->assertDontSee('rating=', false)
+            ->assertDontSee('reply=', false)
+            ->assertDontSee('date_from=', false)
+            ->assertDontSee('date_to=', false)
+            ->assertDontSee('status=approved', false)
+            ->assertDontSee('keyword=', false)
+            ->assertDontSee('course_id=', false);
+    }
+
     public function test_admin_review_index_filters_visible_and_hidden_reviews(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $course = $this->course();
+        $otherCourse = $this->course();
         $visible = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 5, [
             'comment' => 'Đánh giá đang hiển thị',
         ]);
@@ -307,24 +379,37 @@ class CourseFeedbackReviewTest extends TestCase
             'comment' => 'Đánh giá đã ẩn',
             'is_hidden' => true,
         ]);
+        $other = $this->review(User::factory()->create(['role' => 'student']), $otherCourse, ReviewStatus::Visible, 4, [
+            'comment' => 'Đánh giá khóa học khác',
+        ]);
 
         $this->actingAsTwoFactorVerified($admin)
             ->get(route('admin.student-reviews.index'))
             ->assertOk()
             ->assertSee($visible->comment)
-            ->assertSee($hidden->comment);
+            ->assertSee($hidden->comment)
+            ->assertSee($other->comment);
 
         $this->actingAsTwoFactorVerified($admin)
             ->get(route('admin.student-reviews.index', ['status' => ReviewStatus::Visible->value]))
             ->assertOk()
             ->assertSee($visible->comment)
-            ->assertDontSee($hidden->comment);
+            ->assertDontSee($hidden->comment)
+            ->assertSee($other->comment);
 
         $this->actingAsTwoFactorVerified($admin)
             ->get(route('admin.student-reviews.index', ['status' => ReviewStatus::Hidden->value]))
             ->assertOk()
             ->assertDontSee($visible->comment)
-            ->assertSee($hidden->comment);
+            ->assertSee($hidden->comment)
+            ->assertDontSee($other->comment);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->get(route('admin.student-reviews.index', ['course_id' => $course->id]))
+            ->assertOk()
+            ->assertSee($visible->comment)
+            ->assertSee($hidden->comment)
+            ->assertDontSee($other->comment);
     }
 
     public function test_non_admin_cannot_access_review_moderation(): void
