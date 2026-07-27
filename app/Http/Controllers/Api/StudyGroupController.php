@@ -171,18 +171,66 @@ class StudyGroupController extends Controller
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
+        // Backward compatibility: map old image file input to file
+        if (!$request->hasFile('file') && $request->hasFile('image')) {
+            $request->files->set('file', $request->file('image'));
+        }
+
         // Validate message input manually
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'message' => 'nullable|string',
-            'image' => 'nullable|image|max:5120',
-        ], [
-            'image.image' => 'Tập tin tải lên phải là hình ảnh.',
-            'image.max' => 'Kích thước ảnh tối đa là 5MB.',
+            'file' => 'nullable|file|max:102400', // 100MB max overall
         ]);
 
         $validator->after(function ($validator) use ($request) {
-            if (!$request->filled('message') && !$request->hasFile('image')) {
-                $validator->errors()->add('message', 'Nội dung tin nhắn hoặc hình ảnh không được để trống.');
+            if (!$request->filled('message') && !$request->hasFile('file')) {
+                $validator->errors()->add('file', 'Nội dung tin nhắn hoặc tệp tin đính kèm không được để trống.');
+            }
+
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $mime = $file->getMimeType();
+                $sizeKb = $file->getSize() / 1024;
+
+                // Check if image
+                if (str_starts_with($mime, 'image/')) {
+                    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                    if (!in_array($mime, $allowedMimes)) {
+                        $validator->errors()->add('file', 'Hình ảnh phải có định dạng JPEG, PNG, GIF hoặc WEBP.');
+                    }
+                    if ($sizeKb > 5120) { // 5MB
+                        $validator->errors()->add('file', 'Kích thước hình ảnh tối đa là 5MB.');
+                    }
+                }
+                // Check if video
+                elseif (str_starts_with($mime, 'video/')) {
+                    $allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
+                    if (!in_array($mime, $allowedMimes)) {
+                        $validator->errors()->add('file', 'Video phải có định dạng MP4, MOV, AVI, MKV hoặc WEBM.');
+                    }
+                    if ($sizeKb > 102400) { // 100MB
+                        $validator->errors()->add('file', 'Kích thước video tối đa là 100MB.');
+                    }
+                }
+                // Check if allowed documents/archives
+                else {
+                    $allowedMimes = [
+                        'application/pdf', 
+                        'application/msword', 
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+                        'application/vnd.ms-excel', 
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                        'application/zip', 
+                        'application/x-zip-compressed',
+                        'text/plain'
+                    ];
+                    if (!in_array($mime, $allowedMimes)) {
+                        $validator->errors()->add('file', 'Định dạng tệp không được hỗ trợ (chỉ nhận PDF, Word, Excel, ZIP, TXT).');
+                    }
+                    if ($sizeKb > 20480) { // 20MB
+                        $validator->errors()->add('file', 'Kích thước tệp tin tối đa là 20MB.');
+                    }
+                }
             }
         });
 
@@ -197,17 +245,72 @@ class StudyGroupController extends Controller
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('study-group-messages', 'public');
+        $messageType = 'text';
+        $fileName = null;
+        $filePath = null;
+        $mimeType = null;
+        $fileSize = null;
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = $file->getClientOriginalName();
+            $mimeType = $file->getMimeType();
+            $fileSize = $file->getSize();
+
+            if (str_starts_with($mimeType, 'image/')) {
+                $messageType = 'image';
+            } elseif (str_starts_with($mimeType, 'video/')) {
+                $messageType = 'video';
+            } else {
+                $messageType = 'file';
+            }
+
+            // Store securely in private storage/app/chat directory (on local disk)
+            $filePath = $file->store('chat', 'local');
         }
 
         // Create the message
         $studyGroupMessage = $studyGroup->messages()->create([
             'user_id' => $user->id,
             'message' => $request->input('message'),
-            'image_path' => $imagePath,
+            'message_type' => $messageType,
+            'file_name' => $fileName,
+            'file_path' => $filePath,
+            'mime_type' => $mimeType,
+            'file_size' => $fileSize,
         ]);
+
+        // Send push notifications to other members of the group
+        try {
+            $otherMembers = $studyGroup->members()->where('users.id', '!=', $user->id)->get();
+            if ($otherMembers->isNotEmpty()) {
+                $notificationService = app(\App\Services\NotificationService::class);
+                $title = "Tin nhắn mới trong nhóm " . $studyGroup->name;
+                
+                $bodyText = $user->name . ": ";
+                if ($messageType === 'text') {
+                    $bodyText .= \Illuminate\Support\Str::limit($request->input('message'), 60);
+                } elseif ($messageType === 'image') {
+                    $bodyText .= '[Hình ảnh]';
+                } elseif ($messageType === 'video') {
+                    $bodyText .= '[Video]';
+                } else {
+                    $bodyText .= '[Tệp đính kèm]';
+                }
+
+                $notificationUrl = route('study-groups.show', $studyGroup);
+
+                $notificationService->sendToMany(
+                    $otherMembers,
+                    $title,
+                    $bodyText,
+                    'study_group',
+                    $notificationUrl
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to send study group notification: " . $e->getMessage());
+        }
 
         $messageText = 'Gửi tin nhắn thành công.';
         if ($request->wantsJson() || $request->ajax()) {
@@ -219,6 +322,42 @@ class StudyGroupController extends Controller
         }
 
         return redirect()->route('study-groups.show', $studyGroup)->with('success', $messageText);
+    }
+
+    /**
+     * Download or stream a secure chat message file.
+     */
+    public function downloadFile(StudyGroup $studyGroup, StudyGroupMessage $message)
+    {
+        $user = auth()->user();
+
+        // Check if user is member of the group, or admin
+        if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
+            abort(403, 'Bạn không có quyền truy cập tệp tin này.');
+        }
+
+        // Verify the message belongs to the study group
+        if ($message->study_group_id !== $studyGroup->id) {
+            abort(404, 'Tệp tin không tìm thấy.');
+        }
+
+        // Check if file exists in local storage
+        if (!$message->file_path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($message->file_path)) {
+            abort(404, 'Tệp tin không tồn tại trên hệ thống.');
+        }
+
+        $fullPath = \Illuminate\Support\Facades\Storage::disk('local')->path($message->file_path);
+
+        // For video streaming or inline image viewing
+        if (in_array($message->message_type, ['video', 'image'])) {
+            return response()->file($fullPath, [
+                'Content-Type' => $message->mime_type,
+                'Content-Disposition' => 'inline; filename="' . $message->file_name . '"'
+            ]);
+        }
+
+        // For other files, download them
+        return response()->download($fullPath, $message->file_name);
     }
 
     /**

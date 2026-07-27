@@ -77,6 +77,8 @@
                     :can-use-lesson-ai="$canUseLessonAi"
                     :ai-summary-url="$aiSummaryUrl"
                     :ai-explain-url="$aiExplainUrl"
+                    :discussions="$discussions"
+                    :active-discussion="$activeDiscussion"
                 />
             @endif
         </main>
