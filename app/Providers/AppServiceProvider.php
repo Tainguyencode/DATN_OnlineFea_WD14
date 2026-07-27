@@ -49,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
                 $view->with([
                     'unreadNotificationCount' => 0,
                     'recentNotifications' => collect(),
+                    'unreadStudyGroupCount' => 0,
                 ]);
 
                 return;
@@ -60,6 +61,7 @@ class AppServiceProvider extends ServiceProvider
             $view->with([
                 'unreadNotificationCount' => $notificationService->unreadCount($user),
                 'recentNotifications' => $user->pushNotifications()->latest()->limit(5)->get(),
+                'unreadStudyGroupCount' => $user->pushNotifications()->where('is_read', false)->where('type', 'study_group')->count(),
             ]);
         });
     }

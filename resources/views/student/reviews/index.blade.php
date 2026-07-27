@@ -3,13 +3,13 @@
         <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Lịch sử đánh giá khóa học</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Theo dõi trạng thái kiểm duyệt và phản hồi từ giảng viên.</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Theo dõi lịch sử đánh giá và phản hồi từ giảng viên.</p>
             </div>
             <form method="GET" class="flex gap-2">
                 <label for="status" class="sr-only">Trạng thái</label>
                 <select id="status" name="status" class="cursor-pointer rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-950" onchange="this.form.submit()">
                     <option value="">Tất cả trạng thái</option>
-                    @foreach(\App\Enums\ReviewStatus::cases() as $option)
+                    @foreach([\App\Enums\ReviewStatus::Approved, \App\Enums\ReviewStatus::Hidden] as $option)
                         <option value="{{ $option->value }}" @selected($status === $option->value)>{{ $option->label() }}</option>
                     @endforeach
                 </select>
