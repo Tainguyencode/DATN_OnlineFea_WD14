@@ -63,3 +63,6 @@
 ### Commit 21: test: bo sung test suite cho luong hoc tap va lam quiz (2026-07-25 10:00:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 22: style: toi uu hoa layout va responsive cho giao dien hoc vien (2026-07-27 09:15:30 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
