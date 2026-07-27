@@ -147,7 +147,12 @@ class Course extends Model
 
     public function approvedReviews(): HasMany
     {
-        return $this->reviews()->approved();
+        return $this->visibleReviews();
+    }
+
+    public function visibleReviews(): HasMany
+    {
+        return $this->reviews()->visible();
     }
 
     public function courseReviews(): HasMany
