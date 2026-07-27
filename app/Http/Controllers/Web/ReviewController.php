@@ -19,7 +19,7 @@ class ReviewController extends Controller
         $this->reviews->create($course, $request->user(), $request->validated());
 
         return redirect()->to(route('courses.show', $course->slug).'#reviews')
-            ->with('success', 'Đánh giá đã được gửi và đang chờ kiểm duyệt.');
+            ->with('success', 'Đánh giá đã được hiển thị.');
     }
 
     public function update(UpdateReviewRequest $request, Course $course, Review $review): RedirectResponse
@@ -28,7 +28,7 @@ class ReviewController extends Controller
         $this->reviews->update($review, $request->validated());
 
         return redirect()->to(route('courses.show', $course->slug).'#reviews')
-            ->with('success', 'Đánh giá đã được cập nhật và gửi kiểm duyệt lại.');
+            ->with('success', 'Đánh giá đã được cập nhật.');
     }
 
     public function destroy(Course $course, Review $review): RedirectResponse

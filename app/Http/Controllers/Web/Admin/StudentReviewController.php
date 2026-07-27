@@ -36,7 +36,8 @@ class StudentReviewController extends Controller
             ->when($filters['course_id'] ?? null, fn ($query, $id) => $query->where('course_id', $id))
             ->when($filters['instructor_id'] ?? null, fn ($query, $id) => $query->whereHas('course', fn ($course) => $course->where('instructor_id', $id)))
             ->when($filters['rating'] ?? null, fn ($query, $rating) => $query->where('rating', $rating))
-            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when(($filters['status'] ?? null) === ReviewStatus::Visible->value, fn ($query) => $query->visible())
+            ->when(($filters['status'] ?? null) === ReviewStatus::Hidden->value, fn ($query) => $query->hidden())
             ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '<=', $date))
             ->when(($filters['reply'] ?? null) === 'replied', fn ($query) => $query->whereHas('replies'))
@@ -60,34 +61,18 @@ class StudentReviewController extends Controller
         return view('admin.student-reviews.show', compact('review'));
     }
 
-    public function approve(ModerateReviewRequest $request, Review $review): RedirectResponse
-    {
-        Gate::authorize('course_reviews.approve');
-        $this->reviews->moderate($review, ReviewStatus::Approved, $request->user(), $request->validated('moderation_note'));
-
-        return back()->with('success', 'Đã duyệt đánh giá.');
-    }
-
-    public function reject(ModerateReviewRequest $request, Review $review): RedirectResponse
-    {
-        Gate::authorize('course_reviews.reject');
-        $this->reviews->moderate($review, ReviewStatus::Rejected, $request->user(), $request->validated('moderation_note'));
-
-        return back()->with('success', 'Đã từ chối đánh giá.');
-    }
-
     public function hide(ModerateReviewRequest $request, Review $review): RedirectResponse
     {
-        Gate::authorize('course_reviews.hide');
-        $this->reviews->moderate($review, ReviewStatus::Hidden, $request->user(), $request->validated('moderation_note'));
+        Gate::authorize('course_reviews.moderate');
+        $this->reviews->hide($review, $request->user(), $request->validated('moderation_note'));
 
         return back()->with('success', 'Đã ẩn đánh giá.');
     }
 
     public function restore(ModerateReviewRequest $request, Review $review): RedirectResponse
     {
-        Gate::authorize('course_reviews.approve');
-        $this->reviews->moderate($review, ReviewStatus::Approved, $request->user(), $request->validated('moderation_note'));
+        Gate::authorize('course_reviews.moderate');
+        $this->reviews->restore($review, $request->user(), $request->validated('moderation_note'));
 
         return back()->with('success', 'Đánh giá đã được hiển thị lại.');
     }

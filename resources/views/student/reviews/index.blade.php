@@ -3,7 +3,7 @@
         <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Lịch sử đánh giá khóa học</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Theo dõi trạng thái kiểm duyệt và phản hồi từ giảng viên.</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Theo dõi trạng thái hiển thị và phản hồi từ giảng viên.</p>
             </div>
             <form method="GET" class="flex gap-2">
                 <label for="status" class="sr-only">Trạng thái</label>
@@ -32,8 +32,8 @@
                     <time class="ml-2 text-xs text-slate-500">{{ $review->created_at->format('d/m/Y H:i') }}</time>
                 </div>
                 <p class="mt-3 whitespace-pre-line text-sm leading-7 text-slate-700 dark:text-slate-200">{{ $review->comment }}</p>
-                @if($review->moderation_note && $review->status !== \App\Enums\ReviewStatus::Approved)
-                    <p class="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-500/10 dark:text-rose-200"><strong>Lý do kiểm duyệt:</strong> {{ $review->moderation_note }}</p>
+                @if($review->moderation_note && $review->isHidden())
+                    <p class="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-500/10 dark:text-rose-200"><strong>Ghi chú quản trị:</strong> {{ $review->moderation_note }}</p>
                 @endif
                 @php
                     $visibleReply = $review->replies->where('is_hidden', false)->first();
