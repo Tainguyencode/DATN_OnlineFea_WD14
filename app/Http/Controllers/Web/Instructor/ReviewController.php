@@ -14,16 +14,15 @@ class ReviewController extends Controller
     {
         $courseId = $request->integer('course_id') ?: null;
         $rating = $request->integer('rating') ?: null;
-        $status = $request->query('status');
         $replyState = $request->query('reply');
 
         $reviews = Review::query()
+            ->visible()
             ->whereNull('parent_id')
             ->whereHas('course', fn ($query) => $query->where('instructor_id', $request->user()->id))
             ->with(['user:id,name,avatar', 'course:id,instructor_id,title,slug', 'replies.user:id,name'])
             ->when($courseId, fn ($query) => $query->where('course_id', $courseId))
             ->when($rating && $rating >= 1 && $rating <= 5, fn ($query) => $query->where('rating', $rating))
-            ->when(in_array($status, ['pending', 'approved', 'rejected', 'hidden'], true), fn ($query) => $query->where('status', $status))
             ->when($replyState === 'replied', fn ($query) => $query->whereHas('replies'))
             ->when($replyState === 'unreplied', fn ($query) => $query->whereDoesntHave('replies'))
             ->latest()
@@ -35,6 +34,6 @@ class ReviewController extends Controller
             ->orderBy('title')
             ->get(['id', 'title']);
 
-        return view('instructor.reviews.index', compact('reviews', 'courses', 'courseId', 'rating', 'status', 'replyState'));
+        return view('instructor.reviews.index', compact('reviews', 'courses', 'courseId', 'rating', 'replyState'));
     }
 }

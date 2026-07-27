@@ -79,6 +79,10 @@
                     :ai-explain-url="$aiExplainUrl"
                     :discussions="$discussions"
                     :active-discussion="$activeDiscussion"
+                    :can-use-lesson-notes="$canUseLessonNotes"
+                    :lesson-notes="$lessonNotes"
+                    :lesson-notes-index-url="$lessonNotesIndexUrl"
+                    :lesson-notes-store-url="$lessonNotesStoreUrl"
                 />
             @endif
         </main>
