@@ -58,7 +58,8 @@ class ConvertVideoToHLS implements ShouldQueue
 
             $video = $ffmpeg->open($mp4Path);
             
-            $format = new X264('libmp3lame', 'libx264');
+            $format = new X264('aac', 'libx264');
+            $format->setPasses(1);
             $format->setAdditionalParameters([
                 '-hls_time', '10',
                 '-hls_list_size', '0',
