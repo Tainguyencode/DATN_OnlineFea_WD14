@@ -464,8 +464,25 @@ class ManageController extends Controller
             $query->whereYear('created_at', $request->input('year'));
         }
 
-        $totalRevenue = $query->sum('total_amount');
+        $totalGross = $query->sum('total_amount');
         $totalOrders = $query->count();
+
+        // Tính tổng phần chi trả cho giáo viên và hoa hồng nền tảng từ order_items
+        $totalCommission = (float) DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereIn('orders.id', $query->pluck('id'))
+            ->sum('order_items.commission_amount');
+            
+        $totalInstructorEarning = (float) DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereIn('orders.id', $query->pluck('id'))
+            ->sum('order_items.instructor_earning');
+
+        // Fallback tạm tính 20% / 80% cho các đơn hàng cũ chưa có thông tin hoa hồng
+        if ($totalCommission <= 0 && $totalGross > 0) {
+            $totalCommission = $totalGross * 0.2;
+            $totalInstructorEarning = $totalGross * 0.8;
+        }
 
         $monthExpr = DB::connection()->getDriverName() === 'sqlite'
             ? "strftime('%Y-%m', created_at)"
@@ -492,6 +509,28 @@ class ManageController extends Controller
             ->limit(12)
             ->get();
 
+        // Tính toán chi tiết hoa hồng / thực thu giáo viên từng tháng
+        foreach ($monthly as $row) {
+            $monthOrdersQuery = Order::where('status', 'paid')
+                ->whereRaw("{$monthExpr} = ?", [$row->month]);
+                
+            $row->commission = (float) DB::table('order_items')
+                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->whereIn('orders.id', $monthOrdersQuery->pluck('id'))
+                ->sum('order_items.commission_amount');
+                
+            $row->instructor_earning = (float) DB::table('order_items')
+                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->whereIn('orders.id', $monthOrdersQuery->pluck('id'))
+                ->sum('order_items.instructor_earning');
+                
+            // Fallback dữ liệu cũ
+            if ($row->commission <= 0 && $row->total > 0) {
+                $row->commission = $row->total * 0.2;
+                $row->instructor_earning = $row->total * 0.8;
+            }
+        }
+
         $filters = [
             'start_date' => $request->input('start_date'),
             'end_date' => $request->input('end_date'),
@@ -499,7 +538,7 @@ class ManageController extends Controller
             'year' => $request->input('year'),
         ];
 
-        return view('admin.revenue', compact('totalRevenue', 'totalOrders', 'monthly', 'filters'));
+        return view('admin.revenue', compact('totalGross', 'totalCommission', 'totalInstructorEarning', 'totalOrders', 'monthly', 'filters'));
     }
 
     public function activityLogs(): View

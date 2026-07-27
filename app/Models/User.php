@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Storage;
     'google_id', 'facebook_id', 'github_id', 'microsoft_id',
     'two_factor_enabled', 'two_factor_secret', 'is_active',
     'last_login_at', 'last_login_ip', 'password_changed_at',
+    'commission_rate', 'bank_name', 'bank_account_number', 'bank_account_name',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -166,6 +167,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
             'password_changed_at' => 'datetime',
+            'commission_rate' => 'decimal:2',
         ];
     }
 
@@ -217,5 +219,16 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return Storage::disk('public')->url($this->avatar);
+    }
+
+    public function getCommissionRate(): float
+    {
+        if ($this->commission_rate !== null) {
+            return (float) $this->commission_rate;
+        }
+
+        $default = SystemSetting::get('default_commission_rate', config('course.default_commission_rate', 20.00));
+
+        return (float) $default;
     }
 }

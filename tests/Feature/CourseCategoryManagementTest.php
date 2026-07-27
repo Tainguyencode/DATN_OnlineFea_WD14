@@ -141,6 +141,7 @@ class CourseCategoryManagementTest extends TestCase
     {
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
+        $this->category('Web Development', $parent);
 
         $response = $this->actingAs($instructor)
             ->from(route('instructor.courses.create'))

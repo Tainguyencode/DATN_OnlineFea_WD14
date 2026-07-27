@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\Admin\AiModerationController;
 use App\Http\Controllers\Web\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Web\Admin\CommissionController;
 use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboa
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
@@ -242,6 +244,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
+    Route::get('/commissions', [CommissionController::class, 'index'])->name('commissions.index');
+    Route::post('/commissions/default-rate', [CommissionController::class, 'updateDefaultRate'])->name('commissions.update-default');
+    Route::put('/commissions/instructors/{user}', [CommissionController::class, 'updateInstructorRate'])->name('commissions.update-instructor');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications', [AdminNotificationController::class, 'store'])->name('notifications.store');
@@ -263,3 +268,12 @@ Route::get('/dev/login-as-student', function () {
 
     return redirect()->route('dashboard');
 })->name('dev.login-as-student');
+
+// ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───
+Route::get('/payments/vnpay/callback', [PaymentController::class, 'vnpayCallback'])->name('payments.vnpay.callback');
+Route::post('/payments/vnpay/ipn', [PaymentController::class, 'vnpayIpn'])->name('payments.vnpay.ipn');
+
+Route::get('/payments/momo/callback', [PaymentController::class, 'momoCallback'])->name('payments.momo.callback');
+Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
+
+Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');

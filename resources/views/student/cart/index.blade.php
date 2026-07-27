@@ -280,18 +280,21 @@
                                 </div>
                             </div>
 
-                            <!-- Bank Transfer Option -->
+                            <!-- Bank Transfer / PayOS Option -->
                             <div @click="paymentMethod = 'bank_transfer'" 
-                                 :class="paymentMethod === 'bank_transfer' ? 'border-slate-800 bg-slate-50 dark:border-white dark:bg-slate-800/40' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
+                                 :class="paymentMethod === 'bank_transfer' ? 'border-emerald-600 bg-emerald-50/20 dark:border-emerald-500' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
                                  class="flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition select-none">
                                 <div class="flex items-center gap-3">
-                                    <div class="h-6 w-6 flex items-center justify-center shrink-0 text-slate-600 dark:text-slate-300">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                    <div class="h-6 w-6 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                     </div>
-                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Chuyển khoản liên ngân hàng</span>
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-800 dark:text-white block">Chuyển khoản ngân hàng (PayOS VietQR)</span>
+                                        <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Tự động kích hoạt qua quét mã QR</span>
+                                    </div>
                                 </div>
                                 <div class="h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                                     :class="paymentMethod === 'bank_transfer' ? 'border-slate-800 bg-slate-800 dark:border-slate-400 dark:bg-slate-400' : 'border-slate-300'">
+                                     :class="paymentMethod === 'bank_transfer' ? 'border-emerald-600 bg-emerald-600 dark:border-emerald-400 dark:bg-emerald-400' : 'border-slate-300'">
                                     <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'bank_transfer'"></div>
                                 </div>
                             </div>
