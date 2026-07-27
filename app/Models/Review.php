@@ -76,7 +76,7 @@ class Review extends Model
 
     public function isReply(): bool
     {
-        return !is_null($this->parent_id);
+        return ! is_null($this->parent_id);
     }
 
     public function helpfulRecords(): HasMany
@@ -89,14 +89,39 @@ class Review extends Model
         return $this->belongsToMany(User::class, 'review_helpful')->withTimestamps();
     }
 
+    public function isVisible(): bool
+    {
+        return $this->status === ReviewStatus::Visible && ! $this->is_hidden && ! $this->trashed();
+    }
+
+    public function isHidden(): bool
+    {
+        return $this->status === ReviewStatus::Hidden || $this->is_hidden;
+    }
+
+    public function scopeVisible($query)
+    {
+        return $query
+            ->where('status', ReviewStatus::Visible->value)
+            ->where('is_hidden', false);
+    }
+
+    public function scopeHidden($query)
+    {
+        return $query->where(function ($query) {
+            $query->where('status', ReviewStatus::Hidden->value)
+                ->orWhere('is_hidden', true);
+        });
+    }
+
     public function scopeApproved($query)
     {
-        return $query->where('status', ReviewStatus::Approved->value);
+        return $query->visible();
     }
 
     public function scopePending($query)
     {
-        return $query->where('status', ReviewStatus::Pending->value);
+        return $query->whereRaw('1 = 0');
     }
 
     public function scopeRating($query, ?int $rating)

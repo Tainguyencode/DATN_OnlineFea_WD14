@@ -20,6 +20,7 @@ class ReviewReplyController extends Controller
         $course = $review->course;
         abort_unless($course && (int) $course->instructor_id === (int) $request->user()->id, 403);
         abort_if($review->isReply(), 400, 'Cannot reply to a reply.');
+        abort_unless($review->isVisible(), 404);
 
         // Check if there is already a reply to this review
         $exists = Review::query()->where('parent_id', $review->id)->exists();
@@ -31,7 +32,7 @@ class ReviewReplyController extends Controller
             'parent_id' => $review->id,
             'rating' => null,
             'comment' => $request->input('comment'),
-            'status' => ReviewStatus::Approved->value,
+            'status' => ReviewStatus::Visible->value,
             'verified_purchase' => false,
         ]);
 

@@ -20,10 +20,8 @@ class ModerateReviewRequest extends FormRequest
 
     public function rules(): array
     {
-        $required = $this->routeIs('admin.student-reviews.reject', 'admin.student-reviews.hide');
-
         return [
-            'moderation_note' => [$required ? 'required' : 'nullable', 'string', 'min:5', 'max:1000', 'not_regex:/<[^>]*>/'],
+            'moderation_note' => ['nullable', 'string', 'min:5', 'max:1000', 'not_regex:/<[^>]*>/'],
         ];
     }
 }
