@@ -119,7 +119,8 @@
                         if (!currentToken) { console.error('Không lấy được token video'); return; }
 
                         const playlistUrl = `/api/video/hls/${lessonId}/playlist.m3u8?token=${currentToken}`;
-                        const initialTime = await fetchProgress();
+                        const requestedTime = Number(new URLSearchParams(window.location.search).get('t') || 0);
+                        const initialTime = requestedTime > 0 ? requestedTime : await fetchProgress();
 
                         if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                             if (hls) { hls.destroy(); }
