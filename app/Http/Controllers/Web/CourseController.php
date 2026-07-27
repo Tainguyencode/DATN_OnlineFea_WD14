@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonNote;
 use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Models\ReviewHelpful;
@@ -224,6 +225,25 @@ class CourseController extends Controller
             ? route('courses.lessons.ai-explain', [$course, $lesson])
             : null;
 
+        $canUseLessonNotes = (bool) $user && $user->isStudent() && $player['isEnrolled'];
+        $lessonNotes = $canUseLessonNotes
+            ? LessonNote::query()
+                ->where('user_id', $user->id)
+                ->where('lesson_id', $lesson->id)
+                ->when(
+                    $lesson->type === 'video',
+                    fn ($query) => $query->orderBy('timestamp_seconds')->orderBy('created_at'),
+                    fn ($query) => $query->latest()
+                )
+                ->get()
+            : collect();
+        $lessonNotesIndexUrl = $canUseLessonNotes
+            ? route('courses.lessons.notes.index', [$course, $lesson])
+            : null;
+        $lessonNotesStoreUrl = $canUseLessonNotes
+            ? route('courses.lessons.notes.store', [$course, $lesson])
+            : null;
+
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
 
         if ($player['canAccessLesson'] || $player['isEnrolled']) {
@@ -237,8 +257,12 @@ class CourseController extends Controller
             'isEnrolled' => $player['isEnrolled'],
             'canAccessLesson' => $player['canAccessLesson'],
             'canUseLessonAi' => $canUseLessonAi,
+            'canUseLessonNotes' => $canUseLessonNotes,
             'aiSummaryUrl' => $aiSummaryUrl,
             'aiExplainUrl' => $aiExplainUrl,
+            'lessonNotes' => $lessonNotes,
+            'lessonNotesIndexUrl' => $lessonNotesIndexUrl,
+            'lessonNotesStoreUrl' => $lessonNotesStoreUrl,
             'videoSource' => $videoSource,
             'progressUrl' => $progressUrl,
             'sectionTitle' => $sectionTitle,

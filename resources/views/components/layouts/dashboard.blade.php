@@ -24,7 +24,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title }} - EduPlatform</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/learning-player.js'])
 </head>
 <body class="bg-[#f3f6fb] text-slate-900 antialiased">
     <div class="flex min-h-screen">
@@ -132,5 +132,6 @@
         @endforeach
     </nav>
     <div class="h-16 lg:hidden"></div>
+    <div id="learning-toast" class="learning-toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

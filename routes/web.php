@@ -28,6 +28,8 @@ use App\Http\Controllers\Web\ReviewHelpfulController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\LessonAiController;
+use App\Http\Controllers\Web\Student\LessonNoteController;
+use App\Http\Controllers\Web\Student\LessonNoteLibraryController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
@@ -87,6 +89,13 @@ Route::middleware(['auth', 'active', 'role:student'])->group(function () {
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
+
+Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:30,1'])->group(function () {
+    Route::get('/courses/{course}/lessons/{lesson}/notes', [LessonNoteController::class, 'index'])->name('courses.lessons.notes.index');
+    Route::post('/courses/{course}/lessons/{lesson}/notes', [LessonNoteController::class, 'store'])->name('courses.lessons.notes.store');
+    Route::patch('/lesson-notes/{lessonNote}', [LessonNoteController::class, 'update'])->name('lesson-notes.update');
+    Route::delete('/lesson-notes/{lessonNote}', [LessonNoteController::class, 'destroy'])->name('lesson-notes.destroy');
+});
 
 Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(function () {
     Route::get('/courses/{course}/lessons/{lesson}/ai-summary', [LessonAiController::class, 'summary'])
@@ -189,6 +198,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
     Route::get('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'index'])->name('recently-viewed.index');
+    Route::get('/lesson-notes', [LessonNoteLibraryController::class, 'index'])->name('lesson-notes.index');
     Route::get('/reviews', [StudentReviewController::class, 'index'])->name('reviews.index');
     Route::delete('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'clear'])->name('recently-viewed.clear');
     Route::delete('/recently-viewed-courses/{recentlyViewedCourse}', [RecentlyViewedCourseController::class, 'destroy'])->name('recently-viewed.destroy');
