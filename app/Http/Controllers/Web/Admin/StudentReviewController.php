@@ -47,7 +47,10 @@ class StudentReviewController extends Controller
 
         $courses = Course::query()->orderBy('title')->get(['id', 'title']);
         $instructors = User::query()->where('role', 'instructor')->orderBy('name')->get(['id', 'name']);
-        $statusOptions = collect(ReviewStatus::cases())->mapWithKeys(fn ($status) => [$status->value => $status->label()]);
+        $statusOptions = [
+            ReviewStatus::Approved->value => 'Đang hiển thị',
+            ReviewStatus::Hidden->value => 'Đã ẩn',
+        ];
 
         return view('admin.student-reviews.index', compact('reviews', 'courses', 'instructors', 'statusOptions', 'filters'));
     }
@@ -60,21 +63,7 @@ class StudentReviewController extends Controller
         return view('admin.student-reviews.show', compact('review'));
     }
 
-    public function approve(ModerateReviewRequest $request, Review $review): RedirectResponse
-    {
-        Gate::authorize('course_reviews.approve');
-        $this->reviews->moderate($review, ReviewStatus::Approved, $request->user(), $request->validated('moderation_note'));
 
-        return back()->with('success', 'Đã duyệt đánh giá.');
-    }
-
-    public function reject(ModerateReviewRequest $request, Review $review): RedirectResponse
-    {
-        Gate::authorize('course_reviews.reject');
-        $this->reviews->moderate($review, ReviewStatus::Rejected, $request->user(), $request->validated('moderation_note'));
-
-        return back()->with('success', 'Đã từ chối đánh giá.');
-    }
 
     public function hide(ModerateReviewRequest $request, Review $review): RedirectResponse
     {
