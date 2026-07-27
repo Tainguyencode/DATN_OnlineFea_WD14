@@ -13,7 +13,7 @@ enum ReviewStatus: string
     {
         return match ($this) {
             self::Pending => 'Chờ duyệt',
-            self::Approved => 'Đã duyệt',
+            self::Approved => 'Đang hiển thị',
             self::Rejected => 'Từ chối',
             self::Hidden => 'Đã ẩn',
         };

@@ -32,7 +32,7 @@ class ReviewService
                     'user_id' => $user->id,
                     'rating' => $data['rating'],
                     'comment' => $data['comment'],
-                    'status' => config('reviews.default_status', ReviewStatus::Pending->value),
+                    'status' => config('reviews.default_status', ReviewStatus::Approved->value),
                     'verified_purchase' => true,
                 ]);
 
@@ -66,7 +66,7 @@ class ReviewService
     {
         return DB::transaction(function () use ($review, $data) {
             Review::query()->whereKey($review->getKey())->lockForUpdate()->firstOrFail();
-            $status = config('reviews.reset_status_on_update', true)
+            $status = config('reviews.reset_status_on_update', false)
                 ? ReviewStatus::Pending->value
                 : $review->status->value;
 
@@ -109,7 +109,7 @@ class ReviewService
             $review->loadMissing(['user', 'course']);
 
             $labels = [
-                ReviewStatus::Approved->value => 'được duyệt',
+                ReviewStatus::Approved->value => 'hiển thị lại',
                 ReviewStatus::Rejected->value => 'bị từ chối',
                 ReviewStatus::Hidden->value => 'được ẩn',
             ];

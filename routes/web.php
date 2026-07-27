@@ -303,8 +303,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/course-reviews/{course}/reject', [CourseReviewController::class, 'reject'])->name('course-reviews.reject');
     Route::get('/student-reviews', [AdminStudentReviewController::class, 'index'])->name('student-reviews.index');
     Route::get('/student-reviews/{review}', [AdminStudentReviewController::class, 'show'])->name('student-reviews.show');
-    Route::patch('/student-reviews/{review}/approve', [AdminStudentReviewController::class, 'approve'])->name('student-reviews.approve');
-    Route::patch('/student-reviews/{review}/reject', [AdminStudentReviewController::class, 'reject'])->name('student-reviews.reject');
+
     Route::patch('/student-reviews/{review}/hide', [AdminStudentReviewController::class, 'hide'])->name('student-reviews.hide');
     Route::patch('/student-reviews/{review}/restore', [AdminStudentReviewController::class, 'restore'])->name('student-reviews.restore');
     Route::delete('/student-reviews/{review}', [AdminStudentReviewController::class, 'destroy'])->name('student-reviews.destroy');
