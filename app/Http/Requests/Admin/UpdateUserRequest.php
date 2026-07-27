@@ -69,6 +69,10 @@ class UpdateUserRequest extends FormRequest
             'bio' => ['nullable', 'string', 'max:5000'],
             'avatar' => ['nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
+            'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:50'],
+            'bank_account_name' => ['nullable', 'string', 'max:255'],
         ];
     }
 

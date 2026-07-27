@@ -7,6 +7,8 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Service quản lý các cổng thanh toán (VNPay, MoMo, Chuyển khoản)
@@ -19,16 +21,257 @@ class PaymentGatewayService
      */
     public function getPaymentUrl(Order $order): string
     {
-        // Nếu chọn chuyển khoản ngân hàng, dẫn đến trang hiển thị QR Code và thông tin chuyển khoản nội bộ
-        if ($order->payment_method === 'bank_transfer') {
-            return route('student.checkout.pay', $order->order_code);
+        $mode = env('PAYMENT_MODE', 'mock');
+
+        if ($mode === 'mock') {
+            // Nếu chọn chuyển khoản ngân hàng, dẫn đến trang hiển thị QR Code và thông tin chuyển khoản nội bộ
+            if ($order->payment_method === 'bank_transfer') {
+                return route('student.checkout.pay', $order->order_code);
+            }
+
+            // Đối với VNPay hoặc MoMo, dẫn tới trang cổng thanh toán giả lập (Mock Gateway)
+            return route('student.checkout.mock_gateway', [
+                'order_code' => $order->order_code,
+                'gateway' => $order->payment_method,
+            ]);
         }
 
-        // Đối với VNPay hoặc MoMo, dẫn tới trang cổng thanh toán giả lập (Mock Gateway)
-        return route('student.checkout.mock_gateway', [
-            'order_code' => $order->order_code,
-            'gateway' => $order->payment_method,
-        ]);
+        try {
+            return match ($order->payment_method) {
+                'bank_transfer' => $this->createPayOSUrl($order),
+                'vnpay' => $this->createVNPayUrl($order),
+                'momo' => $this->createMoMoUrl($order),
+                default => throw new \Exception('Cổng thanh toán không được hỗ trợ.'),
+            };
+        } catch (\Exception $e) {
+            Log::error('Lỗi khi tạo link thanh toán thật: ' . $e->getMessage());
+            // Fallback sang mock để trải nghiệm người dùng không bị gián đoạn khi dev
+            if ($mode === 'sandbox') {
+                session()->flash('warning', 'Không kết nối được cổng thanh toán thật, chuyển hướng sang cổng giả lập: ' . $e->getMessage());
+                if ($order->payment_method === 'bank_transfer') {
+                    return route('student.checkout.pay', $order->order_code);
+                }
+                return route('student.checkout.mock_gateway', [
+                    'order_code' => $order->order_code,
+                    'gateway' => $order->payment_method,
+                ]);
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Sinh link thanh toán PayOS (VietQR)
+     */
+    protected function createPayOSUrl(Order $order): string
+    {
+        $clientId = env('PAYOS_CLIENT_ID');
+        $apiKey = env('PAYOS_API_KEY');
+        $checksumKey = env('PAYOS_CHECKSUM_KEY');
+
+        if (empty($clientId) || empty($apiKey) || empty($checksumKey)) {
+            throw new \Exception('Chưa cấu hình tài khoản PayOS trong file .env');
+        }
+
+        $orderCode = $order->id; // Chỉ số nguyên an toàn
+        $amount = (int) $order->total_amount;
+        $description = 'Nap tien don hang ' . $order->order_code;
+        // Loại bỏ ký tự đặc biệt theo yêu cầu mô tả của PayOS (chỉ chữ thường, chữ hoa, số và dấu cách)
+        $description = preg_replace('/[^a-zA-Z0-9 ]/', '', $description);
+        $description = substr($description, 0, 25); // Giới hạn 25 ký tự
+
+        $cancelUrl = route('student.checkout.failed', $order->order_code);
+        $returnUrl = route('student.checkout.success', $order->order_code);
+
+        $params = [
+            'orderCode' => $orderCode,
+            'amount' => $amount,
+            'description' => $description,
+            'cancelUrl' => $cancelUrl,
+            'returnUrl' => $returnUrl,
+        ];
+
+        // Sắp xếp các tham số theo bảng chữ cái để tạo chữ ký
+        ksort($params);
+        $stringToSign = collect($params)->map(fn($v, $k) => "{$k}={$v}")->implode('&');
+        $signature = hash_hmac('sha256', $stringToSign, $checksumKey);
+        $params['signature'] = $signature;
+
+        $response = Http::withoutVerifying()->withHeaders([
+            'x-client-id' => $clientId,
+            'x-api-key' => $apiKey,
+            'Content-Type' => 'application/json',
+        ])->post('https://api-merchant.payos.vn/v2/payment-requests', $params);
+
+        if ($response->failed()) {
+            throw new \Exception('Lỗi từ PayOS API: ' . ($response->json('desc') ?? $response->body()));
+        }
+
+        $checkoutUrl = $response->json('data.checkoutUrl');
+        if (empty($checkoutUrl)) {
+            throw new \Exception('Không nhận được checkoutUrl từ PayOS');
+        }
+
+        return $checkoutUrl;
+    }
+
+    /**
+     * Kiểm tra trạng thái thanh toán trực tiếp từ PayOS API nếu đơn hàng chưa xác nhận paid.
+     */
+    public function checkAndUpdatePayOSStatus(Order $order): bool
+    {
+        if ($order->status === 'paid') {
+            return true;
+        }
+
+        if ($order->payment_method !== 'bank_transfer') {
+            return false;
+        }
+
+        $clientId = env('PAYOS_CLIENT_ID');
+        $apiKey = env('PAYOS_API_KEY');
+
+        if (empty($clientId) || empty($apiKey)) {
+            return false;
+        }
+
+        try {
+            $response = Http::withoutVerifying()->withHeaders([
+                'x-client-id' => $clientId,
+                'x-api-key' => $apiKey,
+            ])->get("https://api-merchant.payos.vn/v2/payment-requests/{$order->id}");
+
+            if ($response->successful()) {
+                $status = $response->json('data.status');
+                if ($status === 'PAID') {
+                    $transactions = $response->json('data.transactions', []);
+                    $ref = $transactions[0]['reference'] ?? ('PAYOS-' . $order->id);
+                    $this->processMockPayment($order, 'success', $ref);
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Lỗi kiểm tra trạng thái PayOS API: ' . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Sinh link thanh toán VNPay
+     */
+    protected function createVNPayUrl(Order $order): string
+    {
+        $vnpTmnCode = env('VNP_TMN_CODE');
+        $vnpHashSecret = env('VNP_HASH_SECRET');
+        $vnpUrl = env('VNP_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
+
+        if (empty($vnpTmnCode) || empty($vnpHashSecret)) {
+            throw new \Exception('Chưa cấu hình tài khoản VNPay trong file .env');
+        }
+
+        $vnp_Params = [
+            "vnp_Version" => "2.1.0",
+            "vnp_Command" => "pay",
+            "vnp_TmnCode" => $vnpTmnCode,
+            "vnp_Amount" => $order->total_amount * 100, // VNPay nhân với 100
+            "vnp_CreateDate" => date('YmdHis'),
+            "vnp_CurrCode" => "VND",
+            "vnp_IpAddr" => request()->ip() ?? '127.0.0.1',
+            "vnp_Locale" => "vn",
+            "vnp_OrderInfo" => "Thanh toan khoa hoc " . $order->order_code,
+            "vnp_OrderType" => "other",
+            "vnp_ReturnUrl" => route('payments.vnpay.callback'),
+            "vnp_TxnRef" => $order->order_code,
+        ];
+
+        ksort($vnp_Params);
+        $query = "";
+        $i = 0;
+        $hashdata = "";
+        foreach ($vnp_Params as $key => $value) {
+            if ($i == 1) {
+                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
+            } else {
+                $hashdata .= urlencode($key) . "=" . urlencode($value);
+                $i = 1;
+            }
+            $query .= urlencode($key) . "=" . urlencode($value) . '&';
+        }
+
+        $vnp_Url = $vnpUrl . "?" . rtrim($query, '&');
+        if (isset($vnpHashSecret)) {
+            $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnpHashSecret);
+            $vnp_Url .= '&vnp_SecureHash=' . $vnpSecureHash;
+        }
+
+        return $vnp_Url;
+    }
+
+    /**
+     * Sinh link thanh toán MoMo
+     */
+    protected function createMoMoUrl(Order $order): string
+    {
+        $partnerCode = env('MOMO_PARTNER_CODE');
+        $accessKey = env('MOMO_ACCESS_KEY');
+        $secretKey = env('MOMO_SECRET_KEY');
+        $momoUrl = env('MOMO_URL', 'https://test-payment.momo.vn/v2/gateway/api/create');
+
+        if (empty($partnerCode) || empty($accessKey) || empty($secretKey)) {
+            throw new \Exception('Chưa cấu hình tài khoản MoMo trong file .env');
+        }
+
+        $requestId = (string) Str::uuid();
+        $amount = (int) $order->total_amount;
+        $orderId = $order->order_code;
+        $orderInfo = 'Thanh toan don hang ' . $order->order_code;
+        $redirectUrl = route('payments.momo.callback');
+        $ipnUrl = route('payments.momo.ipn');
+        $extraData = '';
+        $requestType = 'captureWallet';
+
+        $rawHash = "accessKey=" . $accessKey .
+            "&amount=" . $amount .
+            "&extraData=" . $extraData .
+            "&ipnUrl=" . $ipnUrl .
+            "&orderId=" . $orderId .
+            "&orderInfo=" . $orderInfo .
+            "&partnerCode=" . $partnerCode .
+            "&redirectUrl=" . $redirectUrl .
+            "&requestId=" . $requestId .
+            "&requestType=" . $requestType;
+
+        $signature = hash_hmac('sha256', $rawHash, $secretKey);
+
+        $params = [
+            'partnerCode' => $partnerCode,
+            'partnerName' => 'OnlineFEA',
+            'storeId' => 'OnlineFEA',
+            'requestId' => $requestId,
+            'amount' => $amount,
+            'orderId' => $orderId,
+            'orderInfo' => $orderInfo,
+            'redirectUrl' => $redirectUrl,
+            'ipnUrl' => $ipnUrl,
+            'extraData' => $extraData,
+            'requestType' => $requestType,
+            'signature' => $signature,
+            'lang' => 'vi',
+        ];
+
+        $response = Http::withoutVerifying()->timeout(10)->post($momoUrl, $params);
+
+        if ($response->failed()) {
+            throw new \Exception('Lỗi từ MoMo API: ' . ($response->json('message') ?? $response->body()));
+        }
+
+        $payUrl = $response->json('payUrl');
+        if (empty($payUrl)) {
+            throw new \Exception('Không nhận được payUrl từ MoMo: ' . ($response->json('localMessage') ?? $response->body()));
+        }
+
+        return $payUrl;
     }
 
     /**
