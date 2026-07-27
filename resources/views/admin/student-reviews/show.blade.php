@@ -31,10 +31,21 @@
         <aside class="space-y-4">
             <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="font-extrabold text-slate-950 dark:text-white">Kiểm duyệt</h3>
-                @if($review->status !== \App\Enums\ReviewStatus::Approved)<form method="POST" action="{{ route('admin.student-reviews.approve', $review) }}" class="mt-4">@csrf @method('PATCH')<button class="w-full cursor-pointer rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Duyệt đánh giá</button></form>@endif
-                <form method="POST" action="{{ route('admin.student-reviews.reject', $review) }}" class="mt-4 space-y-2">@csrf @method('PATCH')<label class="text-sm font-bold" for="reject-note">Lý do từ chối</label><textarea id="reject-note" name="moderation_note" rows="3" minlength="5" maxlength="1000" required class="w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea><button class="w-full cursor-pointer rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700">Từ chối</button></form>
-                <form method="POST" action="{{ route('admin.student-reviews.hide', $review) }}" class="mt-4 space-y-2">@csrf @method('PATCH')<label class="text-sm font-bold" for="hide-note">Lý do ẩn</label><textarea id="hide-note" name="moderation_note" rows="3" minlength="5" maxlength="1000" required class="w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea><button class="w-full cursor-pointer rounded-xl bg-slate-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800">Ẩn đánh giá</button></form>
-                @if($review->status === \App\Enums\ReviewStatus::Hidden)<form method="POST" action="{{ route('admin.student-reviews.restore', $review) }}" class="mt-4">@csrf @method('PATCH')<button class="w-full cursor-pointer rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10">Khôi phục hiển thị</button></form>@endif
+                @if($review->status !== \App\Enums\ReviewStatus::Hidden)
+                    <form method="POST" action="{{ route('admin.student-reviews.hide', $review) }}" class="mt-4 space-y-2">
+                        @csrf
+                        @method('PATCH')
+                        <label class="text-sm font-bold" for="hide-note">Lý do ẩn</label>
+                        <textarea id="hide-note" name="moderation_note" rows="3" minlength="5" maxlength="1000" required class="w-full rounded-xl border-slate-300 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea>
+                        <button class="w-full cursor-pointer rounded-xl bg-slate-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800">Ẩn đánh giá</button>
+                    </form>
+                @else
+                    <form method="POST" action="{{ route('admin.student-reviews.restore', $review) }}" class="mt-4">
+                        @csrf
+                        @method('PATCH')
+                        <button class="w-full cursor-pointer rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Khôi phục hiển thị</button>
+                    </form>
+                @endif
             </div>
             <form method="POST" action="{{ route('admin.student-reviews.destroy', $review) }}" onsubmit="return confirm('Xóa đánh giá này? Hành động không thể hoàn tác từ giao diện.')">@csrf @method('DELETE')<button class="w-full cursor-pointer rounded-xl border border-rose-300 px-4 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">Xóa đánh giá</button></form>
             <a href="{{ route('admin.student-reviews.index') }}" class="block text-center text-sm font-bold text-indigo-700 hover:underline dark:text-indigo-300">Quay lại danh sách</a>
