@@ -49,6 +49,18 @@
                         <svg class="block dark:hidden h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
                     </button>
                     @auth
+                        {{-- Icon Nhóm học tập --}}
+                        <a href="{{ route('study-groups.index') }}" 
+                           class="relative rounded-lg p-2 text-slate-600 transition duration-200 hover:bg-slate-50 hover:text-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300 flex items-center justify-center cursor-pointer" 
+                           title="Nhóm học tập"
+                           aria-label="Nhóm học tập">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            @if(($unreadStudyGroupCount ?? 0) > 0)
+                                <span class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none animate-pulse">
+                                    {{ $unreadStudyGroupCount > 99 ? '99+' : $unreadStudyGroupCount }}
+                                </span>
+                            @endif
+                        </a>
                         <x-notifications.bell
                             :recent-notifications="$recentNotifications ?? collect()"
                             :unread-count="$unreadNotificationCount ?? 0"

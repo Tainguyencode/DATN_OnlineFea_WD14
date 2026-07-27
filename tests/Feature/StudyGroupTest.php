@@ -566,7 +566,117 @@ class StudyGroupTest extends TestCase
         // Try to kick student2 (who is not in the group)
         $response = $this->actingAs($student1)
             ->deleteJson(route('study-groups.members.remove', [$studyGroup, $student2]));
-
+ 
         $response->assertStatus(400);
+    }
+
+    public function test_member_can_upload_video_and_download_it(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Video Upload Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('test-video.mp4', 500, 'video/mp4');
+
+        $response = $this->actingAs($student)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => 'Đây là video',
+                'file' => $file,
+            ]);
+
+        $response->assertStatus(201);
+
+        $messageData = $response->json('data');
+        $this->assertEquals('video', $messageData['message_type']);
+        $this->assertEquals('test-video.mp4', $messageData['file_name']);
+        $this->assertNotEmpty($messageData['file_path']);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($messageData['file_path']);
+
+        $downloadResponse = $this->actingAs($student)
+            ->get(route('study-groups.messages.download', [$studyGroup, $messageData['id']]));
+
+        $downloadResponse->assertOk();
+        $downloadResponse->assertHeader('Content-Type', 'video/mp4');
+    }
+
+    public function test_non_member_cannot_download_private_attachment(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $student = User::factory()->create(['role' => 'student']);
+        $otherStudent = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Secure Attachment Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('document.pdf', 500, 'application/pdf');
+
+        $response = $this->actingAs($student)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'file' => $file,
+            ]);
+        $response->assertStatus(201);
+        $messageData = $response->json('data');
+
+        $downloadResponse = $this->actingAs($otherStudent)
+            ->get(route('study-groups.messages.download', [$studyGroup, $messageData['id']]));
+
+        $downloadResponse->assertStatus(403);
+    }
+
+    public function test_sending_message_triggers_push_notifications_for_other_members(): void
+    {
+        $student1 = User::factory()->create(['role' => 'student']);
+        $student2 = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student1);
+
+        Enrollment::create([
+            'user_id' => $student2->id,
+            'course_id' => $course->id,
+            'status' => Enrollment::STATUS_ACTIVE,
+            'enrolled_at' => now(),
+        ]);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student1->id,
+            'name' => 'Notification Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student1->id, ['role' => 'moderator']);
+        $studyGroup->members()->attach($student2->id, ['role' => 'member']);
+
+        $response = $this->actingAs($student1)
+            ->postJson(route('study-groups.messages.store', $studyGroup), [
+                'message' => 'Chào mọi người',
+            ]);
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('push_notifications', [
+            'user_id' => $student2->id,
+            'type' => 'study_group',
+            'title' => 'Tin nhắn mới trong nhóm ' . $studyGroup->name,
+        ]);
+
+        $this->assertDatabaseMissing('push_notifications', [
+            'user_id' => $student1->id,
+            'type' => 'study_group',
+        ]);
     }
 }
