@@ -10,6 +10,7 @@ use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Models\ReviewHelpful;
+use App\Models\Discussion;
 use App\Services\CourseRecommendationService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
@@ -229,6 +230,36 @@ class CourseController extends Controller
             $recentlyViewedCourseService->record($user, $course);
         }
 
+        $discussions = collect();
+        if ($user) {
+            if ($user->isInstructor() && (int) $course->instructor_id === (int) $user->id) {
+                $discussions = Discussion::where('lesson_id', $lesson->id)
+                    ->with(['user', 'replies.user'])
+                    ->latest()
+                    ->get();
+            } elseif ($user->isAdmin()) {
+                $discussions = Discussion::where('lesson_id', $lesson->id)
+                    ->with(['user', 'replies.user'])
+                    ->latest()
+                    ->get();
+            } elseif ($user->isStudent()) {
+                $discussions = Discussion::where('lesson_id', $lesson->id)
+                    ->where('user_id', $user->id)
+                    ->with(['user', 'replies.user'])
+                    ->latest()
+                    ->get();
+            }
+        }
+
+        $activeDiscussion = null;
+        $discussionId = request()->integer('discussion_id');
+        if ($discussionId > 0 && $discussions->isNotEmpty()) {
+            $activeDiscussion = $discussions->firstWhere('id', $discussionId);
+            if ($activeDiscussion) {
+                $activeDiscussion->load(['user', 'replies.user']);
+            }
+        }
+
         return view('courses.lesson', [
             'course' => $course,
             'lesson' => $lesson,
@@ -250,6 +281,8 @@ class CourseController extends Controller
             'quizContext' => $player['quizContext'],
             'totalLessons' => $player['totalLessons'],
             'completedLessons' => $player['completedLessons'],
+            'discussions' => $discussions,
+            'activeDiscussion' => $activeDiscussion,
         ]);
     }
 
