@@ -42,7 +42,7 @@ class CourseFeedbackReviewTest extends TestCase
         $this->actingAs($student)->post(route('courses.reviews.store', $course), $this->payload())->assertForbidden();
     }
 
-    public function test_enrolled_student_can_create_pending_review(): void
+    public function test_enrolled_student_can_create_visible_review_immediately(): void
     {
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->course();
@@ -56,10 +56,16 @@ class CourseFeedbackReviewTest extends TestCase
             'course_id' => $course->id,
             'user_id' => $student->id,
             'rating' => 5,
-            'status' => 'pending',
+            'status' => ReviewStatus::Visible->value,
+            'is_hidden' => false,
             'verified_purchase' => true,
         ]);
-        $this->assertSame(0, $course->fresh()->rating_count);
+        $course->refresh();
+        $this->assertSame(1, $course->rating_count);
+        $this->assertSame('5.00', $course->rating_avg);
+
+        $response = $this->get(route('courses.show', $course->slug))->assertOk();
+        $this->assertSame($student->id, $response->viewData('reviews')->first()->user_id);
     }
 
     public function test_rating_content_and_html_are_validated(): void
@@ -88,23 +94,23 @@ class CourseFeedbackReviewTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->course();
         $this->enroll($student, $course);
-        $review = $this->review($student, $course, ReviewStatus::Approved, 5);
+        $review = $this->review($student, $course, ReviewStatus::Visible, 5);
         \App\Models\Review::create([
             'user_id' => $course->instructor_id,
             'course_id' => $course->id,
             'parent_id' => $review->id,
             'rating' => null,
             'comment' => 'Cảm ơn bạn',
-            'status' => ReviewStatus::Approved->value,
+            'status' => ReviewStatus::Visible->value,
         ]);
 
         $this->actingAs($student)->put(route('courses.reviews.update', [$course, $review]), $this->payload(3))->assertSessionHasNoErrors();
 
         $review->refresh();
         $this->assertSame(3, $review->rating);
-        $this->assertSame(ReviewStatus::Pending, $review->status);
+        $this->assertSame(ReviewStatus::Visible, $review->status);
         $this->assertSame('Cảm ơn bạn', $review->replies->first()->comment);
-        $this->assertSame(0, $course->fresh()->rating_count);
+        $this->assertSame(1, $course->fresh()->rating_count);
     }
 
     public function test_student_cannot_update_another_students_review_or_mismatched_course(): void
@@ -127,7 +133,7 @@ class CourseFeedbackReviewTest extends TestCase
         $other = User::factory()->create(['role' => 'student']);
         $course = $this->course();
         $this->enroll($owner, $course);
-        $review = $this->review($owner, $course, ReviewStatus::Approved);
+        $review = $this->review($owner, $course, ReviewStatus::Visible);
         app(ReviewService::class)->syncCourseRating($course->id);
 
         $this->actingAs($other)->delete(route('courses.reviews.destroy', [$course, $review]))->assertForbidden();
@@ -141,7 +147,7 @@ class CourseFeedbackReviewTest extends TestCase
         $course = $this->course();
         $student = User::factory()->create(['role' => 'student']);
         $otherInstructor = User::factory()->create(['role' => 'instructor']);
-        $review = $this->review($student, $course, ReviewStatus::Approved);
+        $review = $this->review($student, $course, ReviewStatus::Visible);
 
         $this->actingAsTwoFactorVerified($otherInstructor)
             ->post(route('instructor.reviews.reply', $review), ['comment' => 'Không hợp lệ'])
@@ -158,54 +164,81 @@ class CourseFeedbackReviewTest extends TestCase
         ]);
     }
 
-    public function test_admin_approval_updates_average_and_public_visibility(): void
+    public function test_admin_can_hide_restore_and_soft_delete_review(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $course = $this->course();
-        $first = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Pending, 5);
-        $second = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Pending, 3);
-
-        $this->actingAsTwoFactorVerified($admin)->patch(route('admin.student-reviews.approve', $first))->assertSessionHasNoErrors();
-        $this->actingAsTwoFactorVerified($admin)->patch(route('admin.student-reviews.approve', $second))->assertSessionHasNoErrors();
+        $first = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 5);
+        $second = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 3);
+        app(ReviewService::class)->syncCourseRating($course->id);
 
         $course->refresh();
         $this->assertSame(2, $course->rating_count);
         $this->assertSame('4.00', $course->rating_avg);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->patch(route('admin.student-reviews.hide', $second), ['moderation_note' => 'Không phù hợp'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(ReviewStatus::Hidden, $second->fresh()->status);
+        $this->assertTrue($second->fresh()->is_hidden);
+        $this->assertSame(1, $course->fresh()->rating_count);
+        $this->assertSame('5.00', $course->fresh()->rating_avg);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->patch(route('admin.student-reviews.restore', $second))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(ReviewStatus::Visible, $second->fresh()->status);
+        $this->assertFalse($second->fresh()->is_hidden);
+        $this->assertSame(2, $course->fresh()->rating_count);
+        $this->assertSame('4.00', $course->fresh()->rating_avg);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->delete(route('admin.student-reviews.destroy', $second))
+            ->assertRedirect(route('admin.student-reviews.index'));
+
+        $this->assertSoftDeleted('reviews', ['id' => $second->id]);
+        $this->assertSame(1, $course->fresh()->rating_count);
+        $this->assertSame('5.00', $course->fresh()->rating_avg);
+
         $response = $this->get(route('courses.show', $course->slug))->assertOk();
-        $this->assertCount(2, $response->viewData('reviews'));
+        $this->assertCount(1, $response->viewData('reviews'));
         $this->assertSame(1, $response->viewData('ratingDistribution')[5]);
-        $this->assertSame(1, $response->viewData('ratingDistribution')[3]);
+        $this->assertSame(0, $response->viewData('ratingDistribution')[3]);
     }
 
-    public function test_rejected_hidden_and_deleted_reviews_do_not_affect_rating(): void
+    public function test_hidden_and_deleted_reviews_do_not_affect_rating(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $course = $this->course();
-        $approved = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Approved, 5);
-        $hidden = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Approved, 1);
+        $visible = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 5);
+        $hidden = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 1);
         app(ReviewService::class)->syncCourseRating($course->id);
         $this->assertSame('3.00', $course->fresh()->rating_avg);
 
         $this->actingAsTwoFactorVerified($admin)->patch(route('admin.student-reviews.hide', $hidden), ['moderation_note' => 'Nội dung vi phạm'])->assertSessionHasNoErrors();
         $this->assertSame('5.00', $course->fresh()->rating_avg);
 
-        $rejected = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Rejected, 1);
-        app(ReviewService::class)->delete($approved);
+        app(ReviewService::class)->delete($visible);
         $this->assertSame(0, $course->fresh()->rating_count);
-        $this->assertSame(ReviewStatus::Rejected, $rejected->status);
+        $this->assertSame(ReviewStatus::Hidden, $hidden->fresh()->status);
     }
 
-    public function test_pending_review_is_not_public_and_escaped_output_blocks_xss(): void
+    public function test_hidden_review_is_not_public_and_escaped_output_blocks_xss(): void
     {
         $course = $this->course();
-        $pending = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Pending, 5, ['comment' => 'Nội dung đang chờ duyệt']);
-        $approved = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Approved, 4, ['comment' => '<script>alert(1)</script>']);
+        $hidden = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Hidden, 5, [
+            'comment' => 'Nội dung đã ẩn',
+            'is_hidden' => true,
+        ]);
+        $visible = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 4, ['comment' => '<script>alert(1)</script>']);
         app(ReviewService::class)->syncCourseRating($course->id);
 
         $response = $this->get(route('courses.show', $course->slug))->assertOk();
         $this->assertCount(1, $response->viewData('reviews'));
-        $response->assertDontSee($pending->comment)->assertDontSee('<script>alert(1)</script>', false)->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false);
-        $this->assertSame($approved->id, $response->viewData('reviews')->first()->id);
+        $response->assertDontSee($hidden->comment)->assertDontSee('<script>alert(1)</script>', false)->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false);
+        $this->assertSame($visible->id, $response->viewData('reviews')->first()->id);
     }
 
     public function test_helpful_toggle_is_unique_reversible_and_cannot_be_self_marked(): void
@@ -213,7 +246,7 @@ class CourseFeedbackReviewTest extends TestCase
         $owner = User::factory()->create(['role' => 'student']);
         $viewer = User::factory()->create(['role' => 'student']);
         $course = $this->course();
-        $review = $this->review($owner, $course, ReviewStatus::Approved);
+        $review = $this->review($owner, $course, ReviewStatus::Visible);
 
         $this->actingAs($owner)->post(route('reviews.helpful.toggle', $review))->assertForbidden();
         $this->actingAs($viewer)->post(route('reviews.helpful.toggle', $review))->assertSessionHasNoErrors();
@@ -228,9 +261,9 @@ class CourseFeedbackReviewTest extends TestCase
     {
         $course = $this->course();
         $otherCourse = $this->course();
-        $oldHelpful = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Approved, 5, ['helpful_count' => 10, 'created_at' => now()->subDay()]);
-        $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Approved, 3, ['helpful_count' => 0]);
-        $this->review(User::factory()->create(['role' => 'student']), $otherCourse, ReviewStatus::Approved, 5, ['helpful_count' => 99]);
+        $oldHelpful = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 5, ['helpful_count' => 10, 'created_at' => now()->subDay()]);
+        $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 3, ['helpful_count' => 0]);
+        $this->review(User::factory()->create(['role' => 'student']), $otherCourse, ReviewStatus::Visible, 5, ['helpful_count' => 99]);
 
         $response = $this->get(route('courses.show', ['slug' => $course->slug, 'review_rating' => 5, 'review_sort' => 'helpful']))->assertOk();
         $reviews = $response->viewData('reviews');
@@ -243,7 +276,7 @@ class CourseFeedbackReviewTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->course();
         $enrollment = $this->enroll($student, $course);
-        $review = $this->review($student, $course, ReviewStatus::Approved);
+        $review = $this->review($student, $course, ReviewStatus::Visible);
         $enrollment->update(['status' => 'refunded']);
 
         $this->actingAs($student)->put(route('courses.reviews.update', [$course, $review]), $this->payload(2))->assertForbidden();
@@ -254,13 +287,44 @@ class CourseFeedbackReviewTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->course();
-        $review = $this->review($student, $course, ReviewStatus::Pending);
+        $review = $this->review($student, $course, ReviewStatus::Visible);
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->actingAsTwoFactorVerified($student)->get(route('student.reviews.index'))->assertOk();
         $this->actingAsTwoFactorVerified($course->instructor)->get(route('instructor.reviews.index'))->assertOk();
         $this->actingAsTwoFactorVerified($admin)->get(route('admin.student-reviews.index'))->assertOk();
         $this->actingAsTwoFactorVerified($admin)->get(route('admin.student-reviews.show', $review))->assertOk();
+    }
+
+    public function test_admin_review_index_filters_visible_and_hidden_reviews(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $course = $this->course();
+        $visible = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Visible, 5, [
+            'comment' => 'Đánh giá đang hiển thị',
+        ]);
+        $hidden = $this->review(User::factory()->create(['role' => 'student']), $course, ReviewStatus::Hidden, 1, [
+            'comment' => 'Đánh giá đã ẩn',
+            'is_hidden' => true,
+        ]);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->get(route('admin.student-reviews.index'))
+            ->assertOk()
+            ->assertSee($visible->comment)
+            ->assertSee($hidden->comment);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->get(route('admin.student-reviews.index', ['status' => ReviewStatus::Visible->value]))
+            ->assertOk()
+            ->assertSee($visible->comment)
+            ->assertDontSee($hidden->comment);
+
+        $this->actingAsTwoFactorVerified($admin)
+            ->get(route('admin.student-reviews.index', ['status' => ReviewStatus::Hidden->value]))
+            ->assertOk()
+            ->assertDontSee($visible->comment)
+            ->assertSee($hidden->comment);
     }
 
     public function test_non_admin_cannot_access_review_moderation(): void
@@ -307,7 +371,7 @@ class CourseFeedbackReviewTest extends TestCase
         ]);
     }
 
-    private function review(User $student, Course $course, ReviewStatus $status = ReviewStatus::Pending, int $rating = 5, array $extra = []): Review
+    private function review(User $student, Course $course, ReviewStatus $status = ReviewStatus::Visible, int $rating = 5, array $extra = []): Review
     {
         return Review::query()->create(array_merge([
             'user_id' => $student->id,

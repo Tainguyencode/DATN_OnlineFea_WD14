@@ -87,7 +87,7 @@ class CourseController extends Controller
         $reviewSort = $request->query('review_sort') === 'helpful' ? 'helpful' : 'latest';
 
         $reviews = Review::query()
-            ->approved()
+            ->visible()
             ->where('course_id', $course->id)
             ->whereNull('parent_id')
             ->with(['user:id,name,avatar', 'replies.user:id,name,avatar'])
@@ -98,8 +98,9 @@ class CourseController extends Controller
             ->withQueryString();
 
         $ratingRows = Review::query()
-            ->approved()
+            ->visible()
             ->where('course_id', $course->id)
+            ->whereNull('parent_id')
             ->selectRaw('rating, COUNT(*) as total')
             ->groupBy('rating')
             ->pluck('total', 'rating');
