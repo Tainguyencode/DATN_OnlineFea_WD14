@@ -27,12 +27,24 @@ class ReviewService
                     ->lockForUpdate()
                     ->firstOrFail();
 
+                if (Review::withTrashed()
+                    ->where('course_id', $course->id)
+                    ->where('user_id', $user->id)
+                    ->whereNull('parent_id')
+                    ->exists()
+                ) {
+                    throw ValidationException::withMessages([
+                        'rating' => 'Bạn đã đánh giá khóa học này. Vui lòng chỉnh sửa đánh giá hiện có.',
+                    ]);
+                }
+
                 $review = Review::query()->create([
                     'course_id' => $course->id,
                     'user_id' => $user->id,
                     'rating' => $data['rating'],
                     'comment' => $data['comment'],
-                    'status' => config('reviews.default_status', ReviewStatus::Pending->value),
+                    'status' => ReviewStatus::Visible->value,
+                    'is_hidden' => false,
                     'verified_purchase' => true,
                 ]);
 
@@ -52,7 +64,12 @@ class ReviewService
                 return $review;
             });
         } catch (QueryException $exception) {
-            if (Review::withTrashed()->where('course_id', $course->id)->where('user_id', $user->id)->exists()) {
+            if (Review::withTrashed()
+                ->where('course_id', $course->id)
+                ->where('user_id', $user->id)
+                ->whereNull('parent_id')
+                ->exists()
+            ) {
                 throw ValidationException::withMessages([
                     'rating' => 'Bạn đã đánh giá khóa học này. Vui lòng chỉnh sửa đánh giá hiện có.',
                 ]);
@@ -66,18 +83,23 @@ class ReviewService
     {
         return DB::transaction(function () use ($review, $data) {
             Review::query()->whereKey($review->getKey())->lockForUpdate()->firstOrFail();
-            $status = config('reviews.reset_status_on_update', true)
-                ? ReviewStatus::Pending->value
-                : $review->status->value;
 
-            $review->update([
+            $updates = [
                 'rating' => $data['rating'],
                 'comment' => $data['comment'],
-                'status' => $status,
-                'moderated_by' => null,
-                'moderated_at' => null,
-                'moderation_note' => null,
-            ]);
+            ];
+
+            if (! $review->isHidden()) {
+                $updates = array_merge($updates, [
+                    'status' => ReviewStatus::Visible->value,
+                    'is_hidden' => false,
+                    'moderated_by' => null,
+                    'moderated_at' => null,
+                    'moderation_note' => null,
+                ]);
+            }
+
+            $review->update($updates);
 
             $this->syncCourseRating($review->course_id);
 
@@ -98,8 +120,11 @@ class ReviewService
     public function moderate(Review $review, ReviewStatus $status, User $moderator, ?string $note = null): Review
     {
         return DB::transaction(function () use ($review, $status, $moderator, $note) {
+            $hidden = $status === ReviewStatus::Hidden;
+
             $review->update([
                 'status' => $status->value,
+                'is_hidden' => $hidden,
                 'moderated_by' => $moderator->id,
                 'moderated_at' => now(),
                 'moderation_note' => $note,
@@ -109,15 +134,14 @@ class ReviewService
             $review->loadMissing(['user', 'course']);
 
             $labels = [
-                ReviewStatus::Approved->value => 'được duyệt',
-                ReviewStatus::Rejected->value => 'bị từ chối',
-                ReviewStatus::Hidden->value => 'được ẩn',
+                ReviewStatus::Visible->value => 'được hiển thị lại',
+                ReviewStatus::Hidden->value => 'đã được ẩn',
             ];
 
             if ($review->user) {
                 $this->notifications->send(
                     $review->user,
-                    'Cập nhật trạng thái đánh giá',
+                    'Cập nhật hiển thị đánh giá',
                     'Đánh giá của bạn cho khóa học '.$review->course?->title.' đã '.($labels[$status->value] ?? 'được cập nhật').'.',
                     'course_review_moderated',
                     route('student.reviews.index'),
@@ -126,6 +150,16 @@ class ReviewService
 
             return $review->refresh();
         });
+    }
+
+    public function hide(Review $review, User $moderator, ?string $note = null): Review
+    {
+        return $this->moderate($review, ReviewStatus::Hidden, $moderator, $note);
+    }
+
+    public function restore(Review $review, User $moderator, ?string $note = null): Review
+    {
+        return $this->moderate($review, ReviewStatus::Visible, $moderator, $note);
     }
 
     public function reply(Review $review, User $instructor, string $reply): Review
@@ -196,8 +230,10 @@ class ReviewService
         }
 
         $aggregate = Review::query()
-            ->approved()
+            ->visible()
             ->where('course_id', $courseId)
+            ->whereNull('parent_id')
+            ->whereNotNull('rating')
             ->selectRaw('COUNT(*) as review_count, COALESCE(AVG(rating), 0) as review_avg')
             ->first();
 
