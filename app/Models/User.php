@@ -129,6 +129,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(LessonProgress::class);
     }
 
+    public function lessonNotes(): HasMany
+    {
+        return $this->hasMany(LessonNote::class);
+    }
+
     public function studyGroups(): BelongsToMany
     {
         return $this->belongsToMany(StudyGroup::class, 'study_group_members')
