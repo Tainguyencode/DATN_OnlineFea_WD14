@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     initLearningSidebar();
-    initVideoProgress();
+    initVideoProgressV2();
     initQuizPlayer();
     initMarkComplete();
     initCertificateDropdown();
@@ -128,6 +128,9 @@ function initVideoProgress() {
             if (typeof data.course_progress === 'number') {
                 updateHeaderProgress(data.course_progress);
             }
+            if (typeof data.lesson_progress === 'number') {
+                updateCurrentLessonProgress(data.lesson_progress, data.lesson_completed);
+            }
         } catch {
             showToast('Chưa lưu được tiến độ. Hệ thống sẽ thử lại.', 'error');
         } finally {
@@ -163,6 +166,212 @@ function initVideoProgress() {
             );
         }
     });
+}
+
+function initVideoProgressV2() {
+    const video = document.querySelector('[data-lesson-progress-video]');
+    if (!video) return;
+
+    const progressUrl = video.dataset.progressUrl;
+    const durationHint = Number(video.dataset.durationSeconds || 0);
+    const resumeThreshold = 5;
+    let lastSavedPosition = Math.floor(Number(video.dataset.initialLastPosition || video.dataset.initialWatched || 0));
+    let furthestPosition = Math.floor(Number(video.dataset.initialFurthestPosition || video.dataset.initialWatched || 0));
+    let unsavedPlayedSeconds = 0;
+    let lastPlayhead = null;
+    let lastSaveStartedAt = Date.now();
+    let completed = video.dataset.initialCompleted === '1';
+    let requestInFlight = false;
+    let pendingSave = false;
+
+    const durationSeconds = () => Math.floor(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint);
+    const currentPosition = () => clampVideoTime(video.currentTime || 0, durationSeconds());
+    const nowIso = () => new Date().toISOString();
+
+    const notePlayedSegment = () => {
+        const current = currentPosition();
+        if (lastPlayhead === null) {
+            lastPlayhead = current;
+            return;
+        }
+
+        const delta = current - lastPlayhead;
+        if (!video.paused && !video.seeking && delta > 0 && delta <= 2.5) {
+            unsavedPlayedSeconds += delta;
+            furthestPosition = Math.max(furthestPosition, current);
+        }
+        lastPlayhead = current;
+    };
+
+    const payload = () => ({
+        last_position_seconds: currentPosition(),
+        furthest_position_seconds: Math.floor(furthestPosition),
+        played_seconds: Math.floor(unsavedPlayedSeconds),
+        video_duration_seconds: durationSeconds(),
+        client_updated_at: nowIso(),
+    });
+
+    const applyProgressResponse = (data) => {
+        if (typeof data.course_progress === 'number') {
+            updateHeaderProgress(data.course_progress);
+        }
+
+        if (typeof data.lesson_progress === 'number') {
+            updateCurrentLessonProgress(data.lesson_progress, data.lesson_completed);
+        }
+
+        if (typeof data.last_position_seconds === 'number') {
+            lastSavedPosition = data.last_position_seconds;
+        }
+
+        if (typeof data.furthest_position_seconds === 'number') {
+            furthestPosition = Math.max(furthestPosition, data.furthest_position_seconds);
+        }
+
+        if (data.lesson_completed) {
+            completed = true;
+        }
+    };
+
+    const sendProgress = async (forceSend = false, options = {}) => {
+        if (!progressUrl) return;
+
+        notePlayedSegment();
+        const body = payload();
+        const hasPlayed = body.played_seconds > 0;
+        const positionChanged = Math.abs(body.last_position_seconds - lastSavedPosition) >= 1;
+        const elapsed = Date.now() - lastSaveStartedAt;
+
+        if (!forceSend && (!hasPlayed || elapsed < 10000)) {
+            return;
+        }
+
+        if (requestInFlight) {
+            pendingSave = true;
+            return;
+        }
+
+        requestInFlight = true;
+        lastSaveStartedAt = Date.now();
+
+        try {
+            const response = await fetch(progressUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                keepalive: Boolean(options.keepalive),
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify(body),
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (response.status === 409) {
+                applyProgressResponse(data);
+                return;
+            }
+
+            if (!response.ok) throw new Error('progress_failed');
+
+            unsavedPlayedSeconds = 0;
+            applyProgressResponse(data);
+        } catch {
+            if (!options.silent) {
+                showToast('Chưa lưu được tiến độ. Hệ thống sẽ thử lại.', 'error');
+            }
+        } finally {
+            requestInFlight = false;
+            if (pendingSave) {
+                pendingSave = false;
+                sendProgress(true, { silent: true });
+            }
+        }
+    };
+
+    const sendBeaconProgress = () => {
+        if (!progressUrl) return;
+
+        notePlayedSegment();
+        const body = payload();
+        if (body.played_seconds <= 0 && Math.abs(body.last_position_seconds - lastSavedPosition) < 1) return;
+
+        const formData = new FormData();
+        formData.append('_token', getCsrfToken());
+        Object.entries(body).forEach(([key, value]) => formData.append(key, value));
+        navigator.sendBeacon?.(progressUrl, formData);
+    };
+
+    const showResumePrompt = () => {
+        const saved = clampVideoTime(lastSavedPosition, durationSeconds());
+        if (saved < resumeThreshold) return;
+
+        const stage = video.closest('.learning-video-stage');
+        if (!stage || stage.querySelector('[data-video-resume-panel]')) return;
+
+        const panel = document.createElement('div');
+        panel.dataset.videoResumePanel = '1';
+        panel.className = 'absolute left-4 top-4 z-[60] max-w-sm rounded border border-white/20 bg-black/75 p-4 text-white shadow-lg';
+        panel.innerHTML = `
+            <p class="text-sm font-semibold">Bạn đã học đến ${formatTime(saved)}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <button type="button" data-resume-video class="rounded bg-[#0056D2] px-3 py-2 text-sm font-bold text-white hover:bg-[#0046B8]">Tiếp tục học</button>
+                <button type="button" data-replay-video class="rounded border border-white/30 px-3 py-2 text-sm font-semibold text-white hover:bg-white/10">Xem lại từ đầu</button>
+            </div>
+        `;
+        stage.appendChild(panel);
+
+        panel.querySelector('[data-resume-video]')?.addEventListener('click', () => {
+            video.currentTime = saved;
+            lastPlayhead = saved;
+            panel.remove();
+            video.play().catch(() => {});
+        });
+
+        panel.querySelector('[data-replay-video]')?.addEventListener('click', () => {
+            video.currentTime = 0;
+            lastPlayhead = 0;
+            panel.remove();
+            sendProgress(true, { silent: true });
+        });
+    };
+
+    video.addEventListener('loadedmetadata', () => {
+        if (requestedStartTimeFromUrl() !== null) return;
+        showResumePrompt();
+    }, { once: true });
+
+    video.addEventListener('play', () => {
+        lastPlayhead = currentPosition();
+    });
+    video.addEventListener('timeupdate', () => {
+        notePlayedSegment();
+        sendProgress(false, { silent: true });
+    });
+    video.addEventListener('seeking', () => {
+        lastPlayhead = null;
+        sendProgress(true, { silent: true });
+    });
+    video.addEventListener('pause', () => sendProgress(true));
+    video.addEventListener('ended', () => sendProgress(true));
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) sendProgress(true, { keepalive: true, silent: true });
+    });
+    window.addEventListener('pagehide', sendBeaconProgress);
+    window.addEventListener('beforeunload', sendBeaconProgress);
+}
+
+function updateCurrentLessonProgress(percent, completed = false) {
+    const item = document.querySelector('[data-current-lesson-item]');
+    if (!item) return;
+
+    const safe = Math.min(100, Math.max(0, Number(percent) || 0));
+    const percentEl = item.querySelector('[data-lesson-progress-percent]');
+    const statusEl = item.querySelector('[data-lesson-progress-status]');
+
+    if (percentEl) percentEl.textContent = `${Math.round(safe)}%`;
+    if (statusEl) statusEl.textContent = completed ? 'Hoàn thành' : (safe > 0 ? 'Đang học' : 'Chưa học');
 }
 
 function initMarkComplete() {

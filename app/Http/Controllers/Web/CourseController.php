@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Learning\UpdateLessonProgressRequest;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -312,7 +313,7 @@ class CourseController extends Controller
     }
 
     public function updateLessonProgress(
-        Request $request,
+        UpdateLessonProgressRequest $request,
         Course $course,
         Lesson $lesson,
         LearningProgressService $progressService
@@ -328,28 +329,31 @@ class CourseController extends Controller
 
         abort_unless($enrollmentExists, 403);
 
-        $validated = $request->validate([
-            'watched_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
-            'completed' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
-        $watchedSeconds = (int) ($validated['watched_seconds'] ?? 0);
-        $durationSeconds = $this->lessonDurationSeconds($lesson);
-        $completed = $request->boolean('completed');
+        if ($lesson->type === 'video') {
+            $progress = $progressService->recordVideoProgress(
+                $request->user()->id,
+                $course,
+                $lesson,
+                $validated,
+            );
 
-        if ($lesson->type === 'video' && $durationSeconds > 0) {
-            $threshold = $course->requiredVideoPercent() / 100;
-            $completed = $completed || $watchedSeconds >= (int) ceil($durationSeconds * $threshold);
+            if ($progress['stale'] ?? false) {
+                return response()->json($progress, 409);
+            }
+        } else {
+            abort_if($lesson->type === 'quiz', 422, 'Quiz progress is updated after quiz submission.');
+
+            $progress = $progressService->recordLessonProgress(
+                $request->user()->id,
+                $course,
+                $lesson,
+                0,
+                0,
+                $request->boolean('completed')
+            );
         }
-
-        $progress = $progressService->recordLessonProgress(
-            $request->user()->id,
-            $course,
-            $lesson,
-            $watchedSeconds,
-            $durationSeconds,
-            $completed
-        );
 
         return response()->json([
             'success' => true,
@@ -357,6 +361,11 @@ class CourseController extends Controller
             'course_progress' => $progress['course_progress'],
             'lesson_completed' => $progress['lesson_completed'],
             'course_completed' => $progress['course_completed'],
+            'watched_seconds' => $progress['watched_seconds'],
+            'last_position_seconds' => $progress['last_position_seconds'] ?? 0,
+            'furthest_position_seconds' => $progress['furthest_position_seconds'] ?? 0,
+            'completed_lessons' => $progress['completed_lessons'],
+            'total_lessons' => $progress['total_lessons'],
         ]);
     }
 

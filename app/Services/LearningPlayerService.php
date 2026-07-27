@@ -83,8 +83,9 @@ class LearningPlayerService
                 $canAccessLesson,
             ),
             'quizContext' => $quizContext,
-            'totalLessons' => $orderedLessons->count(),
-            'completedLessons' => collect($progressMap)->filter(fn ($p) => (bool) ($p['is_completed'] ?? false))->count(),
+            'totalLessons' => $orderedLessons->where('is_required', true)->count(),
+            'completedLessons' => (int) ($enrollment?->completed_lessons
+                ?? collect($progressMap)->filter(fn ($p) => (bool) ($p['is_completed'] ?? false))->count()),
         ];
     }
 
@@ -117,9 +118,12 @@ class LearningPlayerService
             ->keyBy('lesson_id')
             ->map(fn (LessonProgress $progress) => [
                 'watched_seconds' => (int) $progress->watched_seconds,
+                'last_position_seconds' => (int) ($progress->last_position_seconds ?: $progress->watched_seconds),
+                'furthest_position_seconds' => (int) ($progress->furthest_position_seconds ?: $progress->watched_seconds),
                 'progress_percent' => (float) $progress->progress_percent,
                 'is_completed' => (bool) $progress->is_completed,
                 'completed_at' => $progress->completed_at?->toIso8601String(),
+                'last_client_updated_at' => $progress->last_client_updated_at?->toIso8601String(),
             ])
             ->all();
     }
@@ -230,6 +234,16 @@ class LearningPlayerService
         };
     }
 
+    public function stateLabel(string $state): string
+    {
+        return match ($state) {
+            'completed' => 'Hoàn thành',
+            'in_progress' => 'Đang học',
+            'locked' => 'Bị khóa',
+            default => 'Chưa học',
+        };
+    }
+
     /**
      * @return array{sections: list<array<string, mixed>>}
      */
@@ -253,6 +267,7 @@ class LearningPlayerService
                 $progress = $progressMap[$sectionLesson->id] ?? null;
                 $quizStatus = $quizStatusMap[$sectionLesson->id] ?? null;
                 $state = $this->lessonState($sectionLesson, $progress, $quizStatus, $canAccess);
+                $progressPercent = $progress ? (float) ($progress['progress_percent'] ?? 0) : 0.0;
 
                 if ($state === 'completed') {
                     $sectionCompleted++;
@@ -267,6 +282,8 @@ class LearningPlayerService
                     'is_preview' => (bool) $sectionLesson->is_preview,
                     'is_current' => (int) $sectionLesson->id === (int) $currentLesson->id,
                     'state' => $state,
+                    'state_label' => $this->stateLabel($state),
+                    'progress_percent' => min(100, max(0, $progressPercent)),
                     'quiz_status' => $quizStatus,
                     'url' => $canAccess
                         ? route('courses.lessons.show', [$course, $sectionLesson])
