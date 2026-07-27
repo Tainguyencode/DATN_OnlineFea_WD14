@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initQuizPlayer();
     initMarkComplete();
     initCertificateDropdown();
+    initLessonNotes();
+    initStudyNotesPage();
     initLessonAi();
 });
 
@@ -138,6 +140,8 @@ function initVideoProgress() {
     };
 
     video.addEventListener('loadedmetadata', () => {
+        if (requestedStartTimeFromUrl() !== null) return;
+
         const watchedSeconds = Number(video.dataset.initialWatched || 0);
         if (!completed && watchedSeconds > 0 && Number.isFinite(video.duration) && watchedSeconds < video.duration - 3) {
             video.currentTime = watchedSeconds;
@@ -377,8 +381,15 @@ function initQuizPlayer() {
 }
 
 function formatTime(totalSeconds) {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
+    const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const seconds = safeSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
@@ -413,6 +424,502 @@ function initCertificateDropdown() {
         if (!dropdown.contains(e.target)) {
             panel.classList.add('hidden');
         }
+    });
+}
+
+function requestedStartTimeFromUrl() {
+    const raw = new URLSearchParams(window.location.search).get('t');
+    if (raw === null || raw === '') return null;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return null;
+
+    return Math.floor(value);
+}
+
+function clampVideoTime(seconds, duration = 0) {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    const max = Math.max(0, Math.floor(Number(duration) || 0));
+
+    return max > 0 ? Math.min(safe, max) : safe;
+}
+
+function parseJsonScript(root, selector) {
+    const script = root.querySelector(selector);
+    if (!script?.textContent) return [];
+
+    try {
+        return JSON.parse(script.textContent);
+    } catch {
+        return [];
+    }
+}
+
+async function parseJsonResponse(response) {
+    const raw = await response.text();
+    if (!raw) return {};
+
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return { success: false, message: 'Máy chủ trả về phản hồi không hợp lệ.' };
+    }
+}
+
+function validationMessage(data, fallback = 'Dữ liệu ghi chú không hợp lệ.') {
+    const errors = data?.errors || {};
+    const firstError = Object.values(errors)[0];
+
+    if (Array.isArray(firstError) && firstError.length) {
+        return firstError[0];
+    }
+
+    return data?.message || fallback;
+}
+
+function initLessonNotes() {
+    document.querySelectorAll('[data-lesson-notes]').forEach((root) => {
+        if (root.dataset.canUseNotes !== '1') return;
+
+        const isVideo = root.dataset.lessonType === 'video';
+        const video = document.querySelector('video');
+        const videoStage = document.querySelector('.learning-video-stage');
+        const durationHint = Number(root.dataset.videoDuration || 0);
+        const form = root.querySelector('[data-note-create-form]');
+        const textarea = root.querySelector('[data-note-content]');
+        const timestampInput = root.querySelector('[data-note-timestamp]');
+        const timestampLabel = root.querySelector('[data-note-timestamp-label]');
+        const submitButton = root.querySelector('[data-note-submit]');
+        const statusEl = root.querySelector('[data-note-form-status]');
+        const errorEl = root.querySelector('[data-note-form-error]');
+        const charCount = root.querySelector('[data-note-char-count]');
+        const list = root.querySelector('[data-note-list]');
+        const empty = root.querySelector('[data-note-empty]');
+        const count = root.querySelector('[data-note-count]');
+        const storeUrl = root.dataset.storeUrl;
+        let notes = parseJsonScript(root, '[data-lesson-notes-json]');
+        let createInFlight = false;
+        let capturedCurrentTime = false;
+
+        const updateTimestampLabel = () => {
+            if (timestampLabel && timestampInput) {
+                timestampLabel.textContent = formatTime(timestampInput.value || 0);
+            }
+        };
+
+        const setTimestampFromVideo = () => {
+            if (!isVideo || !video || !timestampInput) return;
+
+            video.pause();
+            const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint;
+            timestampInput.value = clampVideoTime(video.currentTime || 0, duration);
+            updateTimestampLabel();
+        };
+
+        const seekVideoTo = async (seconds, shouldPlay = true) => {
+            if (!video) return;
+
+            const seek = () => {
+                const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint;
+                video.currentTime = clampVideoTime(seconds, duration);
+                if (shouldPlay) {
+                    video.play().catch(() => {});
+                }
+                videoStage?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+
+            if (video.readyState >= 1) {
+                seek();
+            } else {
+                video.addEventListener('loadedmetadata', seek, { once: true });
+            }
+        };
+
+        const applyRequestedTimestamp = () => {
+            const requested = requestedStartTimeFromUrl();
+            if (requested !== null && isVideo) {
+                seekVideoTo(requested, false);
+            }
+        };
+
+        const updateCharCount = () => {
+            if (charCount && textarea) {
+                charCount.textContent = `${textarea.value.length}/2000`;
+            }
+        };
+
+        const setError = (message = '') => {
+            if (!errorEl) return;
+            errorEl.textContent = message;
+            errorEl.classList.toggle('hidden', !message);
+        };
+
+        const sortNotes = () => {
+            if (isVideo) {
+                notes.sort((a, b) => Number(a.timestamp_seconds ?? 0) - Number(b.timestamp_seconds ?? 0) || Number(a.id) - Number(b.id));
+            } else {
+                notes.sort((a, b) => Number(b.id) - Number(a.id));
+            }
+        };
+
+        const renderNote = (note) => {
+            const item = document.createElement('article');
+            item.className = 'rounded border border-[#d1d7dc] bg-white p-4 text-sm';
+            item.dataset.noteId = note.id;
+
+            const meta = document.createElement('div');
+            meta.className = 'mb-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-[#6a6f73]';
+
+            const leftMeta = document.createElement('div');
+            leftMeta.className = 'flex flex-wrap items-center gap-2';
+            if (note.timestamp_seconds !== null && note.timestamp_seconds !== undefined) {
+                const timeButton = document.createElement('button');
+                timeButton.type = 'button';
+                timeButton.className = 'rounded bg-[#eef5ff] px-2 py-1 font-bold text-[#0056D2] hover:bg-[#dbeafe]';
+                timeButton.textContent = note.timestamp_label || formatTime(note.timestamp_seconds);
+                timeButton.addEventListener('click', () => seekVideoTo(note.timestamp_seconds, true));
+                leftMeta.appendChild(timeButton);
+            }
+            const updated = document.createElement('span');
+            updated.textContent = note.updated_at ? `Cập nhật ${note.updated_at}` : '';
+            leftMeta.appendChild(updated);
+
+            const actions = document.createElement('div');
+            actions.className = 'flex items-center gap-2';
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'font-bold text-[#0056D2] hover:underline';
+            editButton.textContent = 'Sửa';
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'font-bold text-red-600 hover:underline';
+            deleteButton.textContent = 'Xóa';
+            actions.append(editButton, deleteButton);
+
+            meta.append(leftMeta, actions);
+
+            const content = document.createElement('p');
+            content.className = 'whitespace-pre-line leading-6 text-[#1c1d1f]';
+            content.textContent = note.content;
+
+            item.append(meta, content);
+
+            editButton.addEventListener('click', () => openInlineEditor(item, note, content));
+            deleteButton.addEventListener('click', () => deleteNote(note));
+
+            return item;
+        };
+
+        const render = () => {
+            sortNotes();
+            list.innerHTML = '';
+            notes.forEach((note) => list.appendChild(renderNote(note)));
+            empty.hidden = notes.length > 0;
+            count.textContent = `${notes.length} ghi chú`;
+        };
+
+        const openInlineEditor = (item, note, contentEl) => {
+            if (item.querySelector('[data-note-edit-form]')) return;
+
+            contentEl.hidden = true;
+            const editForm = document.createElement('form');
+            editForm.className = 'mt-3 space-y-3';
+            editForm.dataset.noteEditForm = '1';
+
+            const editTextarea = document.createElement('textarea');
+            editTextarea.name = 'content';
+            editTextarea.required = true;
+            editTextarea.maxLength = 2000;
+            editTextarea.rows = 4;
+            editTextarea.className = 'w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-[#0056D2]';
+            editTextarea.value = note.content;
+            editForm.appendChild(editTextarea);
+
+            let editTimestamp = null;
+            let editTimeLabel = null;
+            if (isVideo) {
+                const row = document.createElement('label');
+                row.className = 'flex flex-wrap items-center gap-2 text-sm font-semibold text-[#6a6f73]';
+                row.textContent = 'Mốc giây';
+                editTimestamp = document.createElement('input');
+                editTimestamp.type = 'number';
+                editTimestamp.min = '0';
+                if (durationHint > 0) editTimestamp.max = String(durationHint);
+                editTimestamp.name = 'timestamp_seconds';
+                editTimestamp.value = note.timestamp_seconds ?? 0;
+                editTimestamp.className = 'h-9 w-24 rounded border border-[#d1d7dc] px-2 text-sm text-[#1c1d1f] outline-none focus:ring-2 focus:ring-[#0056D2]';
+                editTimeLabel = document.createElement('span');
+                editTimeLabel.textContent = formatTime(editTimestamp.value);
+                editTimestamp.addEventListener('input', () => {
+                    editTimeLabel.textContent = formatTime(editTimestamp.value);
+                });
+                row.append(editTimestamp, editTimeLabel);
+                editForm.appendChild(row);
+            }
+
+            const footer = document.createElement('div');
+            footer.className = 'flex flex-wrap items-center justify-between gap-3';
+            const editStatus = document.createElement('p');
+            editStatus.className = 'text-xs text-[#6a6f73]';
+            const buttons = document.createElement('div');
+            buttons.className = 'flex gap-2';
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'rounded border border-[#d1d7dc] px-3 py-2 text-sm font-semibold hover:bg-[#f7f9fa]';
+            cancel.textContent = 'Hủy';
+            const save = document.createElement('button');
+            save.type = 'submit';
+            save.className = 'rounded bg-[#1c1d1f] px-3 py-2 text-sm font-bold text-white hover:bg-black disabled:opacity-60';
+            save.textContent = 'Lưu';
+            buttons.append(cancel, save);
+            footer.append(editStatus, buttons);
+            editForm.appendChild(footer);
+            item.appendChild(editForm);
+
+            cancel.addEventListener('click', () => {
+                editForm.remove();
+                contentEl.hidden = false;
+            });
+
+            editForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (save.disabled) return;
+                save.disabled = true;
+                editStatus.textContent = 'Đang lưu...';
+
+                try {
+                    const payload = { content: editTextarea.value.trim() };
+                    if (isVideo) payload.timestamp_seconds = editTimestamp?.value === '' ? null : Number(editTimestamp?.value || 0);
+                    const response = await fetch(note.update_url, {
+                        method: 'PATCH',
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await parseJsonResponse(response);
+                    if (!response.ok || !data.success) {
+                        throw new Error(validationMessage(data, 'Không thể cập nhật ghi chú.'));
+                    }
+                    notes = notes.map((itemNote) => Number(itemNote.id) === Number(note.id) ? data.note : itemNote);
+                    showToast('Đã cập nhật ghi chú.');
+                    render();
+                } catch (error) {
+                    editStatus.textContent = error.message || 'Không thể cập nhật ghi chú.';
+                    save.disabled = false;
+                }
+            });
+        };
+
+        const deleteNote = async (note) => {
+            if (!window.confirm('Xóa ghi chú này?')) return;
+
+            try {
+                const response = await fetch(note.delete_url, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const data = await parseJsonResponse(response);
+                if (!response.ok || !data.success) {
+                    throw new Error(validationMessage(data, 'Không thể xóa ghi chú.'));
+                }
+                notes = notes.filter((itemNote) => Number(itemNote.id) !== Number(note.id));
+                showToast('Đã xóa ghi chú.');
+                render();
+            } catch (error) {
+                showToast(error.message || 'Không thể xóa ghi chú.', 'error');
+            }
+        };
+
+        textarea?.addEventListener('focus', () => {
+            if (!capturedCurrentTime) {
+                capturedCurrentTime = true;
+                setTimestampFromVideo();
+            }
+        });
+        textarea?.addEventListener('input', () => {
+            if (!capturedCurrentTime) {
+                capturedCurrentTime = true;
+                setTimestampFromVideo();
+            }
+            updateCharCount();
+        });
+        timestampInput?.addEventListener('input', updateTimestampLabel);
+
+        form?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (createInFlight || !storeUrl) return;
+
+            const content = textarea.value.trim();
+            if (!content) {
+                setError('Vui lòng nhập nội dung ghi chú.');
+                return;
+            }
+
+            createInFlight = true;
+            submitButton.disabled = true;
+            statusEl.textContent = 'Đang lưu...';
+            setError('');
+
+            try {
+                const payload = { content };
+                if (isVideo) {
+                    payload.timestamp_seconds = timestampInput?.value === '' ? null : Number(timestampInput?.value || 0);
+                }
+
+                const response = await fetch(storeUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await parseJsonResponse(response);
+                if (!response.ok || !data.success) {
+                    throw new Error(validationMessage(data, 'Không thể lưu ghi chú.'));
+                }
+
+                notes.push(data.note);
+                textarea.value = '';
+                capturedCurrentTime = false;
+                updateCharCount();
+                statusEl.textContent = 'Đã lưu thành công.';
+                showToast('Đã lưu ghi chú.');
+                render();
+            } catch (error) {
+                statusEl.textContent = '';
+                setError(error.message || 'Không thể lưu ghi chú.');
+                showToast(error.message || 'Không thể lưu ghi chú.', 'error');
+            } finally {
+                createInFlight = false;
+                submitButton.disabled = false;
+            }
+        });
+
+        applyRequestedTimestamp();
+        updateCharCount();
+        updateTimestampLabel();
+        render();
+    });
+}
+
+function initStudyNotesPage() {
+    document.querySelectorAll('[data-study-note-card]').forEach((card) => {
+        const content = card.querySelector('[data-study-note-content]');
+        const form = card.querySelector('[data-study-note-edit-form]');
+        const editButton = card.querySelector('[data-study-note-edit]');
+        const cancelButton = card.querySelector('[data-study-note-cancel]');
+        const deleteButton = card.querySelector('[data-study-note-delete]');
+        const saveButton = card.querySelector('[data-study-note-save]');
+        const textarea = card.querySelector('[data-study-note-edit-content]');
+        const timestamp = card.querySelector('[data-study-note-edit-timestamp]');
+        const timeLabel = card.querySelector('[data-study-note-edit-time-label]');
+        const status = card.querySelector('[data-study-note-status]');
+        const displayTime = card.querySelector('[data-study-note-time]');
+        const updateUrl = card.dataset.updateUrl;
+        const deleteUrl = card.dataset.deleteUrl;
+        const isVideo = card.dataset.isVideo === '1';
+        let inFlight = false;
+
+        timestamp?.addEventListener('input', () => {
+            if (timeLabel) timeLabel.textContent = formatTime(timestamp.value || 0);
+        });
+
+        editButton?.addEventListener('click', () => {
+            form?.classList.remove('hidden');
+            content.hidden = true;
+            textarea?.focus();
+        });
+
+        cancelButton?.addEventListener('click', () => {
+            form?.classList.add('hidden');
+            content.hidden = false;
+        });
+
+        form?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (inFlight) return;
+
+            inFlight = true;
+            saveButton.disabled = true;
+            status.textContent = 'Đang lưu...';
+
+            try {
+                const payload = { content: textarea.value.trim() };
+                if (isVideo) payload.timestamp_seconds = timestamp?.value === '' ? null : Number(timestamp?.value || 0);
+
+                const response = await fetch(updateUrl, {
+                    method: 'PATCH',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await parseJsonResponse(response);
+                if (!response.ok || !data.success) {
+                    throw new Error(validationMessage(data, 'Không thể cập nhật ghi chú.'));
+                }
+
+                content.textContent = data.note.content;
+                if (displayTime && data.note.timestamp_label) displayTime.textContent = data.note.timestamp_label;
+                form.classList.add('hidden');
+                content.hidden = false;
+                status.textContent = '';
+                showToast('Đã cập nhật ghi chú.');
+            } catch (error) {
+                status.textContent = error.message || 'Không thể cập nhật ghi chú.';
+            } finally {
+                inFlight = false;
+                saveButton.disabled = false;
+            }
+        });
+
+        deleteButton?.addEventListener('click', async () => {
+            if (inFlight || !window.confirm('Xóa ghi chú này?')) return;
+
+            inFlight = true;
+            deleteButton.disabled = true;
+
+            try {
+                const response = await fetch(deleteUrl, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const data = await parseJsonResponse(response);
+                if (!response.ok || !data.success) {
+                    throw new Error(validationMessage(data, 'Không thể xóa ghi chú.'));
+                }
+                card.remove();
+                showToast('Đã xóa ghi chú.');
+            } catch (error) {
+                deleteButton.disabled = false;
+                showToast(error.message || 'Không thể xóa ghi chú.', 'error');
+            } finally {
+                inFlight = false;
+            }
+        });
     });
 }
 
