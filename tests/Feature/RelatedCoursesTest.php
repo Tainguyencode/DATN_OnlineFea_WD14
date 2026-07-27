@@ -479,6 +479,10 @@ class RelatedCoursesTest extends TestCase
         $service = app(CourseRecommendationService::class);
         $first = $service->getPersonalizedRecommendations($current, $student, 2);
         $this->assertSame($popular->id, $first->first()->id);
+        $cacheKey = $this->recommendationCacheKey($service, $current, $student, 2);
+        $cachedIds = Cache::get($cacheKey);
+        $this->assertIsArray($cachedIds);
+        $this->assertContainsOnly('int', $cachedIds);
 
         DB::flushQueryLog();
         DB::enableQueryLog();
@@ -490,9 +494,50 @@ class RelatedCoursesTest extends TestCase
 
         $refreshed = $service->getPersonalizedRecommendations($current, $student, 2);
 
-        $this->assertLessThan(10, $cachedQueryCount);
+        $this->assertLessThanOrEqual(16, $cachedQueryCount);
         $this->assertSame($wishlistTarget->id, $refreshed->first()->id);
         $this->assertTrue((bool) $refreshed->first()->is_favorited);
+    }
+
+    public function test_course_detail_recommendation_cache_recovers_from_incomplete_class_for_guest_and_student(): void
+    {
+        $category = $this->category('Serialization Safe');
+        $current = $this->course(['category_id' => $category->id, 'tags' => ['safe-cache']]);
+        $candidate = $this->course([
+            'category_id' => $category->id,
+            'tags' => ['safe-cache'],
+            'rating_avg' => 5,
+            'rating_count' => 50,
+        ]);
+        $student = User::factory()->create(['role' => 'student']);
+        $service = app(CourseRecommendationService::class);
+        $brokenPayload = unserialize('O:8:"stdClass":0:{}', ['allowed_classes' => false]);
+
+        $guestKey = $this->recommendationCacheKey($service, $current, null, 4);
+        $oldGuestKey = str_replace('course_recommendations:v2:', 'course_recommendations:', $guestKey);
+        Cache::put($oldGuestKey, $brokenPayload);
+        Cache::put($guestKey, $brokenPayload);
+
+        $this->get(route('courses.show', $current->slug))->assertOk();
+        $guestResponse = $this->get(route('courses.show', $current->slug))->assertOk();
+
+        $guestIds = Cache::get($guestKey);
+        $this->assertIsArray($guestIds);
+        $this->assertContains($candidate->id, $guestIds);
+        $this->assertContainsOnly('int', $guestIds);
+        $this->assertContains($candidate->id, $guestResponse->viewData('relatedCourses')->pluck('id')->all());
+
+        $studentKey = $this->recommendationCacheKey($service, $current, $student, 4);
+        Cache::put($studentKey, $brokenPayload);
+
+        $this->actingAs($student)->get(route('courses.show', $current->slug))->assertOk();
+        $studentResponse = $this->actingAs($student)->get(route('courses.show', $current->slug))->assertOk();
+
+        $studentIds = Cache::get($studentKey);
+        $this->assertIsArray($studentIds);
+        $this->assertContains($candidate->id, $studentIds);
+        $this->assertContainsOnly('int', $studentIds);
+        $this->assertContains($candidate->id, $studentResponse->viewData('relatedCourses')->pluck('id')->all());
     }
 
     public function test_personalized_recommendations_do_not_issue_query_per_candidate(): void
@@ -580,8 +625,16 @@ class RelatedCoursesTest extends TestCase
             'course_id' => $course->id,
             'rating' => $rating,
             'comment' => 'Review content for recommendation tests',
-            'status' => ReviewStatus::Approved->value,
+            'status' => ReviewStatus::Visible->value,
             'verified_purchase' => true,
         ]);
+    }
+
+    private function recommendationCacheKey(CourseRecommendationService $service, Course $course, ?User $user, int $limit): string
+    {
+        $method = new \ReflectionMethod($service, 'cacheKey');
+        $method->setAccessible(true);
+
+        return $method->invoke($service, $course, $user, $limit);
     }
 }

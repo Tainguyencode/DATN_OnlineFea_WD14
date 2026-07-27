@@ -19,7 +19,7 @@ class ReviewController extends Controller
         $this->reviews->create($course, $request->user(), $request->validated());
 
         return redirect()->to(route('courses.show', $course->slug).'#reviews')
-            ->with('success', 'Đánh giá của bạn đã được đăng tải.');
+            ->with('success', 'Đánh giá của bạn đã được hiển thị.');
     }
 
     public function update(UpdateReviewRequest $request, Course $course, Review $review): RedirectResponse
