@@ -195,9 +195,49 @@ class LearningPathAiService
         ]);
 
         if (isset($aiResult['error'])) {
-            Log::error('LearningPathAiService error from Gemini', ['error' => $aiResult['error']]);
+            Log::warning('LearningPathAiService error from Gemini, attempting rule-based fallback', ['error' => $aiResult['error']]);
 
-            $errorMsg = 'AI tạm thời chưa thể phản hồi. Vui lòng thử lại sau giây lát hoặc gửi lại câu hỏi.';
+            if (! empty($profile['field']) || ! empty($profile['desired_field']) || ! empty($profile['target_role']) || ! empty($cleanPrompt)) {
+                $ruleRoadmap = $this->generateRuleBasedRoadmap($profile, $cleanPrompt);
+                $matchResults = $this->matchCoursesFromDatabase($ruleRoadmap, $profile);
+                $relatedLearningPath = $this->findMatchingLearningPath($ruleRoadmap, $profile);
+
+                $adviceMsg = 'Hệ thống đã tự động xây dựng lộ trình học tập tối ưu dựa trên mục tiêu của bạn và dữ liệu khóa học thực tế tại OnlineFEA:';
+                $metadata = [
+                    'type' => 'learning_roadmap',
+                    'roadmap' => $ruleRoadmap,
+                    'matched_courses' => $matchResults,
+                    'related_learning_path' => $relatedLearningPath,
+                    'is_fallback' => true,
+                ];
+
+                AiChatMessage::create([
+                    'conversation_id' => $conversation->id,
+                    'user_id' => $conversation->user_id,
+                    'learning_path_id' => $conversation->learning_path_id,
+                    'role' => 'assistant',
+                    'content' => $adviceMsg,
+                    'metadata' => $metadata,
+                ]);
+
+                $contextData['current_roadmap'] = $ruleRoadmap;
+                $conversation->update([
+                    'context_data' => $contextData,
+                    'last_activity_at' => now(),
+                ]);
+
+                return [
+                    'success' => true,
+                    'response_type' => 'learning_roadmap',
+                    'message' => $adviceMsg,
+                    'roadmap' => $ruleRoadmap,
+                    'matched_courses' => $matchResults,
+                    'related_learning_path' => $relatedLearningPath,
+                    'conversation_id' => $conversation->id,
+                ];
+            }
+
+            $errorMsg = 'AI tạm thời chưa thể phản hồi. Vui lòng chọn chuyên ngành hoặc mục tiêu học tập cụ thể để hệ thống gợi ý lộ trình.';
             AiChatMessage::create([
                 'conversation_id' => $conversation->id,
                 'user_id' => $conversation->user_id,
@@ -843,6 +883,179 @@ FULLPROMPT;
         return [
             'type' => 'general_advice',
             'message' => $rawText,
+        ];
+    }
+
+    /**
+     * Sinh lộ trình theo quy tắc chuẩn khi AI provider offline hoặc gặp sự cố (STU-BE-04).
+     */
+    public function generateRuleBasedRoadmap(array $profile = [], string $prompt = ''): array
+    {
+        $targetField = $profile['desired_field'] ?? $profile['field'] ?? $profile['target_role'] ?? 'Lập trình viên';
+        $level = $profile['current_level'] ?? $profile['level'] ?? 'Người mới bắt đầu';
+        $goal = $profile['goal'] ?? 'Đi làm thực tế';
+
+        $domain = $this->detectDomain([
+            'topic' => $targetField,
+            'title' => $targetField,
+            'target_role' => $targetField,
+        ], $profile);
+
+        // Map domain to tailored stages
+        $stages = match ($domain) {
+            'business' => [
+                [
+                    'stage' => 1,
+                    'title' => 'Giai đoạn 1: Nền tảng Quản trị & Tư duy Kinh doanh',
+                    'duration' => '4 - 6 tuần',
+                    'objective' => 'Nắm vững các mô hình kinh doanh cốt lõi, quản trị tài chính cơ bản và phân tích thị trường.',
+                    'topics_to_learn' => [
+                        'Tổng quan quản trị kinh doanh & khởi nghiệp',
+                        'Mô hình Canvas & Phân tích SWOT / PESTEL',
+                        'Tài chính cơ bản cho nhà quản lý',
+                        'Kỹ năng đàm phán & thuyết phục khách hàng',
+                    ],
+                    'skills' => ['Quản trị', 'Tài chính doanh nghiệp', 'Đàm phán'],
+                    'practice' => 'Xây dựng Business Model Canvas cho một ý tưởng sản phẩm thực tế.',
+                    'transition_criteria' => 'Hoàn thành bản kế hoạch tài chính cơ bản và kế hoạch kinh doanh 1 trang.',
+                ],
+                [
+                    'stage' => 2,
+                    'title' => 'Giai đoạn 2: Quản lý Bán hàng & Trải nghiệm Khách hàng',
+                    'duration' => '6 - 8 tuần',
+                    'objective' => 'Làm chủ quy trình bán hàng B2B/B2C, chăm sóc khách hàng và vận hành đội ngũ bán hàng.',
+                    'topics_to_learn' => [
+                        'Quy trình bán hàng chuẩn 7 bước',
+                        'Quản trị quan hệ khách hàng (CRM)',
+                        'Kỹ năng xử lý từ chối và chốt sale',
+                        'Quản lý chỉ số KPI và hiệu suất kinh doanh',
+                    ],
+                    'skills' => ['Sales', 'CRM', 'Kỹ năng giao tiếp'],
+                    'practice' => 'Mô phỏng cuộc gọi bán hàng và xây dựng kịch bản chăm sóc khách hàng.',
+                    'transition_criteria' => 'Thực hiện thành công bài kiểm tra mô phỏng bán hàng thực tế.',
+                ],
+                [
+                    'stage' => 3,
+                    'title' => 'Giai đoạn 3: Chiến lược Tăng trưởng & Mở rộng Doanh nghiệp',
+                    'duration' => '8 - 10 tuần',
+                    'objective' => 'Xây dựng chiến lược mở rộng quy mô, quản trị rủi ro và chuyển đổi số trong kinh doanh.',
+                    'topics_to_learn' => [
+                        'Chiến lược tăng trưởng quy mô (Scale-up)',
+                        'Ứng dụng công nghệ và chuyển đổi số',
+                        'Quản trị rủi ro và pháp lý kinh doanh cơ bản',
+                        'Lãnh đạo và truyền cảm hứng đội ngũ',
+                    ],
+                    'skills' => ['Chiến lược kinh doanh', 'Lãnh đạo', 'Quản trị rủi ro'],
+                    'practice' => 'Xây dựng kế hoạch kinh doanh toàn diện 6 tháng cho doanh nghiệp vừa & nhỏ.',
+                    'transition_criteria' => 'Bảo vệ thành công đề án kinh doanh trước hội đồng cố vấn.',
+                ],
+            ],
+            'marketing' => [
+                [
+                    'stage' => 1,
+                    'title' => 'Giai đoạn 1: Nền tảng Tiếp thị Số (Digital Marketing Fundamentals)',
+                    'duration' => '4 - 6 tuần',
+                    'objective' => 'Hiểu rõ hành vi người tiêu dùng trên môi trường số và các kênh truyền thông chính.',
+                    'topics_to_learn' => [
+                        'Nguyên lý tiếp thị 4P/7P và Digital Marketing Framework',
+                        'Nghiên cứu thị trường và chân dung khách hàng (Buyer Persona)',
+                        'Chiến lược nội dung (Content Strategy) & Storytelling',
+                        'Thiết kế đồ họa cơ bản cho truyền thông',
+                    ],
+                    'skills' => ['Marketing căn bản', 'Content Strategy', 'Nghiên cứu thị trường'],
+                    'practice' => 'Xây dựng kế hoạch Content 1 tháng cho một thương hiệu trên mạng xã hội.',
+                    'transition_criteria' => 'Viết và xuất bản 5 bài viết chuẩn cấu trúc AIDA / PAS.',
+                ],
+                [
+                    'stage' => 2,
+                    'title' => 'Giai đoạn 2: Tối ưu Công cụ Tìm kiếm (SEO) & Quảng cáo Trả phí (Ads)',
+                    'duration' => '6 - 8 tuần',
+                    'objective' => 'Làm chủ kỹ thuật SEO On-page/Off-page và thiết lập các chiến dịch Facebook/Google Ads hiệu quả.',
+                    'topics_to_learn' => [
+                        'Nghiên cứu từ khóa & Cấu trúc website chuẩn SEO',
+                        'SEO On-page, Off-page và Technical SEO',
+                        'Thiết lập chiến dịch Google Search & Display Ads',
+                        'Quảng cáo Facebook & TikTok Ads chuyển đổi',
+                    ],
+                    'skills' => ['SEO', 'Google Ads', 'Facebook Ads', 'Digital Advertising'],
+                    'practice' => 'Tối ưu 1 bài viết chuẩn SEO và lên kế hoạch chạy ngân sách Ads mẫu.',
+                    'transition_criteria' => 'Đạt điểm chất lượng Ads tối thiểu 7/10 và audit SEO đạt yêu cầu.',
+                ],
+                [
+                    'stage' => 3,
+                    'title' => 'Giai đoạn 3: Phân tích Dữ liệu & Tăng trưởng (Growth & Analytics)',
+                    'duration' => '6 - 8 tuần',
+                    'objective' => 'Đo lường hiệu quả chiến dịch bằng Google Analytics 4, Looker Studio và tối ưu tỷ lệ chuyển đổi.',
+                    'topics_to_learn' => [
+                        'Phân tích dữ liệu với Google Analytics 4 (GA4)',
+                        'Google Tag Manager (GTM) và theo dõi chuyển đổi',
+                        'Tối ưu tỷ lệ chuyển đổi (CRO) trên Landing Page',
+                        'Xây dựng báo cáo tự động với Looker Studio',
+                    ],
+                    'skills' => ['GA4', 'Data Analytics', 'CRO', 'Growth Marketing'],
+                    'practice' => 'Xây dựng Dashboard báo cáo hiệu suất đa kênh hoàn chỉnh.',
+                    'transition_criteria' => 'Phân tích và đưa ra đề xuất tối ưu cho 1 case study chiến dịch thực tế.',
+                ],
+            ],
+            default => [
+                [
+                    'stage' => 1,
+                    'title' => 'Giai đoạn 1: Nền tảng Lập trình & Tư duy Thuật toán',
+                    'duration' => '4 - 6 tuần',
+                    'objective' => 'Xây dựng nền tảng tư duy lập trình vững chắc, làm chủ cú pháp ngôn ngữ và cấu trúc dữ liệu.',
+                    'topics_to_learn' => [
+                        'Cú pháp cơ bản, biến, kiểu dữ liệu, vòng lặp và điều kiện',
+                        'Lập trình hướng đối tượng (OOP: Encapsulation, Inheritance, Polymorphism)',
+                        'Cấu trúc dữ liệu & Thuật toán cơ bản (Array, List, Hash Map, Sorting, Searching)',
+                        'Quản lý mã nguồn với Git và GitHub',
+                    ],
+                    'skills' => ['Lập trình cơ bản', 'OOP', 'Git/GitHub', 'Thuật toán'],
+                    'practice' => 'Xây dựng ứng dụng dòng lệnh (CLI) giải quyết bài toán quản lý dữ liệu thực tế.',
+                    'transition_criteria' => 'Hoàn thành bài kiểm tra 10 bài tập thuật toán và tạo được Git repository chuẩn.',
+                ],
+                [
+                    'stage' => 2,
+                    'title' => 'Giai đoạn 2: Phát triển Ứng dụng & Cơ sở Dữ liệu',
+                    'duration' => '6 - 8 tuần',
+                    'objective' => 'Thiết kế cơ sở dữ liệu quan hệ, xây dựng RESTful API và giao diện tương tác.',
+                    'topics_to_learn' => [
+                        'Thiết kế CSDL quan hệ (MySQL/PostgreSQL) và chuẩn hóa dữ liệu',
+                        'Truy vấn SQL nâng cao, indexing và tối ưu hiệu năng',
+                        'Xây dựng RESTful API với Framework hiện đại',
+                        'Xác thực và phân quyền người dùng (Authentication & Authorization)',
+                    ],
+                    'skills' => ['Cơ sở dữ liệu', 'SQL', 'RESTful API', 'Backend Framework'],
+                    'practice' => 'Xây dựng hệ thống API backend hoàn chỉnh có chứng thực và phân quyền.',
+                    'transition_criteria' => 'Triển khai thành công ứng dụng CRUD có kết nối database và tài liệu API.',
+                ],
+                [
+                    'stage' => 3,
+                    'title' => 'Giai đoạn 3: Chuyên sâu Kiến trúc, DevOps & Dự án Thực chiến',
+                    'duration' => '8 - 12 tuần',
+                    'objective' => 'Nắm vững kiến trúc phần mềm, đóng gói ứng dụng với Docker và triển khai lên máy chủ đám mây.',
+                    'topics_to_learn' => [
+                        'Kiến trúc MVC, Clean Architecture và Repository Pattern',
+                        'Đóng gói container với Docker và Docker Compose',
+                        'Xây dựng quy trình CI/CD tự động',
+                        'Bảo mật ứng dụng web và tối ưu hóa hệ thống tải cao',
+                    ],
+                    'skills' => ['Kiến trúc phần mềm', 'Docker', 'CI/CD', 'Bảo mật web', 'DevOps'],
+                    'practice' => 'Xây dựng và triển khai một sản phẩm thực tế hoàn chỉnh (End-to-End Project) lên môi trường production.',
+                    'transition_criteria' => 'Dự án hoạt động ổn định trên máy chủ thực tế, có unit test và tài liệu kỹ thuật.',
+                ],
+            ],
+        };
+
+        return [
+            'title' => "Lộ trình {$targetField} chuẩn doanh nghiệp",
+            'topic' => $targetField,
+            'goal' => $goal,
+            'target_role' => $targetField,
+            'estimated_duration' => '4 - 6 tháng (10-15 giờ/tuần)',
+            'current_level' => $level,
+            'overview' => "Lộ trình học tập được thiết kế khoa học giúp bạn từ mức {$level} tiến tới làm chủ kỹ năng chuyên môn {$targetField} và sẵn sàng đáp ứng yêu cầu công việc thực tế.",
+            'stages' => $stages,
+            'final_note' => 'Hãy kiên trì thực hành từng bài học và hoàn thành các bài tập dự án ở mỗi giai đoạn để ghi nhớ sâu kiến thức.',
         ];
     }
 }
