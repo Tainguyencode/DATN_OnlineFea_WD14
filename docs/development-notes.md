@@ -66,3 +66,6 @@
 ### Commit 22: style: toi uu hoa layout va responsive cho giao dien hoc vien (2026-07-27 09:15:30 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 23: refactor: tach cac component blade tai su dung trong student dashboard (2026-07-28 14:20:45 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
