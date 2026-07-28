@@ -2,7 +2,7 @@
     <div class="ui-container">
         <div class="flex h-16 items-center gap-4 lg:gap-8">
             <a href="{{ route('home') }}" class="flex shrink-0 items-center gap-2.5">
-                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-9 w-9 object-contain">
+                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-12 w-12 object-contain">
                 <span class="hidden text-lg font-bold text-[#0F172A] sm:inline">FEA Learning</span>
             </a>
 
