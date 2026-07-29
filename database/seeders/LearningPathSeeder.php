@@ -39,27 +39,30 @@ class LearningPathSeeder extends Seeder
 
         DB::table('learning_paths')->insert($paths);
 
-        // 2. Liên kết các khóa học với Lộ trình (Learning Path Courses pivot)
-        $pathCourses = [
-            // Lộ trình Fullstack (Path 1) gồm Khóa Laravel (ID: 1) và Khóa React (ID: 2)
-            [
-                'learning_path_id' => 1,
-                'course_id' => 1,
-                'sort_order' => 1,
-            ],
-            [
-                'learning_path_id' => 1,
-                'course_id' => 2,
-                'sort_order' => 2,
-            ],
-            // Lộ trình UI/UX (Path 2) gồm Khóa UI/UX Fundamentals (ID: 3)
-            [
-                'learning_path_id' => 2,
-                'course_id' => 3,
-                'sort_order' => 1,
-            ],
-        ];
+        // 2. Liên kết các khóa học thực sự tồn tại với lộ trình.
+        $courseIds = DB::table('courses')->orderBy('id')->pluck('id')->values();
+        $fullstackPathId = DB::table('learning_paths')->where('slug', $paths[0]['slug'])->value('id');
+        $designPathId = DB::table('learning_paths')->where('slug', $paths[1]['slug'])->value('id');
+        $pathCourses = [];
 
-        DB::table('learning_path_courses')->insert($pathCourses);
+        foreach ($courseIds->take(2) as $sortOrder => $courseId) {
+            $pathCourses[] = [
+                'learning_path_id' => $fullstackPathId,
+                'course_id' => $courseId,
+                'sort_order' => $sortOrder + 1,
+            ];
+        }
+
+        if ($designCourseId = $courseIds->get(2)) {
+            $pathCourses[] = [
+                'learning_path_id' => $designPathId,
+                'course_id' => $designCourseId,
+                'sort_order' => 1,
+            ];
+        }
+
+        if ($pathCourses !== []) {
+            DB::table('learning_path_courses')->insert($pathCourses);
+        }
     }
 }

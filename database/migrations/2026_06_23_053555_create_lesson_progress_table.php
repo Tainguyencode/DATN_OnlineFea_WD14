@@ -24,10 +24,24 @@ return new class extends Migration
 
             $table->unsignedInteger('watched_seconds')
                 ->default(0);
+        // Thời điểm hiện tại đang xem (dùng để resume)
+            $table->unsignedInteger('current_time')
+                ->default(0);
 
+            // Tổng thời lượng video
+            $table->unsignedInteger('duration')
+                ->default(0);
+                // % hoàn thành
+            $table->decimal('progress_percent', 5, 2)
+                ->default(0);
+
+            // Lần cuối xem
+            $table->timestamp('last_watched_at')
+                ->nullable();
+            // Trạng thái hoàn thành bài học
             $table->boolean('is_completed')
                 ->default(false);
-
+            // Thời điểm hoàn thành bài học
             $table->timestamp('completed_at')
                 ->nullable();
 

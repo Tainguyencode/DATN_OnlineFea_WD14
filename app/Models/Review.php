@@ -2,13 +2,47 @@
 
 namespace App\Models;
 
+use App\Enums\ReviewStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Review extends Model
 {
-    protected $fillable = ['user_id', 'course_id', 'parent_id', 'rating', 'comment'];
+    use SoftDeletes;
+
+    protected $fillable = [
+        'user_id',
+        'course_id',
+        'rating',
+        'comment',
+        'status',
+        'helpful_count',
+        'instructor_reply',
+        'replied_by',
+        'replied_at',
+        'moderated_by',
+        'moderated_at',
+        'moderation_note',
+        'verified_purchase',
+        'parent_id',
+        'is_hidden',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'rating' => 'integer',
+            'helpful_count' => 'integer',
+            'status' => ReviewStatus::class,
+            'verified_purchase' => 'boolean',
+            'replied_at' => 'datetime',
+            'moderated_at' => 'datetime',
+            'is_hidden' => 'boolean',
+        ];
+    }
 
     public function user(): BelongsTo
     {
@@ -20,6 +54,16 @@ class Review extends Model
         return $this->belongsTo(Course::class);
     }
 
+    public function replier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'replied_by');
+    }
+
+    public function moderator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'moderated_by');
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Review::class, 'parent_id');
@@ -28,5 +72,65 @@ class Review extends Model
     public function replies(): HasMany
     {
         return $this->hasMany(Review::class, 'parent_id');
+    }
+
+    public function isReply(): bool
+    {
+        return ! is_null($this->parent_id);
+    }
+
+    public function helpfulRecords(): HasMany
+    {
+        return $this->hasMany(ReviewHelpful::class);
+    }
+
+    public function helpfulUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'review_helpful')->withTimestamps();
+    }
+
+    public function isVisible(): bool
+    {
+        return $this->status === ReviewStatus::Visible && ! $this->is_hidden && ! $this->trashed();
+    }
+
+    public function isHidden(): bool
+    {
+        return $this->status === ReviewStatus::Hidden || $this->is_hidden;
+    }
+
+    public function scopeVisible($query)
+    {
+        return $query
+            ->where('status', ReviewStatus::Visible->value)
+            ->where('is_hidden', false);
+    }
+
+    public function scopeHidden($query)
+    {
+        return $query->where(function ($query) {
+            $query->where('status', ReviewStatus::Hidden->value)
+                ->orWhere('is_hidden', true);
+        });
+    }
+
+    public function scopeApproved($query)
+    {
+        return $query->visible();
+    }
+
+    public function scopePending($query)
+    {
+        return $query->whereRaw('1 = 0');
+    }
+
+    public function scopeRating($query, ?int $rating)
+    {
+        return $rating ? $query->where('rating', $rating) : $query;
+    }
+
+    public function scopeMostHelpful($query)
+    {
+        return $query->orderByDesc('helpful_count')->orderByDesc('created_at');
     }
 }

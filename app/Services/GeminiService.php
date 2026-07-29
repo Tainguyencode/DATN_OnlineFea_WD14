@@ -27,6 +27,96 @@ class GeminiService
         'google/gemini-flash-latest',
     ];
 
+    private const TEXT_MODELS = [
+        'google/gemini-3.5-flash',
+        'google/gemini-3.1-flash-lite',
+        'google/gemini-flash-latest',
+    ];
+
+    /**
+     * Generate plain-text response for lesson AI (summary / Q&A).
+     *
+     * @param  array{max_tokens?: int, temperature?: float, timeout?: int}  $options
+     * @return array{text?: string, error?: string, _model_used?: string}
+     */
+    public function generateText(string $prompt, array $options = []): array
+    {
+        $apiKey = $this->apiKey();
+
+        if ($apiKey === null) {
+            return ['error' => 'Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong .env'];
+        }
+
+        $maxTokens = (int) ($options['max_tokens'] ?? 1200);
+        $temperature = (float) ($options['temperature'] ?? 0.3);
+        $timeout = (int) ($options['timeout'] ?? 45);
+        $lastError = '';
+
+        foreach (self::TEXT_MODELS as $model) {
+            $body = [
+                'model' => $model,
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => $prompt,
+                    ],
+                ],
+                'temperature' => $temperature,
+                'max_tokens' => $maxTokens,
+            ];
+
+            try {
+                $response = Http::timeout($timeout)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer '.$apiKey,
+                        'HTTP-Referer' => url('/'),
+                        'X-Title' => config('app.name'),
+                    ])
+                    ->post(self::API_URL, $body);
+
+                if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404], true)) {
+                    $msg = $response->json('error.message') ?? $response->body();
+                    Log::warning("OpenRouter text skip [{$model}]", ['status' => $response->status()]);
+                    $lastError = "[{$model}] {$response->status()}: {$msg}";
+
+                    continue;
+                }
+
+                if ($response->failed()) {
+                    $msg = $response->json('error.message') ?? $response->body();
+                    Log::error("OpenRouter text error [{$model}]", ['status' => $response->status()]);
+                    $lastError = "[{$model}] {$response->status()}: {$msg}";
+
+                    continue;
+                }
+
+                $rawText = (string) ($response->json('choices.0.message.content') ?? '');
+                $clean = trim($rawText);
+                $clean = preg_replace('/^```(?:\w+)?\s*/i', '', $clean) ?? $clean;
+                $clean = preg_replace('/\s*```\s*$/i', '', $clean) ?? $clean;
+                $clean = trim($clean);
+
+                if ($clean === '') {
+                    $lastError = "[{$model}] empty response";
+
+                    continue;
+                }
+
+                return [
+                    'text' => $clean,
+                    '_model_used' => $model,
+                ];
+            } catch (ConnectionException $e) {
+                Log::error('OpenRouter text connection error', ['exception' => $e::class]);
+                $lastError = 'Connection error: '.$e->getMessage();
+
+                throw $e;
+            }
+        }
+
+        return ['error' => 'Tất cả model OpenRouter đều thất bại. Lỗi cuối: '.$lastError];
+    }
+
     public function analyzeImage(string $imagePath): array
     {
         // 1. Kiểm tra file tồn tại
@@ -38,21 +128,20 @@ class GeminiService
         $imageData = base64_encode(file_get_contents($imagePath));
         $mimeType = mime_content_type($imagePath) ?: 'image/jpeg';
 
-        // Lấy API key (đã trỏ sang OPENROUTER_API_KEY trong config)
-        $apiKey = config('services.gemini.api_key');
+        $apiKey = $this->apiKey();
 
-        if (empty($apiKey)) {
-            return ['error' => 'Chưa cấu hình OPENROUTER_API_KEY trong .env'];
+        if ($apiKey === null) {
+            return ['error' => 'Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong .env'];
         }
 
         // 3. Chuẩn bị prompt
         $prompt = <<<'PROMPT'
-Bạn là hệ thống AI chuyên kiểm duyệt nội dung video cho một nền tảng học trực tuyến.
+Bạn là hệ thống AI hỗ trợ kiểm duyệt nội dung video cho một nền tảng học trực tuyến.
 
 Bạn sẽ được cung cấp:
 - Một ảnh (frame) được cắt từ video.
 
-Nhiệm vụ của bạn là chỉ phân tích nội dung của ảnh này.
+Nhiệm vụ của bạn: PHÁT HIỆN DẤU HIỆU, KHÔNG kết luận vi phạm. Quyết định cuối cùng luôn do con người.
 
 Hãy kiểm tra các tiêu chí sau:
 
@@ -84,35 +173,38 @@ Kiểm tra xem ảnh có xuất hiện:
 - Logo Facebook
 - Logo Instagram
 Nếu phát hiện thì đánh dấu true tương ứng.
+Lưu ý: Logo xuất hiện trong bài giảng minh họa cũng tính là phát hiện, nhưng không đồng nghĩa là vi phạm.
 
 5. Watermark
 Kiểm tra xem ảnh có chứa watermark hoặc logo của bên thứ ba hay không.
 Nếu có thì trả về true.
 
-6. Nguy cơ vi phạm bản quyền (copyright_risk)
-Đánh giá mức độ: low | medium | high
-Quy tắc:
-- Có watermark TikTok → high
-- Có watermark YouTube → high
-- Có logo đài truyền hình → high
-- Có hình ảnh phim, anime, chương trình truyền hình có bản quyền → high
-- Các trường hợp còn lại hãy tự đánh giá hợp lý.
+6. Mức độ dấu hiệu bản quyền cần xem lại (copyright_risk)
+Đây KHÔNG phải kết luận vi phạm, chỉ là mức độ AI nghi ngờ cần xem lại:
+- none: Không phát hiện bất kỳ dấu hiệu nào liên quan đến nội dung bên thứ ba.
+- low: Có logo/watermark xuất hiện thoáng qua hoặc rất nhỏ, có thể chỉ là minh họa.
+- medium: Logo hoặc giao diện nền tảng khác xuất hiện khá lâu hoặc rõ ràng, có thể chỉ đang demo.
+- high: Watermark hoặc nội dung bên thứ ba chiếm phần lớn khung hình, AI nghi ngờ đây là video phát lại từ nguồn khác – cần admin xác minh.
 
-7. Tóm tắt nội dung ảnh
+7. Mô tả nội dung ảnh (summary)
 Viết một câu ngắn bằng tiếng Việt mô tả nội dung chính của ảnh.
+KHÔNG dùng từ "vi phạm", "ăn cắp", "bị từ chối". Chỉ mô tả những gì AI quan sát thấy.
+Ví dụ tốt: "Phát hiện logo YouTube ở góc phải khung hình. Có thể chỉ là video minh họa, admin nên kiểm tra."
 
-8. Giải thích
-Nếu phát hiện vi phạm, hãy giải thích ngắn gọn bằng tiếng Việt vì sao ảnh bị đánh dấu.
-Nếu không có vi phạm thì để chuỗi rỗng.
+8. Giải thích dấu hiệu (reason)
+Nếu phát hiện bất kỳ dấu hiệu nào, mô tả ngắn gọn bằng tiếng Việt những gì AI thấy.
+KHÔNG kết luận vi phạm. Chỉ mô tả dấu hiệu và gợi ý kiểm tra.
+Ví dụ: "Phát hiện logo YouTube tại góc trên bên phải. Gợi ý: Có thể chỉ là video minh họa, admin nên kiểm tra."
+Nếu không có gì đáng chú ý thì để chuỗi rỗng.
 
 9. Độ tin cậy
-confidence là số thực từ 0 đến 1 thể hiện mức độ tự tin của bạn đối với kết quả.
+confidence là số thực từ 0 đến 1 thể hiện mức độ tự tin của bạn đối với phát hiện.
 
 =========================
 QUAN TRỌNG
 =========================
 Chỉ trả về JSON hợp lệ. Không giải thích. Không thêm markdown. Không dùng ```json.
-JSON phải đúng chính xác định dạng sau (với timestamp là placeholder ta sẽ điền ở ngoài):
+JSON phải đúng chính xác định dạng sau:
 {
   "timestamp": 0,
   "violence": false,
@@ -123,7 +215,7 @@ JSON phải đúng chính xác định dạng sau (với timestamp là placehold
   "facebook_logo": false,
   "instagram_logo": false,
   "watermark": false,
-  "copyright_risk": "low",
+  "copyright_risk": "none",
   "confidence": 0.98,
   "reason": "",
   "summary": ""
@@ -215,5 +307,16 @@ PROMPT;
         }
 
         return ['error' => 'Tất cả model OpenRouter đều thất bại. Lỗi cuối: '.$lastError];
+    }
+
+    private function apiKey(): ?string
+    {
+        $key = config('services.gemini.api_key');
+
+        if (! is_string($key) || trim($key) === '') {
+            return null;
+        }
+
+        return trim($key);
     }
 }

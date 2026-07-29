@@ -19,8 +19,7 @@ return new class extends Migration
 
             $table->string('title');
 
-            $table->text('content')
-                ->nullable();
+            $table->longText('content')->nullable();
 
             $table->enum('type', [
                 'video',
@@ -29,17 +28,64 @@ return new class extends Migration
                 'assignment',
             ])->default('video');
 
-            $table->string('video_url')
-                ->nullable();
+            /*
+            |--------------------------------------------------------------------------
+            | Video gốc
+            |--------------------------------------------------------------------------
+            */
 
-            $table->unsignedInteger('duration_seconds')
-                ->default(0);
+            // File upload ban đầu
+            $table->string('video_path')->nullable();
 
-            $table->boolean('is_preview')
-                ->default(false);
+            // URL nếu dùng Cloudflare, S3...
+            $table->string('video_url')->nullable();
 
-            $table->unsignedInteger('sort_order')
-                ->default(0);
+            // Tên file gốc
+            $table->string('video_original_name')->nullable();
+
+            // Dung lượng (byte)
+            $table->unsignedBigInteger('video_size')->default(0);
+
+            // Mime type
+            $table->string('video_mime')->nullable();
+
+            /*
+            |--------------------------------------------------------------------------
+            | HLS
+            |--------------------------------------------------------------------------
+            */
+
+            // playlist.m3u8
+            $table->string('hls_playlist')->nullable();
+
+            // thư mục chứa .ts
+            $table->string('hls_path')->nullable();
+
+            $table->enum('hls_status', [
+                'pending',
+                'processing',
+                'completed',
+                'failed'
+            ])->default('pending');
+
+            // Lưu lỗi FFmpeg nếu có
+            $table->text('processing_error')->nullable();
+
+            // Thời gian convert xong
+            $table->timestamp('processed_at')->nullable();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Video info
+            |--------------------------------------------------------------------------
+            */
+
+            $table->unsignedInteger('duration_seconds')->default(0);
+
+            $table->boolean('is_preview')->default(false);
+
+            $table->unsignedInteger('sort_order')->default(0);
+
             $table->timestamps();
         });
     }
