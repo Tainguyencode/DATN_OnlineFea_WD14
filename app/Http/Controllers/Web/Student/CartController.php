@@ -198,6 +198,17 @@ class CartController extends Controller
 
                     if ($enrollment->wasRecentlyCreated) {
                         $course->increment('enrollment_count');
+
+                        if ($course->instructor) {
+                            $studentName = auth()->user()?->name ?? 'Một học viên';
+                            app(\App\Services\NotificationService::class)->send(
+                                $course->instructor,
+                                'Học viên mới đăng ký khóa học',
+                                "Học viên {$studentName} đã đăng ký khóa học \"{$course->title}\".",
+                                'new_enrollment',
+                                route('instructor.courses.students', $course)
+                            );
+                        }
                     }
                 }
 
@@ -258,7 +269,7 @@ class CartController extends Controller
             return $order;
         });
 
-        // Lấy URL thanh toán tương ứng và chuyển hướng người dùng
+        // Lấy URL thanh toán tương ứng và chuyển hướng người dùng tới trang quét mã QR (PayOS / VietQR)
         $paymentUrl = $paymentService->getPaymentUrl($order);
 
         return redirect($paymentUrl);
@@ -459,3 +470,4 @@ class CartController extends Controller
         return view('student.cart.failed', compact('order', 'orderItems'));
     }
 }
+
