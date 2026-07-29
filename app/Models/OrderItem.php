@@ -11,12 +11,18 @@ class OrderItem extends Model
         'order_id',
         'course_id',
         'price',
+        'commission_rate',
+        'commission_amount',
+        'instructor_earning',
     ];
 
     protected function casts(): array
     {
         return [
             'price' => 'decimal:2',
+            'commission_rate' => 'decimal:2',
+            'commission_amount' => 'decimal:2',
+            'instructor_earning' => 'decimal:2',
         ];
     }
 
