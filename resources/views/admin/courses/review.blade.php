@@ -222,8 +222,22 @@
                                         @endif
 
                                         @if($lesson->type === 'video' && $lesson->video_path)
+                                            @php
+                                                $isHls = !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4');
+                                            @endphp
                                             <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-                                                <video src="{{ asset('storage/'.$lesson->video_path) }}" controls class="h-full w-full"></video>
+                                                <video
+                                                    id="admin-video-{{ $lesson->id }}"
+                                                    @if($isHls)
+                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', $lesson) }}"
+                                                    @else
+                                                        src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
+                                                    @endif
+                                                    controls
+                                                    preload="metadata"
+                                                    class="h-full w-full"
+                                                    data-admin-review-video
+                                                ></video>
                                             </div>
                                             
                                             {{-- Nút và khu vực hiển thị quét AI --}}
@@ -242,36 +256,96 @@
                                                 <div class="ai-result-area mt-4 {{ $lesson->videoModeration ? '' : 'hidden' }}">
                                                     @if($lesson->videoModeration)
                                                         @php $mod = $lesson->videoModeration; @endphp
-                                                        <div class="rounded-lg border {{ $mod->hasViolations() ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50' }} p-4 shadow-sm">
-                                                            <h6 class="font-bold text-slate-900 mb-2">Kết quả quét xong</h6>
-                                                            <div class="flex flex-wrap gap-2 mb-3">
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->violence ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Bạo lực: {{ $mod->violence ? 'Có' : 'Không' }}</span>
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->adult ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">18+: {{ $mod->adult ? 'Có' : 'Không' }}</span>
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->weapon ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Vũ khí: {{ $mod->weapon ? 'Có' : 'Không' }}</span>
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->watermark ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">Watermark: {{ $mod->watermark ? 'Có' : 'Không' }}</span>
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->tiktok_logo ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">TikTok: {{ $mod->tiktok_logo ? 'Có' : 'Không' }}</span>
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->youtube_logo ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">YouTube: {{ $mod->youtube_logo ? 'Có' : 'Không' }}</span>
-                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->copyright_risk === 'high' ? 'bg-rose-100 text-rose-700' : ($mod->copyright_risk === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700') }}">Bản quyền: {{ strtoupper($mod->copyright_risk) }}</span>
+                                                        @php
+                                                            $hasHard = $mod->violence || $mod->adult || $mod->weapon;
+                                                            $hasSigns = $mod->hasDetectedSigns();
+                                                            $riskBadgeMap = [
+                                                                'none'   => ['bg-emerald-100 text-emerald-700', 'Không phát hiện dấu hiệu'],
+                                                                'low'    => ['bg-amber-100 text-amber-700',   'Có dấu hiệu cần kiểm tra'],
+                                                                'medium' => ['bg-orange-100 text-orange-700', 'Nên xem lại video'],
+                                                                'high'   => ['bg-rose-100 text-rose-700',     'AI nghi ngờ cao – cần xác minh'],
+                                                            ];
+                                                            $riskKey = in_array($mod->copyright_risk, ['none','low','medium','high']) ? $mod->copyright_risk : 'none';
+                                                            [$riskCss, $riskLabel] = $riskBadgeMap[$riskKey];
+                                                        @endphp
+                                                        <div class="rounded-lg border {{ $hasHard ? 'border-rose-200 bg-rose-50' : ($hasSigns ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50') }} p-4 shadow-sm">
+                                                            {{-- Banner trạng thái --}}
+                                                            <div class="flex items-center gap-2 mb-3">
+                                                                @if($hasHard)
+                                                                    <span class="text-base">🔴</span>
+                                                                    <h6 class="font-bold text-rose-900 text-sm">AI phát hiện nội dung cần xem xét</h6>
+                                                                @elseif($hasSigns)
+                                                                    <span class="text-base">🔍</span>
+                                                                    <h6 class="font-bold text-amber-900 text-sm">AI phát hiện dấu hiệu – cần admin kiểm tra</h6>
+                                                                @else
+                                                                    <span class="text-base">✅</span>
+                                                                    <h6 class="font-bold text-emerald-900 text-sm">Không phát hiện dấu hiệu đáng chú ý</h6>
+                                                                @endif
                                                             </div>
+
+                                                            {{-- Badges chi tiết --}}
+                                                            <div class="flex flex-wrap gap-2 mb-3">
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->violence ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Bạo lực: {{ $mod->violence ? 'Phát hiện' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->adult ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">18+: {{ $mod->adult ? 'Phát hiện' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->weapon ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">Vũ khí: {{ $mod->weapon ? 'Phát hiện' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->watermark ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">Watermark: {{ $mod->watermark ? 'Có dấu hiệu' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->tiktok_logo ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">TikTok: {{ $mod->tiktok_logo ? 'Có dấu hiệu' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $mod->youtube_logo ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">YouTube: {{ $mod->youtube_logo ? 'Có dấu hiệu' : 'Không' }}</span>
+                                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $riskCss }}">Mức nghi ngờ: {{ $riskLabel }}</span>
+                                                            </div>
+
                                                             @if($mod->summary)
-                                                                <p class="text-sm text-slate-700 mb-3"><span class="font-semibold">Tóm tắt:</span> {{ $mod->summary }}</p>
+                                                                <p class="text-sm text-slate-700 mb-3"><span class="font-semibold">AI nhận xét:</span> {{ $mod->summary }}</p>
                                                             @endif
                                                             
                                                             @php $violatedFrames = $mod->violatedFrameDetails(); @endphp
                                                             @if(!empty($violatedFrames))
-                                                                <div class="text-xs text-slate-600 bg-white rounded border border-slate-200 p-2 max-h-32 overflow-y-auto mt-3">
-                                                                    <p class="font-semibold mb-1 text-slate-900">Chi tiết lỗi các khung hình:</p>
-                                                                    <ul class="list-disc pl-4 space-y-1">
+                                                                <div class="text-xs text-slate-600 bg-white rounded-lg border border-slate-200 mt-3 overflow-hidden">
+                                                                    <div class="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+                                                                        <p class="font-semibold text-slate-800 text-xs">🎯 Dấu hiệu phát hiện theo thời điểm</p>
+                                                                        <span class="text-xs text-slate-400">Bấm ▶ để nhảy đến đoạn AI phát hiện</span>
+                                                                    </div>
+                                                                    <ul class="divide-y divide-slate-100 max-h-48 overflow-y-auto">
                                                                     @foreach($violatedFrames as $vf)
-                                                                        <li>
-                                                                            <span class="font-bold text-slate-800">{{ $vf['timestamp'] }}</span>: 
-                                                                            <span class="text-rose-700 font-semibold">{{ implode(', ', $vf['labels']) }}</span>
-                                                                            @if(!empty($vf['reason'])) - <span class="text-slate-600">{{ $vf['reason'] }}</span> @endif
+                                                                        @php
+                                                                            // Tính seconds từ timestamp string "MM:SS"
+                                                                            $tsParts = explode(':', $vf['timestamp']);
+                                                                            $tsSeconds = count($tsParts) === 2
+                                                                                ? ((int)$tsParts[0] * 60 + (int)$tsParts[1])
+                                                                                : (int)($tsParts[0] ?? 0);
+                                                                        @endphp
+                                                                        <li class="flex items-start gap-2 px-3 py-2 hover:bg-amber-50 transition-colors">
+                                                                            {{-- Nút seek --}}
+                                                                            @if($lesson->video_path)
+                                                                                <button
+                                                                                    type="button"
+                                                                                    class="admin-seek-btn flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
+                                                                                    data-video-id="admin-video-{{ $lesson->id }}"
+                                                                                    data-timestamp="{{ $tsSeconds }}"
+                                                                                    title="Nhảy đến {{ $vf['timestamp'] }} và phát video"
+                                                                                >
+                                                                                    ▶ {{ $vf['timestamp'] }}
+                                                                                </button>
+                                                                            @else
+                                                                                <span class="flex-shrink-0 inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">
+                                                                                    {{ $vf['timestamp'] }}
+                                                                                </span>
+                                                                            @endif
+                                                                            {{-- Labels & reason --}}
+                                                                            <div class="min-w-0 flex-1">
+                                                                                <span class="text-amber-700 font-semibold">{{ implode(', ', $vf['labels']) }}</span>
+                                                                                @if(!empty($vf['reason']))
+                                                                                    <span class="text-slate-500"> – {{ $vf['reason'] }}</span>
+                                                                                @endif
+                                                                            </div>
                                                                         </li>
                                                                     @endforeach
                                                                     </ul>
                                                                 </div>
                                                             @endif
+
+                                                            {{-- Note admin --}}
+                                                            <p class="mt-3 text-xs text-slate-500 italic">ℹ️ AI chỉ hỗ trợ phát hiện dấu hiệu. Quyết định Approve / Cần chỉnh sửa / Từ chối luôn do Admin.</p>
                                                         </div>
                                                     @endif
                                                 </div>
@@ -283,7 +357,7 @@
                                             <a href="{{ $lesson->video_url }}" target="_blank" class="rounded-lg border border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">Xem video URL</a>
                                         @endif
                                         @if($lesson->video_path)
-                                            <a href="{{ asset('storage/'.$lesson->video_path) }}" target="_blank" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50">Tải video file</a>
+                                            <span class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700">Video file ({{ \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4') ? 'Chưa bảo mật HLS' : 'Đã bảo mật' }})</span>
                                         @endif
                                         @if($lesson->document_file)
                                             <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-50">Xem tài liệu</a>
@@ -476,8 +550,21 @@
         </form>
     </section>
 
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Khởi tạo các video HLS (nếu có)
+    document.querySelectorAll('video[data-hls-src]').forEach(function (video) {
+        var hlsSrc = video.getAttribute('data-hls-src');
+        if (Hls.isSupported()) {
+            var hls = new Hls();
+            hls.loadSource(hlsSrc);
+            hls.attachMedia(video);
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = hlsSrc;
+        }
+    });
+
     // 1. Logic duyệt khóa học
     var form     = document.getElementById('course-review-form');
     var actionInput = document.getElementById('review-action-input');
@@ -497,7 +584,85 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ─────────────────────────────────────────────────────────────
+    // 3. Logic xem nhanh đoạn AI phát hiện (CHỈ Admin Review)
+    // ─────────────────────────────────────────────────────────────
+
+    function adminSeekAndPlay(video, seconds) {
+        seconds = Math.max(0, parseFloat(seconds) || 0);
+
+        var seekableInfo = 'none';
+        if (video.seekable && video.seekable.length > 0) {
+            seekableInfo = video.seekable.start(0) + 's – ' + video.seekable.end(0) + 's';
+        }
+        console.log('[AdminSeek] target=' + seconds + 's | readyState=' + video.readyState
+            + ' | duration=' + video.duration + ' | seekable=' + seekableInfo);
+
+        function doSeek() {
+            video.pause();
+            video.currentTime = seconds;
+            console.log('[AdminSeek] currentTime sau set:', video.currentTime);
+
+            var done = false;
+
+            var fallback = setTimeout(function () {
+                if (done) return;
+                done = true;
+                console.warn('[AdminSeek] fallback play @ ' + video.currentTime);
+                video.play().catch(function () {});
+            }, 600);
+
+            video.addEventListener('seeked', function onSeeked() {
+                if (done) return;
+                done = true;
+                clearTimeout(fallback);
+                video.removeEventListener('seeked', onSeeked);
+                console.log('[AdminSeek] seeked OK @ ' + video.currentTime);
+                video.play().catch(function () {});
+            }, { once: true });
+        }
+
+        if (video.readyState >= 1) {
+            doSeek();
+        } else {
+            // Metadata chưa load (preload=metadata đang tải) → chờ
+            video.addEventListener('loadedmetadata', function () {
+                doSeek();
+            }, { once: true });
+        }
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.admin-seek-btn');
+        if (!btn) return;
+
+        var videoId = btn.dataset.videoId;
+        var seconds = parseFloat(btn.dataset.timestamp || 0);
+
+        if (!videoId) return;
+
+        var video = document.getElementById(videoId);
+        if (!video) {
+            console.error('[AdminSeek] Không tìm thấy video#' + videoId);
+            return;
+        }
+
+        // Seek và play TRƯỚC, cuộn SAU (tránh scrollIntoView interrupt seek)
+        adminSeekAndPlay(video, seconds);
+
+        // Cuộn đến video để người dùng thấy
+        video.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Highlight nút đang active
+        document.querySelectorAll('.admin-seek-btn').forEach(function (b) {
+            b.classList.remove('ring-2', 'ring-yellow-400', 'bg-indigo-800');
+        });
+        btn.classList.add('ring-2', 'ring-yellow-400', 'bg-indigo-800');
+    });
+
+    // ─────────────────────────────────────────────────────────────
     // 2. Logic Quét AI
+    // ─────────────────────────────────────────────────────────────
     async function parseJsonResponse(response) {
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\ResetPasswordNotification;
 use App\Services\EmailVerificationService;
 use App\Services\RoleSyncService;
 use Database\Factories\UserFactory;
@@ -84,6 +85,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Review::class);
     }
 
+    public function helpfulCourseReviews(): BelongsToMany
+    {
+        return $this->belongsToMany(Review::class, 'review_helpful')->withTimestamps();
+    }
+
     public function courseReviewsAsReviewer(): HasMany
     {
         return $this->hasMany(CourseReview::class, 'reviewer_id');
@@ -92,6 +98,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function certificates(): HasMany
     {
         return $this->hasMany(Certificate::class);
+    }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
     }
 
     public function activityLogs(): HasMany
@@ -119,6 +130,29 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(LessonProgress::class);
     }
 
+    public function lessonNotes(): HasMany
+    {
+        return $this->hasMany(LessonNote::class);
+    }
+
+    public function studyGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(StudyGroup::class, 'study_group_members')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function createdStudyGroups(): HasMany
+    {
+        return $this->hasMany(StudyGroup::class, 'creator_id');
+    }
+
+    public function studyGroupMessages(): HasMany
+    {
+        return $this->hasMany(StudyGroupMessage::class);
+    }
+
+
     public function emailVerificationCodes(): HasMany
     {
         return $this->hasMany(EmailVerificationCode::class);
@@ -127,6 +161,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function sendEmailVerificationNotification(): void
     {
         app(EmailVerificationService::class)->sendCode($this);
+    }
+
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 
     public function roles(): BelongsToMany
