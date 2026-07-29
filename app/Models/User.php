@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Storage;
     'google_id', 'facebook_id', 'github_id', 'microsoft_id',
     'two_factor_enabled', 'two_factor_secret', 'is_active',
     'last_login_at', 'last_login_ip', 'password_changed_at',
-    'commission_rate', 'bank_name', 'bank_account_number', 'bank_account_name',
+    'commission_rate', 'bank_code', 'bank_name', 'bank_account_number', 'bank_account_name',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -230,5 +230,39 @@ class User extends Authenticatable implements MustVerifyEmail
         $default = SystemSetting::get('default_commission_rate', config('course.default_commission_rate', 20.00));
 
         return (float) $default;
+    }
+
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(Withdrawal::class);
+    }
+
+    public function getTotalEarningsAttribute(): float
+    {
+        return (float) \Illuminate\Support\Facades\DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->join('courses', 'courses.id', '=', 'order_items.course_id')
+            ->where('courses.instructor_id', $this->id)
+            ->where('orders.status', 'paid')
+            ->sum('order_items.instructor_earning');
+    }
+
+    public function getTotalWithdrawnAttribute(): float
+    {
+        return (float) $this->withdrawals()
+            ->where('status', Withdrawal::STATUS_APPROVED)
+            ->sum('amount');
+    }
+
+    public function getPendingWithdrawalAttribute(): float
+    {
+        return (float) $this->withdrawals()
+            ->where('status', Withdrawal::STATUS_PENDING)
+            ->sum('amount');
+    }
+
+    public function getAvailableBalanceAttribute(): float
+    {
+        return max(0, $this->total_earnings - $this->total_withdrawn - $this->pending_withdrawal);
     }
 }
