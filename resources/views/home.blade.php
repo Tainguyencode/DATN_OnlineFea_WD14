@@ -5,17 +5,33 @@
 @section('content')
 <section class="bg-white dark:bg-slate-950">
     <div class="relative overflow-hidden shadow-md" id="banner-slider">
+        <style>
+            .banner-img-custom {
+                width: 100%;
+                object-fit: cover;
+                /* Sử dụng tỷ lệ gốc của ảnh banner1 để không bị cắt xén (1942x809) */
+                aspect-ratio: 1942 / 809;
+            }
+            @media (max-width: 768px) {
+                .banner-img-custom {
+                    aspect-ratio: 16 / 9;
+                }
+            }
+        </style>
         {{-- Slides --}}
         <div class="banner-track flex transition-transform duration-700 ease-in-out" id="banner-track">
             <div class="banner-slide w-full shrink-0">
-                <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block h-auto w-full">
+                <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block banner-img-custom">
             </div>
             <div class="banner-slide w-full shrink-0">
-                <img src="{{ asset('images/banner2.png') }}" alt="FEA Learning Banner 2" class="block h-auto w-full">
+                <img src="{{ asset('images/banner3.png') }}" alt="FEA Learning Banner 2" class="block banner-img-custom">
+            </div>
+             <div class="banner-slide w-full shrink-0">
+                <img src="{{ asset('images/banner2.png') }}" alt="FEA Learning Banner 2" class="block banner-img-custom">
             </div>
             {{-- Clone slide 1 để loop vô tận không giật --}}
             <div class="banner-slide w-full shrink-0" aria-hidden="true">
-                <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block h-auto w-full">
+                <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block banner-img-custom">
             </div>
         </div>
         
