@@ -27,6 +27,12 @@ class PermissionSeeder extends Seeder
             ['name' => 'Quản lý khóa học', 'slug' => 'courses.manage', 'group' => 'courses'],
             ['name' => 'Duyệt đơn giảng viên', 'slug' => 'instructor_applications.review', 'group' => 'instructors'],
             ['name' => 'Quản lý vai trò', 'slug' => 'roles.manage', 'group' => 'roles'],
+            ['name' => 'Xem đánh giá khóa học', 'slug' => 'course_reviews.view', 'group' => 'course_reviews'],
+            ['name' => 'Quản lý hiển thị đánh giá khóa học', 'slug' => 'course_reviews.moderate', 'group' => 'course_reviews'],
+            ['name' => 'Ẩn đánh giá khóa học', 'slug' => 'course_reviews.hide', 'group' => 'course_reviews'],
+            ['name' => 'Xóa đánh giá khóa học', 'slug' => 'course_reviews.delete', 'group' => 'course_reviews'],
+            ['name' => 'Xuất đánh giá khóa học', 'slug' => 'course_reviews.export', 'group' => 'course_reviews'],
+            ['name' => 'Phản hồi đánh giá khóa học', 'slug' => 'course_reviews.reply', 'group' => 'course_reviews'],
         ];
 
         foreach ($permissions as $permission) {

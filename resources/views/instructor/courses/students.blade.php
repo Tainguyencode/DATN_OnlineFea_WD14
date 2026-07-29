@@ -1,4 +1,4 @@
-<x-instructor-layout :title="$course->title" page-title="Học viên" :breadcrumb="$course->title">
+<x-instructor-layout :title="$course->title" page-title="Danh sách học viên" :breadcrumb="$course->title">
 
 <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
     <div class="p-5 border-b border-slate-100">

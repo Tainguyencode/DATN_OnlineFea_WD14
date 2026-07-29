@@ -9,24 +9,43 @@ use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardControll
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
+use App\Http\Controllers\Web\Admin\StudentReviewController as AdminStudentReviewController;
+use App\Http\Controllers\Web\Admin\SupportTicketController as AdminSupportTicketController;
 use App\Http\Controllers\Web\Admin\UserController;
+use App\Http\Controllers\Web\SupportTicketController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
+use App\Http\Controllers\Web\DiscussionController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
+<<<<<<< HEAD
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
 use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\PaymentController;
+=======
+use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
+use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
+use App\Http\Controllers\Web\Instructor\ReviewReplyController;
+use App\Http\Controllers\Web\NotificationController;
+use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\ReviewController;
+use App\Http\Controllers\Web\ReviewHelpfulController;
+>>>>>>> origin/main
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
+use App\Http\Controllers\Web\Student\LessonAiController;
+use App\Http\Controllers\Web\Student\LessonNoteController;
+use App\Http\Controllers\Web\Student\LessonNoteLibraryController;
 use App\Http\Controllers\Web\Student\MiscController as StudentMiscController;
 use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
+use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
+use App\Http\Controllers\Api\StudyGroupController;
 use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
@@ -36,22 +55,23 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+if (app()->environment('local')) {
+    Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
+        $frames = $extractor->extract(
+            storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
+        );
 
-    $frames = $extractor->extract(
-        storage_path('app/public/lesson-videos/N3KN3TMzv1u4QWYDJI0NEPxqdeJqz1HfRW5Rnn8L.mp4')
-    );
+        return $frames;
+    });
 
-    return $frames;
-});
+    Route::get('/test-gemini', function (GeminiService $gemini) {
+        $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
 
-Route::get('/test-gemini', function (GeminiService $gemini) {
-    $framePath = storage_path('app'.DIRECTORY_SEPARATOR.'temp_frames'.DIRECTORY_SEPARATOR.'frame_0.jpg');
+        $result = $gemini->analyzeImage($framePath);
 
-    $result = $gemini->analyzeImage($framePath);
-
-    return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-});
+        return response()->json($result, 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    });
+}
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
@@ -59,6 +79,19 @@ Route::get('/courses/category/{category:slug}', [CourseController::class, 'categ
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
+
+    // Study Groups
+    Route::get('/study-groups', [StudyGroupController::class, 'index'])->name('study-groups.index');
+    Route::post('/study-groups', [StudyGroupController::class, 'store'])->name('study-groups.store');
+    Route::get('/study-groups/{studyGroup}', [StudyGroupController::class, 'show'])->name('study-groups.show');
+    Route::put('/study-groups/{studyGroup}', [StudyGroupController::class, 'update'])->name('study-groups.update');
+    Route::delete('/study-groups/{studyGroup}', [StudyGroupController::class, 'destroy'])->name('study-groups.destroy');
+    Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('study-groups.join');
+    Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('study-groups.leave');
+    Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('study-groups.members');
+    Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('study-groups.messages.store');
+    Route::get('/study-groups/{studyGroup}/messages/{message}/file', [StudyGroupController::class, 'downloadFile'])->name('study-groups.messages.download');
+    Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('study-groups.members.remove');
 });
 Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
@@ -69,8 +102,37 @@ Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'less
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
 
+Route::middleware(['auth', 'active'])->group(function () {
+    Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
+    Route::post('/discussions/{discussion}/replies', [DiscussionController::class, 'storeReply'])->name('discussions.replies.store');
+});
+
+Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:30,1'])->group(function () {
+    Route::get('/courses/{course}/lessons/{lesson}/notes', [LessonNoteController::class, 'index'])->name('courses.lessons.notes.index');
+    Route::post('/courses/{course}/lessons/{lesson}/notes', [LessonNoteController::class, 'store'])->name('courses.lessons.notes.store');
+    Route::patch('/lesson-notes/{lessonNote}', [LessonNoteController::class, 'update'])->name('lesson-notes.update');
+    Route::delete('/lesson-notes/{lessonNote}', [LessonNoteController::class, 'destroy'])->name('lesson-notes.destroy');
+});
+
+Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(function () {
+    Route::get('/courses/{course}/lessons/{lesson}/ai-summary', [LessonAiController::class, 'summary'])
+        ->middleware('throttle:6,1')
+        ->name('courses.lessons.ai-summary');
+    Route::post('/courses/{course}/lessons/{lesson}/ai-explain', [LessonAiController::class, 'explain'])
+        ->middleware('throttle:10,1')
+        ->name('courses.lessons.ai-explain');
+});
+
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
 Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
+Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:6,1'])->group(function () {
+    Route::post('/courses/{course}/reviews', [ReviewController::class, 'store'])->name('courses.reviews.store');
+    Route::put('/courses/{course}/reviews/{review}', [ReviewController::class, 'update'])->name('courses.reviews.update');
+    Route::delete('/courses/{course}/reviews/{review}', [ReviewController::class, 'destroy'])->name('courses.reviews.destroy');
+});
+Route::post('/reviews/{review}/helpful', [ReviewHelpfulController::class, 'toggle'])
+    ->middleware(['auth', 'active', 'verified', 'throttle:20,1'])
+    ->name('reviews.helpful.toggle');
 Route::get('/courses/{slug}', [CourseController::class, 'show'])->name('courses.show');
 
 Route::middleware('guest')->group(function () {
@@ -89,7 +151,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])
         ->whereIn('provider', ['google', 'facebook'])
         ->name('social.callback');
-    Route::post('/quick-login/{role}', [AuthController::class, 'quickLogin'])->name('quick-login');
+    if (app()->environment('local')) {
+        Route::post('/quick-login/{role}', [AuthController::class, 'quickLogin'])
+            ->whereIn('role', ['admin', 'instructor', 'student'])
+            ->name('quick-login');
+    }
 });
 
 Route::get('/auth/availability', [AuthController::class, 'availability'])->middleware('throttle:30,1')->name('auth.availability');
@@ -132,11 +198,25 @@ Route::get('/dashboard', function () {
     return redirect(auth()->user()->dashboardUrl());
 })->middleware(['auth', 'active', 'verified', '2fa'])->name('dashboard');
 
+// ─── TICKET HỖ TRỢ (Student + Instructor) ───
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student,instructor'])->prefix('support')->name('support.')->group(function () {
+    Route::get('/tickets', [SupportTicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/create', [SupportTicketController::class, 'create'])->name('tickets.create');
+    Route::post('/tickets', [SupportTicketController::class, 'store'])->middleware('throttle:10,1')->name('tickets.store');
+    Route::get('/tickets/{ticket}', [SupportTicketController::class, 'show'])->name('tickets.show');
+    Route::post('/tickets/{ticket}/replies', [SupportTicketController::class, 'reply'])->middleware('throttle:20,1')->name('tickets.reply');
+    Route::post('/tickets/{ticket}/close', [SupportTicketController::class, 'close'])->name('tickets.close');
+    Route::post('/tickets/{ticket}/reopen', [SupportTicketController::class, 'reopen'])->name('tickets.reopen');
+    Route::get('/tickets/{ticket}/attachments/{attachment}', [SupportTicketController::class, 'downloadAttachment'])->name('tickets.attachments.download');
+});
+
 // ─── HỌC VIÊN ───
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
     Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
     Route::get('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'index'])->name('recently-viewed.index');
+    Route::get('/lesson-notes', [LessonNoteLibraryController::class, 'index'])->name('lesson-notes.index');
+    Route::get('/reviews', [StudentReviewController::class, 'index'])->name('reviews.index');
     Route::delete('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'clear'])->name('recently-viewed.clear');
     Route::delete('/recently-viewed-courses/{recentlyViewedCourse}', [RecentlyViewedCourseController::class, 'destroy'])->name('recently-viewed.destroy');
     Route::get('/cart', [CartController::class, 'index'])->name('cart');
@@ -151,7 +231,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/checkout/{order_code}/failed', [CartController::class, 'failedPage'])->name('checkout.failed');
     Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
-    Route::get('/certificates', fn () => redirect(route('student.dashboard').'#certificates'))->name('certificates');
+    Route::get('/certificates', [StudentMiscController::class, 'certificates'])->name('certificates');
     Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
     Route::get('/orders', fn () => redirect(route('student.dashboard').'#orders'))->name('orders');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
@@ -168,14 +248,22 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
     Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
     Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
+    Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
+    Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
     Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
     Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
     Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->name('wallet.bank-details.update');
     Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
+    Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
+    Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
+    Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     Route::middleware('verified')->group(function () {
+        Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
+        Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
+        Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
         Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
         Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
         Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
@@ -235,6 +323,12 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/course-reviews/{course}', [CourseReviewController::class, 'show'])->name('course-reviews.show');
     Route::post('/course-reviews/{course}/approve', [CourseReviewController::class, 'approve'])->name('course-reviews.approve');
     Route::post('/course-reviews/{course}/reject', [CourseReviewController::class, 'reject'])->name('course-reviews.reject');
+    Route::get('/student-reviews', [AdminStudentReviewController::class, 'index'])->name('student-reviews.index');
+    Route::get('/student-reviews/{review}', [AdminStudentReviewController::class, 'show'])->name('student-reviews.show');
+    Route::patch('/student-reviews/{review}/hide', [AdminStudentReviewController::class, 'hide'])->name('student-reviews.hide');
+    Route::patch('/student-reviews/{review}/restore', [AdminStudentReviewController::class, 'restore'])->name('student-reviews.restore');
+    Route::delete('/student-reviews/{review}', [AdminStudentReviewController::class, 'destroy'])->name('student-reviews.destroy');
+    Route::post('/replies/{review}/toggle-hide', [ManageController::class, 'toggleHideReply'])->name('replies.toggleHide');
     Route::get('/courses/pending', fn () => redirect()->route('admin.course-reviews.index'))->name('courses.pending');
     Route::get('/courses/{course}/review', [ManageController::class, 'review'])->name('courses.review');
     Route::get('/courses/{course}/students', [ManageController::class, 'students'])->name('courses.students');
@@ -245,6 +339,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/ai-moderation/{lesson}/extract', [AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
     Route::post('/ai-moderation/analyze-frame', [AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
     Route::post('/ai-moderation/{lesson}/save', [AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
+    Route::get('/ai-moderation/{lesson}/stream-video', [AiModerationController::class, 'streamVideo'])->name('ai-moderation.stream-video');
+    Route::get('/ai-moderation/{lesson}/hls/playlist.m3u8', [AiModerationController::class, 'streamHlsPlaylist'])->name('ai-moderation.hls.playlist');
+    Route::get('/ai-moderation/{lesson}/hls/{segment}', [AiModerationController::class, 'streamHlsSegment'])->name('ai-moderation.hls.segment');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
@@ -258,22 +355,29 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications', [AdminNotificationController::class, 'store'])->name('notifications.store');
+    Route::get('/support-tickets', [AdminSupportTicketController::class, 'index'])->name('support-tickets.index');
+    Route::get('/support-tickets/{ticket}', [AdminSupportTicketController::class, 'show'])->name('support-tickets.show');
+    Route::post('/support-tickets/{ticket}/replies', [AdminSupportTicketController::class, 'reply'])->middleware('throttle:30,1')->name('support-tickets.reply');
+    Route::patch('/support-tickets/{ticket}', [AdminSupportTicketController::class, 'update'])->name('support-tickets.update');
+    Route::get('/support-tickets/{ticket}/attachments/{attachment}', [AdminSupportTicketController::class, 'downloadAttachment'])->name('support-tickets.attachments.download');
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
-// Dev helper login route
-Route::get('/dev/login-as-admin', function () {
-    auth()->login(User::where('role', 'admin')->first());
+if (app()->environment('local')) {
+    Route::get('/dev/login-as-admin', function () {
+        auth()->login(User::where('role', 'admin')->firstOrFail());
 
-    return redirect()->route('admin.dashboard');
-})->name('dev.login-as-admin');
+        return redirect()->route('admin.dashboard');
+    })->name('dev.login-as-admin');
 
-Route::get('/dev/login-as-student', function () {
-    auth()->login(User::where('email', 'leanhtuan291111@gmail.com')->first() ?? User::where('role', 'student')->first());
+    Route::get('/dev/login-as-student', function () {
+        $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
+            ?? User::where('role', 'student')->firstOrFail();
 
+<<<<<<< HEAD
     return redirect()->route('dashboard');
 })->name('dev.login-as-student');
 
@@ -285,3 +389,10 @@ Route::get('/payments/momo/callback', [PaymentController::class, 'momoCallback']
 Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
 
 Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');
+=======
+        auth()->login($user);
+
+        return redirect()->route('dashboard');
+    })->name('dev.login-as-student');
+}
+>>>>>>> origin/main

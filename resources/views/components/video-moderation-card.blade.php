@@ -7,10 +7,10 @@
 @php
     $moderation = $lesson->videoModeration;
     $badgeTones = [
-        'red' => 'border-rose-200 bg-rose-50 text-rose-800',
+        'red'    => 'border-rose-200 bg-rose-50 text-rose-800',
         'orange' => 'border-orange-200 bg-orange-50 text-orange-800',
         'yellow' => 'border-amber-200 bg-amber-50 text-amber-800',
-        'green' => 'border-emerald-200 bg-emerald-50 text-emerald-800',
+        'green'  => 'border-emerald-200 bg-emerald-50 text-emerald-800',
     ];
 
     $videoFileName = $lesson->video_original_name
@@ -31,6 +31,10 @@
     };
 
     $durationLabel = $formatDuration($lesson->duration ?? $lesson->duration_seconds);
+
+    // Xác định trạng thái dấu hiệu
+    $hasAnySign = $moderation && $moderation->hasDetectedSigns();
+    $hasHardViolation = $moderation && ($moderation->violence || $moderation->adult || $moderation->weapon);
 @endphp
 
 <article {{ $attributes->merge(['class' => 'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm']) }}>
@@ -89,39 +93,50 @@
         @if (! $moderation)
             <p class="text-sm text-slate-500">Chưa có dữ liệu kiểm duyệt AI.</p>
         @else
-            @if ($moderation->hasViolations())
-                <div class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900">
-                    <span aria-hidden="true">⚠</span>
-                    <span>Phát hiện vi phạm</span>
+            {{-- Banner trạng thái tổng --}}
+            @if ($hasHardViolation)
+                <div class="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-900">
+                    <span aria-hidden="true">🔴</span>
+                    <span>AI phát hiện nội dung có thể vi phạm chính sách (bạo lực / 18+ / vũ khí). Admin cần xem lại.</span>
                 </div>
+            @elseif ($hasAnySign)
+                <div class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900">
+                    <span aria-hidden="true">🔍</span>
+                    <span>AI phát hiện một số dấu hiệu cần xem lại. Không phải kết luận vi phạm.</span>
+                </div>
+            @else
+                <div class="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800">
+                    <span aria-hidden="true">✅</span>
+                    <span>Không phát hiện dấu hiệu đáng chú ý.</span>
+                </div>
+            @endif
 
+            {{-- Badges chi tiết dấu hiệu --}}
+            @if (count($moderation->summaryBadgeItems()) > 0)
                 <div class="flex flex-wrap gap-2">
                     @foreach ($moderation->summaryBadgeItems() as $badge)
-                        <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold {{ $badgeTones[$badge['tone']] ?? $badgeTones['orange'] }}">
+                        <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold {{ $badgeTones[$badge['tone']] ?? $badgeTones['yellow'] }}">
                             <span aria-hidden="true">{{ $badge['emoji'] }}</span>
                             {{ $badge['label'] }}
                         </span>
                     @endforeach
                 </div>
-            @else
-                <div class="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800">
-                    <span aria-hidden="true">✅</span>
-                    <span>Không phát hiện vi phạm.</span>
-                </div>
             @endif
 
+            {{-- Tóm tắt AI --}}
             @if ($moderation->summary)
                 <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Tóm tắt</p>
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Nhận xét của AI</p>
                     <p class="mt-1 text-sm leading-6 text-slate-700">{{ $moderation->summary }}</p>
                 </div>
             @endif
 
+            {{-- Chi tiết từng frame --}}
             @php $frames = $moderation->violatedFrameDetails(); @endphp
 
             @if ($frames !== [])
                 <div>
-                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Chi tiết khung hình</p>
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Dấu hiệu phát hiện theo thời điểm</p>
                     <ul class="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
                         @foreach ($frames as $frame)
                             <li class="px-4 py-3">
@@ -129,19 +144,30 @@
                                 <ul class="mt-2 space-y-1">
                                     @foreach ($frame['labels'] as $label)
                                         <li class="text-sm font-semibold text-amber-800">
-                                            <span aria-hidden="true">⚠</span> {{ $label }}
+                                            <span aria-hidden="true">🔍</span> {{ $label }}
                                         </li>
                                     @endforeach
                                 </ul>
                                 @if ($frame['reason'] !== '')
                                     <div class="mt-2 text-sm text-slate-600">
-                                        <p class="font-semibold text-slate-700">Lý do:</p>
+                                        <p class="font-semibold text-slate-700">Ghi chú của AI:</p>
                                         <p class="mt-0.5 leading-6">{{ $frame['reason'] }}</p>
                                     </div>
                                 @endif
                             </li>
                         @endforeach
                     </ul>
+                </div>
+            @endif
+
+            {{-- Khuyến nghị cho giảng viên --}}
+            @if ($hasAnySign)
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                    <p class="font-bold">💡 Khuyến nghị dành cho giảng viên</p>
+                    <p class="mt-1 leading-6">
+                        Nếu đây chỉ là video demo hoặc minh họa thì <strong>không cần chỉnh sửa</strong>.
+                        Nếu là nội dung của bên thứ ba, nên thay bằng nội dung do bạn tự tạo để tránh bị từ chối khi admin xem xét.
+                    </p>
                 </div>
             @endif
         @endif

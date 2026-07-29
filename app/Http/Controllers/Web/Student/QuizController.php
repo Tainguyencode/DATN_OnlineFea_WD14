@@ -117,16 +117,14 @@ class QuizController extends Controller
             return $attempt;
         });
 
-        if ($attempt->passed) {
-            $progressService->recordLessonProgress(
-                $request->user()->id,
-                $course,
-                $lesson,
-                0,
-                0,
-                true,
-            );
-        }
+        $progressService->recordLessonProgress(
+            $request->user()->id,
+            $course,
+            $lesson,
+            0,
+            0,
+            true,
+        );
 
         return view('courses.quiz-result', [
             'course' => $course,
@@ -200,18 +198,14 @@ class QuizController extends Controller
             return $attempt;
         });
 
-        if ($attempt->passed) {
-            $progress = $progressService->recordLessonProgress(
-                $request->user()->id,
-                $course,
-                $lesson,
-                0,
-                0,
-                true,
-            );
-        } else {
-            $progress = null;
-        }
+        $progress = $progressService->recordLessonProgress(
+            $request->user()->id,
+            $course,
+            $lesson,
+            0,
+            0,
+            true,
+        );
 
         $correctCount = collect($graded['questions'])->filter(fn ($q) => $q['is_correct'])->count();
         $totalQuestions = count($graded['questions']);
@@ -238,9 +232,7 @@ class QuizController extends Controller
             ],
             'course_progress' => $progress['course_progress'] ?? null,
             'lesson_completed' => $progress['lesson_completed'] ?? false,
-            'next_lesson_url' => $attempt->passed
-                ? $this->nextLessonUrl($course, $lesson)
-                : null,
+            'next_lesson_url' => $this->nextLessonUrl($course, $lesson),
             'attempts_count' => $quiz->attempts()->where('user_id', $request->user()->id)->count(),
             'remaining_attempts' => $quiz->max_attempts !== null
                 ? max(0, $quiz->max_attempts - $quiz->attempts()->where('user_id', $request->user()->id)->count())

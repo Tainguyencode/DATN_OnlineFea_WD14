@@ -74,6 +74,15 @@
                     :lesson-state="$lessonState"
                     :is-enrolled="$isEnrolled"
                     :can-access-lesson="$canAccessLesson"
+                    :can-use-lesson-ai="$canUseLessonAi"
+                    :ai-summary-url="$aiSummaryUrl"
+                    :ai-explain-url="$aiExplainUrl"
+                    :discussions="$discussions"
+                    :active-discussion="$activeDiscussion"
+                    :can-use-lesson-notes="$canUseLessonNotes"
+                    :lesson-notes="$lessonNotes"
+                    :lesson-notes-index-url="$lessonNotesIndexUrl"
+                    :lesson-notes-store-url="$lessonNotesStoreUrl"
                 />
             @endif
         </main>
