@@ -69,3 +69,6 @@
 ### Commit 23: refactor: tach cac component blade tai su dung trong student dashboard (2026-07-28 14:20:45 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 24: docs: cap nhat tai lieu dac ta giao dien va trai nghiem nguoi dung (2026-07-29 10:35:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
