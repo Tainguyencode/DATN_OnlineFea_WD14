@@ -1,3 +1,4 @@
+
 <?php
 
 namespace App\Http\Controllers\Api;
@@ -9,6 +10,7 @@ use App\Models\Coupon;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Notifications\OrderPaidNotification;
 use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +29,7 @@ class PaymentController extends Controller
             'coupon_code' => 'nullable|string',
         ]);
 
-        $cart = Cart::where('user_id', $request->user()->id)->with('items.course')->first();
+        $cart = Cart::where('user_id', $request->user()->id)->with('items.course.instructor')->first();
 
         if (! $cart || $cart->items->isEmpty()) {
             return $this->error('Giỏ hàng trống', 422);
@@ -60,11 +62,24 @@ class PaymentController extends Controller
         $total = max(0, $subtotal - $discount);
 
         $order = DB::transaction(function () use ($request, $cart, $subtotal, $discount, $total, $coupon, $validated) {
-            $items = $cart->items->map(function ($item) {
+            $items = $cart->items->map(function ($item) use ($subtotal, $discount) {
+                $price = (float) $item->course->effective_price;
+                
+                // Tính toán tỷ lệ giảm giá cho item này
+                $itemDiscount = $subtotal > 0 ? ($price / $subtotal) * $discount : 0;
+                $itemNetPrice = max(0, $price - $itemDiscount);
+                
+                $commissionRate = (float) $item->course->instructor->getCommissionRate();
+                $commissionAmount = ($itemNetPrice * $commissionRate) / 100;
+                $instructorEarning = $itemNetPrice - $commissionAmount;
+
                 return [
                     'course_id' => $item->course_id,
-                    'price' => $item->course->effective_price,
+                    'price' => $price,
                     'title' => $item->course->title,
+                    'commission_rate' => $commissionRate,
+                    'commission_amount' => $commissionAmount,
+                    'instructor_earning' => $instructorEarning,
                 ];
             })->toArray();
 
@@ -79,6 +94,17 @@ class PaymentController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'items' => $items,
             ]);
+
+            foreach ($items as $item) {
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'course_id' => $item['course_id'],
+                    'price' => $item['price'],
+                    'commission_rate' => $item['commission_rate'],
+                    'commission_amount' => $item['commission_amount'],
+                    'instructor_earning' => $item['instructor_earning'],
+                ]);
+            }
 
             if ($coupon) {
                 $coupon->increment('used_count');
@@ -129,9 +155,20 @@ class PaymentController extends Controller
                     ]
                 );
 
-                $course = Course::find($item['course_id']);
+                $course = Course::with('instructor')->find($item['course_id']);
                 if ($course && $enrollment->wasRecentlyCreated) {
                     $course->increment('enrollment_count');
+
+                    if ($course->instructor) {
+                        $studentName = $order->user?->name ?? 'Một học viên';
+                        app(\App\Services\NotificationService::class)->send(
+                            $course->instructor,
+                            'Học viên mới mua khóa học',
+                            "Học viên {$studentName} đã đăng ký mua khóa học \"{$course->title}\".",
+                            'new_enrollment',
+                            route('instructor.courses.students', $course)
+                        );
+                    }
                 }
             }
 

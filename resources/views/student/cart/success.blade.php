@@ -39,9 +39,6 @@
         <div class="space-y-2">
             <h2 class="text-2xl font-black text-slate-900">Thanh toán thành công!</h2>
             <p class="text-xs text-slate-500">Khóa học đã được đăng ký và kích hoạt thành công.</p>
-            <p class="text-xs text-[#0056D2] font-semibold bg-blue-50 inline-block px-3 py-1.5 rounded-full mt-2">
-                Tự động quay về trang chủ sau <span id="countdown" class="font-extrabold text-sm">5</span> giây...
-            </p>
         </div>
 
         <!-- Receipt Card -->
@@ -56,7 +53,7 @@
                 <strong class="text-slate-900 text-right">
                     @if($order->payment_method === 'vnpay') VNPay
                     @elseif($order->payment_method === 'momo') MoMo
-                    @else Chuyển khoản
+                    @else Chuyển khoản VietQR
                     @endif
                 </strong>
 
@@ -87,24 +84,19 @@
                     @endforeach
                 </div>
             </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-4 flex items-center gap-3 border-t border-slate-100">
+                <a href="{{ route('student.dashboard') }}" class="flex-1 text-center bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold py-3 rounded-xl transition shadow-sm">
+                    Vào học ngay →
+                </a>
+                <a href="{{ route('home') }}" class="text-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl transition">
+                    Trang chủ
+                </a>
+            </div>
         </div>
 
     </div>
-
-    <!-- Redirect script -->
-    <script>
-        var count = 5;
-        var counter = setInterval(timer, 1000);
-        function timer() {
-            count = count - 1;
-            if (count <= 0) {
-                clearInterval(counter);
-                window.location.href = "{{ route('home') }}";
-                return;
-            }
-            document.getElementById("countdown").innerHTML = count;
-        }
-    </script>
 
 </body>
 </html>

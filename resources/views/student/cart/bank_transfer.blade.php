@@ -95,6 +95,13 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="mt-5 rounded-xl bg-amber-50 p-4 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs leading-relaxed flex items-start gap-2.5">
+                    <svg class="w-4 h-4 shrink-0 mt-0.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div>
+                        <strong class="font-bold">Lưu ý quan trọng:</strong> Học phí chuyển khoản sẽ được chuyển về tài khoản trung tâm của Nền tảng OnlineFEA. Hệ thống sẽ tự động kích hoạt khóa học của bạn và thực hiện thanh toán chiết khấu doanh thu cho giảng viên sở hữu khóa học theo thỏa thuận hợp đồng.
+                    </div>
+                </div>
             </div>
 
             <!-- Các bước thanh toán -->

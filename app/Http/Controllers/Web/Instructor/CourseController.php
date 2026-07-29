@@ -294,7 +294,8 @@ class CourseController extends Controller
 
     public function revenue(Request $request): View
     {
-        $courseIds = Course::where('instructor_id', auth()->id())->pluck('id')->toArray();
+        $user = auth()->user();
+        $courseIds = Course::where('instructor_id', $user->id)->pluck('id')->toArray();
         $query = Order::where('status', 'paid');
 
         if ($request->filled('start_date')) {
@@ -312,7 +313,9 @@ class CourseController extends Controller
 
         $orders = $query->get();
 
-        $totalRevenue = 0;
+        $totalGross = 0;
+        $totalCommission = 0;
+        $totalRevenue = 0; // Net earning
         $courseSales = [];
 
         foreach ($orders as $order) {
@@ -328,18 +331,28 @@ class CourseController extends Controller
                 }
 
                 $price = $item['price'] ?? 0;
-                $totalRevenue += $price;
+                $commRate = $item['commission_rate'] ?? $user->getCommissionRate();
+                $commAmount = $item['commission_amount'] ?? (($price * $commRate) / 100);
+                $earning = $item['instructor_earning'] ?? ($price - $commAmount);
+
+                $totalGross += $price;
+                $totalCommission += $commAmount;
+                $totalRevenue += $earning;
 
                 if (! isset($courseSales[$cid])) {
                     $courseSales[$cid] = [
                         'course_id' => $cid,
-                        'total' => 0,
+                        'gross' => 0,
+                        'commission' => 0,
+                        'total' => 0, // Net earning
                         'sales' => 0,
                         'course' => Course::find($cid),
                     ];
                 }
 
-                $courseSales[$cid]['total'] += $price;
+                $courseSales[$cid]['gross'] += $price;
+                $courseSales[$cid]['commission'] += $commAmount;
+                $courseSales[$cid]['total'] += $earning;
                 $courseSales[$cid]['sales'] += 1;
             }
         }
@@ -352,7 +365,7 @@ class CourseController extends Controller
             'year' => $request->input('year'),
         ];
 
-        return view('instructor.revenue', compact('totalRevenue', 'courseRevenue', 'filters'));
+        return view('instructor.revenue', compact('totalGross', 'totalCommission', 'totalRevenue', 'courseRevenue', 'filters'));
     }
 
     protected function ensureOwned(Course $course): void

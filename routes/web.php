@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\Admin\AiModerationController;
 use App\Http\Controllers\Web\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Web\Admin\CommissionController;
 use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
@@ -20,6 +21,13 @@ use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseCont
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
+<<<<<<< HEAD
+use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
+use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
+use App\Http\Controllers\Web\NotificationController;
+use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\PaymentController;
+=======
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
@@ -27,6 +35,7 @@ use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ReviewHelpfulController;
+>>>>>>> origin/main
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\LessonAiController;
@@ -242,6 +251,9 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
     Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
     Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
+    Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
+    Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->name('wallet.bank-details.update');
+    Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
     Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
     Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
     Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
@@ -334,6 +346,12 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
+    Route::get('/commissions', [CommissionController::class, 'index'])->name('commissions.index');
+    Route::post('/commissions/default-rate', [CommissionController::class, 'updateDefaultRate'])->name('commissions.update-default');
+    Route::put('/commissions/instructors/{user}', [CommissionController::class, 'updateInstructorRate'])->name('commissions.update-instructor');
+    Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals.index');
+    Route::post('/withdrawals/{withdrawal}/approve', [AdminWithdrawalController::class, 'approve'])->name('withdrawals.approve');
+    Route::post('/withdrawals/{withdrawal}/reject', [AdminWithdrawalController::class, 'reject'])->name('withdrawals.reject');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications', [AdminNotificationController::class, 'store'])->name('notifications.store');
@@ -359,8 +377,22 @@ if (app()->environment('local')) {
         $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
             ?? User::where('role', 'student')->firstOrFail();
 
+<<<<<<< HEAD
+    return redirect()->route('dashboard');
+})->name('dev.login-as-student');
+
+// ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───
+Route::get('/payments/vnpay/callback', [PaymentController::class, 'vnpayCallback'])->name('payments.vnpay.callback');
+Route::post('/payments/vnpay/ipn', [PaymentController::class, 'vnpayIpn'])->name('payments.vnpay.ipn');
+
+Route::get('/payments/momo/callback', [PaymentController::class, 'momoCallback'])->name('payments.momo.callback');
+Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
+
+Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');
+=======
         auth()->login($user);
 
         return redirect()->route('dashboard');
     })->name('dev.login-as-student');
 }
+>>>>>>> origin/main

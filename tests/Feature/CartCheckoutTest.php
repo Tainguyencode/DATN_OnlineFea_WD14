@@ -204,6 +204,12 @@ class CartCheckoutTest extends TestCase
         $this->assertNotNull($enrollment);
         $this->assertEquals('active', $enrollment->status);
 
+        // Đảm bảo giảng viên nhận được thông báo học viên mới mua khóa học
+        $this->assertDatabaseHas('push_notifications', [
+            'user_id' => $this->instructor->id,
+            'type' => 'new_enrollment',
+        ]);
+
         // Giỏ hàng phải được làm sạch các khóa học đã mua
         $cart->refresh();
         $this->assertFalse($cart->courses->contains($this->course->id));
