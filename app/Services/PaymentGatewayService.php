@@ -73,12 +73,18 @@ class PaymentGatewayService
             throw new \Exception('Chưa cấu hình tài khoản PayOS trong file .env');
         }
 
-        $orderCode = $order->id; // Chỉ số nguyên an toàn
+        // Tạo orderCode dạng số nguyên duy nhất cho PayOS
+        $orderCode = (int) (time() % 10000000 . $order->id);
         $amount = (int) $order->total_amount;
         $description = 'Nap tien don hang ' . $order->order_code;
         // Loại bỏ ký tự đặc biệt theo yêu cầu mô tả của PayOS (chỉ chữ thường, chữ hoa, số và dấu cách)
         $description = preg_replace('/[^a-zA-Z0-9 ]/', '', $description);
         $description = substr($description, 0, 25); // Giới hạn 25 ký tự
+
+        // Lưu orderCode duy nhất vào bản ghi Payment để tra cứu API khi redirect về
+        if ($order->payment) {
+            $order->payment->update(['transaction_id' => (string) $orderCode]);
+        }
 
         $cancelUrl = route('student.checkout.failed', $order->order_code);
         $returnUrl = route('student.checkout.success', $order->order_code);
@@ -116,7 +122,7 @@ class PaymentGatewayService
     }
 
     /**
-     * Kiểm tra trạng thái thanh toán trực tiếp từ PayOS API nếu đơn hàng chưa xác nhận paid.
+     * Kiểm tra trạng thái thanh toán trực tiếp từ PayOS API hoặc URL callback nếu đơn hàng chưa xác nhận paid.
      */
     public function checkAndUpdatePayOSStatus(Order $order): bool
     {
@@ -128,6 +134,18 @@ class PaymentGatewayService
             return false;
         }
 
+        // 1. Nhận diện kết quả thành công trực tiếp từ query params của PayOS redirect URL
+        $returnCode = request('code');
+        $returnStatus = request('status');
+        $returnOrderCode = request('orderCode');
+
+        if (($returnCode === '00' || $returnStatus === 'PAID') && ($returnOrderCode || request('id'))) {
+            $ref = request('id') ?? ('PAYOS-' . ($returnOrderCode ?? $order->id));
+            $this->processMockPayment($order, 'success', $ref);
+            return true;
+        }
+
+        // 2. Tra cứu trực tiếp PayOS API
         $clientId = env('PAYOS_CLIENT_ID');
         $apiKey = env('PAYOS_API_KEY');
 
@@ -135,17 +153,22 @@ class PaymentGatewayService
             return false;
         }
 
+        $payOSOrderCode = $returnOrderCode 
+            ?? $order->payment?->transaction_id 
+            ?? $order->transaction_id 
+            ?? $order->id;
+
         try {
             $response = Http::withoutVerifying()->withHeaders([
                 'x-client-id' => $clientId,
                 'x-api-key' => $apiKey,
-            ])->get("https://api-merchant.payos.vn/v2/payment-requests/{$order->id}");
+            ])->get("https://api-merchant.payos.vn/v2/payment-requests/{$payOSOrderCode}");
 
             if ($response->successful()) {
                 $status = $response->json('data.status');
                 if ($status === 'PAID') {
                     $transactions = $response->json('data.transactions', []);
-                    $ref = $transactions[0]['reference'] ?? ('PAYOS-' . $order->id);
+                    $ref = $transactions[0]['reference'] ?? ('PAYOS-' . $payOSOrderCode);
                     $this->processMockPayment($order, 'success', $ref);
                     return true;
                 }
@@ -349,10 +372,13 @@ class PaymentGatewayService
      */
     protected function enrollStudent(Order $order): void
     {
-        // Lấy chi tiết các mục trong đơn hàng từ quan hệ Eloquent
-        $items = $order->items()->with('course')->get();
+        // Lấy chi tiết các mục trong đơn hàng từ quan hệ Eloquent kèm thông tin khóa học và giảng viên
+        $items = $order->items()->with(['course.instructor'])->get();
+        $student = $order->user;
 
         foreach ($items as $item) {
+            $course = $item->course;
+
             // Tìm hoặc tạo mới bản ghi ghi danh (status: active)
             $enrollment = Enrollment::firstOrCreate(
                 [
@@ -369,7 +395,19 @@ class PaymentGatewayService
 
             // Tăng số lượng học viên đăng ký của khóa học nếu đây là lượt ghi danh mới
             if ($enrollment->wasRecentlyCreated) {
-                $item->course?->increment('enrollment_count');
+                $course?->increment('enrollment_count');
+
+                // Gửi thông báo cho giảng viên tạo khóa học
+                if ($course && $course->instructor) {
+                    $studentName = $student?->name ?? 'Một học viên';
+                    app(NotificationService::class)->send(
+                        $course->instructor,
+                        'Học viên mới mua khóa học',
+                        "Học viên {$studentName} đã đăng ký mua khóa học \"{$course->title}\".",
+                        'new_enrollment',
+                        route('instructor.courses.students', $course)
+                    );
+                }
             }
         }
     }

@@ -1,3 +1,4 @@
+
 <?php
 
 namespace App\Http\Controllers\Api;
@@ -154,9 +155,20 @@ class PaymentController extends Controller
                     ]
                 );
 
-                $course = Course::find($item['course_id']);
+                $course = Course::with('instructor')->find($item['course_id']);
                 if ($course && $enrollment->wasRecentlyCreated) {
                     $course->increment('enrollment_count');
+
+                    if ($course->instructor) {
+                        $studentName = $order->user?->name ?? 'Một học viên';
+                        app(\App\Services\NotificationService::class)->send(
+                            $course->instructor,
+                            'Học viên mới mua khóa học',
+                            "Học viên {$studentName} đã đăng ký mua khóa học \"{$course->title}\".",
+                            'new_enrollment',
+                            route('instructor.courses.students', $course)
+                        );
+                    }
                 }
             }
 
