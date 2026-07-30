@@ -59,18 +59,23 @@
 
                     @if($isEligible)
                         <a
-                            href="{{ route('student.certificates.pdf', $certificate) }}"
+                            href="{{ route('certificates.public', $certificate->certificate_code) }}"
                             target="_blank"
                             class="flex w-full items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-purple-700"
                         >
-                            Xem chứng chỉ (PDF)
+                            Xem chứng chỉ
                         </a>
-                        <a
-                            href="{{ route('student.certificates', ['send_email' => 1, 'certificate_id' => $certificate->id]) }}"
-                            class="mt-2 flex w-full items-center justify-center rounded-lg border border-purple-200 bg-white px-4 py-2 text-center text-sm font-semibold text-purple-700 transition hover:bg-purple-50"
+                        <button
+                            type="button"
+                            id="btn-send-cert-email"
+                            data-cert-id="{{ $certificate->id }}"
+                            data-send-url="{{ route('student.certificates', ['send_email' => 1, 'certificate_id' => $certificate->id]) }}"
+                            class="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-4 py-2 text-center text-sm font-semibold text-purple-700 transition hover:bg-purple-50"
+                            onclick="sendCertEmail(this)"
                         >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                             Gửi lại email chứng chỉ
-                        </a>
+                        </button>
                     @else
                         <button
                             type="button"
@@ -114,3 +119,61 @@
         @endauth
     </div>
 </header>
+
+{{-- Toast Notification --}}
+<div id="cert-toast" style="display:none; position:fixed; bottom:24px; right:24px; z-index:99999; max-width:380px; border-radius:12px; padding:14px 18px; box-shadow:0 10px 40px rgba(0,0,0,0.18); align-items:center; gap:12px; font-family:inherit;" role="alert">
+    <span id="cert-toast-msg" style="font-size:14px; font-weight:500; flex:1;"></span>
+    <button onclick="document.getElementById('cert-toast').style.display='none'" style="background:none;border:none;cursor:pointer;opacity:0.6;padding:0;margin-left:8px;" aria-label="Đóng">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+</div>
+
+<script>
+function sendCertEmail(btn) {
+    btn.disabled = true;
+
+    // Hiển thị thông báo NGAY LẬP TỨC khi bấm
+    showCertToast('success', '✅ Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+
+    // Gửi request ngầm (fire and forget)
+    fetch(btn.dataset.sendUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' }
+    })
+    .catch(function() {
+        // Nếu thực sự lỗi mạng thì cập nhật lại toast
+        showCertToast('error', '❌ Không gửi được email. Vui lòng thử lại sau.');
+    })
+    .finally(function() {
+        btn.disabled = false;
+    });
+}
+
+function showCertToast(type, msg) {
+    var toast = document.getElementById('cert-toast');
+    var msgEl = document.getElementById('cert-toast-msg');
+    msgEl.textContent = msg;
+    if (type === 'success') {
+        toast.style.background = '#f0fdf4';
+        toast.style.border = '1px solid #bbf7d0';
+        toast.style.color = '#166534';
+    } else {
+        toast.style.background = '#fef2f2';
+        toast.style.border = '1px solid #fecaca';
+        toast.style.color = '#991b1b';
+    }
+    toast.style.display = 'flex';
+    clearTimeout(window._certToastTimer);
+    window._certToastTimer = setTimeout(function() {
+        toast.style.display = 'none';
+    }, 5000);
+}
+
+if (!document.getElementById('cert-toast-style')) {
+    var s = document.createElement('style');
+    s.id = 'cert-toast-style';
+    s.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(s);
+}
+</script>

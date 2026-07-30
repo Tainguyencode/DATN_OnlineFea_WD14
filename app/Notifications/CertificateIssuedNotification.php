@@ -31,7 +31,7 @@ class CertificateIssuedNotification extends Notification
             ->line('Chúc mừng bạn đã hoàn thành xuất sắc khóa học: "'.$this->course->title.'".')
             ->line('Chứng chỉ hoàn thành khóa học của bạn đã được cấp thành công.')
             ->line('Mã số chứng chỉ của bạn là: '.$this->certificate->certificate_code)
-            ->action('Xem chứng chỉ của tôi', route('student.certificates.pdf', $this->certificate))
+            ->action('Xem chứng chỉ của tôi', route('certificates.public.pdf', $this->certificate->certificate_code))
             ->line('Bạn cũng có thể xem lại danh sách chứng chỉ tại trang Chứng chỉ.')
             ->line('Cảm ơn bạn đã đồng hành và học tập cùng chúng tôi!');
 
