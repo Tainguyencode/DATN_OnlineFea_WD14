@@ -71,6 +71,10 @@ if (app()->environment('local')) {
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
 Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
+
+// ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───
+Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertificate'])->name('certificates.public');
+Route::get('/certificates/{code}/pdf', [StudentMiscController::class, 'publicCertificatePdf'])->name('certificates.public.pdf');
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
     Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
