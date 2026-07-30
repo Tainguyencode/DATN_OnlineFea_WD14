@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Student;
 
+use App\Enums\ReviewStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Review;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ class ReviewController extends Controller
         $reviews = Review::query()
             ->where('user_id', $request->user()->id)
             ->with(['course:id,instructor_id,title,slug,thumbnail', 'course.instructor:id,name', 'replier:id,name'])
-            ->when(in_array($status, ['pending', 'approved', 'rejected', 'hidden'], true), fn ($query) => $query->where('status', $status))
+            ->when($status === ReviewStatus::Visible->value, fn ($query) => $query->visible())
+            ->when($status === ReviewStatus::Hidden->value, fn ($query) => $query->hidden())
             ->latest()
             ->paginate(config('reviews.per_page', 8))
             ->withQueryString();

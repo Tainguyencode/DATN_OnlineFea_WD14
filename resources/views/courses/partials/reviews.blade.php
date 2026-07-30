@@ -4,7 +4,7 @@
             <p class="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">Phản hồi học viên</p>
             <h2 class="mt-1 text-2xl font-extrabold text-slate-950 dark:text-white">Đánh giá khóa học</h2>
         </div>
-        <p class="text-sm text-slate-500 dark:text-slate-400">Đánh giá từ học viên thực tế.</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Chỉ đánh giá đang hiển thị được tính vào điểm chung.</p>
     </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -15,7 +15,7 @@
                     <svg class="h-5 w-5 {{ $star <= round($ratingSummary['average']) ? 'text-amber-400' : 'text-slate-600' }}" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.539 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.783.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81H7.03a1 1 0 00.95-.69l1.07-3.292z"/></svg>
                 @endfor
             </div>
-            <p class="mt-2 text-sm font-semibold text-slate-300">{{ number_format($ratingSummary['count']) }} đánh giá</p>
+            <p class="mt-2 text-sm font-semibold text-slate-300">{{ number_format($ratingSummary['count']) }} đánh giá đang hiển thị</p>
         </div>
 
         <div class="space-y-2" aria-label="Phân bố số sao">
@@ -52,8 +52,8 @@
                     @endif
                 </div>
 
-                @if($userReview->moderation_note && $userReview->status !== \App\Enums\ReviewStatus::Approved)
-                    <p class="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200"><strong>Lý do kiểm duyệt:</strong> {{ $userReview->moderation_note }}</p>
+                @if($userReview->moderation_note && $userReview->isHidden())
+                    <p class="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200"><strong>Ghi chú quản trị:</strong> {{ $userReview->moderation_note }}</p>
                 @endif
 
                 @if($canUpdateReview)
@@ -83,7 +83,7 @@
     @endauth
 
     <div class="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-        <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Nhận xét từ học viên</h3>
+        <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Nhận xét đang hiển thị</h3>
         <form method="GET" action="{{ route('courses.show', $course->slug) }}" class="flex flex-wrap gap-2">
             @if($reviewRating)<input type="hidden" name="review_rating" value="{{ $reviewRating }}">@endif
             <label for="review-sort" class="sr-only">Sắp xếp đánh giá</label>

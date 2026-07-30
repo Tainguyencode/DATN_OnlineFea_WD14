@@ -9,6 +9,9 @@
 
 @php
     $watchedSeconds = (int) ($lessonProgress['watched_seconds'] ?? 0);
+    $lastPositionSeconds = (int) ($lessonProgress['last_position_seconds'] ?? $watchedSeconds);
+    $furthestPositionSeconds = (int) ($lessonProgress['furthest_position_seconds'] ?? $watchedSeconds);
+    $progressPercent = (float) ($lessonProgress['progress_percent'] ?? 0);
     $lessonCompleted = (bool) ($lessonProgress['is_completed'] ?? false);
     $durationSeconds = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
 
@@ -30,6 +33,9 @@
                     data-lesson-progress-video
                     data-progress-url="{{ $progressUrl }}"
                     data-initial-watched="{{ $watchedSeconds }}"
+                    data-initial-last-position="{{ $lastPositionSeconds }}"
+                    data-initial-furthest-position="{{ $furthestPositionSeconds }}"
+                    data-initial-progress-percent="{{ $progressPercent }}"
                     data-initial-completed="{{ $lessonCompleted ? '1' : '0' }}"
                     data-duration-seconds="{{ $durationSeconds }}"
                     data-required-percent="{{ $requiredVideoPercent }}"
@@ -54,7 +60,6 @@
                     const container  = document.getElementById('video-container-' + lessonId);
                     let currentToken = null;
                     let hls          = null;
-                    let lastSentProgress = 0;
 
                     // ─── Watermark di chuyển ngẫu nhiên mỗi 5 giây ───
                     if (watermark && container) {
@@ -87,39 +92,13 @@
                         return null;
                     }
 
-                    async function fetchProgress() {
-                        try {
-                            const resp = await fetch(`/api/video/${lessonId}/progress`, {
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-                                }
-                            });
-                            if (resp.ok) { return (await resp.json()).current_time || 0; }
-                        } catch (e) { /* ignore */ }
-                        return 0;
-                    }
-
-                    async function updateProgress(t) {
-                        try {
-                            await fetch(`/api/video/${lessonId}/progress`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-                                },
-                                body: JSON.stringify({ current_time: t })
-                            });
-                        } catch (e) { /* ignore */ }
-                    }
-
                     async function initHlsPlayer() {
                         currentToken = await fetchToken();
                         if (!currentToken) { console.error('Không lấy được token video'); return; }
 
                         const playlistUrl = `/api/video/hls/${lessonId}/playlist.m3u8?token=${currentToken}`;
-                        const initialTime = await fetchProgress();
+                        const requestedTime = Number(new URLSearchParams(window.location.search).get('t') || 0);
+                        const initialTime = requestedTime > 0 ? requestedTime : 0;
 
                         if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                             if (hls) { hls.destroy(); }
@@ -155,9 +134,9 @@
                         }
 
                         // Chống tua video đối với học sinh (khi isEnrolled = true và chưa hoàn thành)
-                        const isEnrolled = {{ $isEnrolled ? 'true' : 'false' }};
-                        const lessonCompleted = {{ $lessonCompleted ? 'true' : 'false' }};
-                        let maxTimeWatched = initialTime;
+                        const isEnrolled = false;
+                        const lessonCompleted = true;
+                        let maxTimeWatched = 0;
 
                         if (isEnrolled && !lessonCompleted) {
                             videoElement.addEventListener('timeupdate', () => {
@@ -184,13 +163,7 @@
                     }
 
                     // Progress: gửi mỗi 10 giây
-                    videoElement.addEventListener('timeupdate', () => {
-                        const ct = Math.floor(videoElement.currentTime);
-                        if (ct - lastSentProgress >= 10) {
-                            lastSentProgress = ct;
-                            updateProgress(ct);
-                        }
-                    });
+                    videoElement.dataset.progressManagedBy = 'learning-player.js';
                 });
             </script>
         @else

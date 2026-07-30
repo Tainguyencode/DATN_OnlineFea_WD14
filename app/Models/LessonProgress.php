@@ -23,9 +23,12 @@ class LessonProgress extends Model
         'lesson_id',
         'watched_seconds',
         'duration_seconds',
+        'last_position_seconds',
+        'furthest_position_seconds',
         'progress_percent',
         'is_completed',
         'last_watched_at',
+        'last_client_updated_at',
         'completed_at',
     ];
 
@@ -34,9 +37,12 @@ class LessonProgress extends Model
         return [
             'watched_seconds' => 'integer',
             'duration_seconds' => 'integer',
+            'last_position_seconds' => 'integer',
+            'furthest_position_seconds' => 'integer',
             'progress_percent' => 'decimal:2',
             'is_completed' => 'boolean',
             'last_watched_at' => 'datetime',
+            'last_client_updated_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }
