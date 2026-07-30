@@ -64,13 +64,10 @@ return [
         'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
         'redirect' => env('MICROSOFT_REDIRECT_URI', env('APP_URL').'/auth/microsoft/callback'),
     ],
-    // Admin video moderation (OpenRouter).
+    // Admin video moderation (Google Gemini API).
     'gemini' => [
-        'api_key' => env('OPENROUTER_API_KEY', env('GEMINI_API_KEY')),
+        'api_key' => env('GEMINI_API_KEY'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 45),
-    ],
-    'openrouter' => [
-        'api_key' => env('OPENROUTER_API_KEY'),
     ],
 
     // Lesson AI explain/summary (Google Gemini API).
