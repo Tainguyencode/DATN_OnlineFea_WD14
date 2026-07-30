@@ -69,7 +69,7 @@ class CommissionController extends Controller
                 ->where('orders.status', 'paid')
                 ->select(
                     'courses.instructor_id',
-                    DB::raw('SUM(order_items.price * order_items.quantity) as total_sales'),
+                    DB::raw('SUM(order_items.price) as total_sales'),
                     DB::raw('SUM(order_items.commission_amount) as total_commission'),
                     DB::raw('SUM(order_items.instructor_earning) as total_earning'),
                     DB::raw('COUNT(DISTINCT order_items.order_id) as total_orders')
