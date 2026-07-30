@@ -13,10 +13,48 @@
     'activeDiscussion' => null,
 ])
 
-<div class="learning-tabs border-t border-[#d1d7dc] bg-white">
-    <div class="border-b border-[#d1d7dc] px-4 sm:px-6" x-data="{ tab: '{{ (request()->has('discussion_id') || request()->query('tab') === 'qa') ? 'qa' : 'overview' }}' }">
+<div class="learning-tabs border-t border-[#d1d7dc] bg-white" id="learning-tabs">
+    <div class="border-b border-[#d1d7dc] px-4 sm:px-6" 
+         x-data="{ tab: '{{ (request()->has('discussion_id') || request()->query('tab') === 'qa') ? 'qa' : 'overview' }}' }"
+         x-init="
+            $watch('tab', value => {
+                if (value === 'qa') {
+                    $nextTick(() => {
+                        const chatScroll = document.querySelector('.chat-scroll');
+                        if (chatScroll) {
+                            chatScroll.scrollTop = chatScroll.scrollHeight;
+                        }
+                    });
+                }
+            });
+
+            if (tab === 'qa') {
+                $nextTick(() => {
+                    const tabsEl = document.getElementById('learning-tabs');
+                    if (tabsEl) {
+                        tabsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    const chatScroll = document.querySelector('.chat-scroll');
+                    if (chatScroll) {
+                        chatScroll.scrollTop = chatScroll.scrollHeight;
+                    }
+                });
+
+                setTimeout(() => {
+                    const tabsEl = document.getElementById('learning-tabs');
+                    if (tabsEl) {
+                        tabsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    const chatScroll = document.querySelector('.chat-scroll');
+                    if (chatScroll) {
+                        chatScroll.scrollTop = chatScroll.scrollHeight;
+                    }
+                }, 300);
+            }
+         "
+    >
         <div class="flex gap-1 overflow-x-auto" role="tablist">
-            @foreach(['overview' => 'Nội dung', 'notes' => 'Ghi chú', 'qa' => 'Thảo luận', 'ai' => 'AI hỗ trợ', 'resources' => 'Tài liệu'] as $key => $label)
+            @foreach(['overview' => 'Nội dung', 'notes' => 'Ghi chú', 'qa' => 'Trao đổi với giảng viên', 'ai' => 'AI hỗ trợ', 'resources' => 'Tài liệu'] as $key => $label)
                 <button
                     type="button"
                     role="tab"
@@ -161,7 +199,7 @@
                     @if(!$isEnrolled && !$isInstructor && !$isAdmin)
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center text-amber-800" role="alert">
                             <h5 class="font-bold text-base mb-1">Ghi danh để đặt câu hỏi</h5>
-                            <p class="text-sm mb-0">Bạn cần ghi danh khóa học này để có thể xem thảo luận và đặt câu hỏi cho giảng viên.</p>
+                            <p class="text-sm mb-0">Bạn cần ghi danh khóa học này để có thể xem trao đổi và đặt câu hỏi cho giảng viên.</p>
                         </div>
                     @else
                         @if($activeDiscussion)
