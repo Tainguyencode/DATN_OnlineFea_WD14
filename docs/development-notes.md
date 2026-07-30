@@ -72,3 +72,6 @@
 ### Commit 24: docs: cap nhat tai lieu dac ta giao dien va trai nghiem nguoi dung (2026-07-29 10:35:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 25: test: bo sung test case cho chuc nang danh sach khoa hoc yeu thich (2026-07-30 16:10:20 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
