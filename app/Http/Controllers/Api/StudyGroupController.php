@@ -134,6 +134,24 @@ class StudyGroupController extends Controller
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
+        // Mark study group notifications as read for this user
+        try {
+            $notificationUrl = route('study-groups.show', $studyGroup);
+            $user->pushNotifications()
+                ->where('is_read', false)
+                ->where('type', 'study_group')
+                ->where(function ($query) use ($notificationUrl, $studyGroup) {
+                    $query->where('url', $notificationUrl)
+                        ->orWhere('url', 'like', '%/study-groups/' . $studyGroup->id . '%');
+                })
+                ->update([
+                    'is_read' => true,
+                    'read_at' => now(),
+                ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to mark study group notifications as read: " . $e->getMessage());
+        }
+
         // Load study group creator, members, and messages with user sorted by created_at asc
         $studyGroup->load([
             'creator',
