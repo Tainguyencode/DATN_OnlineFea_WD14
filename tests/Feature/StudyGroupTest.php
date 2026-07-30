@@ -679,4 +679,37 @@ class StudyGroupTest extends TestCase
             'type' => 'study_group',
         ]);
     }
+
+    public function test_viewing_chat_room_marks_notifications_as_read(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+
+        $studyGroup = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Notification Mark Read Team',
+            'max_members' => 5,
+        ]);
+        $studyGroup->members()->attach($student->id, ['role' => 'moderator']);
+
+        $notification = \App\Models\PushNotification::create([
+            'user_id' => $student->id,
+            'title' => 'Tin nhắn mới',
+            'message' => 'Nội dung tin nhắn',
+            'type' => 'study_group',
+            'url' => route('study-groups.show', $studyGroup),
+            'is_read' => false,
+        ]);
+
+        $this->assertFalse($notification->fresh()->is_read);
+
+        $response = $this->actingAs($student)
+            ->get(route('study-groups.show', $studyGroup));
+        
+        $response->assertStatus(200);
+
+        $this->assertTrue($notification->fresh()->is_read);
+        $this->assertNotNull($notification->fresh()->read_at);
+    }
 }
