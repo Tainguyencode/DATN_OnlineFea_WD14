@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Web\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonProgress;
 use App\Models\VideoAccessLog;
 use App\Models\VideoWatchHistory;
+use App\Services\LearningProgressService;
 use App\Services\SecurityAlertService;
 use App\Services\VideoTokenService;
 use Illuminate\Http\Request;
@@ -29,12 +32,13 @@ class VideoPlayerController extends Controller
         $user = $request->user();
 
         // Kiểm tra quyền truy cập (đã mua khóa học)
-        $hasAccess = Enrollment::where('user_id', $user->id)
-            ->where('course_id', $lesson->course_id)
+        $course = $this->courseForLesson($lesson);
+        $hasAccess = $course && Enrollment::where('user_id', $user->id)
+            ->where('course_id', $course->id)
             ->withLearningAccess()
             ->exists();
 
-        if (!$hasAccess && !$lesson->is_preview && !$user->hasRole('admin') && $lesson->course->instructor_id !== $user->id) {
+        if (!$hasAccess && !$lesson->is_preview && !$user->isAdmin() && (! $course || (int) $course->instructor_id !== (int) $user->id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -67,14 +71,14 @@ class VideoPlayerController extends Controller
                 'token' => $token,
                 'lesson_id' => $lesson->id
             ]);
-            abort(403, 'Invalid or expired token.');
+            return response('Not found', 404);
         }
 
         $hlsDir = 'lesson-hls/' . $lesson->id;
         $m3u8Path = $hlsDir . '/playlist.m3u8';
 
         if (!Storage::disk('local')->exists($m3u8Path)) {
-            abort(404, 'Playlist not found.');
+            return response('Not found', 404);
         }
 
         $content = Storage::disk('local')->get($m3u8Path);
@@ -103,13 +107,13 @@ class VideoPlayerController extends Controller
         $token = $request->query('token');
 
         if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
-            abort(403, 'Invalid or expired token.');
+            return response('Not found', 404);
         }
 
         $segmentPath = 'lesson-hls/' . $lesson->id . '/' . $segment;
 
         if (!Storage::disk('local')->exists($segmentPath)) {
-            abort(404, 'Segment not found.');
+            return response('Not found', 404);
         }
 
         $path = Storage::disk('local')->path($segmentPath);
@@ -123,16 +127,39 @@ class VideoPlayerController extends Controller
     /**
      * Cập nhật tiến trình xem video (được gọi từ client mỗi 10s)
      */
-    public function updateProgress(Request $request, Lesson $lesson)
+    public function updateProgress(Request $request, Lesson $lesson, LearningProgressService $progressService)
     {
         $user = $request->user();
-        $currentTime = $request->input('current_time', 0);
+        $course = $this->courseForLesson($lesson);
+        abort_unless($course, 404);
+
+        $validated = $request->validate([
+            'current_time' => ['nullable', 'integer', 'min:0'],
+            'last_position_seconds' => ['nullable', 'integer', 'min:0'],
+            'furthest_position_seconds' => ['nullable', 'integer', 'min:0'],
+            'played_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
+            'video_duration_seconds' => ['nullable', 'numeric', 'min:0'],
+            'client_updated_at' => ['nullable', 'date'],
+        ]);
+
+        $currentTime = (int) ($validated['last_position_seconds'] ?? $validated['current_time'] ?? 0);
+        $progress = $progressService->recordVideoProgress($user->id, $course, $lesson, [
+            'last_position_seconds' => $currentTime,
+            'furthest_position_seconds' => $validated['furthest_position_seconds'] ?? $currentTime,
+            'played_seconds' => $validated['played_seconds'] ?? 0,
+            'video_duration_seconds' => $validated['video_duration_seconds'] ?? null,
+            'client_updated_at' => $validated['client_updated_at'] ?? null,
+        ]);
+
+        if ($progress['stale'] ?? false) {
+            return response()->json($progress, 409);
+        }
         
         // Cập nhật hoặc tạo mới history
         VideoWatchHistory::updateOrCreate(
             ['user_id' => $user->id, 'lesson_id' => $lesson->id],
             [
-                'course_id' => $lesson->course_id,
+                'course_id' => $course->id,
                 'current_time' => $currentTime,
             ]
         );
@@ -146,11 +173,11 @@ class VideoPlayerController extends Controller
         if ($log && $log->watch_started_at) {
             $log->update([
                 'watch_ended_at' => now(),
-                'watch_duration' => now()->diffInSeconds($log->watch_started_at)
+                'watch_duration' => max(0, now()->timestamp - $log->watch_started_at->timestamp)
             ]);
         }
 
-        return response()->json(['success' => true]);
+        return response()->json($progress);
     }
 
     /**
@@ -159,13 +186,30 @@ class VideoPlayerController extends Controller
     public function getProgress(Request $request, Lesson $lesson)
     {
         $user = $request->user();
+        $progress = LessonProgress::query()
+            ->where('user_id', $user->id)
+            ->where('lesson_id', $lesson->id)
+            ->first();
+
         $history = VideoWatchHistory::where('user_id', $user->id)
             ->where('lesson_id', $lesson->id)
             ->first();
 
         return response()->json([
-            'current_time' => $history ? $history->current_time : 0
+            'current_time' => (int) ($progress?->last_position_seconds ?? $history?->current_time ?? 0),
+            'last_position_seconds' => (int) ($progress?->last_position_seconds ?? $history?->current_time ?? 0),
+            'furthest_position_seconds' => (int) ($progress?->furthest_position_seconds ?? 0),
+            'watched_seconds' => (int) ($progress?->watched_seconds ?? 0),
+            'progress_percent' => (float) ($progress?->progress_percent ?? 0),
+            'is_completed' => (bool) ($progress?->is_completed ?? false),
         ]);
+    }
+
+    private function courseForLesson(Lesson $lesson): ?Course
+    {
+        return $lesson->course
+            ?? $lesson->section?->course
+            ?? $lesson->chapter?->course;
     }
 
     private function getBrowserName($userAgent)

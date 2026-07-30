@@ -26,6 +26,12 @@
             'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
         ],
         [
+            'route' => 'student.lesson-notes.index',
+            'label' => 'Ghi chú học tập',
+            'active' => ['student.lesson-notes.*'],
+            'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11.5A1.5 1.5 0 005.5 20H17a2 2 0 002-2v-5M16.5 3.5a2.121 2.121 0 013 3L12 14l-4 1 1-4 7.5-7.5z"/></svg>'
+        ],
+        [
             'route' => 'student.reviews.index',
             'active' => ['student.reviews.*'],
             'label' => 'Đánh giá của tôi',

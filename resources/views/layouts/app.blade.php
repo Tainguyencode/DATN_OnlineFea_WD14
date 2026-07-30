@@ -15,13 +15,13 @@
 <body x-data="{ mobileMenu: false }" class="flex min-h-screen flex-col bg-white font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-200">
     <header class="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div class="ui-container">
-            <div class="flex h-16 items-center gap-4">
+            <div class="flex h-20 items-center gap-4">
                 <button type="button" x-on:click="mobileMenu = true" class="inline-flex rounded-md p-2 text-slate-900 transition duration-200 hover:bg-slate-100 dark:text-white dark:hover:bg-slate-800 lg:hidden" aria-label="Mở menu">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
 
                 <a href="{{ route('home') }}" class="flex shrink-0 items-center gap-2 text-lg font-extrabold text-slate-900 dark:text-white">
-                    <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-10 w-auto object-contain">
+                    <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-14 w-auto object-contain">
                     <span class="hidden sm:inline">FEA Learning</span>
                 </a>
 
@@ -155,42 +155,44 @@
         @yield('content')
     </main>
 
-    <footer class="mt-auto border-t border-slate-800 bg-slate-900 py-12 text-sm text-white">
+    <footer class="mt-auto border-t border-slate-700 bg-slate-800 py-12 text-sm text-white">
         <div class="ui-container">
             <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                    <div class="mb-4 flex items-center gap-3 text-lg font-extrabold">
-                        <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-10 w-auto object-contain">
+                    <div class="mb-4 flex items-center gap-3 text-lg font-extrabold text-white">
+                        <div class="flex items-center justify-center rounded-lg bg-white p-1.5 shadow-sm">
+                            <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-10 w-auto object-contain">
+                        </div>
                         FEA Learning
                     </div>
-                    <p class="leading-6 text-slate-400">Nền tảng học trực tuyến giúp học viên, giảng viên và nhà quản trị vận hành khóa học chuyên nghiệp.</p>
+                    <p class="leading-6 text-slate-300">Nền tảng học trực tuyến giúp học viên, giảng viên và nhà quản trị vận hành khóa học chuyên nghiệp.</p>
                 </div>
                 <div>
-                    <h4 class="mb-4 font-bold">Giới thiệu</h4>
-                    <ul class="space-y-3 text-slate-400">
-                        <li><a href="{{ route('courses.index') }}" class="hover:text-white">Khóa học</a></li>
-                        <li><a href="{{ route('home') }}#categories" class="hover:text-white">Danh mục</a></li>
-                        <li><a href="{{ route('home') }}#paths" class="hover:text-white">Lộ trình học</a></li>
+                    <h4 class="mb-4 font-bold text-white">Giới thiệu</h4>
+                    <ul class="space-y-3 text-slate-300">
+                        <li><a href="{{ route('courses.index') }}" class="transition-colors hover:text-white">Khóa học</a></li>
+                        <li><a href="{{ route('home') }}#categories" class="transition-colors hover:text-white">Danh mục</a></li>
+                        <li><a href="{{ route('home') }}#paths" class="transition-colors hover:text-white">Lộ trình học</a></li>
                     </ul>
                 </div>
                 <div>
-                    <h4 class="mb-4 font-bold">Hỗ trợ</h4>
-                    <ul class="space-y-3 text-slate-400">
+                    <h4 class="mb-4 font-bold text-white">Hỗ trợ</h4>
+                    <ul class="space-y-3 text-slate-300">
                         <li>Email: support@fea-lms.vn</li>
                         <li>Hotline: 1900 88xx</li>
-                        <li><a href="{{ route('home') }}#faq" class="hover:text-white">Câu hỏi thường gặp</a></li>
+                        <li><a href="{{ route('home') }}#faq" class="transition-colors hover:text-white">Câu hỏi thường gặp</a></li>
                     </ul>
                 </div>
                 <div>
-                    <h4 class="mb-4 font-bold">Điều khoản</h4>
-                    <ul class="space-y-3 text-slate-400">
+                    <h4 class="mb-4 font-bold text-white">Điều khoản</h4>
+                    <ul class="space-y-3 text-slate-300">
                         <li>Chính sách bảo mật</li>
                         <li>Điều khoản sử dụng</li>
                         <li>Mạng xã hội: Facebook, YouTube, LinkedIn</li>
                     </ul>
                 </div>
             </div>
-            <div class="mt-8 border-t border-slate-800 pt-6 text-center text-xs text-slate-500">
+            <div class="mt-8 border-t border-slate-700 pt-6 text-center text-xs text-slate-400">
                 &copy; {{ date('Y') }} Website học online FEA. All rights reserved.
             </div>
         </div>

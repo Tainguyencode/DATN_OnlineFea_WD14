@@ -28,6 +28,10 @@ class CourseCompletionService
                     ->orWhereHas('section', fn ($q) => $q->where('course_id', $course->id))
                     ->orWhereHas('chapter', fn ($q) => $q->where('course_id', $course->id));
             })
+            ->where('is_required', true)
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhere('status', 'published');
+            })
             ->get();
 
         // 1. Xem 100% video
@@ -46,12 +50,12 @@ class CourseCompletionService
             if (! $quiz) {
                 continue;
             }
-            $passed = QuizAttempt::query()
+            $submitted = QuizAttempt::query()
                 ->where('user_id', $userId)
                 ->where('quiz_id', $quiz->id)
-                ->where('passed', true)
+                ->whereNotNull('completed_at')
                 ->exists();
-            if (! $passed) {
+            if (! $submitted) {
                 $missing[] = "Bài trắc nghiệm \"{$lesson->title}\" chưa đạt điểm yêu cầu.";
             }
         }

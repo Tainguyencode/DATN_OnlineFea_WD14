@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Learning\UpdateLessonProgressRequest;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonNote;
 use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Models\ReviewHelpful;
@@ -88,7 +90,7 @@ class CourseController extends Controller
         $reviewSort = $request->query('review_sort') === 'helpful' ? 'helpful' : 'latest';
 
         $reviews = Review::query()
-            ->approved()
+            ->visible()
             ->where('course_id', $course->id)
             ->whereNull('parent_id')
             ->with(['user:id,name,avatar', 'replies.user:id,name,avatar'])
@@ -99,8 +101,9 @@ class CourseController extends Controller
             ->withQueryString();
 
         $ratingRows = Review::query()
-            ->approved()
+            ->visible()
             ->where('course_id', $course->id)
+            ->whereNull('parent_id')
             ->selectRaw('rating, COUNT(*) as total')
             ->groupBy('rating')
             ->pluck('total', 'rating');
@@ -224,6 +227,25 @@ class CourseController extends Controller
             ? route('courses.lessons.ai-explain', [$course, $lesson])
             : null;
 
+        $canUseLessonNotes = (bool) $user && $user->isStudent() && $player['isEnrolled'];
+        $lessonNotes = $canUseLessonNotes
+            ? LessonNote::query()
+                ->where('user_id', $user->id)
+                ->where('lesson_id', $lesson->id)
+                ->when(
+                    $lesson->type === 'video',
+                    fn ($query) => $query->orderBy('timestamp_seconds')->orderBy('created_at'),
+                    fn ($query) => $query->latest()
+                )
+                ->get()
+            : collect();
+        $lessonNotesIndexUrl = $canUseLessonNotes
+            ? route('courses.lessons.notes.index', [$course, $lesson])
+            : null;
+        $lessonNotesStoreUrl = $canUseLessonNotes
+            ? route('courses.lessons.notes.store', [$course, $lesson])
+            : null;
+
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
 
         if ($player['canAccessLesson'] || $player['isEnrolled']) {
@@ -267,8 +289,12 @@ class CourseController extends Controller
             'isEnrolled' => $player['isEnrolled'],
             'canAccessLesson' => $player['canAccessLesson'],
             'canUseLessonAi' => $canUseLessonAi,
+            'canUseLessonNotes' => $canUseLessonNotes,
             'aiSummaryUrl' => $aiSummaryUrl,
             'aiExplainUrl' => $aiExplainUrl,
+            'lessonNotes' => $lessonNotes,
+            'lessonNotesIndexUrl' => $lessonNotesIndexUrl,
+            'lessonNotesStoreUrl' => $lessonNotesStoreUrl,
             'videoSource' => $videoSource,
             'progressUrl' => $progressUrl,
             'sectionTitle' => $sectionTitle,
@@ -287,7 +313,7 @@ class CourseController extends Controller
     }
 
     public function updateLessonProgress(
-        Request $request,
+        UpdateLessonProgressRequest $request,
         Course $course,
         Lesson $lesson,
         LearningProgressService $progressService
@@ -303,28 +329,31 @@ class CourseController extends Controller
 
         abort_unless($enrollmentExists, 403);
 
-        $validated = $request->validate([
-            'watched_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
-            'completed' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
-        $watchedSeconds = (int) ($validated['watched_seconds'] ?? 0);
-        $durationSeconds = $this->lessonDurationSeconds($lesson);
-        $completed = $request->boolean('completed');
+        if ($lesson->type === 'video') {
+            $progress = $progressService->recordVideoProgress(
+                $request->user()->id,
+                $course,
+                $lesson,
+                $validated,
+            );
 
-        if ($lesson->type === 'video' && $durationSeconds > 0) {
-            $threshold = $course->requiredVideoPercent() / 100;
-            $completed = $completed || $watchedSeconds >= (int) ceil($durationSeconds * $threshold);
+            if ($progress['stale'] ?? false) {
+                return response()->json($progress, 409);
+            }
+        } else {
+            abort_if($lesson->type === 'quiz', 422, 'Quiz progress is updated after quiz submission.');
+
+            $progress = $progressService->recordLessonProgress(
+                $request->user()->id,
+                $course,
+                $lesson,
+                0,
+                0,
+                $request->boolean('completed')
+            );
         }
-
-        $progress = $progressService->recordLessonProgress(
-            $request->user()->id,
-            $course,
-            $lesson,
-            $watchedSeconds,
-            $durationSeconds,
-            $completed
-        );
 
         return response()->json([
             'success' => true,
@@ -332,6 +361,11 @@ class CourseController extends Controller
             'course_progress' => $progress['course_progress'],
             'lesson_completed' => $progress['lesson_completed'],
             'course_completed' => $progress['course_completed'],
+            'watched_seconds' => $progress['watched_seconds'],
+            'last_position_seconds' => $progress['last_position_seconds'] ?? 0,
+            'furthest_position_seconds' => $progress['furthest_position_seconds'] ?? 0,
+            'completed_lessons' => $progress['completed_lessons'],
+            'total_lessons' => $progress['total_lessons'],
         ]);
     }
 

@@ -107,7 +107,7 @@ class CartController extends Controller
 
         $selectedCourseIds = $validated['course_ids'];
         $cart = $this->getCart()->load(['courses' => function ($query) use ($selectedCourseIds) {
-            $query->whereIn('courses.id', $selectedCourseIds);
+            $query->whereIn('courses.id', $selectedCourseIds)->with('instructor');
         }]);
 
         if ($cart->courses->isEmpty()) {
@@ -184,11 +184,15 @@ class CartController extends Controller
 
                 foreach ($cart->courses as $course) {
                     $price = $course->discount_price ?? $course->sale_price ?? $course->price;
+                    $commissionRate = (float) $course->instructor->getCommissionRate();
 
                     OrderItem::create([
                         'order_id' => $order->id,
                         'course_id' => $course->id,
                         'price' => $price,
+                        'commission_rate' => $commissionRate,
+                        'commission_amount' => 0,
+                        'instructor_earning' => 0,
                     ]);
 
                     $enrollment = Enrollment::firstOrCreate(
@@ -203,6 +207,17 @@ class CartController extends Controller
 
                     if ($enrollment->wasRecentlyCreated) {
                         $course->increment('enrollment_count');
+
+                        if ($course->instructor) {
+                            $studentName = auth()->user()?->name ?? 'Một học viên';
+                            app(\App\Services\NotificationService::class)->send(
+                                $course->instructor,
+                                'Học viên mới đăng ký khóa học',
+                                "Học viên {$studentName} đã đăng ký khóa học \"{$course->title}\".",
+                                'new_enrollment',
+                                route('instructor.courses.students', $course)
+                            );
+                        }
                     }
                 }
 
@@ -245,18 +260,29 @@ class CartController extends Controller
 
             foreach ($cart->courses as $course) {
                 $price = $course->discount_price ?? $course->sale_price ?? $course->price;
+                
+                // Tính toán tỷ lệ giảm giá cho item này
+                $itemDiscount = $subtotal > 0 ? ($price / $subtotal) * $discount : 0;
+                $itemNetPrice = max(0, $price - $itemDiscount);
+                
+                $commissionRate = (float) $course->instructor->getCommissionRate();
+                $commissionAmount = ($itemNetPrice * $commissionRate) / 100;
+                $instructorEarning = $itemNetPrice - $commissionAmount;
 
                 OrderItem::create([
                     'order_id' => $order->id,
                     'course_id' => $course->id,
                     'price' => $price,
+                    'commission_rate' => $commissionRate,
+                    'commission_amount' => $commissionAmount,
+                    'instructor_earning' => $instructorEarning,
                 ]);
             }
 
             return $order;
         });
 
-        // Lấy URL thanh toán tương ứng và chuyển hướng người dùng
+        // Lấy URL thanh toán tương ứng và chuyển hướng người dùng tới trang quét mã QR (PayOS / VietQR)
         $paymentUrl = $paymentService->getPaymentUrl($order);
 
         return redirect($paymentUrl);
@@ -418,11 +444,17 @@ class CartController extends Controller
      *
      * @return View|RedirectResponse
      */
-    public function successPage(string $orderCode)
+    public function successPage(string $orderCode, PaymentGatewayService $paymentService)
     {
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', auth()->id())
             ->firstOrFail();
+
+        // Tự động kiểm tra trạng thái thanh toán từ PayOS API nếu đơn hàng chưa được chuyển sang paid (đặc biệt hữu ích khi dev localhost không có Webhook)
+        if ($order->status !== 'paid') {
+            $paymentService->checkAndUpdatePayOSStatus($order);
+            $order->refresh();
+        }
 
         if ($order->status !== 'paid') {
             return redirect()->route('student.dashboard')->with('error', 'Đơn hàng này chưa được thanh toán thành công.');
@@ -455,3 +487,4 @@ class CartController extends Controller
         return view('student.cart.failed', compact('order', 'orderItems'));
     }
 }
+
