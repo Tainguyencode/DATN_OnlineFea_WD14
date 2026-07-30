@@ -96,6 +96,37 @@
                     </form>
                 </div>
 
+                @if($user->role === 'instructor')
+                {{-- Thông tin tài khoản ngân hàng nhận đối soát --}}
+                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-bold text-slate-900">Tài khoản ngân hàng nhận tiền</h3>
+                    <p class="mt-1 text-sm text-slate-500">Cung cấp thông tin tài khoản ngân hàng để nền tảng đối soát và chuyển khoản chiết khấu doanh thu khóa học cho bạn.</p>
+
+                    <form method="POST" action="{{ $profileUpdateRoute }}" class="mt-6 space-y-5">
+                        @csrf
+                        @method('PUT')
+                        <div class="grid gap-5 sm:grid-cols-3">
+                            <div>
+                                <label class="mb-1.5 block text-sm font-semibold text-slate-700">Tên ngân hàng</label>
+                                <input name="bank_name" value="{{ old('bank_name', $user->bank_name) }}" placeholder="Ví dụ: MB Bank, Vietcombank..."
+                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-sm font-semibold text-slate-700">Số tài khoản</label>
+                                <input name="bank_account_number" value="{{ old('bank_account_number', $user->bank_account_number) }}" placeholder="Nhập số tài khoản"
+                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-sm font-semibold text-slate-700">Chủ tài khoản (viết hoa không dấu)</label>
+                                <input name="bank_account_name" value="{{ old('bank_account_name', $user->bank_account_name) }}" placeholder="NGUYEN VAN A"
+                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                            </div>
+                        </div>
+                        <button class="rounded-lg bg-[#0056D2] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0046B8]">Lưu thông tin ngân hàng</button>
+                    </form>
+                </div>
+                @endif
+
                 {{-- Đổi email & Đổi mật khẩu: mỗi cái 1 hàng riêng để không bị hẹp --}}
                 <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-bold text-slate-900">Đổi email</h3>

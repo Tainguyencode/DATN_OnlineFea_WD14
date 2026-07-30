@@ -12,7 +12,8 @@
         "laravel/socialite": "*",
         "laravel/tinker": "^3.0",
         "php-ffmpeg/php-ffmpeg": "^1.4",
-        "socialiteproviders/microsoft": "*"
+        "socialiteproviders/microsoft": "*",
+        "stripe/stripe-php": "^21.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

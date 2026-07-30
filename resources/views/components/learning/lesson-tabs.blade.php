@@ -11,6 +11,10 @@
     'aiExplainUrl' => null,
     'discussions' => collect(),
     'activeDiscussion' => null,
+    'canUseLessonNotes' => false,
+    'lessonNotes' => collect(),
+    'lessonNotesIndexUrl' => null,
+    'lessonNotesStoreUrl' => null,
 ])
 
 <div class="learning-tabs border-t border-[#d1d7dc] bg-white" id="learning-tabs">
@@ -184,8 +188,82 @@
                 @endif
             </div>
 
-            <div x-show="tab === 'notes'" x-cloak>
-                <p class="text-sm text-[#6a6f73]">Tính năng ghi chú sẽ được bổ sung trong phiên bản tiếp theo.</p>
+            <div
+                x-show="tab === 'notes'"
+                x-cloak
+                data-lesson-notes
+                data-can-use-notes="{{ $canUseLessonNotes ? '1' : '0' }}"
+                data-lesson-type="{{ $lesson->type }}"
+                data-video-duration="{{ $videoDurationSeconds }}"
+                data-store-url="{{ $lessonNotesStoreUrl }}"
+                data-index-url="{{ $lessonNotesIndexUrl }}"
+            >
+                <script type="application/json" data-lesson-notes-json>@json($notesPayload)</script>
+
+                @if($canUseLessonNotes)
+                    <div class="space-y-5">
+                        <form data-note-create-form class="space-y-3 rounded border border-[#d1d7dc] bg-[#f7f9fa] p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="text-base font-bold text-[#1c1d1f]">Ghi chú bài học</h2>
+                                    <p class="mt-1 text-xs text-[#6a6f73]">Ghi chú chỉ hiển thị với riêng bạn.</p>
+                                </div>
+
+                                @if($lesson->type === 'video')
+                                    <div class="flex items-center gap-2 text-sm">
+                                        <span class="font-semibold text-[#6a6f73]">Mốc:</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            @if($videoDurationSeconds > 0) max="{{ $videoDurationSeconds }}" @endif
+                                            name="timestamp_seconds"
+                                            data-note-timestamp
+                                            class="h-9 w-24 rounded border border-[#d1d7dc] px-2 text-sm text-[#1c1d1f] outline-none focus:ring-2 focus:ring-[#0056D2]"
+                                            placeholder="giây"
+                                        >
+                                        <span data-note-timestamp-label class="min-w-12 font-semibold text-[#1c1d1f]">0:00</span>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <textarea
+                                name="content"
+                                rows="4"
+                                maxlength="2000"
+                                required
+                                data-note-content
+                                class="w-full rounded border border-[#d1d7dc] bg-white px-3 py-2 text-sm leading-6 text-[#1c1d1f] outline-none focus:ring-2 focus:ring-[#0056D2]"
+                                placeholder="Nhập ghi chú của bạn..."
+                            ></textarea>
+
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div class="space-y-1">
+                                    <p data-note-form-status class="text-xs text-[#6a6f73]"></p>
+                                    <p data-note-form-error class="hidden text-sm text-red-600"></p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span data-note-char-count class="text-xs font-semibold text-[#6a6f73]">0/2000</span>
+                                    <button type="submit" data-note-submit class="inline-flex h-9 items-center rounded bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60">
+                                        Lưu ghi chú
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div>
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <h3 class="text-sm font-bold text-[#1c1d1f]">Ghi chú của bạn</h3>
+                                <span data-note-count class="text-xs font-semibold text-[#6a6f73]"></span>
+                            </div>
+                            <div data-note-empty class="rounded border border-dashed border-[#d1d7dc] p-5 text-center text-sm text-[#6a6f73]">
+                                Bạn chưa có ghi chú nào cho bài học này.
+                            </div>
+                            <div data-note-list class="space-y-3"></div>
+                        </div>
+                    </div>
+                @else
+                    <p class="text-sm text-[#6a6f73]">Bạn cần đăng nhập bằng tài khoản học viên và có quyền học khóa này để sử dụng ghi chú.</p>
+                @endif
             </div>
             <div x-show="tab === 'qa'" x-cloak>
                 <div class="py-2">
@@ -376,7 +454,7 @@
                                                 @php
                                                     $hasInstructorReply = $disc->replies->contains('is_instructor_answer', true);
                                                 @endphp
-                                                <a href="{{ route('courses.lessons.show', [$course, $lesson, 'discussion_id' => $disc->id]) }}?tab=qa" 
+                                                <a href="{{ route('courses.lessons.show', [$course, $lesson, 'discussion_id' => $disc->id, 'tab' => 'qa']) }}"
                                                    class="block p-3 hover:bg-[#f7f9fa] transition">
                                                     <div class="flex justify-between items-start mb-2">
                                                         <h6 class="mb-0 text-sm text-[#1c1d1f] font-bold">{{ $disc->title }}</h6>
@@ -433,7 +511,7 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            @if($isEnrolled && $lesson->type !== 'video' && $canAccessLesson && $lessonState !== 'completed')
+            @if($isEnrolled && $lesson->type === 'document' && $canAccessLesson && $lessonState !== 'completed')
                 <button type="button" data-mark-lesson-complete class="inline-flex h-10 items-center rounded bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8]">
                     Đánh dấu hoàn thành
                 </button>

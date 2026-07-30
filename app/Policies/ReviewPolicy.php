@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Enums\ReviewStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\LessonProgress;
@@ -55,13 +54,15 @@ class ReviewPolicy
     {
         return $user->is_active
             && (int) $review->user_id !== (int) $user->id
-            && $review->status === ReviewStatus::Approved;
+            && $review->isVisible();
     }
 
     public function reply(User $user, Review $review): bool
     {
         return $user->is_active
             && $user->isInstructor()
+            && ! $review->isReply()
+            && $review->isVisible()
             && $review->course()->where('instructor_id', $user->id)->exists();
     }
 

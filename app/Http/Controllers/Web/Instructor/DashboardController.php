@@ -20,7 +20,8 @@ class DashboardController extends Controller
         foreach ($orders as $order) {
             foreach (($order->items ?? []) as $item) {
                 if (in_array($item['course_id'] ?? null, $courseIds->toArray())) {
-                    $revenue += $item['price'] ?? 0;
+                    $itemPrice = $item['price'] ?? 0;
+                    $revenue += $item['instructor_earning'] ?? ($itemPrice * (1 - $user->getCommissionRate() / 100));
                 }
             }
         }

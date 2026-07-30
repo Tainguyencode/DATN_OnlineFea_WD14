@@ -34,35 +34,131 @@ class CourseRecommendationService
 
         $viewer = $user?->isStudent() ? $user : null;
         $cacheKey = $this->cacheKey($currentCourse, $viewer, $limit);
+        $freshCourses = null;
 
-        return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($currentCourse, $viewer, $limit) {
-            $profile = $this->buildUserPreferenceProfile($viewer);
-            $sourceTags = $this->normalizeTags($currentCourse->tags);
-            $excludeIds = $this->excludedCourseIds($currentCourse, $profile);
-            $poolLimit = $this->candidatePoolLimit($limit);
+        $ids = Cache::get($cacheKey);
 
-            $candidates = $this->getHybridCandidates($currentCourse, $profile, $sourceTags, $viewer, $excludeIds, $poolLimit);
+        if (! $this->isValidCachedCourseIds($ids, $currentCourse, $limit)) {
+            Cache::forget($cacheKey);
 
-            if ($candidates->unique('id')->count() < $limit) {
-                $candidates = $this->appendFallbackCandidates($currentCourse, $profile, $candidates, $viewer, $excludeIds, $limit, $poolLimit);
+            $ids = Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($currentCourse, $viewer, $limit, &$freshCourses) {
+                $freshCourses = $this->rankedRecommendationCourses($currentCourse, $viewer, $limit);
+
+                return $this->courseIds($freshCourses);
+            });
+        }
+
+        if (! $this->isValidCachedCourseIds($ids, $currentCourse, $limit)) {
+            Cache::forget($cacheKey);
+            $freshCourses = $this->rankedRecommendationCourses($currentCourse, $viewer, $limit);
+            $ids = $this->courseIds($freshCourses);
+        }
+
+        if ($freshCourses instanceof EloquentCollection) {
+            return $freshCourses;
+        }
+
+        $courses = $this->coursesFromCachedIds($ids, $currentCourse, $viewer);
+
+        if ($courses->count() < count($ids)) {
+            Cache::forget($cacheKey);
+            $freshCourses = null;
+            $ids = Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($currentCourse, $viewer, $limit, &$freshCourses) {
+                $freshCourses = $this->rankedRecommendationCourses($currentCourse, $viewer, $limit);
+
+                return $this->courseIds($freshCourses);
+            });
+
+            if ($freshCourses instanceof EloquentCollection) {
+                return $freshCourses;
             }
 
-            $ranked = $candidates
-                ->unique('id')
-                ->map(function (Course $candidate) use ($currentCourse, $profile, $sourceTags) {
-                    $score = $this->calculateRecommendationScore($currentCourse, $candidate, $profile, $sourceTags);
-                    $candidate->setAttribute('related_score', $score['score']);
-                    $candidate->setAttribute('recommendation_reason', $score['reason']);
-                    $candidate->setAttribute('recommendation_type', $score['type']);
+            if (! $this->isValidCachedCourseIds($ids, $currentCourse, $limit)) {
+                Cache::forget($cacheKey);
+                $freshCourses = $this->rankedRecommendationCourses($currentCourse, $viewer, $limit);
 
-                    return $candidate;
-                })
-                ->sort(fn (Course $first, Course $second) => $this->compareRank($first, $second))
-                ->take($limit)
-                ->values();
+                return $freshCourses;
+            }
 
-            return new EloquentCollection($ranked->all());
-        });
+            $courses = $this->coursesFromCachedIds($ids, $currentCourse, $viewer);
+        }
+
+        return $courses;
+    }
+
+    private function rankedRecommendationCourses(Course $currentCourse, ?User $viewer, int $limit): EloquentCollection
+    {
+        $profile = $this->buildUserPreferenceProfile($viewer);
+        $sourceTags = $this->normalizeTags($currentCourse->tags);
+        $excludeIds = $this->excludedCourseIds($currentCourse, $profile);
+        $poolLimit = $this->candidatePoolLimit($limit);
+
+        $candidates = $this->getHybridCandidates($currentCourse, $profile, $sourceTags, $viewer, $excludeIds, $poolLimit);
+
+        if ($candidates->unique('id')->count() < $limit) {
+            $candidates = $this->appendFallbackCandidates($currentCourse, $profile, $candidates, $viewer, $excludeIds, $limit, $poolLimit);
+        }
+
+        $courses = $candidates
+            ->unique('id')
+            ->map(function (Course $candidate) use ($currentCourse, $profile, $sourceTags) {
+                return $this->withRecommendationMetadata($candidate, $currentCourse, $profile, $sourceTags);
+            })
+            ->sort(fn (Course $first, Course $second) => $this->compareRank($first, $second))
+            ->take($limit)
+            ->values();
+
+        return new EloquentCollection($courses->all());
+    }
+
+    private function courseIds(EloquentCollection $courses): array
+    {
+        return $courses
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function coursesFromCachedIds(array $ids, Course $currentCourse, ?User $viewer): EloquentCollection
+    {
+        if ($ids === []) {
+            return new EloquentCollection;
+        }
+
+        $positions = array_flip($ids);
+        $profile = $this->buildUserPreferenceProfile($viewer);
+        $sourceTags = $this->normalizeTags($currentCourse->tags);
+
+        $courses = $this->baseCandidateQuery($viewer, [])
+            ->whereIn('courses.id', $ids)
+            ->get()
+            ->map(fn (Course $course) => $this->withRecommendationMetadata($course, $currentCourse, $profile, $sourceTags))
+            ->sortBy(fn (Course $course) => $positions[(int) $course->id] ?? PHP_INT_MAX)
+            ->values();
+
+        return new EloquentCollection($courses->all());
+    }
+
+    private function withRecommendationMetadata(Course $candidate, Course $currentCourse, array $profile, array $sourceTags): Course
+    {
+        $score = $this->calculateRecommendationScore($currentCourse, $candidate, $profile, $sourceTags);
+        $candidate->setAttribute('related_score', $score['score']);
+        $candidate->setAttribute('recommendation_reason', $score['reason']);
+        $candidate->setAttribute('recommendation_type', $score['type']);
+
+        return $candidate;
+    }
+
+    private function isValidCachedCourseIds(mixed $ids, Course $currentCourse, int $limit): bool
+    {
+        if (! is_array($ids) || count($ids) > $limit) {
+            return false;
+        }
+
+        return collect($ids)->every(
+            fn ($id) => is_int($id) && $id > 0 && $id !== (int) $currentCourse->id
+        );
     }
 
     private function buildUserPreferenceProfile(?User $user): array
@@ -790,7 +886,7 @@ class CourseRecommendationService
         $viewer = $user ? (string) $user->id : 'guest';
 
         return sprintf(
-            'course_recommendations:%s:%d:%d:%s',
+            'course_recommendations:v2:%s:%d:%d:%s',
             $viewer,
             $course->id,
             $limit,
