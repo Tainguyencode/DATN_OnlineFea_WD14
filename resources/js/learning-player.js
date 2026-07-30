@@ -209,6 +209,7 @@ function initVideoProgressV2() {
         played_seconds: Math.floor(unsavedPlayedSeconds),
         video_duration_seconds: durationSeconds(),
         client_updated_at: nowIso(),
+        completed: video.ended || currentPosition() >= durationSeconds() - 1,
     });
 
     const applyProgressResponse = (data) => {

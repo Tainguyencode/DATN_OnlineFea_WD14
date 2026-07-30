@@ -110,13 +110,8 @@
                                 <a href="{{ $learningEntryUrl ?? route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
                                     Vào học (Xem lại)
                                 </a>
-                                <form method="POST" action="{{ route('courses.enroll', $course) }}" class="mt-3">
-                                    @csrf
-                                    <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
-                                        Học lại từ đầu (Đăng ký lại)
-                                    </button>
-                                </form>
                                 <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
+
                                 <p class="mt-3 text-center text-xs text-emerald-600 dark:text-emerald-400">Chúc mừng! Bạn đã hoàn thành khóa học này.</p>
                             @else
                                 <a href="{{ $learningEntryUrl ?? route('student.courses') }}" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer">
@@ -337,12 +332,6 @@
                                     <a href="{{ $learningEntryUrl }}" class="ui-button-primary flex w-full items-center justify-center gap-2">
                                         Vào học (Xem lại)
                                     </a>
-                                    <form method="POST" action="{{ route('courses.enroll', $course) }}">
-                                        @csrf
-                                        <button type="submit" class="ui-button-secondary w-full">
-                                            Học lại từ đầu (Đăng ký lại)
-                                        </button>
-                                    </form>
                                     <p class="text-center text-xs text-emerald-600 dark:text-emerald-400">Bạn đã hoàn thành khóa học này</p>
                                 @else
                                     <a href="{{ $learningEntryUrl }}" class="ui-button-primary flex w-full items-center justify-center gap-2">
