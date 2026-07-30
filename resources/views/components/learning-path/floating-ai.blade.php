@@ -463,6 +463,13 @@ document.addEventListener('alpine:init', () => {
 
         init() {
             this.loadConversation();
+            window.addEventListener('open-lp-ai-chat', () => {
+                this.isOpen = true;
+                if (this.messages.length === 0) {
+                    this.showSurvey = true;
+                }
+                this.$nextTick(() => this.scrollToBottom());
+            });
         },
 
         toggleChat() {
