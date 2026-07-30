@@ -20,9 +20,8 @@
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
 
-                <a href="{{ route('home') }}" class="flex shrink-0 items-center gap-2 text-lg font-extrabold text-slate-900 dark:text-white">
-                    <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-14 w-auto object-contain">
-                    <span class="hidden sm:inline">FEA Learning</span>
+                <a href="{{ route('home') }}" class="flex shrink-0 items-center text-lg font-extrabold text-slate-900 dark:text-white">
+                    <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-16 w-auto object-contain">
                 </a>
 
                 <nav class="hidden items-center gap-5 text-sm font-semibold text-slate-700 dark:text-slate-300 lg:flex">
@@ -110,9 +109,8 @@
         <div class="absolute inset-0 bg-black/40" x-on:click="mobileMenu = false"></div>
         <aside class="absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col bg-white shadow-md dark:bg-slate-900" x-transition>
             <div class="flex h-16 items-center justify-between border-b border-slate-200 px-5 dark:border-slate-800">
-                <a href="{{ route('home') }}" class="flex items-center gap-2 font-extrabold text-slate-900 dark:text-white">
-                    <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-9 w-auto">
-                    FEA Learning
+                <a href="{{ route('home') }}" class="flex items-center font-extrabold text-slate-900 dark:text-white">
+                    <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-11 w-auto">
                 </a>
                 <button type="button" x-on:click="mobileMenu = false" class="rounded-md p-2 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Đóng menu">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
