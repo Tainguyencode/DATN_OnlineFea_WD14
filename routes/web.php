@@ -21,21 +21,16 @@ use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseCont
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
-<<<<<<< HEAD
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
 use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
-use App\Http\Controllers\Web\NotificationController;
-use App\Http\Controllers\Web\ProfileController;
-use App\Http\Controllers\Web\PaymentController;
-=======
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
+use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ReviewHelpfulController;
->>>>>>> origin/main
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\CartController;
 use App\Http\Controllers\Web\Student\LessonAiController;
@@ -377,9 +372,11 @@ if (app()->environment('local')) {
         $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
             ?? User::where('role', 'student')->firstOrFail();
 
-<<<<<<< HEAD
-    return redirect()->route('dashboard');
-})->name('dev.login-as-student');
+        auth()->login($user);
+
+        return redirect()->route('dashboard');
+    })->name('dev.login-as-student');
+}
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───
 Route::get('/payments/vnpay/callback', [PaymentController::class, 'vnpayCallback'])->name('payments.vnpay.callback');
@@ -389,10 +386,3 @@ Route::get('/payments/momo/callback', [PaymentController::class, 'momoCallback']
 Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
 
 Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');
-=======
-        auth()->login($user);
-
-        return redirect()->route('dashboard');
-    })->name('dev.login-as-student');
-}
->>>>>>> origin/main
