@@ -47,8 +47,8 @@ class PushNotification extends Model
         return match ($this->type) {
             'announcement' => 'Thông báo chung',
             'badge_unlocked' => 'Huy hiệu',
-            'discussion_reply' => 'Thảo luận',
-            'new_discussion' => 'Thảo luận mới',
+            'discussion_reply' => 'Trao đổi',
+            'new_discussion' => 'Trao đổi mới',
             'course_approved' => 'Khóa học duyệt',
             'course_rejected' => 'Khóa học từ chối',
             'new_enrollment' => 'Ghi danh mới',

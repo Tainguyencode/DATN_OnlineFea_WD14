@@ -1,4 +1,4 @@
-<x-instructor-layout title="Hỏi đáp học viên" pageTitle="Hỏi đáp học viên" breadcrumb="Giảng viên / Hỏi đáp">
+<x-instructor-layout title="Trao đổi với học viên" pageTitle="Trao đổi với học viên" breadcrumb="Giảng viên / Trao đổi">
     <div class="space-y-6">
         <!-- BỘ LỌC TÌM KIẾM -->
         <form method="GET" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-3">
