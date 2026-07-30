@@ -169,10 +169,16 @@ class LearningProgressService
 
             $progressPercent = $durationSeconds > 0
                 ? min(100, round(($watchedSeconds / $durationSeconds) * 100, 2))
-                : ($payload['completed'] ?? false ? 100 : (float) ($existing?->progress_percent ?? 0));
+                : (float) ($existing?->progress_percent ?? 0);
 
             $threshold = $course->requiredVideoPercent();
-            $completed = $previousCompleted || $progressPercent >= $threshold;
+            $completed = $previousCompleted || $progressPercent >= $threshold || !empty($payload['completed']);
+            
+            if ($completed) {
+                $progressPercent = 100;
+                $watchedSeconds = max($watchedSeconds, $durationSeconds);
+            }
+
             $completedAt = $existing?->completed_at;
             if ($completed && ! $completedAt) {
                 $completedAt = now();
