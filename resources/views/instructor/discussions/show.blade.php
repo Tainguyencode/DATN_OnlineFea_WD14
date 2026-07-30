@@ -1,4 +1,4 @@
-<x-instructor-layout title="Chi tiết câu hỏi" pageTitle="Chi tiết câu hỏi" breadcrumb="Giảng viên / Hỏi đáp / Chi tiết">
+<x-instructor-layout title="Chi tiết trao đổi" pageTitle="Chi tiết trao đổi" breadcrumb="Giảng viên / Trao đổi / Chi tiết">
     <div class="space-y-6 max-w-4xl">
         <!-- NÚT QUAY LẠI -->
         <div>
@@ -12,6 +12,24 @@
                 {{ session('success') }}
             </div>
         @endif
+
+        <script>
+            (function() {
+                const scrollBottom = (isSmooth = false) => {
+                    const replyForm = document.getElementById('reply-form');
+                    if (replyForm) {
+                        replyForm.scrollIntoView({ behavior: isSmooth ? 'smooth' : 'auto', block: 'end' });
+                    }
+                };
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => scrollBottom(false));
+                } else {
+                    scrollBottom(false);
+                }
+                setTimeout(() => scrollBottom(false), 100);
+                setTimeout(() => scrollBottom(false), 300);
+            })();
+        </script>
 
         <!-- THÔNG TIN CÂU HỎI GỐC -->
         <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -124,7 +142,7 @@
 
             <!-- Ô NHẬP PHẢN HỒI GỬI ĐI -->
             <div class="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-                <form action="{{ route('discussions.replies.store', $discussion) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
+                <form id="reply-form" action="{{ route('discussions.replies.store', $discussion) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
                     @csrf
                     <div>
                         <label for="reply-comment" class="block text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">
