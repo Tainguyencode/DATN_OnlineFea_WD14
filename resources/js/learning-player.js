@@ -1134,7 +1134,7 @@ function initStudyNotesPage() {
 
 function initLessonAi() {
     const root = document.querySelector('[data-lesson-ai]');
-    if (!root || root.dataset.canUseAi !== '1') return;
+    if (!root || root.getAttribute('data-can-use-ai') !== '1') return;
 
     const summaryUrl = root.dataset.aiSummaryUrl;
     const explainUrl = root.dataset.aiExplainUrl;
