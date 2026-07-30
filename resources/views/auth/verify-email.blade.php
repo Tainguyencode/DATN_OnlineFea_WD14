@@ -371,11 +371,11 @@
                                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Mã: <span class="font-mono font-bold">{{ $cert->certificate_code }}</span></p>
                                 <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 mb-4">Cấp ngày: {{ $cert->issued_at?->format('d/m/Y') }}</p>
                                 <a
-                                    href="{{ route('student.certificates.pdf', $cert) }}"
+                                    href="{{ route('certificates.public', $cert->certificate_code) }}"
                                     target="_blank"
                                     class="inline-flex h-9 items-center justify-center rounded-xl bg-purple-600 px-4 text-xs font-bold text-white transition hover:bg-purple-700 shadow-sm"
                                 >
-                                    Xem chứng chỉ (PDF)
+                                    Xem chứng chỉ
                                 </a>
                             </article>
                         @endforeach

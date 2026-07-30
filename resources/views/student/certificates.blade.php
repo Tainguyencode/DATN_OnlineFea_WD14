@@ -1,5 +1,30 @@
 <x-student-layout title="Chứng chỉ" page-title="Chứng chỉ của tôi">
 
+{{-- Flash Messages --}}
+@if(session('success'))
+    <div id="flash-success" class="flex items-center gap-3 mb-6 bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 shadow-sm">
+        <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="font-medium">{{ session('success') }}</span>
+        <button onclick="document.getElementById('flash-success').remove()" class="ml-auto text-green-400 hover:text-green-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+    </div>
+@endif
+
+@if(session('error'))
+    <div id="flash-error" class="flex items-center gap-3 mb-6 bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-4 shadow-sm">
+        <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="font-medium">{{ session('error') }}</span>
+        <button onclick="document.getElementById('flash-error').remove()" class="ml-auto text-red-400 hover:text-red-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+    </div>
+@endif
+
 @if($certificates->isEmpty())
     <div class="bg-white rounded-2xl border border-slate-200 p-16 text-center">
         <p class="text-slate-600">Hoàn thành khóa học để nhận chứng chỉ.</p>
@@ -14,19 +39,36 @@
                     <h3 class="text-xl font-bold text-slate-900 mb-1">{{ $cert->course->title }}</h3>
                     <p class="text-sm text-slate-500">Mã: <span class="font-mono font-medium">{{ $cert->certificate_code }}</span></p>
                     <p class="text-sm text-slate-500 mt-1 mb-4">Cấp ngày: {{ $cert->issued_at->format('d/m/Y') }}</p>
-                    <a
-                        href="{{ route('student.certificates.pdf', $cert) }}"
-                        target="_blank"
-                        class="inline-flex h-9 items-center justify-center rounded-xl bg-purple-600 px-4 text-xs font-bold text-white transition hover:bg-purple-700 shadow-sm"
-                    >
-                        Xem chứng chỉ (PDF)
-                    </a>
-                    <a
-                        href="{{ route('student.certificates.pdf', $cert) }}?download=1"
-                        class="ml-2 inline-flex h-9 items-center justify-center rounded-xl border border-purple-200 bg-white px-4 text-xs font-bold text-purple-700 transition hover:bg-purple-50 shadow-sm"
-                    >
-                        Tải PDF
-                    </a>
+                    <div class="flex flex-wrap gap-2">
+                        <a
+                            href="{{ route('certificates.public', $cert->certificate_code) }}"
+                            target="_blank"
+                            class="inline-flex h-9 items-center justify-center rounded-xl bg-purple-600 px-4 text-xs font-bold text-white transition hover:bg-purple-700 shadow-sm"
+                        >
+                            Xem chứng chỉ
+                        </a>
+                        <a
+                            href="{{ route('student.certificates.pdf', $cert) }}?download=1"
+                            class="inline-flex h-9 items-center justify-center rounded-xl border border-purple-200 bg-white px-4 text-xs font-bold text-purple-700 transition hover:bg-purple-50 shadow-sm"
+                        >
+                            Tải PDF
+                        </a>
+                        {{-- Nút gửi email chứng chỉ --}}
+                        <form method="GET" action="{{ route('student.certificates') }}">
+                            <input type="hidden" name="send_email" value="1">
+                            <input type="hidden" name="certificate_id" value="{{ $cert->id }}">
+                            <button
+                                type="submit"
+                                class="inline-flex h-9 items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-4 text-xs font-bold text-amber-700 transition hover:bg-amber-100 shadow-sm gap-1"
+                                onclick="this.disabled=true; this.textContent='Đang gửi...';"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                                Gửi về email
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         @endforeach
