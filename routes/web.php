@@ -15,6 +15,7 @@ use App\Http\Controllers\Web\Admin\UserController;
 use App\Http\Controllers\Web\SupportTicketController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
+use App\Http\Controllers\Web\InstructorController;
 use App\Http\Controllers\Web\DiscussionController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
@@ -70,6 +71,10 @@ if (app()->environment('local')) {
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+
+// ─── GIẢNG VIÊN (PUBLIC) ───
+Route::get('/instructors', [InstructorController::class, 'index'])->name('instructors.index');
+Route::get('/instructors/{user}', [InstructorController::class, 'show'])->name('instructors.show');
 Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
 
 // ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───

@@ -179,38 +179,34 @@
             margin: 0;
         }
         html, body {
-            width: 100%;
-            height: auto;
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
             font-family: 'Poppins', 'Inter', "DejaVu Sans", sans-serif;
             background-color: #ffffff;
             color: #1F2937;
-        }
-        .page {
-            width: 100%;
-            height: auto;
-            page-break-after: avoid;
-            page-break-inside: avoid;
-        }
-        .certificate {
-            page-break-inside: avoid;
+            line-height: 1.15;
+            overflow: hidden;
         }
         
         /* Khung: Border cách mép giấy khoảng 25px */
         .double-border {
-            width: 1068px; /* 1122 - 25 - 25 = 1072, 1072 - 4 (border) = 1068 */
-            height: 739px; /* 793 - 25 - 25 = 743, 743 - 4 (border) = 739 */
-            margin: 25px auto 0 auto;
+            position: absolute;
+            top: 25px;
+            bottom: 25px;
+            left: 25px;
+            right: 25px;
             border: 2px solid #D4A24C;
         }
         .double-border-inner {
-            width: 1054px; /* 1068 - 12 (margin) - 2 (border) = 1054 */
-            height: 725px; /* 739 - 12 (margin) - 2 (border) = 725 */
-            margin: 6px;
+            position: absolute;
+            top: 6px;
+            bottom: 6px;
+            left: 6px;
+            right: 6px;
             border: 1px solid #D4A24C;
             text-align: center;
-            position: relative;
         }
         
         /* 4 góc bo trang trí */
@@ -226,50 +222,50 @@
 
         /* Giảm padding-top lớn */
         .content-wrapper {
-            padding-top: 15px;
+            padding-top: 10px;
         }
 
         /* Màu: Logo #3B5BDB, Text #1F2937, Border #D4A24C */
         .cert-logo {
-            font-size: 46px;
+            font-size: 41px;
             font-weight: 700;
             color: #3B5BDB;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             font-family: 'Poppins', sans-serif;
         }
         .cert-title {
-            font-size: 28px;
+            font-size: 25px;
             font-weight: 700;
             color: #1F2937;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             text-transform: uppercase;
             letter-spacing: 3px;
         }
         .cert-separator {
             color: #D4A24C;
             font-size: 26px;
-            margin-bottom: 15px;
+            margin-bottom: 8px;
         }
         
         /* Giảm khoảng cách dọc khoảng 30% */
         .cert-recipient-label {
             font-size: 18px;
             color: #4B5563;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
         .cert-recipient-name {
-            font-size: 58px;
+            font-size: 50px;
             font-weight: 700;
             color: #1F2937;
-            margin-bottom: 15px;
+            margin-bottom: 8px;
         }
         .cert-course-label {
             font-size: 18px;
             color: #4B5563;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
         .cert-course-title {
-            font-size: 38px;
+            font-size: 34px;
             font-weight: 700;
             color: #1F2937;
             font-style: italic;
@@ -280,9 +276,7 @@
         .cert-footer-table {
             width: 100%;
             table-layout: fixed;
-            margin-top: 30px; /* Giảm từ 80px xuống 30px để không bị đẩy sang trang 2 */
-            page-break-inside: avoid;
-            break-inside: avoid;
+            margin: 0;
         }
         .cert-footer-table td {
             width: 25%;
@@ -291,30 +285,30 @@
             padding: 0 10px;
         }
         
-        /* ICON: 40px màu vàng */
+        /* ICON: 36px màu vàng */
         .icon-wrapper {
-            margin-bottom: 5px;
+            margin-bottom: 3px;
         }
         
         .footer-label {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: #1F2937;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }
         .footer-value {
-            font-size: 16px;
+            font-size: 15px;
             color: #4B5563;
             font-weight: 600;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         /* CHỮ KÝ: Không dùng block, không dùng giãn chữ, ép kerning, loại bỏ letter-spacing */
         .footer-signature {
             font-family: 'Great Vibes', 'Alex Brush', 'Allura', 'Dancing Script', cursive;
-            font-size: 42px;
+            font-size: 38px;
             font-weight: 400;
             font-style: normal;
 
@@ -334,25 +328,25 @@
             font-feature-settings: "kern" 1, "liga" 1;
 
             text-align: center;
-            margin-top: 8px;
-            margin-bottom: 5px;
+            margin-top: 5px;
+            margin-bottom: 3px;
         }
         .signature-line {
-            width: 160px;
+            width: 140px;
             height: 1px;
             background: #D4A24C;
             margin: 0 auto;
         }
         .footer-small {
-            font-size: 12px;
+            font-size: 11px;
             color: #9CA3AF;
             margin-top: 2px;
         }
         
-        /* QR: 120x120 canh giữa, URL xuống tối đa 2 dòng */
+        /* QR: 100x100 canh giữa, URL xuống tối đa 2 dòng */
         .qr-box {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             margin: 0 auto 5px auto;
             border: 1px solid #E5E7EB;
             padding: 5px;
@@ -373,8 +367,6 @@
     </style>
 </head>
 <body>
-<div class="page">
-<div class="certificate">
     <div class="double-border">
         <div class="double-border-inner">
             
@@ -396,17 +388,18 @@
                 <div class="cert-course-title">"{{ $course->title }}"</div>
             </div>
 
-            <table class="cert-footer-table" cellpadding="0" cellspacing="0" border="0">
-                <tr>
+            <div style="position: absolute; bottom: 30px; left: 0; width: 100%;">
+                <table class="cert-footer-table" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
                     <!-- Cột 1: INSTRUCTOR -->
                     <td>
                         <div class="icon-wrapper">
-                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAACbElEQVR4nO3ZPWgUURAH8FERRWyMiNhqYSMWphEEFZHLcTMrFkYbbQQ7W7EQDH6AIKQIYhEPuZ05EySFpViLikoIZGfulBDRtBIDYmM8uZNFjEU+3Ntd7z1l//Dqfb99b97HLkCRIkWcJBrD3cp0zgRvmuBdYxxRpitaCw51OrAOfI+GVFKmlybUWb3hM6uW+sDXqOAtZWqvjfjZVHBOhe5FYbAffIoJXkwCWKF9ixjPgw+JxnCbMn1OCekYU6spuM+1A6KwcjY1YgmDVR9qYywHyFvXDlChVzlAvs+MlDe5hTDNZIbEbWJwq1OICc3mAZkcpS2OIfgiKyJe9cB1TOhRZojglA+r1rUcRuSOawcoB5S5RkI85doBzTodyAqJQuz3oUae5FAjj32oEcuhRtS1A5RxPAfIA9cOaDAeT3oPWQXRNgmOgQ8xqZTTQ3AAfIoxvUsBmQXfooLDKVarYfAtGpb3KONiYghTa7p+Yi/4GGO88U+Pxq/E36yS7CvK9GFiYnAD+BxNcGNUxgb4HmN8/eephW/A9yhjI0F9zIHPmRzt32hCHxNMrS/va0c2g68xoaHk+wjeBt9i1VKfMta6PXPF38Sm7pd3uO4/ROPBTmO6mmQ6rYGZV6HrzfrArp4DGmHlcPw2VehrWsAKdbNogg+1jkf/6j+UztDQ+vhubYLTeXV+jeNLFNWD0/Ezc0U068HBngBkOSh+di4IY7wQH/B6jpAlTCvuQyaEMp3JcvvLr36o3RAcTP8DR+iTa4T9HpmFJp/c3jXEBC8777wsG5lL3UOYnnsIeZoGsuAdRHC+a0iRIkXgv8kPEklrE0Tx0H0AAAAASUVORK5CYII=" width="40" height="40">
+                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAACbElEQVR4nO3ZPWgUURAH8FERRWyMiNhqYSMWphEEFZHLcTMrFkYbbQQ7W7EQDH6AIKQIYhEPuZ05EySFpViLikoIZGfulBDRtBIDYmM8uZNFjEU+3Ntd7z1l//Dqfb99b97HLkCRIkWcJBrD3cp0zgRvmuBdYxxRpitaCw51OrAOfI+GVFKmlybUWb3hM6uW+sDXqOAtZWqvjfjZVHBOhe5FYbAffIoJXkwCWKF9ixjPgw+JxnCbMn1OCekYU6spuM+1A6KwcjY1YgmDVR9qYywHyFvXDlChVzlAvs+MlDe5hTDNZIbEbWJwq1OICc3mAZkcpS2OIfgiKyJe9cB1TOhRZojglA+r1rUcRuSOawcoB5S5RkI85doBzTodyAqJQuz3oUae5FAjj32oEcuhRtS1A5RxPAfIA9cOaDAeT3oPWQXRNgmOgQ8xqZTTQ3AAfIoxvUsBmQXfooLDKVarYfAtGpb3KONiYghTa7p+Yi/4GGO88U+Pxq/E36yS7CvK9GFiYnAD+BxNcGNUxgb4HmN8/eephW/A9yhjI0F9zIHPmRzt32hCHxNMrS/va0c2g68xoaHk+wjeBt9i1VKfMta6PXPF38Sm7pd3uO4/ROPBTmO6mmQ6rYGZV6HrzfrArp4DGmHlcPw2VehrWsAKdbNogg+1jkf/6j+UztDQ+vhubYLTeXV+jeNLFNWD0/Ezc0U068HBngBkOSh+di4IY7wQH/B6jpAlTCvuQyaEMp3JcvvLr36o3RAcTP8DR+iTa4T9HpmFJp/c3jXEBC8777wsG5lL3UOYnnsIeZoGsuAdRHC+a0iRIkXgv8kPEklrE0Tx0H0AAAAASUVORK5CYII=" width="36" height="36">
                         </div>
                         <div class="footer-label">INSTRUCTOR</div>
                         @if(isset($course->instructor) && !empty($course->instructor->signature))
-                            <div style="margin-top: 8px; margin-bottom: 5px;">
-                                <img src="{{ asset('storage/' . $course->instructor->signature) }}" alt="Signature" style="height: 45px; display: block; margin: 0 auto;">
+                            <div style="margin-top: 5px; margin-bottom: 5px;">
+                                <img src="{{ asset('storage/' . $course->instructor->signature) }}" alt="Signature" style="height: 38px; display: block; margin: 0 auto;">
                             </div>
                         @else
                             <div class="footer-signature">{{ $course->instructor->name ?? 'Instructor Name' }}</div>
@@ -418,19 +411,19 @@
                     <!-- Cột 2: ISSUED ON & CERTIFICATE ID -->
                     <td>
                         <div class="icon-wrapper">
-                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA+ElEQVR4nO3aaw6CMBAE4D2esTXqDe0eSZYLoHiNGiSg8rI+SLcyk8wPJWz7hRpjIlFghNcrcfYkbH1dU1Tvhd4fe36benCzyH0xSmR+m2b42Gvt89ODHA9mnzl76T/e53YX+nUpcH6115ztrgcJQWiCyA1jytFHmxJEho7e4iCirAQI6yoBwsohiLaIgmMi+Iw8JPaGAOkm9oYA6ebjG1/8mvv2mgDCgHhAYkBEWWnxEJo4BnNcE0AYEA9IDIgoKy0eQhPHYI5rAggD4gGJARFlJUBYVwkQ1lX6W0jmTBl7U/J+zz1I9XeIlDCZM2XuNtuBryCENOQK0ynKCKufY/QAAAAASUVORK5CYII=" width="40" height="40">
+                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA+ElEQVR4nO3aaw6CMBAE4D2esTXqDe0eSZYLoHiNGiSg8rI+SLcyk8wPJWz7hRpjIlFghNcrcfYkbH1dU1Tvhd4fe36benCzyH0xSmR+m2b42Gvt89ODHA9mnzl76T/e53YX+nUpcH6115ztrgcJQWiCyA1jytFHmxJEho7e4iCirAQI6yoBwsohiLaIgmMi+Iw8JPaGAOkm9oYA6ebjG1/8mvv2mgDCgHhAYkBEWWnxEJo4BnNcE0AYEA9IDIgoKy0eQhPHYI5rAggD4gGJARFlJUBYVwkQ1lX6W0jmTBl7U/J+zz1I9XeIlDCZM2XuNtuBryCENOQK0ynKCKufY/QAAAAASUVORK5CYII=" width="36" height="36">
                         </div>
-                        <div class="footer-label" style="margin-bottom: 8px;">ISSUED ON</div>
+                        <div class="footer-label" style="margin-bottom: 5px;">ISSUED ON</div>
                         <div class="footer-value">{{ $certificate->issued_at->format('d F Y') }}</div>
                         
-                        <div class="footer-label" style="margin-bottom: 8px;">CERTIFICATE ID</div>
+                        <div class="footer-label" style="margin-bottom: 5px;">CERTIFICATE ID</div>
                         <div class="footer-value" style="margin-bottom: 0;">{{ $certificate->certificate_code }}</div>
                     </td>
                     
                     <!-- Cột 3: CEO ONLINEFEA -->
                     <td>
                         <div class="icon-wrapper">
-                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAACjUlEQVR4nO2XO28TQRDHFygQoqCg4iVogC9AnYqA4xkcmjQU6RAfAIkiTaR0KSgo04TbOR6JI6oknwCSCgHO7DkSQkiIIiCIEiKBgngcWt9dbNm5l+3Ie2j/0jR7p73/b3d2Zk8IKysrKyshRM0tnWXCBSbY0aEIn3mP4aIoIMSmIvRbQ4+9duCMKIqYcCEwD4vauA4lcakBI2FeFEUcpJLfuvo8O3quASdxWxRFSuK2Nq1TrNAgLGE+NL2kYcIzsxym25woitYfjl5QEj63H3Y9pp+Jomi1OnaMCT50gBC+e/ugdFQURUw4tQ9EWILhniiCuHGo4XsCyE7dvX7K+E7M0UFPCJYweyD+an3qxJ5THkqDCHflz5ocuZITYjPVXz86cbU6doQJXmUBCUvziu+LQ1nm5qz++tGJlYTbmSGaMLeygUA2fyzxW1wnZsKNtA+9rF49sW/fSAf5+IaGj6eD4Eamm0JiJ5bwvuZWLqes2P3cEM08n0qaW1G5pCR8iveHT/deDh7A1/iVg9+KgOpy5FL7h/QYS/jZLYiS8MN7VD7fsTgOXlMEqynV70tHMdIDemeiNIsFkihby1506HoJJqxG863RjWFdCJIBtEeYW39SOR27lf7k5GFFsJWS27+Y0FEO3ukVomWR7iqCF+nvwpb2mJSOzW3du6maF0y4nAmiAeLChLEgLkyIfnfoQYTnlIdyXsNx18C02tXeRB6lVY6BhMSVXBAhyLSBINP5QVyoDNw4tYULldwgdXnzJEv8O3DzFIT2oj2JbsQSPHNAwOsKIgDBGYN2ZKZ7EIJxY0AIxrsGsTJRyoC0UoS+BYk0aABlQdr0H4FAht/Pgw0meN4ziJWVlZUwSf8AP2BT+D3dqkYAAAAASUVORK5CYII=" width="40" height="40">
+                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAACjUlEQVR4nO2XO28TQRDHFygQoqCg4iVogC9AnYqA4xkcmjQU6RAfAIkiTaR0KSgo04TbOR6JI6oknwCSCgHO7DkSQkiIIiCIEiKBgngcWt9dbNm5l+3Ie2j/0jR7p73/b3d2Zk8IKysrKyshRM0tnWXCBSbY0aEIn3mP4aIoIMSmIvRbQ4+9duCMKIqYcCEwD4vauA4lcakBI2FeFEUcpJLfuvo8O3quASdxWxRFSuK2Nq1TrNAgLGE+NL2kYcIzsxym25woitYfjl5QEj63H3Y9pp+Jomi1OnaMCT50gBC+e/ugdFQURUw4tQ9EWILhniiCuHGo4XsCyE7dvX7K+E7M0UFPCJYweyD+an3qxJ5THkqDCHflz5ocuZITYjPVXz86cbU6doQJXmUBCUvziu+LQ1nm5qz++tGJlYTbmSGaMLeygUA2fyzxW1wnZsKNtA+9rF49sW/fSAf5+IaGj6eD4Eamm0JiJ5bwvuZWLqes2P3cEM08n0qaW1G5pCR8iveHT/deDh7A1/iVg9+KgOpy5FL7h/QYS/jZLYiS8MN7VD7fsTgOXlMEqynV70tHMdIDemeiNIsFkihby1506HoJJqxG863RjWFdCJIBtEeYW39SOR27lf7k5GFFsJWS27+Y0FEO3ukVomWR7iqCF+nvwpb2mJSOzW3du6maF0y4nAmiAeLChLEgLkyIfnfoQYTnlIdyXsNx18C02tXeRB6lVY6BhMSVXBAhyLSBINP5QVyoDNw4tYULldwgdXnzJEv8O3DzFIT2oj2JbsQSPHNAwOsKIgDBGYN2ZKZ7EIJxY0AIxrsGsTJRyoC0UoS+BYk0aABlQdr0H4FAht/Pgw0meN4ziJWVlZUwSf8AP2BT+D3dqkYAAAAASUVORK5CYII=" width="36" height="36">
                         </div>
                         <div class="footer-label">CEO ONLINEFEA</div>
                         <div class="footer-signature">Hoàng Tuấn Tú</div>
@@ -440,9 +433,9 @@
                     
                     <!-- Cột 4: QR VERIFY -->
                     <td>
-                        <div class="footer-label" style="margin-bottom: 8px;">QR VERIFY</div>
+                        <div class="footer-label" style="margin-bottom: 5px;">QR VERIFY</div>
                         <div class="qr-box">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data={{ urlencode(route('certificates.public', $certificate->certificate_code)) }}" alt="QR Code" width="108" height="108">
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data={{ urlencode(route('certificates.public', $certificate->certificate_code)) }}" alt="QR Code" width="88" height="88">
                         </div>
                         <div class="qr-url">
                             {{ route('certificates.public', $certificate->certificate_code) }}
@@ -450,10 +443,9 @@
                     </td>
                 </tr>
             </table>
+            </div>
         </div>
     </div>
-</div>
-</div>
 </body>
 </html>
 @endif
