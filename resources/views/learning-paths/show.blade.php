@@ -438,5 +438,8 @@
             </div>
         </section>
     @endif
+
+    {{-- Floating AI Assistant Modal Component (STU-FE-09) --}}
+    <x-learning-path.floating-ai :learningPath="$learningPath" />
 @endsection
 
