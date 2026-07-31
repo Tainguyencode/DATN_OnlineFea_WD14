@@ -102,6 +102,9 @@ class DatabaseSeeder extends Seeder
 
         // 3. Tự động đồng bộ course_sections và cập nhật lessons (course_id, section_id) từ chapters
         $this->backfillCourseSections();
+
+        // 4. Tạo đăng ký khóa học mẫu cho học sinh
+        $this->seedEnrollments();
     }
 
     /**
@@ -133,5 +136,88 @@ class DatabaseSeeder extends Seeder
         }
 
         echo '✓ Đồng bộ thành công '.count($chapters)." chương học sang course_sections!\n\n";
+    }
+
+    /**
+     * Tạo đăng ký khóa học mẫu cho học sinh
+     */
+    private function seedEnrollments(): void
+    {
+        echo "\n========== TẠO ĐĂNG KÝ KHÓA HỌC MẪU (ENROLLMENTS) ==========\n";
+
+        $enrollments = [
+            [
+                'user_id' => 4, // Trần Thị Học (student@example.com)
+                'course_id' => 1, // Laravel từ Zero đến Hero
+                'status' => 'active',
+                'progress_percent' => 35.00,
+                'enrolled_at' => now()->subDays(10),
+                'created_at' => now()->subDays(10),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 4, // Trần Thị Học (student@example.com)
+                'course_id' => 2, // React.js Masterclass
+                'status' => 'active',
+                'progress_percent' => 10.00,
+                'enrolled_at' => now()->subDays(5),
+                'created_at' => now()->subDays(5),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 5, // Lê Văn Học (student2@example.com)
+                'course_id' => 1, // Laravel từ Zero đến Hero
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(3),
+                'created_at' => now()->subDays(3),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 5, // Lê Văn Học (student2@example.com)
+                'course_id' => 2, // React.js Masterclass
+                'status' => 'active',
+                'progress_percent' => 45.00,
+                'enrolled_at' => now()->subDays(6),
+                'created_at' => now()->subDays(6),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 6, // Phạm Minh Tuấn (student3@example.com)
+                'course_id' => 1, // Laravel từ Zero đến Hero
+                'status' => 'active',
+                'progress_percent' => 60.00,
+                'enrolled_at' => now()->subDays(8),
+                'created_at' => now()->subDays(8),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 4, // Trần Thị Học (student@example.com)
+                'course_id' => 3, // Figma Prototype
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(2),
+                'created_at' => now()->subDays(2),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => 7, // Nguyễn Thị Mai (student4@example.com)
+                'course_id' => 1, // Laravel từ Zero đến Hero
+                'status' => 'active',
+                'progress_percent' => 15.00,
+                'enrolled_at' => now()->subDays(4),
+                'created_at' => now()->subDays(4),
+                'updated_at' => now(),
+            ],
+        ];
+
+        foreach ($enrollments as $enrollment) {
+            DB::table('enrollments')->updateOrInsert(
+                ['user_id' => $enrollment['user_id'], 'course_id' => $enrollment['course_id']],
+                $enrollment
+            );
+        }
+
+        echo "✓ Đã đăng ký thành công các khóa học mẫu cho học sinh!\n\n";
     }
 }
