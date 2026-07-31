@@ -104,6 +104,15 @@ class UserSeeder extends Seeder
                 'bio' => 'Học viên đam mê xây dựng hệ thống phần mềm doanh nghiệp.',
                 'phone' => '0966554499',
             ],
+            [
+                'name' => 'Qtrung',
+                'username' => 'qtrung',
+                'email' => 'tungazquoc@gmail.com',
+                'role' => 'student',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=qtrung',
+                'bio' => 'Học viên QTrung.',
+                'phone' => '0123456789',
+            ],
         ];
 
         foreach ($users as $data) {

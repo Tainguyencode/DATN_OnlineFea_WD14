@@ -145,71 +145,127 @@ class DatabaseSeeder extends Seeder
     {
         echo "\n========== TẠO ĐĂNG KÝ KHÓA HỌC MẪU (ENROLLMENTS) ==========\n";
 
-        $enrollments = [
-            [
-                'user_id' => 4, // Trần Thị Học (student@example.com)
-                'course_id' => 1, // Laravel từ Zero đến Hero
+        $student1 = DB::table('users')->where('email', 'student@example.com')->value('id');
+        $student2 = DB::table('users')->where('email', 'student2@example.com')->value('id');
+        $student3 = DB::table('users')->where('email', 'student3@example.com')->value('id');
+        $student4 = DB::table('users')->where('email', 'student4@example.com')->value('id');
+        $qtrung = DB::table('users')->where('email', 'tungazquoc@gmail.com')->value('id');
+
+        $enrollments = [];
+
+        if ($student1) {
+            $enrollments[] = [
+                'user_id' => $student1,
+                'course_id' => 1,
                 'status' => 'active',
                 'progress_percent' => 35.00,
                 'enrolled_at' => now()->subDays(10),
                 'created_at' => now()->subDays(10),
                 'updated_at' => now(),
-            ],
-            [
-                'user_id' => 4, // Trần Thị Học (student@example.com)
-                'course_id' => 2, // React.js Masterclass
+            ];
+            $enrollments[] = [
+                'user_id' => $student1,
+                'course_id' => 2,
                 'status' => 'active',
                 'progress_percent' => 10.00,
                 'enrolled_at' => now()->subDays(5),
                 'created_at' => now()->subDays(5),
                 'updated_at' => now(),
-            ],
-            [
-                'user_id' => 5, // Lê Văn Học (student2@example.com)
-                'course_id' => 1, // Laravel từ Zero đến Hero
-                'status' => 'active',
-                'progress_percent' => 0.00,
-                'enrolled_at' => now()->subDays(3),
-                'created_at' => now()->subDays(3),
-                'updated_at' => now(),
-            ],
-            [
-                'user_id' => 5, // Lê Văn Học (student2@example.com)
-                'course_id' => 2, // React.js Masterclass
-                'status' => 'active',
-                'progress_percent' => 45.00,
-                'enrolled_at' => now()->subDays(6),
-                'created_at' => now()->subDays(6),
-                'updated_at' => now(),
-            ],
-            [
-                'user_id' => 6, // Phạm Minh Tuấn (student3@example.com)
-                'course_id' => 1, // Laravel từ Zero đến Hero
-                'status' => 'active',
-                'progress_percent' => 60.00,
-                'enrolled_at' => now()->subDays(8),
-                'created_at' => now()->subDays(8),
-                'updated_at' => now(),
-            ],
-            [
-                'user_id' => 4, // Trần Thị Học (student@example.com)
-                'course_id' => 3, // Figma Prototype
+            ];
+            $enrollments[] = [
+                'user_id' => $student1,
+                'course_id' => 3,
                 'status' => 'active',
                 'progress_percent' => 0.00,
                 'enrolled_at' => now()->subDays(2),
                 'created_at' => now()->subDays(2),
                 'updated_at' => now(),
-            ],
-            [
-                'user_id' => 7, // Nguyễn Thị Mai (student4@example.com)
-                'course_id' => 1, // Laravel từ Zero đến Hero
+            ];
+        }
+
+        if ($student2) {
+            $enrollments[] = [
+                'user_id' => $student2,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(3),
+                'created_at' => now()->subDays(3),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $student2,
+                'course_id' => 2,
+                'status' => 'active',
+                'progress_percent' => 45.00,
+                'enrolled_at' => now()->subDays(6),
+                'created_at' => now()->subDays(6),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($student3) {
+            $enrollments[] = [
+                'user_id' => $student3,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 60.00,
+                'enrolled_at' => now()->subDays(8),
+                'created_at' => now()->subDays(8),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($student4) {
+            $enrollments[] = [
+                'user_id' => $student4,
+                'course_id' => 1,
                 'status' => 'active',
                 'progress_percent' => 15.00,
                 'enrolled_at' => now()->subDays(4),
                 'created_at' => now()->subDays(4),
                 'updated_at' => now(),
-            ],
-        ];
+            ];
+        }
+
+        if ($qtrung) {
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 25.00,
+                'enrolled_at' => now()->subDays(10),
+                'created_at' => now()->subDays(10),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 2,
+                'status' => 'active',
+                'progress_percent' => 50.00,
+                'enrolled_at' => now()->subDays(7),
+                'created_at' => now()->subDays(7),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 3,
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(5),
+                'created_at' => now()->subDays(5),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 4,
+                'status' => 'active',
+                'progress_percent' => 10.00,
+                'enrolled_at' => now()->subDays(3),
+                'created_at' => now()->subDays(3),
+                'updated_at' => now(),
+            ];
+        }
 
         foreach ($enrollments as $enrollment) {
             DB::table('enrollments')->updateOrInsert(
