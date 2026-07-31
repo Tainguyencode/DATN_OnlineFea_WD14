@@ -120,7 +120,7 @@
         @else
             <div class="hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm md:block">
                 <div class="overflow-x-auto">
-                    <table class="min-w-full text-left text-sm">
+                    <table class="w-full text-left text-sm">
                         <thead
                             class="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                             <tr>
@@ -142,7 +142,7 @@
                                     $isReady = $check?->passes() ?? false;
                                 @endphp
                                 <tr class="align-middle transition-colors duration-200 hover:bg-slate-50">
-                                    <td class="px-5 py-4">
+                                    <td class="px-5 py-4 w-[30%]">
                                         <div class="flex items-center gap-4">
                                             <div
                                                 class="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
@@ -198,31 +198,22 @@
                                     <td class="px-5 py-4 text-slate-500">{{ $course->created_at?->format('d/m/Y') }}
                                     </td>
                                     <td class="px-5 py-4">
-                                        <div class="flex items-center justify-end gap-2">
+                                        <div class="flex flex-wrap items-center justify-end gap-2 w-full max-w-[280px] ml-auto">
                                             <a href="{{ route('instructor.courses.students', $course) }}"
-                                                 class="rounded-lg px-3 py-2 text-xs font-bold text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer">Xem chi tiết</a>
+                                                 class="rounded-lg px-2 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50">Học viên</a>
                                             <a href="{{ route('instructor.courses.edit', $course) }}"
-                                                class="rounded-lg px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">Kết quả kiểm duyệt</a>
+                                                class="rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50">Kiểm duyệt</a>
                                             <a href="{{ route('instructor.courses.curriculum', $course) }}"
-                                               class="rounded-lg px-3 py-2 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">Quản
-                                                lý nội dung</a>
+                                               class="rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50">Nội dung</a>
                                             @if ($course->status === 'published')
                                                 <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
-                                                   class="rounded-lg px-3 py-2 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">Xem
-                                                    trước</a>
-                                            @else
-                                                <span class="rounded-lg px-3 py-2 text-xs font-bold text-slate-400"
-                                                      title="Chỉ xem trước công khai sau khi khóa học được xuất bản">Xem
-                                                    trước</span>
+                                                   class="rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">Xem trước</a>
                                             @endif
                                             @if ($canSubmit && $isReady)
                                                 <a href="{{ route('instructor.courses.edit', $course) }}"
-                                                    class="rounded-lg px-3 py-2 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
-                                                    {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
+                                                    class="rounded-lg px-2 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-50">
+                                                    {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại' : 'Gửi duyệt' }}
                                                 </a>
-                                            @elseif ($canSubmit)
-                                                <span class="rounded-lg px-3 py-2 text-xs font-bold text-slate-400"
-                                                    title="Hoàn thiện điều kiện gửi duyệt trước">Chưa đủ điều kiện</span>
                                             @endif
                                             @if ($course->status === 'published')
                                                 <form method="POST"
@@ -230,8 +221,8 @@
                                                       onsubmit="return confirm('Ẩn khóa học này khỏi trang học viên?')">
                                                     @csrf
                                                     <button type="submit"
-                                                            class="rounded-lg px-3 py-2 text-xs font-bold text-zinc-700 transition-colors duration-200 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 cursor-pointer">
-                                                        Ẩn khóa học
+                                                            class="rounded-lg px-2 py-1.5 text-xs font-bold text-zinc-700 hover:bg-zinc-100">
+                                                        Ẩn
                                                     </button>
                                                 </form>
                                             @endif
@@ -241,7 +232,7 @@
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit"
-                                                        class="rounded-lg px-3 py-2 text-xs font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer">
+                                                        class="rounded-lg px-2 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50">
                                                     Xóa
                                                 </button>
                                             </form>
