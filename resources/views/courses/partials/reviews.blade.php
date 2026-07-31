@@ -41,7 +41,6 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h3 class="font-extrabold text-slate-950 dark:text-white">Đánh giá của bạn</h3>
-                        <span class="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $userReview->status->badgeClasses() }}">{{ $userReview->status->label() }}</span>
                     </div>
                     @if($canDeleteReview)
                         <form method="POST" action="{{ route('courses.reviews.destroy', [$course, $userReview]) }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa đánh giá này?')">
