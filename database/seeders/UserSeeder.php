@@ -68,6 +68,42 @@ class UserSeeder extends Seeder
                 'bio' => 'Sinh viên CNTT.',
                 'phone' => '0966554455',
             ],
+            [
+                'name' => 'Nguyễn Thị Mai',
+                'username' => 'student4',
+                'email' => 'student4@example.com',
+                'role' => 'student',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=hocvien4',
+                'bio' => 'Học viên muốn chuyển ngành sang lập trình Frontend.',
+                'phone' => '0966554466',
+            ],
+            [
+                'name' => 'Hoàng Văn Nam',
+                'username' => 'student5',
+                'email' => 'student5@example.com',
+                'role' => 'student',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=hocvien5',
+                'bio' => 'Học viên quan tâm đến bảo mật và an toàn thông tin.',
+                'phone' => '0966554477',
+            ],
+            [
+                'name' => 'Vũ Thị Hoa',
+                'username' => 'student6',
+                'email' => 'student6@example.com',
+                'role' => 'student',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=hocvien6',
+                'bio' => 'Sinh viên học thiết kế đồ họa muốn tìm hiểu thêm về UI/UX.',
+                'phone' => '0966554488',
+            ],
+            [
+                'name' => 'Đỗ Minh Khang',
+                'username' => 'student7',
+                'email' => 'student7@example.com',
+                'role' => 'student',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=hocvien7',
+                'bio' => 'Học viên đam mê xây dựng hệ thống phần mềm doanh nghiệp.',
+                'phone' => '0966554499',
+            ],
         ];
 
         foreach ($users as $data) {
