@@ -198,7 +198,8 @@ class CourseController extends Controller
 
     public function submit(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        $this->authorize('submit', $course);
+        $this->ensureOwned($course);
+        abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
         $request->validate([
             'copyright_agreed' => ['required', 'accepted'],

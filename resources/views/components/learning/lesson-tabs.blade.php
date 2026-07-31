@@ -15,7 +15,14 @@
     'lessonNotes' => collect(),
     'lessonNotesIndexUrl' => null,
     'lessonNotesStoreUrl' => null,
+    'videoDurationSeconds' => 0,
+    'notesPayload' => null,
 ])
+
+@php
+    $videoDurationSeconds = $videoDurationSeconds ?: (isset($lesson) ? ((int) ($lesson->duration_seconds ?: $lesson->duration ?: 0)) : 0);
+    $notesPayload = $notesPayload ?? $lessonNotes;
+@endphp
 
 <div class="learning-tabs border-t border-[#d1d7dc] bg-white" id="learning-tabs">
     <div class="border-b border-[#d1d7dc] px-4 sm:px-6" 
@@ -199,6 +206,7 @@
                 data-index-url="{{ $lessonNotesIndexUrl }}"
             >
                 <script type="application/json" data-lesson-notes-json>@json($notesPayload)</script>
+
 
                 @if($canUseLessonNotes)
                     <div class="space-y-5">

@@ -28,7 +28,7 @@
                     <a href="{{ route('home') }}#categories" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khám phá</a>
                     <a href="{{ route('courses.index') }}" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khóa học</a>
                     <a href="{{ route('home') }}#paths" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Lộ trình</a>
-                    <a href="{{ route('home') }}#instructors" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Giảng viên</a>
+                    <a href="{{ route('instructors.index') }}" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Giảng viên</a>
                     <a href="{{ route('home') }}#business" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Doanh nghiệp</a>
                     <a href="{{ route('home') }}#faq" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">FAQ</a>
                 </nav>
@@ -121,7 +121,7 @@
                 <a href="{{ route('courses.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Danh mục</a>
                 <a href="{{ route('home') }}#paths" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Lộ trình</a>
-                <a href="{{ route('home') }}#instructors" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>
+                <a href="{{ route('instructors.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>
                 <a href="{{ route('home') }}#business" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Doanh nghiệp</a>
                 <a href="{{ route('home') }}#faq" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">FAQ</a>
             </nav>
