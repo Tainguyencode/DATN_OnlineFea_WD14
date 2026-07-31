@@ -17,7 +17,6 @@ class ReviewController extends Controller
         $replyState = $request->query('reply');
 
         $reviews = Review::query()
-            ->visible()
             ->whereNull('parent_id')
             ->whereHas('course', fn ($query) => $query->where('instructor_id', $request->user()->id))
             ->with(['user:id,name,avatar', 'course:id,instructor_id,title,slug', 'replies.user:id,name'])
