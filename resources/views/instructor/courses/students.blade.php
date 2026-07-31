@@ -13,6 +13,7 @@
                 <th class="text-left px-6 py-3 font-semibold text-slate-600">Tiến độ</th>
                 <th class="text-left px-6 py-3 font-semibold text-slate-600">Điểm Quiz (TB)</th>
                 <th class="text-left px-6 py-3 font-semibold text-slate-600">Thực hành</th>
+                <th class="text-left px-6 py-3 font-semibold text-slate-600">Trạng thái</th>
                 <th class="text-left px-6 py-3 font-semibold text-slate-600">Ngày đăng ký</th>
             </tr>
         </thead>
@@ -52,10 +53,21 @@
                             <span class="text-xs text-slate-400">Chưa nộp</span>
                         @endif
                     </td>
+                    <td class="px-6 py-4">
+                        @if($enrollment->isCourseCompleted())
+                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+                                Đã hoàn thành
+                            </span>
+                        @else
+                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                Đang học
+                            </span>
+                        @endif
+                    </td>
                     <td class="px-6 py-4 text-slate-500">{{ $enrollment->created_at->format('d/m/Y') }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Chưa có học viên.</td></tr>
+                <tr><td colspan="7" class="px-6 py-12 text-center text-slate-500">Chưa có học viên.</td></tr>
             @endforelse
         </tbody>
     </table>
