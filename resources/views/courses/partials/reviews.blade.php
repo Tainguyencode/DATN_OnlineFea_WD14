@@ -51,10 +51,6 @@
                     @endif
                 </div>
 
-                @if($userReview->moderation_note && $userReview->isHidden())
-                    <p class="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200"><strong>Ghi chú quản trị:</strong> {{ $userReview->moderation_note }}</p>
-                @endif
-
                 @if($canUpdateReview)
                     <form method="POST" action="{{ route('courses.reviews.update', [$course, $userReview]) }}" class="mt-4 space-y-4" x-data="{ submitting: false }" @submit="submitting = true">
                         @csrf
