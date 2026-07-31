@@ -17,6 +17,8 @@ class Submission extends Model
         'status',
         'submitted_at',
         'graded_at',
+        'graded_by',
+        'grading_history',
     ];
 
     protected function casts(): array
@@ -25,6 +27,7 @@ class Submission extends Model
             'submitted_at' => 'datetime',
             'graded_at' => 'datetime',
             'score' => 'integer',
+            'grading_history' => 'array',
         ];
     }
 
@@ -36,6 +39,11 @@ class Submission extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function gradedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'graded_by');
     }
 
     public function isLate(): bool

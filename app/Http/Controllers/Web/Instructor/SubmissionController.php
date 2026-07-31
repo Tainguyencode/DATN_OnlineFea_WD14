@@ -88,16 +88,76 @@ class SubmissionController extends Controller
             'status' => 'required|string|in:graded,returned',
         ]);
 
+        $statusValue = $validated['status'];
+        if ($statusValue === 'returned') {
+            $statusValue = 'resubmit_required';
+        }
+
+        // 1. Save to history
+        $history = $submission->grading_history ?? [];
+        $history[] = [
+            'score' => (int) $validated['score'],
+            'feedback' => $validated['feedback'],
+            'status' => $statusValue,
+            'graded_by' => $request->user()->name,
+            'graded_at' => now()->toIso8601String(),
+        ];
+
+        // 2. Update submission
         $submission->update([
             'score' => $validated['score'],
             'feedback' => $validated['feedback'],
-            'status' => $validated['status'],
-            'graded_at' => $validated['status'] === 'graded' ? now() : null,
+            'status' => $statusValue,
+            'graded_at' => now(),
+            'graded_by' => $request->user()->id,
+            'grading_history' => $history,
         ]);
+
+        // 3. Send Notification to Student
+        try {
+            $student = $submission->user;
+            $assignmentTitle = $submission->assignment->title;
+            $course = $submission->assignment->lesson->course;
+            
+            $url = route('courses.lessons.show', [
+                'course' => $course->id,
+                'lesson' => $submission->assignment->lesson_id
+            ]);
+
+            $title = $statusValue === 'graded' 
+                ? 'Bài tập của bạn đã được chấm điểm' 
+                : 'Yêu cầu làm lại bài tập';
+
+            $message = $statusValue === 'graded'
+                ? "Bài tập \"{$assignmentTitle}\" trong khóa học \"{$course->title}\" đã đạt {$validated['score']}/{$submission->assignment->max_score} điểm."
+                : "Giảng viên yêu cầu bạn làm lại bài tập \"{$assignmentTitle}\" trong khóa học \"{$course->title}\".";
+
+            app(\App\Services\NotificationService::class)->send(
+                $student,
+                $title,
+                $message,
+                'assignment_graded',
+                $url
+            );
+        } catch (\Exception $e) {
+            logger()->error('Failed to send assignment grading notification: ' . $e->getMessage());
+        }
+
+        // 4. Check course completion
+        try {
+            $enrollment = \App\Models\Enrollment::where('user_id', $student->id)
+                ->where('course_id', $course->id)
+                ->first();
+            if ($enrollment) {
+                app(\App\Services\CourseCompletionService::class)->check($enrollment, $student->id);
+            }
+        } catch (\Exception $e) {
+            logger()->error('Failed to check course completion after grading: ' . $e->getMessage());
+        }
 
         return redirect()
             ->route('instructor.submissions.show', $submission)
-            ->with('success', 'Đã chấm điểm và phản hồi bài tập thành công.');
+            ->with('success', 'Đã chấm điểm, ghi nhận lịch sử, kiểm tra điều kiện hoàn thành khóa học và gửi thông báo kết quả cho học viên.');
     }
 
     private function ensureOwned(Submission $submission, int $instructorId): void
