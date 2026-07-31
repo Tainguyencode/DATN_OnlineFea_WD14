@@ -75,3 +75,6 @@
 ### Commit 25: test: bo sung test case cho chuc nang danh sach khoa hoc yeu thich (2026-07-30 16:10:20 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 26: style: tinh chinh hieu ung chuyen trang va animation thanh dieu huong (2026-07-31 09:50:15 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
