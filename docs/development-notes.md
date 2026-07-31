@@ -78,3 +78,6 @@
 ### Commit 26: style: tinh chinh hieu ung chuyen trang va animation thanh dieu huong (2026-07-31 09:50:15 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 27: refactor: toi uu css va don dep cac style khong su dung (2026-07-31 17:15:40 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
