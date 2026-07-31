@@ -84,6 +84,34 @@
 
         <!-- Form chấm điểm -->
         <div class="space-y-6">
+            @if($submission->grading_history && count($submission->grading_history) > 0)
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <h3 class="text-sm font-extrabold text-slate-950 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 uppercase tracking-wider">Lịch sử các lần chấm</h3>
+                    <div class="mt-4 space-y-4">
+                        @foreach(array_reverse($submission->grading_history) as $history)
+                            <div class="border-l-2 border-slate-200 dark:border-slate-800 pl-4 py-1 text-xs space-y-1">
+                                <div class="flex items-center justify-between text-slate-500">
+                                    <span>Người chấm: <strong>{{ $history['graded_by'] ?? 'Giảng viên' }}</strong></span>
+                                    <span>{{ isset($history['graded_at']) ? \Carbon\Carbon::parse($history['graded_at'])->format('d/m/Y H:i') : '' }}</span>
+                                </div>
+                                <div class="font-semibold text-slate-900 dark:text-white">
+                                    Điểm: <span class="text-emerald-600 dark:text-emerald-400">{{ $history['score'] }}đ</span>
+                                    - Trạng thái: 
+                                    @if(($history['status'] ?? '') === 'graded')
+                                        <span class="text-emerald-500">Đã chấm điểm</span>
+                                    @else
+                                        <span class="text-rose-500">Yêu cầu nộp lại</span>
+                                    @endif
+                                </div>
+                                @if(!empty($history['feedback']))
+                                    <p class="text-slate-600 dark:text-slate-400 italic">"{{ $history['feedback'] }}"</p>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-lg font-extrabold text-slate-950 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-4">Chấm điểm & Nhận xét</h3>
                 
