@@ -133,12 +133,13 @@
                             });
                         }
 
-                        // Chống tua video đối với học sinh (khi isEnrolled = true và chưa hoàn thành)
-                        const isEnrolled = false;
-                        const lessonCompleted = true;
-                        let maxTimeWatched = 0;
+                        // Chống tua video đối với học sinh chưa hoàn thành bài học
+                        const isStudent = {{ (auth()->check() && auth()->user()->isStudent()) ? 'true' : 'false' }};
+                        const isEnrolled = {{ $isEnrolled ? 'true' : 'false' }};
+                        const lessonCompleted = {{ $lessonCompleted ? 'true' : 'false' }};
+                        let maxTimeWatched = Number(videoElement.dataset.initialFurthestPosition || videoElement.dataset.initialWatched || 0);
 
-                        if (isEnrolled && !lessonCompleted) {
+                        if (isStudent && isEnrolled && !lessonCompleted) {
                             videoElement.addEventListener('timeupdate', () => {
                                 if (!videoElement.seeking && videoElement.currentTime > maxTimeWatched) {
                                     maxTimeWatched = videoElement.currentTime;
