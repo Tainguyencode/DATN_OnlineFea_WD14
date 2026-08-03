@@ -316,7 +316,7 @@ class CourseController extends Controller
 
         $totalGross = 0;
         $totalCommission = 0;
-        $totalRevenue = 0; // Net earning
+        $totalRevenue = 0; // Thu nhập thực nhận
         $courseSales = [];
         $studentPurchases = [];
 
