@@ -60,6 +60,24 @@ class CourseCompletionService
             }
         }
 
+        // 3. Hoàn thành 100% bài tập tự luận (Assignments) và đạt điểm yêu cầu
+        $assignmentLessons = $allLessons->where('type', 'assignment');
+        foreach ($assignmentLessons as $lesson) {
+            $assignment = $lesson->assignment;
+            if (! $assignment) {
+                continue;
+            }
+            $passed = \App\Models\Submission::query()
+                ->where('user_id', $userId)
+                ->where('assignment_id', $assignment->id)
+                ->where('status', 'graded')
+                ->where('score', '>=', $assignment->passing_score ?? 70)
+                ->exists();
+            if (! $passed) {
+                $missing[] = "Bài tập tự luận \"{$lesson->title}\" chưa đạt điểm đạt yêu cầu ({$assignment->passing_score} điểm).";
+            }
+        }
+
         $eligible = $missing === [] && $enrollment->hasLearningAccess();
         $completedAt = $enrollment->completed_at;
 
