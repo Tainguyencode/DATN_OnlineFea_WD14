@@ -41,7 +41,6 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h3 class="font-extrabold text-slate-950 dark:text-white">Đánh giá của bạn</h3>
-                        <span class="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $userReview->status->badgeClasses() }}">{{ $userReview->status->label() }}</span>
                     </div>
                     @if($canDeleteReview)
                         <form method="POST" action="{{ route('courses.reviews.destroy', [$course, $userReview]) }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa đánh giá này?')">
@@ -51,10 +50,6 @@
                         </form>
                     @endif
                 </div>
-
-                @if($userReview->moderation_note && $userReview->isHidden())
-                    <p class="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200"><strong>Ghi chú quản trị:</strong> {{ $userReview->moderation_note }}</p>
-                @endif
 
                 @if($canUpdateReview)
                     <form method="POST" action="{{ route('courses.reviews.update', [$course, $userReview]) }}" class="mt-4 space-y-4" x-data="{ submitting: false }" @submit="submitting = true">

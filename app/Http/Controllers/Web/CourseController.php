@@ -282,9 +282,18 @@ class CourseController extends Controller
             }
         }
 
+        $submission = null;
+        if (auth()->check() && $lesson->type === 'assignment' && $lesson->assignment) {
+            $submission = \App\Models\Submission::query()
+                ->where('assignment_id', $lesson->assignment->id)
+                ->where('user_id', auth()->id())
+                ->first();
+        }
+
         return view('courses.lesson', [
             'course' => $course,
             'lesson' => $lesson,
+            'submission' => $submission,
             'enrollment' => $player['enrollment'],
             'isEnrolled' => $player['isEnrolled'],
             'canAccessLesson' => $player['canAccessLesson'],
