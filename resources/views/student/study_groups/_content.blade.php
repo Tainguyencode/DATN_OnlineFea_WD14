@@ -1,5 +1,5 @@
 <div class="ui-container py-8">
-    <div class="mx-auto max-w-5xl space-y-8">
+    <div class="mx-auto max-w-7xl space-y-8">
         {{-- Header area --}}
         <div>
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Nhóm học tập</h1>
@@ -29,9 +29,9 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
             {{-- Left side: Study Groups list --}}
-            <div class="lg:col-span-2 space-y-6">
+            <div class="lg:col-span-8 space-y-6">
                 <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white">Danh sách nhóm học tập</h2>
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Tham gia trao đổi thảo luận về các khóa học bạn đang theo học.</p>
@@ -136,7 +136,7 @@
             </div>
 
             {{-- Right side: Create Group Form --}}
-            <div class="space-y-6">
+            <div class="lg:col-span-4 space-y-6">
                 <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">Lập nhóm mới</h2>
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Tạo nhóm học để cùng thảo luận.</p>
