@@ -7,20 +7,29 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * GeminiService
- *
- * Gửi yêu cầu lên Google AI Studio (sử dụng model Gemini) và nhận kết quả.
+ * Service Tương tác với Trí tuệ nhân tạo Google Gemini API (GeminiService)
+ * 
+ * Chức năng chính:
+ * 1. `generateText`: Sinh văn bản tóm tắt bài học, trả lời câu hỏi AI Trợ lý học tập (Learning AI Assistant).
+ * 2. `analyzeImage`: Phân tích hình ảnh / khung hình cắt từ video bài giảng bằng Gemini Multimodal Vision để phát hiện dấu hiệu vi phạm nội dung:
+ *    - Bạo lực (violence), Người lớn (adult), Vũ khí (weapon).
+ *    - Logo các nền tảng (TikTok, YouTube, Facebook, Instagram) & Watermark bản quyền.
+ *    - Đánh giá mức độ rủi ro bản quyền (copyright_risk: none, low, medium, high).
  */
 class GeminiService
 {
+    /** URL API Google Generative AI */
     private const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    
+    /** Model Gemini mặc định sử dụng */
     private const DEFAULT_MODEL = 'gemini-3.5-flash';
 
     /**
-     * Generate plain-text response for lesson AI (summary / Q&A).
+     * Sinh phản hồi văn bản từ Gemini cho trợ lý AI bài học (Tóm tắt, Giải đáp thắc mắc).
      *
-     * @param  array{max_tokens?: int, temperature?: float, timeout?: int}  $options
-     * @return array{text?: string, error?: string, _model_used?: string}
+     * @param string $prompt Câu lệnh yêu cầu truyền tới AI
+     * @param array{max_tokens?: int, temperature?: float, timeout?: int} $options Cấu hình tùy chọn
+     * @return array{text?: string, error?: string, _model_used?: string} Mảng chứa kết quả văn bản hoặc thông báo lỗi
      */
     public function generateText(string $prompt, array $options = []): array
     {
@@ -93,14 +102,20 @@ class GeminiService
         }
     }
 
+    /**
+     * Phân tích khung hình ảnh cắt từ Video bài giảng bằng AI Gemini Multimodal Vision để tự động kiểm duyệt nội dung.
+     * 
+     * @param string $imagePath Đường dẫn file ảnh thực tế trên ổ đĩa
+     * @return array Kết quả dạng mảng JSON [violence, adult, weapon, tiktok_logo, youtube_logo, copyright_risk, summary, reason, confidence]
+     */
     public function analyzeImage(string $imagePath): array
     {
-        // 1. Kiểm tra file tồn tại
+        // 1. Kiểm tra file ảnh có tồn tại trên hệ thống không
         if (! file_exists($imagePath)) {
             return ['error' => "File không tồn tại: {$imagePath}"];
         }
 
-        // 2. Đọc & encode ảnh sang Base64
+        // 2. Đọc & mã hóa ảnh sang chuỗi Base64
         $imageData = base64_encode(file_get_contents($imagePath));
         $mimeType = mime_content_type($imagePath) ?: 'image/jpeg';
 
@@ -110,7 +125,7 @@ class GeminiService
             return ['error' => 'Chưa cấu hình GEMINI_API_KEY trong .env'];
         }
 
-        // 3. Chuẩn bị prompt
+        // 3. Chuẩn bị prompt mẫu định hình phản hồi dạng JSON nghiêm ngặt cho Gemini
         $prompt = <<<'PROMPT'
 Bạn là hệ thống AI hỗ trợ kiểm duyệt nội dung video cho một nền tảng học trực tuyến.
 
@@ -244,16 +259,16 @@ PROMPT;
                 return ['error' => "[{$model}] {$response->status()}: {$msg}"];
             }
 
-            // 5. Lấy text
+            // 5. Lấy chuỗi phản hồi text dạng JSON từ Gemini
             $rawText = $response->json('candidates.0.content.parts.0.text') ?? '';
 
-            // 6. Làm sạch markdown (```json ... ```)
+            // 6. Làm sạch các thẻ markdown (```json ... ```)
             $clean = trim($rawText);
             $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
             $clean = preg_replace('/\s*```\s*$/i', '', $clean);
             $clean = trim($clean);
 
-            // 7. Parse JSON
+            // 7. Parse chuỗi JSON thành mảng PHP
             $result = json_decode($clean, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -272,6 +287,11 @@ PROMPT;
         }
     }
 
+    /**
+     * Trích xuất API Key hợp lệ từ cấu hình `config/services.php`.
+     * 
+     * @return string|null Chuỗi API Key hoặc null nếu chưa cài đặt
+     */
     private function apiKey(): ?string
     {
         $key = config('services.gemini.api_key');
