@@ -147,15 +147,25 @@
                 <div class="mt-4 space-y-4">
                     <div>
                         <label for="price" class="mb-1.5 block text-sm font-bold text-slate-700">Giá gốc <span class="text-rose-500">*</span></label>
-                        <input id="price" type="number" name="price" value="{{ old('price', $course->price ?? 0) }}" min="0" step="1000"
+                        <input id="price" type="number" name="price" value="{{ old('price', $course->price ?? 0) }}" min="0" max="100000000" step="1000"
+                               oninput="if(this.value.length > 9) this.value = this.value.slice(0, 9); formatPricePreview('price', 'price-preview-txt');"
                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                        <div class="mt-1 flex items-center justify-between text-xs">
+                            <span id="price-preview-txt" class="font-bold text-emerald-600"></span>
+                            <span class="text-slate-400">Tối đa 100.000.000 VNĐ</span>
+                        </div>
                         @error('price') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>
 
                     <div>
                         <label for="discount_price" class="mb-1.5 block text-sm font-bold text-slate-700">Giá khuyến mãi</label>
-                        <input id="discount_price" type="number" name="discount_price" value="{{ $discountPrice }}" min="0" step="1000"
+                        <input id="discount_price" type="number" name="discount_price" value="{{ $discountPrice }}" min="0" max="100000000" step="1000"
+                               oninput="if(this.value.length > 9) this.value = this.value.slice(0, 9); formatPricePreview('discount_price', 'discount-preview-txt');"
                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                        <div class="mt-1 flex items-center justify-between text-xs">
+                            <span id="discount-preview-txt" class="font-bold text-emerald-600"></span>
+                            <span class="text-slate-400">Phải ≤ giá gốc</span>
+                        </div>
                         @error('discount_price') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>
 
@@ -189,3 +199,21 @@
         </div>
     </div>
 </form>
+
+<script>
+    function formatPricePreview(inputId, previewId) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+        if (!input || !preview) return;
+        const val = parseFloat(input.value);
+        if (isNaN(val) || val <= 0) {
+            preview.textContent = val === 0 ? 'Miễn phí (0đ)' : '';
+        } else {
+            preview.textContent = '=> ' + new Intl.NumberFormat('vi-VN').format(val) + 'đ';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        formatPricePreview('price', 'price-preview-txt');
+        formatPricePreview('discount_price', 'discount-preview-txt');
+    });
+</script>
