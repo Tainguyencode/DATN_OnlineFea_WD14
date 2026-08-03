@@ -223,11 +223,26 @@ class MiscController extends Controller
         ]);
     }
 
-    public function publicCertificatePdf(string $code)
+    public function publicCertificatePdf(Request $request, string $code)
     {
         $certificate = Certificate::where('certificate_code', $code)
             ->with(['course', 'user'])
             ->firstOrFail();
+
+        $pdfService = app(CertificatePdfService::class);
+        $certificate = $pdfService->ensureStored($certificate);
+
+        $absolutePath = $pdfService->absolutePath($certificate);
+        $fileName = 'certificate-'.$certificate->certificate_code.'.pdf';
+
+        if ($absolutePath) {
+            $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
+            return response()->file($absolutePath, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => $disposition.'; filename="'.$fileName.'"',
+            ]);
+        }
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.certificate', [
             'certificate' => $certificate,
@@ -235,6 +250,8 @@ class MiscController extends Controller
             'user' => $certificate->user,
         ]);
 
-        return $pdf->stream('certificate-' . $certificate->certificate_code . '.pdf');
+        return $request->boolean('download')
+            ? $pdf->download($fileName)
+            : $pdf->stream($fileName);
     }
 }
