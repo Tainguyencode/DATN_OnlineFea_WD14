@@ -37,8 +37,8 @@ class StoreCourseRequest extends FormRequest
             'objectives' => ['nullable', 'string'],
             'thumbnail' => ['nullable', 'image', 'max:2048'],
             'preview_video' => ['nullable', 'string', 'max:2048'],
-            'price' => ['required', 'numeric', 'min:0', 'max:999999999'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'lte:price'],
+            'price' => ['required', 'numeric', 'min:0', 'max:100000000'],
+            'discount_price' => ['nullable', 'numeric', 'min:0', 'max:100000000', 'lte:price'],
             'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
             'language' => ['sometimes', 'string', 'max:10'],
         ];
