@@ -71,14 +71,14 @@ class VideoPlayerController extends Controller
                 'token' => $token,
                 'lesson_id' => $lesson->id
             ]);
-            abort(403, 'Invalid or expired token.');
+            return response('Not found', 404);
         }
 
         $hlsDir = 'lesson-hls/' . $lesson->id;
         $m3u8Path = $hlsDir . '/playlist.m3u8';
 
         if (!Storage::disk('local')->exists($m3u8Path)) {
-            abort(404, 'Playlist not found.');
+            return response('Not found', 404);
         }
 
         $content = Storage::disk('local')->get($m3u8Path);
@@ -107,13 +107,13 @@ class VideoPlayerController extends Controller
         $token = $request->query('token');
 
         if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
-            abort(403, 'Invalid or expired token.');
+            return response('Not found', 404);
         }
 
         $segmentPath = 'lesson-hls/' . $lesson->id . '/' . $segment;
 
         if (!Storage::disk('local')->exists($segmentPath)) {
-            abort(404, 'Segment not found.');
+            return response('Not found', 404);
         }
 
         $path = Storage::disk('local')->path($segmentPath);
@@ -173,7 +173,7 @@ class VideoPlayerController extends Controller
         if ($log && $log->watch_started_at) {
             $log->update([
                 'watch_ended_at' => now(),
-                'watch_duration' => now()->diffInSeconds($log->watch_started_at)
+                'watch_duration' => max(0, now()->timestamp - $log->watch_started_at->timestamp)
             ]);
         }
 

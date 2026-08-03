@@ -39,11 +39,7 @@
         </span>
         <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-[#1c1d1f]">{{ $item['title'] }}</p>
-            <p class="mt-0.5 text-xs font-semibold text-[#6a6f73]">
-                <span data-lesson-progress-status>{{ $stateLabel }}</span>
-                <span> - </span>
-                <span data-lesson-progress-percent>{{ number_format($progressPercent, 0) }}%</span>
-            </p>
+
             <p class="text-xs text-[#6a6f73]">
                 {{ $item['type_label'] }}
                 @if($item['duration']) · {{ $item['duration'] }} @endif
