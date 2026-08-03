@@ -15,9 +15,9 @@ class Assignment extends Model
         'description',
         'instructions',
         'due_date',
+        'due_days',
         'max_score',
         'passing_score',
-        'due_days',
         'is_required',
         'allowed_file_types',
         'maximum_file_size',
@@ -28,16 +28,7 @@ class Assignment extends Model
         return [
             'due_date' => 'datetime',
             'max_score' => 'integer',
-            'passing_score' => 'integer',
-            'due_days' => 'integer',
-            'is_required' => 'boolean',
-            'maximum_file_size' => 'integer',
         ];
-    }
-
-    public function course(): BelongsTo
-    {
-        return $this->belongsTo(Course::class);
     }
 
     public function lesson(): BelongsTo
@@ -47,6 +38,6 @@ class Assignment extends Model
 
     public function submissions(): HasMany
     {
-        return $this->hasMany(AssignmentSubmission::class, 'assignment_id');
+        return $this->hasMany(Submission::class);
     }
 }

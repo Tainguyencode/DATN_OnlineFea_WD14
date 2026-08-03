@@ -12,13 +12,22 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Service quản lý các cổng thanh toán (VNPay, MoMo, Chuyển khoản)
- * Được cấu trúc sẵn sàng để thay thế bằng API thật trong tương lai.
+ * Service Quản lý Cổng Thanh toán & Xử lý Giao dịch Đơn hàng (PaymentGatewayService)
+ * 
+ * Chức năng chính:
+ * 1. Khởi tạo liên kết thanh toán (VNPay, MoMo, PayOS VietQR, Giả lập Mock).
+ * 2. Xác thực tính hợp lệ của đơn hàng, mã giảm giá (Coupon), kiểm tra chống trùng lặp giao dịch (Replay attack).
+ * 3. Đánh dấu trạng thái đơn hàng (paid / failed) an toàn với DB Transaction & Row Locking (`lockForUpdate`).
+ * 4. Tự động ghi danh học viên (`Enrollment`), xóa sản phẩm đã mua khỏi Giỏ hàng (`Cart`).
+ * 5. Bắn thông báo `NotificationService` tới Giảng viên khi có học viên mới đăng ký khóa học.
  */
 class PaymentGatewayService
 {
     /**
-     * Lấy URL thanh toán tương ứng cho đơn hàng.
+     * Lấy URL chuyển hướng thanh toán tương ứng cho đơn hàng theo phương thức thanh toán được chọn.
+     * 
+     * @param Order $order Model đơn hàng cần thanh toán
+     * @return string URL chuyển hướng tới Cổng thanh toán hoặc Trang chuyển khoản QR
      */
     public function getPaymentUrl(Order $order): string
     {
@@ -62,7 +71,10 @@ class PaymentGatewayService
     }
 
     /**
-     * Sinh link thanh toán PayOS (VietQR)
+     * Sinh URL tạo link thanh toán VietQR qua PayOS API v2.
+     * 
+     * @param Order $order Đơn hàng cần tạo mã QR thanh toán
+     * @return string URL link thanh toán PayOS Checkout
      */
     protected function createPayOSUrl(Order $order): string
     {
@@ -124,6 +136,9 @@ class PaymentGatewayService
 
     /**
      * Kiểm tra trạng thái thanh toán trực tiếp từ PayOS API hoặc URL callback nếu đơn hàng chưa xác nhận paid.
+     * 
+     * @param Order $order Đơn hàng cần đối soát
+     * @return bool True nếu thanh toán thành công, False nếu chưa hoặc thất bại
      */
     public function checkAndUpdatePayOSStatus(Order $order): bool
     {
@@ -182,7 +197,10 @@ class PaymentGatewayService
     }
 
     /**
-     * Sinh link thanh toán VNPay
+     * Sinh URL chuyển hướng đến Cổng thanh toán VNPay (vnpayment.vn).
+     * 
+     * @param Order $order Đơn hàng
+     * @return string URL VNPay
      */
     protected function createVNPayUrl(Order $order): string
     {
@@ -233,7 +251,10 @@ class PaymentGatewayService
     }
 
     /**
-     * Sinh link thanh toán MoMo
+     * Sinh URL chuyển hướng đến Cổng thanh toán Ví MoMo.
+     * 
+     * @param Order $order Đơn hàng
+     * @return string URL MoMo PayUrl
      */
     protected function createMoMoUrl(Order $order): string
     {
@@ -299,18 +320,20 @@ class PaymentGatewayService
     }
 
     /**
-     * Xử lý kết quả giao dịch (Thành công / Thất bại).
-     * Áp dụng cho cả chuyển khoản giả lập lẫn callback từ các cổng VNPay, MoMo.
+     * Xử lý xác nhận kết quả giao dịch Đơn hàng (Thành công / Thất bại).
+     * Áp dụng khóa hàng DB Transaction & LockForUpdate để chống tình trạng ghi đè trùng lặp.
      *
-     * @param  string  $status  ('success' hoặc 'failed')
-     * @param  string|null  $transactionId  Mã giao dịch thực tế hoặc giả lập
+     * @param Order $order Đơn hàng
+     * @param string $status Trạng thái ('success' hoặc 'failed')
+     * @param string|null $transactionId Mã giao dịch thực tế hoặc giả lập
+     * @return bool Thành công hay thất bại
      */
     public function processMockPayment(Order $order, string $status, ?string $transactionId = null): bool
     {
         return DB::transaction(function () use ($order, $status, $transactionId): bool {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
 
-            // A repeated callback for a completed order must be a no-op.
+            // Nếu đơn hàng đã được xác nhận paid trước đó thì giữ nguyên
             if ($lockedOrder->status === 'paid') {
                 return true;
             }
@@ -360,6 +383,13 @@ class PaymentGatewayService
         });
     }
 
+    /**
+     * Đánh dấu giao dịch đơn hàng thất bại.
+     * 
+     * @param Order $order
+     * @param Payment|null $payment
+     * @param string $message Lý do thất bại
+     */
     protected function markPaymentFailed(Order $order, ?Payment $payment, string $message): void
     {
         $order->update(['status' => 'failed']);
@@ -375,7 +405,9 @@ class PaymentGatewayService
     }
 
     /**
-     * Đăng ký ghi danh cho học viên khi thanh toán thành công.
+     * Tự động đăng ký Ghi danh (Enrollment) cho học viên khi thanh toán thành công và bắn thông báo tới Giảng viên.
+     * 
+     * @param Order $order
      */
     protected function enrollStudent(Order $order): void
     {
@@ -420,7 +452,9 @@ class PaymentGatewayService
     }
 
     /**
-     * Xóa các khóa học đã mua khỏi giỏ hàng của người dùng.
+     * Tự động xóa các khóa học đã mua khỏi giỏ hàng của học viên.
+     * 
+     * @param Order $order
      */
     protected function clearCart(Order $order): void
     {
