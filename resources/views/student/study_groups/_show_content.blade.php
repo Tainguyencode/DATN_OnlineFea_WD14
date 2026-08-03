@@ -68,9 +68,7 @@ if (!function_exists('formatBytes')) {
                     <div class="space-y-3 max-h-[360px] overflow-y-auto chat-scroll pr-1">
                         @foreach($studyGroup->members as $member)
                             <div class="flex items-center gap-2.5">
-                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-xs">
-                                    {{ strtoupper(substr($member->name, 0, 1)) }}
-                                </div>
+                                <img src="{{ $member->avatarUrl() }}" alt="{{ $member->name }}" class="h-8 w-8 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($member->name) }}&background=0056D2&color=fff'">
                                 <div class="flex-1 min-w-0">
                                     <p class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" title="{{ $member->name }}">
                                         {{ $member->name }}
