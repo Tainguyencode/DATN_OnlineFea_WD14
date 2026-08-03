@@ -37,7 +37,7 @@
     <div class="relative aspect-video overflow-hidden bg-gradient-to-br {{ $gradient }}">
         <a href="{{ route('courses.show', $course->slug) }}" class="block h-full" aria-label="Xem chi tiết {{ $course->title }}">
             @if($course->thumbnail)
-                <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80'">
             @else
                 <div class="absolute inset-0 flex items-center justify-center">
                     <svg class="h-14 w-14 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824 2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg>

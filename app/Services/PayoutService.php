@@ -7,6 +7,14 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Service Quản lý Rút tiền Giảng viên & Danh sách Ngân hàng VietQR (PayoutService)
+ * 
+ * Chức năng chính:
+ * 1. Lấy danh sách 50+ Ngân hàng thương mại tại Việt Nam (MBBank, Vietcombank, Techcombank, Agribank, VPBank...) từ VietQR API v2.
+ * 2. Lưu Cache 24 giờ (`vietnam_banks_list`) tránh quá tải API bên thứ ba.
+ * 3. Sinh đường dẫn ảnh mã QR Chuyển khoản nhanh Napas247 (VietQR Compact2) động cho Admin chuyển khoản rút tiền.
+ */
 class PayoutService
 {
     /**
@@ -36,7 +44,9 @@ class PayoutService
     ];
 
     /**
-     * Lấy danh sách ngân hàng Việt Nam (VietQR API) có caching 24 giờ.
+     * Lấy danh sách ngân hàng Việt Nam từ VietQR API có caching 24 giờ.
+     * 
+     * @return array Danh sách ngân hàng [code, shortName, name, bin, logo]
      */
     public function getVietNamBanks(): array
     {
@@ -66,7 +76,10 @@ class PayoutService
     }
 
     /**
-     * Sinh URL ảnh mã VietQR Chuyển khoản Thật (Napas247)
+     * Sinh URL ảnh mã QR Chuyển khoản VietQR (Napas247) động chứa sẵn số tiền, nội dung rút tiền và tên tài khoản.
+     * 
+     * @param Withdrawal $withdrawal Yêu cầu rút tiền
+     * @return string URL ảnh QR Code VietQR
      */
     public function generateVietQrUrl(Withdrawal $withdrawal): string
     {

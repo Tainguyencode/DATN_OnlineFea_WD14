@@ -15,13 +15,30 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
+/**
+ * Service Kiểm tra Hoàn thành Khóa học & Cấp Chứng chỉ Tự động (CourseCompletionService)
+ * 
+ * Chức năng chính:
+ * 1. Kiểm tra điều kiện hoàn thành 3 tầng: Xem 100% Video, Làm 100% Bài Trắc nghiệm (Quiz), Đạt điểm Bài tập Tự luận (Assignment >= passing_score).
+ * 2. Cập nhật trạng thái `Enrollment` sang `completed` và ghi nhận `completed_at`.
+ * 3. Tự động khởi tạo Mã chứng chỉ điện tử duy nhất dạng `FEA-XXXXXXXX`.
+ * 4. Gọi `CertificatePdfService` tạo file PDF chứng chỉ và gửi Email chúc mừng đính kèm thông báo Push Notification.
+ */
 class CourseCompletionService
 {
+    /**
+     * Kiểm tra chi tiết tiến độ và điều kiện hoàn thành khóa học của Học viên.
+     * 
+     * @param Enrollment $enrollment Bản ghi ghi danh học viên
+     * @param int $userId ID học viên
+     * @return array [eligible, progress_percent, missing_requirements, completed_at]
+     */
     public function check(Enrollment $enrollment, int $userId): array
     {
         $course = $enrollment->course()->with(['lessons.quiz', 'lessons.assignment'])->first();
         $missing = [];
 
+        // Lấy danh sách tất cả bài học bắt buộc trong khóa học
         $allLessons = Lesson::query()
             ->where(function ($query) use ($course) {
                 $query->where('course_id', $course->id)
@@ -34,7 +51,7 @@ class CourseCompletionService
             })
             ->get();
 
-        // 1. Xem 100% video
+        // 1. Kiểm tra hoàn thành 100% bài học Video
         $videoLessons = $allLessons->where('type', 'video');
         foreach ($videoLessons as $lesson) {
             $progress = LessonProgress::where('user_id', $userId)->where('lesson_id', $lesson->id)->first();
@@ -43,7 +60,7 @@ class CourseCompletionService
             }
         }
 
-        // 2. Hoàn thành 100% quiz
+        // 2. Kiểm tra hoàn thành 100% bài kiểm tra Trắc nghiệm (Quiz)
         $quizLessons = $allLessons->where('type', 'quiz');
         foreach ($quizLessons as $lesson) {
             $quiz = $lesson->quiz;
@@ -60,9 +77,28 @@ class CourseCompletionService
             }
         }
 
+        // 3. Kiểm tra hoàn thành 100% bài tập tự luận (Assignments) và đạt điểm số yêu cầu
+        $assignmentLessons = $allLessons->where('type', 'assignment');
+        foreach ($assignmentLessons as $lesson) {
+            $assignment = $lesson->assignment;
+            if (! $assignment) {
+                continue;
+            }
+            $passed = \App\Models\Submission::query()
+                ->where('user_id', $userId)
+                ->where('assignment_id', $assignment->id)
+                ->where('status', 'graded')
+                ->where('score', '>=', $assignment->passing_score ?? 70)
+                ->exists();
+            if (! $passed) {
+                $missing[] = "Bài tập tự luận \"{$lesson->title}\" chưa đạt điểm đạt yêu cầu ({$assignment->passing_score} điểm).";
+            }
+        }
+
         $eligible = $missing === [] && $enrollment->hasLearningAccess();
         $completedAt = $enrollment->completed_at;
 
+        // Nếu đủ điều kiện và chưa ghi nhận hoàn thành -> Cấp chứng chỉ & Bắn thông báo
         if ($eligible) {
             if (! $completedAt) {
                 $completedAt = now();
@@ -98,6 +134,13 @@ class CourseCompletionService
         ];
     }
 
+    /**
+     * Khởi tạo Chứng chỉ điện tử cho Học viên sau khi hoàn thành khóa học.
+     * 
+     * @param int $userId ID học viên
+     * @param Course $course Model khóa học
+     * @return Certificate|null Model chứng chỉ vừa tạo hoặc null nếu khóa học tắt chứng chỉ
+     */
     private function issueCertificate(int $userId, Course $course): ?Certificate
     {
         if (! $course->certificate_enabled) {
@@ -114,6 +157,7 @@ class CourseCompletionService
 
         $wasRecentlyCreated = $certificate->wasRecentlyCreated;
 
+        // Sinh file PDF chứng chỉ chuẩn mực
         app(CertificatePdfService::class)->ensureStored($certificate);
         $certificate->refresh();
 
@@ -124,6 +168,13 @@ class CourseCompletionService
         return $certificate;
     }
 
+    /**
+     * Gửi email thông báo cấp chứng chỉ kèm đường dẫn tải PDF cho Học viên.
+     * 
+     * @param int $userId ID học viên
+     * @param Course $course Khóa học
+     * @param Certificate $certificate Chứng chỉ
+     */
     private function sendCertificateEmail(int $userId, Course $course, Certificate $certificate): void
     {
         try {
