@@ -209,6 +209,7 @@ function initVideoProgressV2() {
         played_seconds: Math.floor(unsavedPlayedSeconds),
         video_duration_seconds: durationSeconds(),
         client_updated_at: nowIso(),
+        completed: video.ended || currentPosition() >= durationSeconds() - 1,
     });
 
     const applyProgressResponse = (data) => {
@@ -1134,7 +1135,7 @@ function initStudyNotesPage() {
 
 function initLessonAi() {
     const root = document.querySelector('[data-lesson-ai]');
-    if (!root || root.dataset.canUseAi !== '1') return;
+    if (!root || root.getAttribute('data-can-use-ai') !== '1') return;
 
     const summaryUrl = root.dataset.aiSummaryUrl;
     const explainUrl = root.dataset.aiExplainUrl;

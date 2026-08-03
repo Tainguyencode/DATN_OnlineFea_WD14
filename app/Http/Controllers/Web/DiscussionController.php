@@ -61,7 +61,7 @@ class DiscussionController extends Controller
             'course' => $course,
             'lesson' => $lesson,
             'discussion_id' => $discussion->id
-        ])->with('success', 'Đã gửi câu hỏi thảo luận thành công.');
+        ])->with('success', 'Đã gửi câu hỏi trao đổi thành công.');
     }
 
     /**

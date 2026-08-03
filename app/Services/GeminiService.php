@@ -7,31 +7,14 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * GeminiService (dùng qua OpenRouter)
+ * GeminiService
  *
- * Gửi ảnh lên OpenRouter API (sử dụng các model Gemini) và nhận kết quả kiểm duyệt.
+ * Gửi yêu cầu lên Google AI Studio (sử dụng model Gemini) và nhận kết quả.
  */
 class GeminiService
 {
-    private const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-    /**
-     * Danh sách model thử trên OpenRouter (ưu tiên các bản free của Gemini)
-     */
-    private const MODELS = [
-        'google/gemini-3.5-flash',
-        'google/gemini-3.1-flash-image',
-        'google/gemini-3.1-flash-lite-image',
-        'google/gemini-3-pro-image',
-        'google/gemini-3.1-flash-lite',
-        'google/gemini-flash-latest',
-    ];
-
-    private const TEXT_MODELS = [
-        'google/gemini-3.5-flash',
-        'google/gemini-3.1-flash-lite',
-        'google/gemini-flash-latest',
-    ];
+    private const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    private const DEFAULT_MODEL = 'gemini-3.5-flash';
 
     /**
      * Generate plain-text response for lesson AI (summary / Q&A).
@@ -44,77 +27,70 @@ class GeminiService
         $apiKey = $this->apiKey();
 
         if ($apiKey === null) {
-            return ['error' => 'Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong .env'];
+            return ['error' => 'Chưa cấu hình GEMINI_API_KEY trong .env'];
         }
 
-        $maxTokens = (int) ($options['max_tokens'] ?? 1200);
+        $maxTokens = (int) ($options['max_tokens'] ?? 400);
         $temperature = (float) ($options['temperature'] ?? 0.3);
         $timeout = (int) ($options['timeout'] ?? 45);
-        $lastError = '';
+        
+        $model = self::DEFAULT_MODEL;
 
-        foreach (self::TEXT_MODELS as $model) {
-            $body = [
-                'model' => $model,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => $prompt,
+        $body = [
+            'contents' => [
+                [
+                    'parts' => [
+                        [
+                            'text' => $prompt,
+                        ],
                     ],
                 ],
+            ],
+            'generationConfig' => [
                 'temperature' => $temperature,
-                'max_tokens' => $maxTokens,
-            ];
+                'maxOutputTokens' => $maxTokens,
+            ],
+        ];
 
-            try {
-                $response = Http::timeout($timeout)
-                    ->withHeaders([
-                        'Authorization' => 'Bearer '.$apiKey,
-                        'HTTP-Referer' => url('/'),
-                        'X-Title' => config('app.name'),
-                    ])
-                    ->post(self::API_URL, $body);
+        try {
+            $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
 
-                if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404], true)) {
-                    $msg = $response->json('error.message') ?? $response->body();
-                    Log::warning("OpenRouter text skip [{$model}]", ['status' => $response->status()]);
-                    $lastError = "[{$model}] {$response->status()}: {$msg}";
+            $response = Http::timeout($timeout)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($url, $body);
 
-                    continue;
-                }
-
-                if ($response->failed()) {
-                    $msg = $response->json('error.message') ?? $response->body();
-                    Log::error("OpenRouter text error [{$model}]", ['status' => $response->status()]);
-                    $lastError = "[{$model}] {$response->status()}: {$msg}";
-
-                    continue;
-                }
-
-                $rawText = (string) ($response->json('choices.0.message.content') ?? '');
-                $clean = trim($rawText);
-                $clean = preg_replace('/^```(?:\w+)?\s*/i', '', $clean) ?? $clean;
-                $clean = preg_replace('/\s*```\s*$/i', '', $clean) ?? $clean;
-                $clean = trim($clean);
-
-                if ($clean === '') {
-                    $lastError = "[{$model}] empty response";
-
-                    continue;
-                }
-
-                return [
-                    'text' => $clean,
-                    '_model_used' => $model,
-                ];
-            } catch (ConnectionException $e) {
-                Log::error('OpenRouter text connection error', ['exception' => $e::class]);
-                $lastError = 'Connection error: '.$e->getMessage();
-
-                throw $e;
+            if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404], true)) {
+                $msg = $response->json('error.message') ?? $response->body();
+                Log::warning("Google Gemini text skip [{$model}]", ['status' => $response->status()]);
+                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
             }
-        }
 
-        return ['error' => 'Tất cả model OpenRouter đều thất bại. Lỗi cuối: '.$lastError];
+            if ($response->failed()) {
+                $msg = $response->json('error.message') ?? $response->body();
+                Log::error("Google Gemini text error [{$model}]", ['status' => $response->status()]);
+                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
+            }
+
+            $rawText = (string) ($response->json('candidates.0.content.parts.0.text') ?? '');
+            $clean = trim($rawText);
+            $clean = preg_replace('/^```(?:\w+)?\s*/i', '', $clean) ?? $clean;
+            $clean = preg_replace('/\s*```\s*$/i', '', $clean) ?? $clean;
+            $clean = trim($clean);
+
+            if ($clean === '') {
+                return ['error' => "[{$model}] empty response"];
+            }
+
+            return [
+                'text' => $clean,
+                '_model_used' => $model,
+            ];
+        } catch (ConnectionException $e) {
+            Log::error('Google Gemini text connection error', ['exception' => $e::class]);
+            throw $e;
+        }
     }
 
     public function analyzeImage(string $imagePath): array
@@ -131,7 +107,7 @@ class GeminiService
         $apiKey = $this->apiKey();
 
         if ($apiKey === null) {
-            return ['error' => 'Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong .env'];
+            return ['error' => 'Chưa cấu hình GEMINI_API_KEY trong .env'];
         }
 
         // 3. Chuẩn bị prompt
@@ -222,91 +198,78 @@ JSON phải đúng chính xác định dạng sau:
 }
 PROMPT;
 
-        $lastError = '';
+        $model = self::DEFAULT_MODEL;
 
-        // 4. Thử từng model trên OpenRouter
-        foreach (self::MODELS as $model) {
-            $body = [
-                'model' => $model,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            [
-                                'type' => 'text',
-                                'text' => $prompt,
-                            ],
-                            [
-                                'type' => 'image_url',
-                                'image_url' => [
-                                    'url' => "data:{$mimeType};base64,{$imageData}",
-                                ],
+        $body = [
+            'contents' => [
+                [
+                    'parts' => [
+                        [
+                            'text' => $prompt,
+                        ],
+                        [
+                            'inline_data' => [
+                                'mime_type' => $mimeType,
+                                'data' => $imageData,
                             ],
                         ],
                     ],
                 ],
+            ],
+            'generationConfig' => [
                 'temperature' => 0.1,
-                'max_tokens' => 500,
-                // Định dạng JSON nếu OpenRouter model support
-                'response_format' => ['type' => 'json_object'],
-            ];
+                'maxOutputTokens' => 1024,
+                'responseMimeType' => 'application/json',
+            ],
+        ];
 
-            try {
-                $response = Http::timeout(30)
-                    ->withHeaders([
-                        'Authorization' => 'Bearer '.$apiKey,
-                        'HTTP-Referer' => url('/'),
-                        'X-Title' => config('app.name'),
-                    ])
-                    ->post(self::API_URL, $body);
+        try {
+            $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
 
-                // Bỏ qua lỗi Rate limit (429), Model unavailable (404/502/503), Invalid model (400) hoặc Thiếu Credit (402)
-                if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404])) {
-                    $msg = $response->json('error.message') ?? $response->body();
-                    Log::warning("OpenRouter skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
-                    $lastError = "[{$model}] {$response->status()}: {$msg}";
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($url, $body);
 
-                    continue;
-                }
-
-                if ($response->failed()) {
-                    $msg = $response->json('error.message') ?? $response->body();
-                    Log::error("OpenRouter error [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
-
-                    $lastError = "[{$model}] {$response->status()}: {$msg}";
-
-                    continue;
-                }
-
-                // 5. Lấy text từ OpenAI format
-                $rawText = $response->json('choices.0.message.content') ?? '';
-
-                // 6. Làm sạch markdown (```json ... ```)
-                $clean = trim($rawText);
-                $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
-                $clean = preg_replace('/\s*```\s*$/i', '', $clean);
-                $clean = trim($clean);
-
-                // 7. Parse JSON
-                $result = json_decode($clean, true);
-
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    Log::warning('OpenRouter JSON parse failed', ['raw' => $rawText, 'model' => $model]);
-
-                    return ['error' => 'Không parse được JSON từ OpenRouter.', 'raw' => $rawText];
-                }
-
-                $result['_model_used'] = $model; // Ghi chú model nào đã thành công
-
-                return $result;
-
-            } catch (ConnectionException $e) {
-                Log::error('OpenRouter connection error', ['msg' => $e->getMessage()]);
-                $lastError = 'Connection error: '.$e->getMessage();
+            if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404])) {
+                $msg = $response->json('error.message') ?? $response->body();
+                Log::warning("Google Gemini skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
+                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
             }
-        }
 
-        return ['error' => 'Tất cả model OpenRouter đều thất bại. Lỗi cuối: '.$lastError];
+            if ($response->failed()) {
+                $msg = $response->json('error.message') ?? $response->body();
+                Log::error("Google Gemini error [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
+                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
+            }
+
+            // 5. Lấy text
+            $rawText = $response->json('candidates.0.content.parts.0.text') ?? '';
+
+            // 6. Làm sạch markdown (```json ... ```)
+            $clean = trim($rawText);
+            $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
+            $clean = preg_replace('/\s*```\s*$/i', '', $clean);
+            $clean = trim($clean);
+
+            // 7. Parse JSON
+            $result = json_decode($clean, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Log::warning('Google Gemini JSON parse failed', ['raw' => $rawText, 'model' => $model]);
+
+                return ['error' => 'Không parse được JSON từ Google Gemini.', 'raw' => $rawText];
+            }
+
+            $result['_model_used'] = $model;
+
+            return $result;
+
+        } catch (ConnectionException $e) {
+            Log::error('Google Gemini connection error', ['msg' => $e->getMessage()]);
+            return ['error' => 'Connection error: '.$e->getMessage()];
+        }
     }
 
     private function apiKey(): ?string
