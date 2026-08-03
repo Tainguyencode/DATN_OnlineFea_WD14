@@ -29,7 +29,7 @@ if (!function_exists('formatBytes')) {
 @endphp
 
 <div class="ui-container py-8">
-    <div class="mx-auto max-w-5xl space-y-6">
+    <div class="mx-auto max-w-7xl space-y-6">
         
         {{-- Breadcrumb / Back button --}}
         <div class="flex items-center justify-between">
@@ -39,16 +39,16 @@ if (!function_exists('formatBytes')) {
             </a>
             
             <div class="flex items-center gap-2">
-                <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-300">
+                <span class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0056D2] ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-300">
                     {{ $studyGroup->course->title }}
                 </span>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <div class="flex flex-col lg:flex-row gap-6 items-start">
             
             {{-- Left column: Group Details & Members --}}
-            <div class="lg:col-span-1 space-y-6">
+            <div class="w-full lg:w-80 shrink-0 space-y-6">
                 {{-- Group info --}}
                 <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <h1 class="text-xl font-extrabold text-slate-900 dark:text-white break-words">{{ $studyGroup->name }}</h1>
@@ -65,7 +65,7 @@ if (!function_exists('formatBytes')) {
                     <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
                         <h2 class="text-sm font-bold text-slate-900 dark:text-white">Thành viên ({{ $studyGroup->members->count() }}/{{ $studyGroup->max_members }})</h2>
                     </div>
-                    <div class="space-y-3 max-h-[300px] overflow-y-auto chat-scroll pr-1">
+                    <div class="space-y-3 max-h-[360px] overflow-y-auto chat-scroll pr-1">
                         @foreach($studyGroup->members as $member)
                             <div class="flex items-center gap-2.5">
                                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-xs">
@@ -97,7 +97,7 @@ if (!function_exists('formatBytes')) {
             </div>
 
             {{-- Right column: Chat area --}}
-            <div class="lg:col-span-3">
+            <div class="w-full lg:flex-1 min-w-0">
                 <div class="flex flex-col h-[600px] rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
                     
                     {{-- Chat header --}}
