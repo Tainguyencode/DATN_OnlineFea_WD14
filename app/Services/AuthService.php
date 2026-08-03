@@ -16,6 +16,7 @@ class AuthService
 {
     public function login(string $identifier, string $password, bool $remember, string $throttleKey, Request $request): User
     {
+        $identifier = trim($identifier);
         $column = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         $credentials = [$column => $identifier, 'password' => $password];
 

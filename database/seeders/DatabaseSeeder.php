@@ -102,6 +102,9 @@ class DatabaseSeeder extends Seeder
 
         // 3. Tự động đồng bộ course_sections và cập nhật lessons (course_id, section_id) từ chapters
         $this->backfillCourseSections();
+
+        // 4. Tạo đăng ký khóa học mẫu cho học sinh
+        $this->seedEnrollments();
     }
 
     /**
@@ -133,5 +136,144 @@ class DatabaseSeeder extends Seeder
         }
 
         echo '✓ Đồng bộ thành công '.count($chapters)." chương học sang course_sections!\n\n";
+    }
+
+    /**
+     * Tạo đăng ký khóa học mẫu cho học sinh
+     */
+    private function seedEnrollments(): void
+    {
+        echo "\n========== TẠO ĐĂNG KÝ KHÓA HỌC MẪU (ENROLLMENTS) ==========\n";
+
+        $student1 = DB::table('users')->where('email', 'student@example.com')->value('id');
+        $student2 = DB::table('users')->where('email', 'student2@example.com')->value('id');
+        $student3 = DB::table('users')->where('email', 'student3@example.com')->value('id');
+        $student4 = DB::table('users')->where('email', 'student4@example.com')->value('id');
+        $qtrung = DB::table('users')->where('email', 'tungazquoc@gmail.com')->value('id');
+
+        $enrollments = [];
+
+        if ($student1) {
+            $enrollments[] = [
+                'user_id' => $student1,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 35.00,
+                'enrolled_at' => now()->subDays(10),
+                'created_at' => now()->subDays(10),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $student1,
+                'course_id' => 2,
+                'status' => 'active',
+                'progress_percent' => 10.00,
+                'enrolled_at' => now()->subDays(5),
+                'created_at' => now()->subDays(5),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $student1,
+                'course_id' => 3,
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(2),
+                'created_at' => now()->subDays(2),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($student2) {
+            $enrollments[] = [
+                'user_id' => $student2,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(3),
+                'created_at' => now()->subDays(3),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $student2,
+                'course_id' => 2,
+                'status' => 'active',
+                'progress_percent' => 45.00,
+                'enrolled_at' => now()->subDays(6),
+                'created_at' => now()->subDays(6),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($student3) {
+            $enrollments[] = [
+                'user_id' => $student3,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 60.00,
+                'enrolled_at' => now()->subDays(8),
+                'created_at' => now()->subDays(8),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($student4) {
+            $enrollments[] = [
+                'user_id' => $student4,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 15.00,
+                'enrolled_at' => now()->subDays(4),
+                'created_at' => now()->subDays(4),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($qtrung) {
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 1,
+                'status' => 'active',
+                'progress_percent' => 25.00,
+                'enrolled_at' => now()->subDays(10),
+                'created_at' => now()->subDays(10),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 2,
+                'status' => 'active',
+                'progress_percent' => 50.00,
+                'enrolled_at' => now()->subDays(7),
+                'created_at' => now()->subDays(7),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 3,
+                'status' => 'active',
+                'progress_percent' => 0.00,
+                'enrolled_at' => now()->subDays(5),
+                'created_at' => now()->subDays(5),
+                'updated_at' => now(),
+            ];
+            $enrollments[] = [
+                'user_id' => $qtrung,
+                'course_id' => 4,
+                'status' => 'active',
+                'progress_percent' => 10.00,
+                'enrolled_at' => now()->subDays(3),
+                'created_at' => now()->subDays(3),
+                'updated_at' => now(),
+            ];
+        }
+
+        foreach ($enrollments as $enrollment) {
+            DB::table('enrollments')->updateOrInsert(
+                ['user_id' => $enrollment['user_id'], 'course_id' => $enrollment['course_id']],
+                $enrollment
+            );
+        }
+
+        echo "✓ Đã đăng ký thành công các khóa học mẫu cho học sinh!\n\n";
     }
 }
