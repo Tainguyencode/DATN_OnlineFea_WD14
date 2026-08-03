@@ -10,10 +10,23 @@ use App\Models\StudyGroupMessage;
 use App\Models\User;
 use Illuminate\Http\Request;
 
+/**
+ * Controller Quản lý Nhóm học tập & Chat thời gian thực (Study Groups & Group Chat API/Web)
+ * 
+ * Chức năng chính:
+ * 1. Tạo nhóm, quản lý danh sách nhóm học tập theo từng khóa học.
+ * 2. Phân quyền tham gia (Chỉ học viên đã đăng ký khóa học hoặc Giảng viên/Admin mới được tham gia).
+ * 3. Chat trong nhóm: Gửi tin nhắn văn bản, hình ảnh, video và tệp tài liệu đính kèm (PDF, Word, Excel, ZIP).
+ * 4. Gửi thông báo Push Notification đến tất cả thành viên trong nhóm khi có tin nhắn mới.
+ * 5. Bảo mật tệp tin chat: Tải về hoặc xem trực tuyến thông qua route bảo vệ quyền thành viên.
+ */
 class StudyGroupController extends Controller
 {
     /**
-     * Display a listing of the study groups.
+     * Danh sách tất cả các nhóm học tập khả dụng.
+     * 
+     * @param Request $request Tham số lọc 'course_id' (nếu có)
+     * @return mixed JSON data nếu gọi AJAX/API hoặc Render View nếu truy cập trực tiếp
      */
     public function index(Request $request)
     {
@@ -34,7 +47,7 @@ class StudyGroupController extends Controller
 
         $user = auth()->user();
 
-        // Fetch courses the user is enrolled in, or if instructor/admin, courses they manage
+        // Lấy danh sách khóa học mà người dùng được phép tạo/tham gia nhóm
         if ($user->role === 'admin') {
             $availableCourses = Course::all();
         } elseif ($user->role === 'instructor') {
@@ -50,7 +63,10 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Store a newly created study group in storage.
+     * Tạo một nhóm học tập mới cho khóa học.
+     * 
+     * @param Request $request Chứa course_id, name, description, max_members
+     * @return mixed
      */
     public function store(Request $request)
     {
@@ -73,7 +89,7 @@ class StudyGroupController extends Controller
         $user = auth()->user();
         $courseId = $request->input('course_id');
 
-        // Check if the user is enrolled or has permission (instructor/admin)
+        // Kiểm tra xem người dùng đã đăng ký khóa học hoặc là giảng viên/admin quản lý khóa học chưa
         $isEnrolled = Enrollment::where('user_id', $user->id)
             ->where('course_id', $courseId)
             ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED])
@@ -93,6 +109,7 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
+        // Khởi tạo nhóm học tập
         $studyGroup = StudyGroup::create([
             'course_id' => $courseId,
             'creator_id' => $user->id,
@@ -101,7 +118,7 @@ class StudyGroupController extends Controller
             'max_members' => $request->input('max_members') ?? 50,
         ]);
 
-        // Add creator as moderator member
+        // Gán người tạo làm Trưởng nhóm (moderator)
         $studyGroup->members()->attach($user->id, ['role' => 'moderator']);
 
         $message = 'Tạo nhóm học tập thành công.';
@@ -116,13 +133,17 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Display the specified study group.
+     * Xem chi tiết phòng chat của Nhóm học tập.
+     * 
+     * @param StudyGroup $studyGroup Model nhóm học tập
+     * @param Request $request
+     * @return mixed
      */
     public function show(StudyGroup $studyGroup, Request $request)
     {
         $user = auth()->user();
 
-        // Check if user is a member of the group, or admin
+        // Phân quyền: Phải là thành viên trong nhóm hoặc Admin hệ thống mới được vào xem
         if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
             $message = 'Bạn không phải là thành viên của nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -134,7 +155,7 @@ class StudyGroupController extends Controller
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
-        // Mark study group notifications as read for this user
+        // Tự động đánh dấu các thông báo tin nhắn liên quan đến nhóm này là đã đọc
         try {
             $notificationUrl = route('study-groups.show', $studyGroup);
             $user->pushNotifications()
@@ -152,7 +173,7 @@ class StudyGroupController extends Controller
             \Illuminate\Support\Facades\Log::error("Failed to mark study group notifications as read: " . $e->getMessage());
         }
 
-        // Load study group creator, members, and messages with user sorted by created_at asc
+        // Tải thông tin người tạo, các thành viên và lịch sử tin nhắn sắp xếp theo thời gian
         $studyGroup->load([
             'creator',
             'members',
@@ -171,13 +192,17 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Store a new message in the study group.
+     * Gửi tin nhắn mới vào Nhóm học tập (Hỗ trợ Văn bản & File đính kèm Ảnh, Video, Tài liệu).
+     * 
+     * @param Request $request Chứa 'message' hoặc 'file'
+     * @param StudyGroup $studyGroup
+     * @return mixed
      */
     public function storeMessage(Request $request, StudyGroup $studyGroup)
     {
         $user = auth()->user();
 
-        // Check if user is member of the group
+        // Phân quyền thành viên
         if (!$studyGroup->hasMember($user->id)) {
             $message = 'Bạn không phải là thành viên của nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -189,15 +214,15 @@ class StudyGroupController extends Controller
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
-        // Backward compatibility: map old image file input to file
+        // Đảm bảo tương thích với input 'image' cũ
         if (!$request->hasFile('file') && $request->hasFile('image')) {
             $request->files->set('file', $request->file('image'));
         }
 
-        // Validate message input manually
+        // Validate nội dung tin nhắn và tệp tin đính kèm
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'message' => 'nullable|string',
-            'file' => 'nullable|file|max:102400', // 100MB max overall
+            'file' => 'nullable|file|max:102400', // Tối đa 100MB tổng thể
         ]);
 
         $validator->after(function ($validator) use ($request) {
@@ -210,27 +235,27 @@ class StudyGroupController extends Controller
                 $mime = $file->getMimeType();
                 $sizeKb = $file->getSize() / 1024;
 
-                // Check if image
+                // Kiểm tra định dạng Ảnh (Max 5MB)
                 if (str_starts_with($mime, 'image/')) {
                     $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
                     if (!in_array($mime, $allowedMimes)) {
                         $validator->errors()->add('file', 'Hình ảnh phải có định dạng JPEG, PNG, GIF hoặc WEBP.');
                     }
-                    if ($sizeKb > 5120) { // 5MB
+                    if ($sizeKb > 5120) {
                         $validator->errors()->add('file', 'Kích thước hình ảnh tối đa là 5MB.');
                     }
                 }
-                // Check if video
+                // Kiểm tra định dạng Video (Max 100MB)
                 elseif (str_starts_with($mime, 'video/')) {
                     $allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
                     if (!in_array($mime, $allowedMimes)) {
                         $validator->errors()->add('file', 'Video phải có định dạng MP4, MOV, AVI, MKV hoặc WEBM.');
                     }
-                    if ($sizeKb > 102400) { // 100MB
+                    if ($sizeKb > 102400) {
                         $validator->errors()->add('file', 'Kích thước video tối đa là 100MB.');
                     }
                 }
-                // Check if allowed documents/archives
+                // Kiểm tra tệp tài liệu khác (PDF, Word, Excel, ZIP - Max 20MB)
                 else {
                     $allowedMimes = [
                         'application/pdf', 
@@ -245,7 +270,7 @@ class StudyGroupController extends Controller
                     if (!in_array($mime, $allowedMimes)) {
                         $validator->errors()->add('file', 'Định dạng tệp không được hỗ trợ (chỉ nhận PDF, Word, Excel, ZIP, TXT).');
                     }
-                    if ($sizeKb > 20480) { // 20MB
+                    if ($sizeKb > 20480) {
                         $validator->errors()->add('file', 'Kích thước tệp tin tối đa là 20MB.');
                     }
                 }
@@ -283,11 +308,11 @@ class StudyGroupController extends Controller
                 $messageType = 'file';
             }
 
-            // Store securely in private storage/app/chat directory (on local disk)
+            // Lưu file an toàn trong bộ nhớ private (storage/app/chat)
             $filePath = $file->store('chat', 'local');
         }
 
-        // Create the message
+        // Tạo tin nhắn mới trong CSDL
         $studyGroupMessage = $studyGroup->messages()->create([
             'user_id' => $user->id,
             'message' => $request->input('message'),
@@ -298,7 +323,7 @@ class StudyGroupController extends Controller
             'file_size' => $fileSize,
         ]);
 
-        // Send push notifications to other members of the group
+        // Gửi thông báo đẩy (Push Notification) đến các thành viên còn lại trong nhóm
         try {
             $otherMembers = $studyGroup->members()->where('users.id', '!=', $user->id)->get();
             if ($otherMembers->isNotEmpty()) {
@@ -343,30 +368,33 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Download or stream a secure chat message file.
+     * Tải xuống hoặc Stream file phương tiện (Ảnh, Video, Tệp tin) bảo mật trong phòng chat.
+     * 
+     * @param StudyGroup $studyGroup Nhóm học tập
+     * @param StudyGroupMessage $message Model tin nhắn chứa file
      */
     public function downloadFile(StudyGroup $studyGroup, StudyGroupMessage $message)
     {
         $user = auth()->user();
 
-        // Check if user is member of the group, or admin
+        // Kiểm tra quyền truy cập: Phải là thành viên nhóm hoặc Admin
         if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
             abort(403, 'Bạn không có quyền truy cập tệp tin này.');
         }
 
-        // Verify the message belongs to the study group
+        // Đảm bảo tin nhắn thuộc đúng nhóm
         if ($message->study_group_id !== $studyGroup->id) {
             abort(404, 'Tệp tin không tìm thấy.');
         }
 
-        // Check if file exists in local storage
+        // Kiểm tra file có thực sự tồn tại trong disk local hay không
         if (!$message->file_path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($message->file_path)) {
             abort(404, 'Tệp tin không tồn tại trên hệ thống.');
         }
 
         $fullPath = \Illuminate\Support\Facades\Storage::disk('local')->path($message->file_path);
 
-        // For video streaming or inline image viewing
+        // Với Ảnh & Video: Trả về dạng stream inline để hiển thị trực tiếp trên web/app
         if (in_array($message->message_type, ['video', 'image'])) {
             return response()->file($fullPath, [
                 'Content-Type' => $message->mime_type,
@@ -374,7 +402,7 @@ class StudyGroupController extends Controller
             ]);
         }
 
-        // For other files, download them
+        // Với các tệp tin khác (PDF, Word, ZIP): Trả về dạng download về máy
         return response()->download($fullPath, $message->file_name);
     }
 
