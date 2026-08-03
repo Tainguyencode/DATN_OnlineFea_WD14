@@ -3,10 +3,19 @@
     <div x-data="{
         showPurchaseModal: false,
         activePurchase: null,
+        searchQuery: '',
+        copied: false,
 
         openPurchaseDetail(item) {
             this.activePurchase = item;
             this.showPurchaseModal = true;
+        },
+        copyCode(code) {
+            if (navigator.clipboard && code) {
+                navigator.clipboard.writeText(code);
+                this.copied = true;
+                setTimeout(() => this.copied = false, 2000);
+            }
         }
     }" class="space-y-6">
 
@@ -108,12 +117,29 @@
 
         {{-- Detailed Student Purchases Table --}}
         <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div class="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 class="font-bold text-slate-900 text-base">🛒 Lịch sử Học viên Mua khóa học & Giao dịch</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Danh sách các đơn hàng chi tiết của học viên đăng ký mua khóa học</p>
+                    <h2 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                        🛒 Lịch sử Học viên Mua khóa học & Giao dịch
+                        <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                            {{ $studentPurchases->count() }} giao dịch
+                        </span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Theo dõi lịch sử đơn hàng thanh toán của học viên trong hệ thống</p>
+                </div>
+
+                {{-- Real-time Quick Filter Input --}}
+                <div class="relative w-72">
+                    <input
+                        type="text"
+                        x-model="searchQuery"
+                        placeholder="Tìm kiếm mã đơn, tên học viên..."
+                        class="w-full text-xs font-medium rounded-xl border-slate-300 py-2.5 pl-9 pr-3 text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
+                    />
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </div>
             </div>
+
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left">
                     <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider">
@@ -130,17 +156,20 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @forelse($studentPurchases as $item)
-                            <tr class="hover:bg-slate-50/80 transition">
+                            <tr
+                                x-show="!searchQuery || '{{ strtolower($item->order_code . ' ' . ($item->user?->name ?? '') . ' ' . ($item->user?->email ?? '') . ' ' . $item->course_title) }}'.includes(searchQuery.toLowerCase())"
+                                class="hover:bg-slate-50/80 transition"
+                            >
                                 <td class="px-6 py-4 font-mono font-bold text-slate-900">
                                     {{ $item->order_code }}
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-2.5">
-                                        <div class="w-7 h-7 bg-emerald-100 text-emerald-800 font-bold rounded-lg flex items-center justify-center text-xs shrink-0">
+                                        <div class="w-8 h-8 bg-emerald-100 text-emerald-800 font-black rounded-xl flex items-center justify-center text-xs shrink-0 shadow-xs">
                                             {{ strtoupper(substr($item->user?->name ?? 'H', 0, 1)) }}
                                         </div>
                                         <div>
-                                            <span class="font-bold text-slate-900 block">{{ $item->user?->name ?? 'Học viên' }}</span>
+                                            <span class="font-bold text-slate-900 block text-sm">{{ $item->user?->name ?? 'Học viên' }}</span>
                                             <span class="text-[11px] text-slate-500 font-mono">{{ $item->user?->email }}</span>
                                         </div>
                                     </div>
@@ -155,7 +184,7 @@
                                     +{{ number_format($item->instructor_earning, 0, ',', '.') }}đ
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-800">
+                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-[11px] font-bold text-slate-800 shadow-2xs">
                                         💳 {{ $item->payment_method }}
                                     </span>
                                 </td>
@@ -176,10 +205,10 @@
                                             'payment_method' => $item->payment_method,
                                             'purchased_at' => $item->purchased_at ? $item->purchased_at->format('H:i:s - d/m/Y') : '',
                                         ]) }})"
-                                        class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer"
+                                        class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer"
                                     >
-                                        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                        Chi tiết
+                                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        Xem chi tiết
                                     </button>
                                 </td>
                             </tr>
@@ -233,17 +262,26 @@
                 >
                     <div class="flex items-center justify-between border-b border-slate-100 pb-4">
                         <div class="flex items-center gap-3">
-                            <div class="h-10 w-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm">
+                            <div class="h-11 w-11 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-base shadow-xs">
                                 🛍️
                             </div>
                             <div>
                                 <h3 class="text-base font-bold text-slate-900" id="purchase-modal-title">
-                                    Chi tiết Đơn hàng Học viên mua
+                                    Chi tiết Đơn hàng & Thanh toán
                                 </h3>
-                                <p class="text-xs text-slate-500 font-mono" x-text="activePurchase ? activePurchase.order_code : ''"></p>
+                                <div class="flex items-center gap-2 mt-0.5">
+                                    <span class="text-xs text-slate-500 font-mono" x-text="activePurchase ? activePurchase.order_code : ''"></span>
+                                    <button
+                                        type="button"
+                                        @click="copyCode(activePurchase?.order_code)"
+                                        class="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded cursor-pointer"
+                                    >
+                                        <span x-text="copied ? 'Đã sao chép!' : 'Sao chép'"></span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <button type="button" @click="showPurchaseModal = false" class="text-slate-400 hover:text-slate-600">
+                        <button type="button" @click="showPurchaseModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
@@ -251,9 +289,10 @@
                     <template x-if="activePurchase">
                         <div class="mt-5 space-y-4">
                             {{-- Earning Banner --}}
-                            <div class="rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-4 text-center">
-                                <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider block">Thu nhập thực nhận của bạn</span>
-                                <span class="text-3xl font-black text-emerald-600 mt-1 block" x-text="'+' + activePurchase.earning"></span>
+                            <div class="rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-800 p-5 text-white shadow-md text-center">
+                                <span class="text-xs font-bold uppercase tracking-wider text-emerald-100 block">Thu nhập thực nhận của bạn</span>
+                                <span class="text-3xl font-black mt-1 block tracking-tight" x-text="'+' + activePurchase.earning"></span>
+                                <span class="text-[11px] text-emerald-200 mt-1 block">Số tiền đã tự động cộng vào Ví dư khả dụng</span>
                             </div>
 
                             {{-- Purchase Specs --}}
@@ -264,7 +303,7 @@
                                 </div>
 
                                 <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Email học viên:</span>
+                                    <span class="text-slate-500 font-semibold">Email tài khoản:</span>
                                     <span class="font-mono font-bold text-slate-800" x-text="activePurchase.student_email"></span>
                                 </div>
 
@@ -274,22 +313,22 @@
                                 </div>
 
                                 <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Giá bán (Doanh thu gộp):</span>
-                                    <span class="font-bold text-slate-900" x-text="activePurchase.price"></span>
+                                    <span class="text-slate-500 font-semibold">Giá niêm yết (Gross):</span>
+                                    <span class="font-bold text-slate-900 text-sm" x-text="activePurchase.price"></span>
                                 </div>
 
                                 <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Chiết khấu hệ thống:</span>
-                                    <span class="font-bold text-rose-600" x-text="activePurchase.commission"></span>
+                                    <span class="text-slate-500 font-semibold">Chiết khấu nền tảng:</span>
+                                    <span class="font-bold text-rose-600" x-text="'-' + activePurchase.commission"></span>
                                 </div>
 
                                 <div class="p-3.5 flex justify-between items-center">
                                     <span class="text-slate-500 font-semibold">Cổng thanh toán:</span>
-                                    <span class="font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded" x-text="activePurchase.payment_method"></span>
+                                    <span class="font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs" x-text="activePurchase.payment_method"></span>
                                 </div>
 
                                 <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Thời gian giao dịch:</span>
+                                    <span class="text-slate-500 font-semibold">Thời gian thanh toán:</span>
                                     <span class="text-slate-700 font-medium" x-text="activePurchase.purchased_at"></span>
                                 </div>
                             </div>
