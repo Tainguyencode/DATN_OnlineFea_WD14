@@ -1,3 +1,4 @@
+
 <x-instructor-layout title="Ví tiền & Rút tiền" page-title="Ví tiền & Quản lý rút tiền">
 
     <div x-data="{
@@ -5,6 +6,7 @@
         showWithdrawModal: false,
         showDetailModal: false,
         activeDetail: null,
+        copied: false,
         bankCode: '{{ old('bank_code', $user->bank_code ?? '') }}',
         bankName: '{{ old('bank_name', $user->bank_name ?? '') }}',
         accountNumber: '{{ old('bank_account_number', $user->bank_account_number ?? '') }}',
@@ -15,6 +17,13 @@
         openDetail(item) {
             this.activeDetail = item;
             this.showDetailModal = true;
+        },
+        copyCode(code) {
+            if (navigator.clipboard && code) {
+                navigator.clipboard.writeText(code);
+                this.copied = true;
+                setTimeout(() => this.copied = false, 2000);
+            }
         },
         onBankChange(event) {
             const selectedOption = event.target.options[event.target.selectedIndex];
@@ -645,7 +654,16 @@
 
                                 <div class="p-3.5 flex justify-between items-center">
                                     <span class="text-slate-500 font-semibold">Mã GD đối soát (Ref):</span>
-                                    <span class="font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded" x-text="activeDetail.transaction_ref"></span>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs" x-text="activeDetail.transaction_ref"></span>
+                                        <button
+                                            type="button"
+                                            @click="copyCode(activeDetail?.transaction_ref)"
+                                            class="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded cursor-pointer"
+                                        >
+                                            <span x-text="copied ? 'Đã chép!' : 'Sao chép'"></span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="p-3.5 flex justify-between items-center">
