@@ -49,9 +49,7 @@ use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [HomeController::class, 'index']);
 
 if (app()->environment('local')) {
     Route::get('/test-frame', function (VideoFrameExtractor $extractor) {
