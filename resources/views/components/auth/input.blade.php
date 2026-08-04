@@ -38,7 +38,7 @@
             placeholder="{{ $placeholder }}"
             @if($required) required @endif
             @if($autofocus) autofocus @endif
-            {{ $attributes->except('class')->class(['auth-input', $inputClass]) }}
+            {{ $attributes->except('class')->class(['auth-input', 'border-red-500 focus:border-red-500 focus:ring-red-500' => $errors->has($name), $inputClass]) }}
         />
 
         @isset($trailing)
@@ -46,9 +46,13 @@
         @endisset
     </div>
 
-    @isset($hint)
-        <div class="mt-1.5">
-            {{ $hint }}
-        </div>
-    @endisset
+    @error($name)
+        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+    @else
+        @isset($hint)
+            <div class="mt-1.5">
+                {{ $hint }}
+            </div>
+        @endisset
+    @enderror
 </div>

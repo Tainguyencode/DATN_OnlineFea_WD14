@@ -76,9 +76,32 @@ class AuthService
             'password' => $validated['password'],
             'role' => $validated['role'],
             'avatar' => $avatarPath,
+            'bio' => $validated['bio'] ?? null,
+            'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
             'is_active' => true,
             'password_changed_at' => now(),
         ]);
+
+        if ($validated['role'] === 'instructor') {
+            $cvPath = null;
+            if ($request->hasFile('cv')) {
+                $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
+            }
+
+            \App\Models\InstructorProfile::create([
+                'user_id' => $user->id,
+                'phone' => $validated['phone'],
+                'specialty' => $validated['specialty'],
+                'experience' => $validated['experience'],
+                'bio' => $validated['bio'],
+                'linkedin_url' => $validated['linkedin_url'] ?? null,
+                'github_url' => $validated['github_url'] ?? null,
+                'website_url' => $validated['website_url'] ?? null,
+                'cv' => $cvPath,
+                'agree_information' => true,
+                'agree_terms' => true,
+            ]);
+        }
 
         ActivityLogService::log($user->id, 'register', User::class, $user->id, [
             'role' => $user->role,
@@ -118,7 +141,7 @@ class AuthService
      * Register the current session as an active session.
      * Must be called AFTER session()->regenerate() to use the correct new session ID.
      */
-    private function registerActiveSession(User $user, Request $request): void
+    public function registerActiveSession(User $user, Request $request): void
     {
         try {
             if (! \Illuminate\Support\Facades\Schema::hasTable('active_sessions')) {
