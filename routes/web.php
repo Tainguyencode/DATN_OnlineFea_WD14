@@ -6,12 +6,14 @@ use App\Http\Controllers\Web\Admin\CommissionController;
 use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Web\Admin\InstructorApplicationController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\StudentReviewController as AdminStudentReviewController;
 use App\Http\Controllers\Web\Admin\SupportTicketController as AdminSupportTicketController;
 use App\Http\Controllers\Web\Admin\UserController;
+use App\Http\Controllers\Web\InstructorPendingController;
 use App\Http\Controllers\Web\SupportTicketController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
@@ -246,54 +248,59 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
 
 // ─── GIẢNG VIÊN ───
 Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
-    Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
-    Route::get('/courses', [InstructorCourseController::class, 'index'])->name('courses.index');
-    Route::get('/courses/create', [InstructorCourseController::class, 'create'])->name('courses.create');
-    Route::get('/courses/{course}/curriculum', [InstructorCurriculumController::class, 'index'])->name('courses.curriculum');
-    Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
-    Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
-    Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
-    Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
-    Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
-    Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
-    Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
-    Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->name('wallet.bank-details.update');
-    Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
-    Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
-    Route::get('/submissions', [SubmissionController::class, 'index'])->name('submissions.index');
-    Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
-    Route::post('/submissions/{submission}/grade', [SubmissionController::class, 'grade'])->name('submissions.grade');
-    Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
-    Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
-    Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
-    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::get('/pending', [InstructorPendingController::class, 'show'])->name('pending');
+    Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware('throttle:5,1')->name('resubmit');
 
-    Route::middleware('verified')->group(function () {
-        Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
-        Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
-        Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
-        Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
-        Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
-        Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
-        Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
-        Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
-        Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
-        Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
-        Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
-        Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
-        Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
-        Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
-        Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
-        Route::put('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'updateAnswers'])->name('quiz-questions.answers.update');
-        Route::put('/quiz-answers/{answer}', [InstructorQuizController::class, 'updateAnswer'])->name('quiz-answers.update');
-        Route::delete('/quiz-answers/{answer}', [InstructorQuizController::class, 'destroyAnswer'])->name('quiz-answers.destroy');
-        Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
-        Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
-        Route::post('/courses/{course}/archive', [InstructorCourseController::class, 'archive'])->name('courses.archive');
-        Route::post('/courses/{course}/chapters', [InstructorCourseController::class, 'addChapter'])->name('courses.chapters.store');
-        Route::get('/courses/{course}/submit', [InstructorCourseController::class, 'submitPage'])->name('courses.submit.page');
-        Route::post('/courses/{course}/submit', [InstructorCourseController::class, 'submit'])->name('courses.submit');
-        Route::post('/chapters/{chapter}/lessons', [InstructorCourseController::class, 'addLesson'])->name('chapters.lessons.store');
+    Route::middleware('approved.instructor')->group(function () {
+        Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/courses', [InstructorCourseController::class, 'index'])->name('courses.index');
+        Route::get('/courses/create', [InstructorCourseController::class, 'create'])->name('courses.create');
+        Route::get('/courses/{course}/curriculum', [InstructorCurriculumController::class, 'index'])->name('courses.curriculum');
+        Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
+        Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
+        Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
+        Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
+        Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
+        Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
+        Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
+        Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->name('wallet.bank-details.update');
+        Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
+        Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
+        Route::get('/submissions', [SubmissionController::class, 'index'])->name('submissions.index');
+        Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
+        Route::post('/submissions/{submission}/grade', [SubmissionController::class, 'grade'])->name('submissions.grade');
+        Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
+        Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
+        Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+        Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+        Route::middleware('verified')->group(function () {
+            Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
+            Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
+            Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
+            Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
+            Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
+            Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
+            Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
+            Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
+            Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
+            Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
+            Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
+            Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
+            Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
+            Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
+            Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
+            Route::put('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'updateAnswers'])->name('quiz-questions.answers.update');
+            Route::put('/quiz-answers/{answer}', [InstructorQuizController::class, 'updateAnswer'])->name('quiz-answers.update');
+            Route::delete('/quiz-answers/{answer}', [InstructorQuizController::class, 'destroyAnswer'])->name('quiz-answers.destroy');
+            Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
+            Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
+            Route::post('/courses/{course}/archive', [InstructorCourseController::class, 'archive'])->name('courses.archive');
+            Route::post('/courses/{course}/chapters', [InstructorCourseController::class, 'addChapter'])->name('courses.chapters.store');
+            Route::get('/courses/{course}/submit', [InstructorCourseController::class, 'submitPage'])->name('courses.submit.page');
+            Route::post('/courses/{course}/submit', [InstructorCourseController::class, 'submit'])->name('courses.submit');
+            Route::post('/chapters/{chapter}/lessons', [InstructorCourseController::class, 'addLesson'])->name('chapters.lessons.store');
+        });
     });
 });
 
@@ -317,6 +324,14 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/roles/{role}/edit', [RoleController::class, 'edit'])->name('roles.edit');
     Route::put('/roles/{role}', [RoleController::class, 'update'])->name('roles.update');
     Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+
+    // Quản lý duyệt Giảng viên
+    Route::prefix('instructors/applications')->name('instructors.applications.')->group(function () {
+        Route::get('/', [InstructorApplicationController::class, 'index'])->name('index');
+        Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');
+        Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
+        Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
+    });
     Route::get('/categories', [AdminCategoryController::class, 'index'])->name('categories.index');
     Route::get('/categories/create', [AdminCategoryController::class, 'create'])->name('categories.create');
     Route::post('/categories', [AdminCategoryController::class, 'store'])->name('categories.store');
