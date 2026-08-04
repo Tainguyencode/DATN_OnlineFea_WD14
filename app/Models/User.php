@@ -10,6 +10,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\Storage;
     'two_factor_enabled', 'two_factor_secret', 'is_active',
     'last_login_at', 'last_login_ip', 'password_changed_at',
     'commission_rate', 'bank_code', 'bank_name', 'bank_account_number', 'bank_account_name',
+    'instructor_status', 'approved_at', 'approved_by', 'rejected_reason',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -192,15 +194,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SocialAccount::class);
     }
 
-    public function instructorApplication(): HasOne
+    public function instructorProfile(): HasOne
     {
-        return $this->hasOne(InstructorApplication::class);
+        return $this->hasOne(InstructorProfile::class);
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
+            'approved_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_enabled' => 'boolean',
             'is_active' => 'boolean',
@@ -240,9 +248,16 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function dashboardUrl(): string
     {
+        if ($this->role === 'instructor') {
+            if ($this->instructor_status !== 'approved') {
+                return route('instructor.pending');
+            }
+
+            return route('instructor.dashboard');
+        }
+
         return match ($this->role) {
             'admin' => route('admin.dashboard'),
-            'instructor' => route('instructor.dashboard'),
             default => route('student.dashboard'),
         };
     }

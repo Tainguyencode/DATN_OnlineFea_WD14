@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterInstructorRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\VerifyEmailCodeRequest;
@@ -97,21 +98,28 @@ class AuthController extends Controller
 
     public function register(
         string $role,
-        RegisterRequest $request,
+        Request $request,
         AuthService $authService,
         EmailVerificationService $emailVerificationService
     ): RedirectResponse {
         abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
 
-        $request->validateCaptcha();
+        if ($role === 'instructor') {
+            $formRequest = app(RegisterInstructorRequest::class);
+        } else {
+            $formRequest = app(RegisterRequest::class);
+        }
 
-        $data = $request->validated();
+        $formRequest->validateCaptcha();
+
+        $data = $formRequest->validated();
         $data['role'] = $role;
 
         $user = $authService->register($data, $request);
 
         Auth::login($user);
         $request->session()->regenerate();
+        $authService->registerActiveSession($user, $request);
 
         if (! config('auth.email_verification_enabled', true)) {
             return $this->redirectAfterAuthentication($user, $request)
@@ -296,6 +304,7 @@ class AuthController extends Controller
 
         event(new Verified($user));
         $request->session()->regenerate();
+        app(AuthService::class)->registerActiveSession($user, $request);
 
         return redirect()->intended($user->dashboardUrl())
             ->with('success', $result['message']);

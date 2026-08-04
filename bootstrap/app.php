@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => CheckRole::class,
             'verified' => EnsureEmailIsVerified::class,
             '2fa' => EnsureTwoFactorIsVerified::class,
+            'approved.instructor' => \App\Http\Middleware\EnsureApprovedInstructor::class,
             'single.session' => \App\Http\Middleware\SingleSessionMiddleware::class,
         ]);
         

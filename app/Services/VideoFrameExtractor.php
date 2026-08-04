@@ -55,16 +55,23 @@ class VideoFrameExtractor
         // 4. Cắt frame mỗi $intervalSeconds giây, không vượt quá duration
         for ($i = 0; $i < $duration; $i += $intervalSeconds) {
             // Đảm bảo không lấy frame ở đúng cuối (có thể gây lỗi)
-            $second = min($i, $duration - 1);
+            $second = min($i, max(0, $duration - 1));
 
             // Dùng DIRECTORY_SEPARATOR để tránh mixed slash trên Windows
             $file = $outputDir.DIRECTORY_SEPARATOR."frame_{$i}.jpg";
 
-            $video
-                ->frame(TimeCode::fromSeconds($second))
-                ->save($file);
+            try {
+                $video
+                    ->frame(TimeCode::fromSeconds($second))
+                    ->save($file);
 
-            $frames[] = $file;
+                if (file_exists($file) && filesize($file) > 0) {
+                    $frames[] = $file;
+                }
+            } catch (\Throwable $e) {
+                // Bỏ qua frame bị lỗi (nếu timestamp đó bị hỏng/lỗi codec) để tiếp tục các frame khác
+                continue;
+            }
         }
 
         return $frames;
