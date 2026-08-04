@@ -104,11 +104,15 @@ class AiModerationController extends Controller
             // Cắt frame mỗi 30s, truyền vào lesson_id để lưu riêng thư mục
             $frames = $extractor->extract($videoPath, 30, $lesson->id);
 
+            if (empty($frames)) {
+                return response()->json(['error' => 'Không thể trích xuất hình ảnh từ video này (vui lòng kiểm tra định dạng hoặc độ dài video).'], 422);
+            }
+
             return response()->json([
                 'frames' => $frames,
                 'total' => count($frames),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json(['error' => 'Lỗi khi cắt frame: '.$e->getMessage()], 500);
         }
     }
