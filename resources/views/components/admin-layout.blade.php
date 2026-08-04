@@ -17,6 +17,12 @@
             'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>'
         ],
         [
+            'route' => 'admin.instructors.applications.index',
+            'active' => ['admin.instructors.applications.*'],
+            'label' => 'Quản lý giảng viên',
+            'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0l-3 3m3-3l3 3M9 7h6"/></svg>'
+        ],
+        [
             'route' => 'admin.roles.index',
             'active' => ['admin.roles.index', 'admin.roles.*'],
             'label' => 'Vai trò',

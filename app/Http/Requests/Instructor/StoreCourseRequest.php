@@ -37,8 +37,8 @@ class StoreCourseRequest extends FormRequest
             'objectives' => ['nullable', 'string'],
             'thumbnail' => ['nullable', 'image', 'max:2048'],
             'preview_video' => ['nullable', 'string', 'max:2048'],
-            'price' => ['required', 'numeric', 'min:0', 'max:100000000'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'max:100000000', 'lte:price'],
+            'price' => ['required', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000'],
+            'discount_price' => ['nullable', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000', 'lte:price'],
             'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
             'language' => ['sometimes', 'string', 'max:10'],
         ];
@@ -103,11 +103,14 @@ class StoreCourseRequest extends FormRequest
 
             'price.required' => 'Vui lòng nhập giá gốc khóa học.',
             'price.numeric' => 'Giá gốc phải là một số.',
+            'price.multiple_of' => 'Giá gốc phải là bội số của 1.000 VNĐ (ví dụ: 10.000, 50.000, 100.000).',
             'price.min' => 'Giá gốc không được nhỏ hơn :min.',
-            'price.max' => 'Giá gốc không được vượt quá :max.',
+            'price.max' => 'Giá gốc không được vượt quá 100.000.000 VNĐ.',
 
             'discount_price.numeric' => 'Giá khuyến mãi phải là một số.',
-            'discount_price.min' => 'Giá khuyến mãi không được nhỏ hơn :min.',
+            'discount_price.multiple_of' => 'Giá khuyến mãi phải là bội số của 1.000 VNĐ.',
+            'discount_price.min' => 'Giá khuyến mãi không được nhỏ hơn 0.',
+            'discount_price.max' => 'Giá khuyến mãi không được vượt quá 100.000.000 VNĐ.',
             'discount_price.lte' => 'Giá khuyến mãi phải nhỏ hơn hoặc bằng giá gốc.',
 
             'level.in' => 'Trình độ không hợp lệ. Chọn: Beginner, Intermediate hoặc Advanced.',
