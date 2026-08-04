@@ -172,8 +172,11 @@ class LearningProgressService
                 : (float) ($existing?->progress_percent ?? 0);
 
             $threshold = $course->requiredVideoPercent();
-            $completed = $previousCompleted || $progressPercent >= $threshold || !empty($payload['completed']);
-            
+            // Đảm bảo học viên phải xem đủ thời lượng yêu cầu, không tin tưởng hoàn toàn cờ completed từ client
+            $completed = $previousCompleted || $progressPercent >= $threshold;
+            if (!$completed && !empty($payload['completed']) && $progressPercent >= max(1, $threshold - 5)) {
+                $completed = true;
+            }            
             if ($completed) {
                 $progressPercent = 100;
                 $watchedSeconds = max($watchedSeconds, $durationSeconds);
