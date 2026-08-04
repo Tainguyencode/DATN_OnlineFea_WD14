@@ -84,3 +84,6 @@
 ### Commit 28: docs: bo sung huong dan van hanh va cau hinh dich vu luu tru (2026-08-03 10:10:25 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 29: test: bo sung kiem thu tich hop luong hoc tap va lam bai kiem tra (2026-08-04 14:40:15 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
