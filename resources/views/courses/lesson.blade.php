@@ -18,6 +18,12 @@
 
     <div class="learning-player-body flex min-h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
         <main class="learning-main min-w-0 flex-1" data-learning-main>
+            @if(!empty($hasNewContentVersion))
+                <div class="bg-amber-500/20 border-b border-amber-500/30 px-6 py-2.5 text-xs font-bold text-amber-300 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Bài học đã được cập nhật nội dung / video mới từ Giảng viên.
+                </div>
+            @endif
             @if(! $canAccessLesson)
                 <div class="flex min-h-[320px] items-center justify-center bg-[#1c1d1f] p-6">
                     <div class="max-w-md rounded border border-amber-400/30 bg-amber-500/10 p-6 text-center text-white">

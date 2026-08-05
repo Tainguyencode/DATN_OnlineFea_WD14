@@ -6,6 +6,9 @@
 
 @php
     $moderation = $lesson->videoModeration;
+    if (!$moderation && isset($lesson->draft_update) && !empty($lesson->draft_update->payload['ai_moderation'])) {
+        $moderation = new \App\Models\VideoModeration($lesson->draft_update->payload['ai_moderation']);
+    }
     $badgeTones = [
         'red'    => 'border-rose-200 bg-rose-50 text-rose-800',
         'orange' => 'border-orange-200 bg-orange-50 text-orange-800',
@@ -90,6 +93,39 @@
     @endif
 
     <div class="space-y-4 p-4 sm:p-5">
+        @php
+            $lessonUpdate = $lesson->draft_update ?? null;
+            if (!$lessonUpdate && isset($lesson->id)) {
+                $lessonUpdate = \App\Models\ContentUpdate::where('entity_id', $lesson->id)
+                    ->latest()
+                    ->first();
+            }
+            $lPayload = $lessonUpdate?->payload ?? [];
+            $cardAdminNote = $lPayload['admin_note'] ?? ($lessonUpdate?->rejection_reason ?? null);
+            $cardRequireReupload = !empty($lPayload['require_reupload']);
+        @endphp
+
+        @if (filled($cardAdminNote) || $cardRequireReupload)
+            <div class="rounded-lg border border-amber-200 bg-amber-50/90 p-4 shadow-2xs">
+                <div class="flex items-start gap-2.5">
+                    <span class="text-lg">⚠️</span>
+                    <div class="w-full">
+                        <p class="text-xs font-bold uppercase tracking-wide text-amber-900">Ghi chú & Phản hồi từ Admin cho bài học này:</p>
+                        @if (filled($cardAdminNote))
+                            <div class="mt-2 text-xs text-amber-950 leading-relaxed font-medium whitespace-pre-line bg-white/90 p-3 rounded-lg border border-amber-200/80">
+                                {!! nl2br(e($cardAdminNote)) !!}
+                            </div>
+                        @endif
+                        @if ($cardRequireReupload)
+                            <p class="mt-2 text-xs font-bold text-rose-700 flex items-center gap-1">
+                                <span>📹</span> Yêu cầu từ Admin: Vui lòng upload lại video gốc mới.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if (! $moderation)
             <p class="text-sm text-slate-500">Chưa có dữ liệu kiểm duyệt AI.</p>
         @else

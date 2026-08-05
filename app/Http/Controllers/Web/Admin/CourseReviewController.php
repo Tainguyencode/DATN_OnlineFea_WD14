@@ -20,20 +20,25 @@ class CourseReviewController extends Controller
 
     public function index(Request $request): View
     {
-        $status = $request->query('status', CourseStatus::PendingReview->value);
+        $status = $request->query('status', 'all_pending');
 
         $courses = Course::query()
             ->with(['instructor:id,name,email', 'category:id,name', 'courseSections.lessons', 'chapters.lessons'])
             ->withCount('courseReviews')
-            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($status === 'all_pending', fn ($q) => $q->whereIn('status', [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value]))
+            ->when($status && $status !== 'all_pending', fn ($q) => $q->where('status', $status))
             ->orderByDesc('submitted_at')
             ->paginate(12)
             ->withQueryString();
 
+        $statusOptions = collect([
+            'all_pending' => 'Tất cả đang chờ duyệt (Mới & Cập nhật)',
+        ])->merge(collect(CourseStatus::cases())->mapWithKeys(fn ($s) => [$s->value => $s->label()]));
+
         return view('admin.course-reviews.index', [
             'courses' => $courses,
             'status' => $status,
-            'statusOptions' => collect(CourseStatus::cases())->mapWithKeys(fn ($s) => [$s->value => $s->label()]),
+            'statusOptions' => $statusOptions,
         ]);
     }
 
