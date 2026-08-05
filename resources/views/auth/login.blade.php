@@ -7,7 +7,7 @@
         <x-auth.card x-data="{ showPassword: false, loading: false }">
             <x-auth.header title="Đăng nhập" subtitle="Đăng nhập để tiếp tục hành trình học tập của bạn." />
 
-            <x-auth.errors />
+            {{-- <x-auth.errors /> --}}
 
             @if(\App\Enums\SocialProvider::anyConfigured())
                 <x-auth.social-buttons />
