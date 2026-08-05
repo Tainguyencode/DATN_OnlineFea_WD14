@@ -246,6 +246,10 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
             return redirect()->route('login')
                 ->with('success', 'Mật khẩu đã được cập nhật. Bạn có thể đăng nhập lại.');
         }

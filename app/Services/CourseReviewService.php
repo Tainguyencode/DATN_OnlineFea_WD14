@@ -15,12 +15,14 @@ class CourseReviewService
     public function submitForReview(Course $course, User $instructor): CourseReview
     {
         abort_unless($course->isOwnedBy($instructor), 403);
-        abort_unless($course->isEditable(), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
+        abort_unless($course->canBeSubmittedForReview(), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
         $hasAgreement = $course->copyright_agreed || request()->boolean('copyright_agreed');
         abort_unless($hasAgreement, 422, 'Bạn phải đồng ý với cam kết bản quyền trước khi gửi duyệt.');
 
-        return DB::transaction(function () use ($course, $instructor) {
+        $isAlreadyPublished = (bool) $course->is_published || in_array($course->status, [CourseStatus::Published->value, CourseStatus::PendingUpdate->value, CourseStatus::RejectedUpdate->value], true);
+
+        return DB::transaction(function () use ($course, $instructor, $isAlreadyPublished) {
             $submissionNumber = (int) $course->submission_count + 1;
 
             $review = CourseReview::create([
@@ -31,9 +33,11 @@ class CourseReviewService
                 'submitted_at' => now(),
             ]);
 
+            $newStatus = $isAlreadyPublished ? CourseStatus::PendingUpdate->value : CourseStatus::PendingReview->value;
+
             $course->update([
-                'status' => CourseStatus::PendingReview->value,
-                'is_published' => false,
+                'status' => $newStatus,
+                'is_published' => $isAlreadyPublished ? true : false,
                 'submitted_at' => now(),
                 'submission_count' => $submissionNumber,
                 'reject_reason' => null,
@@ -42,7 +46,19 @@ class CourseReviewService
                 'copyright_agreed_by' => $instructor->id,
             ]);
 
-            $this->notifyAdmins($course, 'course_submitted', 'Khóa học chờ duyệt', "Giảng viên đã gửi khóa học \"{$course->title}\" lần {$submissionNumber}.");
+            // Cập nhật mốc thời gian submitted_at và chuyển trạng thái pending cho các bản ghi content_updates của khóa học này
+            \App\Models\ContentUpdate::where('course_id', $course->id)
+                ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING])
+                ->update([
+                    'status' => \App\Models\ContentUpdate::STATUS_PENDING,
+                    'submitted_at' => now(),
+                ]);
+
+            $noticeMsg = $isAlreadyPublished 
+                ? "Giảng viên đã gửi bản CẬP NHẬT khóa học \"{$course->title}\" lần {$submissionNumber}."
+                : "Giảng viên đã gửi khóa học \"{$course->title}\" lần {$submissionNumber}.";
+
+            $this->notifyAdmins($course, 'course_submitted', 'Khóa học chờ duyệt', $noticeMsg);
 
             ActivityLogService::log(
                 $instructor->id,
@@ -67,26 +83,36 @@ class CourseReviewService
     public function approve(Course $course, User $admin, array $checklist, bool $publishImmediately = true): CourseReview
     {
         abort_unless($admin->isAdmin(), 403);
-        abort_unless($course->status === CourseStatus::PendingReview->value, 422);
+        abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
 
         $this->assertChecklistComplete($checklist);
 
         return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately) {
             $review = $this->latestPendingReview($course);
 
-            $review->update([
-                'reviewer_id' => $admin->id,
-                'status' => CourseReviewStatus::Approved,
-                'checklist_json' => $checklist,
-                'reviewed_at' => now(),
-            ]);
+            if ($review) {
+                $review->update([
+                    'reviewer_id' => $admin->id,
+                    'status' => CourseReviewStatus::Approved,
+                    'checklist_json' => $checklist,
+                    'reviewed_at' => now(),
+                ]);
+            }
 
-            $courseUpdates = [
-                'status' => $publishImmediately ? CourseStatus::Published->value : CourseStatus::Approved->value,
-                'is_published' => $publishImmediately,
-                'approved_at' => now(),
-                'reject_reason' => null,
-            ];
+            // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này
+            $pendingUpdates = \App\Models\ContentUpdate::where('course_id', $course->id)
+                ->where('status', \App\Models\ContentUpdate::STATUS_PENDING)
+                ->get();
+
+            $contentUpdateService = app(\App\Services\ContentUpdateService::class);
+            foreach ($pendingUpdates as $pendingUpdate) {
+                $contentUpdateService->applyApprovedUpdate($pendingUpdate, $admin);
+            }
+
+            $courseUpdates['status'] = $publishImmediately ? CourseStatus::Published->value : CourseStatus::Approved->value;
+            $courseUpdates['is_published'] = true;
+            $courseUpdates['approved_at'] = now();
+            $courseUpdates['reject_reason'] = null;
 
             if ($publishImmediately) {
                 $courseUpdates['published_at'] = $course->published_at ?? now();
@@ -101,41 +127,57 @@ class CourseReviewService
 
             ActivityLogService::log($admin->id, 'approve_course', Course::class, $course->id);
 
-            return $review->fresh();
+            return $review ? $review->fresh() : new CourseReview();
         });
     }
 
     public function reject(Course $course, User $admin, string $comment, array $checklist = []): CourseReview
     {
         abort_unless($admin->isAdmin(), 403);
-        abort_unless($course->status === CourseStatus::PendingReview->value, 422);
+        abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
 
         $comment = trim($comment);
         abort_if(strlen($comment) < config('course.reject_reason_min_length', 10), 422, 'Lý do từ chối phải có ít nhất 10 ký tự.');
 
-        return DB::transaction(function () use ($course, $admin, $comment, $checklist) {
+        $wasPublished = (bool) $course->is_published || $course->status === CourseStatus::PendingUpdate->value;
+
+        return DB::transaction(function () use ($course, $admin, $comment, $checklist, $wasPublished) {
             $review = $this->latestPendingReview($course);
 
-            $review->update([
-                'reviewer_id' => $admin->id,
-                'status' => CourseReviewStatus::Rejected,
-                'comment' => $comment,
-                'checklist_json' => $checklist ?: null,
-                'reviewed_at' => now(),
-            ]);
+            if ($review) {
+                $review->update([
+                    'reviewer_id' => $admin->id,
+                    'status' => CourseReviewStatus::Rejected,
+                    'comment' => $comment,
+                    'checklist_json' => $checklist ?: null,
+                    'reviewed_at' => now(),
+                ]);
+            }
+
+            // Cập nhật trạng thái các content_updates đang pending thành rejected
+            \App\Models\ContentUpdate::where('course_id', $course->id)
+                ->where('status', \App\Models\ContentUpdate::STATUS_PENDING)
+                ->update([
+                    'status' => \App\Models\ContentUpdate::STATUS_REJECTED,
+                    'rejection_reason' => $comment,
+                    'reviewed_by' => $admin->id,
+                    'reviewed_at' => now(),
+                ]);
+
+            $newStatus = $wasPublished ? CourseStatus::RejectedUpdate->value : CourseStatus::Rejected->value;
 
             $course->update([
-                'status' => CourseStatus::Rejected->value,
-                'is_published' => false,
+                'status' => $newStatus,
+                'is_published' => $wasPublished ? true : false,
                 'reject_reason' => $comment,
             ]);
 
-            $this->notifyInstructor($course, 'course_rejected', 'Khóa học bị từ chối',
+            $this->notifyInstructor($course, 'course_rejected', 'Bản cập nhật khóa học bị từ chối',
                 "Khóa học \"{$course->title}\" bị từ chối. Lý do: {$comment}");
 
             ActivityLogService::log($admin->id, 'reject_course', Course::class, $course->id);
 
-            return $review->fresh();
+            return $review ? $review->fresh() : new CourseReview();
         });
     }
 

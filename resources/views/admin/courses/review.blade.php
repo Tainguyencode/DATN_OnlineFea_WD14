@@ -54,7 +54,13 @@
 
             <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
-                    <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đang chờ duyệt</span>
+                    @if($course->status === 'pending_update')
+                        <span class="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Cập nhật chờ duyệt</span>
+                    @elseif($course->status === 'published')
+                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Đã xuất bản</span>
+                    @else
+                        <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đang chờ duyệt</span>
+                    @endif
                     <span class="text-xs font-semibold text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }}</span>
                     @if($course->submitted_at)
                         <span class="text-xs text-slate-400">Gửi lúc {{ $course->submitted_at->format('d/m/Y H:i') }}</span>
@@ -206,6 +212,21 @@
                                     <div class="min-w-0 flex-1">
                                         <div class="flex flex-wrap items-center gap-2">
                                             <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700">{{ $typeLabels[$lesson->type] ?? $lesson->type }}</span>
+                                            @if(isset($lesson->update_status))
+                                                @if($lesson->update_status === 'draft')
+                                                    <span class="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">Draft</span>
+                                                @elseif($lesson->update_status === 'pending')
+                                                    <span class="rounded-full border border-blue-300 bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">Pending</span>
+                                                @elseif($lesson->update_status === 'rejected')
+                                                    <span class="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800">Rejected</span>
+                                                @endif
+                                            @endif
+                                            @if(!empty($lesson->is_draft_create))
+                                                <span class="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">Mới (New)</span>
+                                            @endif
+                                            @if(!empty($lesson->is_pending_deletion))
+                                                <span class="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800">Yêu cầu xóa</span>
+                                            @endif
                                             <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $hasVideo ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-500' }}">
                                                 {{ $hasVideo ? 'Có video' : 'Chưa có video' }}
                                             </span>
@@ -225,20 +246,26 @@
                                             @php
                                                 $isHls = !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4');
                                             @endphp
-                                            <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-                                                <video
-                                                    id="admin-video-{{ $lesson->id }}"
-                                                    @if($isHls)
-                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', $lesson) }}"
-                                                    @else
-                                                        src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
-                                                    @endif
-                                                    controls
-                                                    preload="metadata"
-                                                    class="h-full w-full"
-                                                    data-admin-review-video
-                                                ></video>
-                                            </div>
+                                            @if(! $isHls)
+                                                <div class="mt-4 flex h-36 max-w-xl items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
+                                                    <div>
+                                                        <span class="text-xl">⏳</span>
+                                                        <p class="mt-1 text-sm font-bold text-amber-800">Đang xử lý HLS</p>
+                                                        <p class="mt-0.5 text-xs text-amber-600">Video gốc đang được chuyển đổi HLS. Không thể phát trực tiếp video MP4 gốc.</p>
+                                                    </div>
+                                                </div>
+                                            @else
+                                                <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+                                                    <video
+                                                        id="admin-video-{{ $lesson->id }}"
+                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $lesson->id]) }}"
+                                                        controls
+                                                        preload="metadata"
+                                                        class="h-full w-full"
+                                                        data-admin-review-video
+                                                    ></video>
+                                                </div>
+                                            @endif
                                             
                                             {{-- Nút và khu vực hiển thị quét AI --}}
                                             <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $lesson->id }}">
@@ -348,6 +375,87 @@
                                                             <p class="mt-3 text-xs text-slate-500 italic">ℹ️ AI chỉ hỗ trợ phát hiện dấu hiệu. Quyết định Approve / Cần chỉnh sửa / Từ chối luôn do Admin.</p>
                                                         </div>
                                                     @endif
+
+                                                    {{-- Ghi chú của Admin theo từng Lesson --}}
+                                                    @php
+                                                        $lessonUpdate = $lesson->draft_update ?? null;
+                                                        if (!$lessonUpdate && str_starts_with((string)$lesson->id, 'update_les_')) {
+                                                            $uId = str_replace('update_les_', '', $lesson->id);
+                                                            $lessonUpdate = \App\Models\ContentUpdate::find($uId);
+                                                        }
+                                                        if (!$lessonUpdate) {
+                                                            $lessonUpdate = \App\Models\ContentUpdate::where('course_id', $course->id)
+                                                                ->where('entity_id', $lesson->id)
+                                                                ->latest()
+                                                                ->first();
+                                                        }
+                                                        $lPayload = $lessonUpdate?->payload ?? [];
+                                                        $existingAdminNote = $lPayload['admin_note'] ?? null;
+                                                        $existingRequireReupload = !empty($lPayload['require_reupload']);
+                                                        $existingLessonStatus = $lPayload['review_status'] ?? ($lessonUpdate?->status === 'rejected' ? 'fail' : 'pass');
+                                                    @endphp
+
+                                                    <div class="mt-4 max-w-xl rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-2xs">
+                                                        <div class="flex items-center justify-between">
+                                                            <p class="text-xs font-bold uppercase tracking-wide text-indigo-700 flex items-center gap-1.5">
+                                                                <svg class="h-4 w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                                </svg>
+                                                                <span>Ghi chú của Admin (Cho bài học này)</span>
+                                                            </p>
+                                                            <span class="text-xs text-slate-500">Mỗi bài học có ghi chú riêng</span>
+                                                        </div>
+
+                                                        <div class="mt-3 space-y-3">
+                                                            <textarea
+                                                                name="lesson_notes[{{ $lesson->id }}][admin_note]"
+                                                                rows="3"
+                                                                placeholder="Ví dụ: Video có watermark TikTok. Vui lòng upload bản gốc. Âm thanh hơi nhỏ..."
+                                                                class="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                                            >{{ old("lesson_notes.{$lesson->id}.admin_note", $existingAdminNote) }}</textarea>
+
+                                                            <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                                                                <div class="flex flex-wrap items-center gap-4">
+                                                                    <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            name="lesson_notes[{{ $lesson->id }}][require_reupload]"
+                                                                            value="1"
+                                                                            @checked(old("lesson_notes.{$lesson->id}.require_reupload", $existingRequireReupload))
+                                                                            class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                                                                        >
+                                                                        <span class="text-rose-700">☐ Yêu cầu upload lại video</span>
+                                                                    </label>
+
+                                                                    <div class="flex items-center gap-3 border-l border-slate-200 pl-4">
+                                                                        <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
+                                                                            <input type="radio" name="lesson_notes[{{ $lesson->id }}][status]" value="need_revision" @checked(old("lesson_notes.{$lesson->id}.status", $existingLessonStatus) === 'need_revision') class="h-3.5 w-3.5 text-amber-600 focus:ring-amber-500">
+                                                                            <span class="text-amber-700">Cần chỉnh sửa</span>
+                                                                        </label>
+                                                                        <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
+                                                                            <input type="radio" name="lesson_notes[{{ $lesson->id }}][status]" value="fail" @checked(old("lesson_notes.{$lesson->id}.status", $existingLessonStatus) === 'fail') class="h-3.5 w-3.5 text-rose-600 focus:ring-rose-500">
+                                                                            <span class="text-rose-700">Từ chối</span>
+                                                                        </label>
+                                                                        <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
+                                                                            <input type="radio" name="lesson_notes[{{ $lesson->id }}][status]" value="pass" @checked(old("lesson_notes.{$lesson->id}.status", $existingLessonStatus) === 'pass') class="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500">
+                                                                            <span class="text-emerald-700">Đạt</span>
+                                                                        </label>
+                                                                    </div>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    data-lesson-id="{{ $lesson->id }}"
+                                                                    class="btn-save-lesson-note inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                                                                >
+                                                                    <svg class="h-3.5 w-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                                                                    </svg>
+                                                                    <span>Lưu ghi chú</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         @endif
@@ -396,7 +504,7 @@
     </section>
 
     {{-- Checklist + nút hành động --}}
-    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <section id="review-decision-section" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Checklist đánh giá</p>
@@ -405,20 +513,8 @@
             <p class="text-xs text-slate-500">Các mục có gợi ý tự động được đánh dấu sẵn theo dữ liệu khóa học.</p>
         </div>
 
-        {{-- Validation errors --}}
-        @if($errors->any())
-            <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-                <p class="font-bold">Vui lòng kiểm tra lại thông tin:</p>
-                <ul class="mt-2 list-inside list-disc space-y-1">
-                    @foreach($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <form method="POST"
-              action="{{ route('admin.courses.submitReview', $course) }}"
+              action="{{ route('admin.courses.submitReview', $course) }}#review-decision-section"
               id="course-review-form"
               class="mt-5 space-y-6">
             @csrf
@@ -459,7 +555,12 @@
                                         </p>
                                     @endif
                                     @error("checklist.{$itemKey}.status")
-                                        <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>
+                                        <p class="mt-1.5 text-xs font-bold text-rose-600 flex items-center gap-1">
+                                            <svg class="h-4 w-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                            </svg>
+                                            <span>{{ $message }}</span>
+                                        </p>
                                     @enderror
                                 </td>
                                 <td class="px-4 py-4 align-top">
@@ -507,11 +608,29 @@
                           rows="4"
                           maxlength="2000"
                           placeholder="Nhập lý do hoặc hướng dẫn chỉnh sửa cho giảng viên..."
-                          class="mt-2 w-full resize-none rounded-lg border @error('comment') border-rose-400 @else border-slate-300 @enderror px-3 py-2 text-sm outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20">{{ old('comment') }}</textarea>
+                          class="mt-2 w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none transition-all duration-200 focus-visible:ring-2 @error('comment') border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20 focus:border-rose-500 focus-visible:ring-rose-500/30 @else border-slate-300 focus:border-indigo-500 focus-visible:ring-indigo-500/20 @enderror">{{ old('comment') }}</textarea>
+                
+                {{-- JS Client-side validation message --}}
+                <p id="js-comment-error" class="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5 hidden"></p>
+
                 @error('comment')
-                    <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>
+                    <p class="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5">
+                        <svg class="h-4 w-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span>{{ $message }}</span>
+                    </p>
                 @enderror
             </div>
+
+            @error('action')
+                <p class="mt-2 text-xs font-bold text-rose-600 flex items-center gap-1.5">
+                    <svg class="h-4 w-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span>{{ $message }}</span>
+                </p>
+            @enderror
 
             <div class="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:flex-wrap">
                 {{-- Approve --}}
@@ -553,6 +672,35 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    var commentInput = document.getElementById('review-comment');
+    var jsCommentError = document.getElementById('js-comment-error');
+
+    @if($errors->any())
+        if (window.location.hash !== '#review-decision-section') {
+            window.location.hash = 'review-decision-section';
+        }
+        setTimeout(function () {
+            var targetSection = document.getElementById('review-decision-section');
+            if (targetSection) {
+                targetSection.scrollIntoView({ behavior: 'auto', block: 'start' });
+            }
+            if (commentInput) {
+                commentInput.focus();
+            }
+        }, 50);
+    @endif
+
+    if (commentInput) {
+        commentInput.addEventListener('input', function () {
+            if (commentInput.value.trim().length >= 10) {
+                commentInput.classList.remove('border-rose-500', 'bg-rose-50/20', 'ring-2', 'ring-rose-500/20');
+                commentInput.classList.add('border-slate-300');
+                if (jsCommentError) {
+                    jsCommentError.classList.add('hidden');
+                }
+            }
+        });
+    }
     // Khởi tạo các video HLS (nếu có)
     document.querySelectorAll('video[data-hls-src]').forEach(function (video) {
         var hlsSrc = video.getAttribute('data-hls-src');
@@ -571,9 +719,34 @@ document.addEventListener('DOMContentLoaded', function () {
     var buttons  = document.querySelectorAll('.review-action-btn');
 
     buttons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', function (e) {
             var action  = btn.getAttribute('data-action');
             var message = btn.getAttribute('data-confirm');
+
+            if (action === 'rejected' || action === 'need_revision') {
+                var val = commentInput ? commentInput.value.trim() : '';
+                if (val.length < 10) {
+                    e.preventDefault();
+
+                    if (commentInput) {
+                        commentInput.classList.remove('border-slate-300', 'focus:border-indigo-500');
+                        commentInput.classList.add('border-rose-500', 'bg-rose-50/20', 'ring-2', 'ring-rose-500/20');
+                        commentInput.focus();
+                    }
+
+                    if (jsCommentError) {
+                        jsCommentError.innerHTML = `
+                            <svg class="h-4 w-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <span>Lý do / ghi chú bắt buộc khi yêu cầu chỉnh sửa hoặc từ chối (tối thiểu 10 ký tự).</span>
+                        `;
+                        jsCommentError.classList.remove('hidden');
+                    }
+
+                    return false;
+                }
+            }
 
             if (!confirm(message)) {
                 return;
@@ -913,6 +1086,49 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.reload();
         });
     }
+
+    document.querySelectorAll('.btn-save-lesson-note').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            var lessonId = this.dataset.lessonId;
+            var container = this.closest('.rounded-xl');
+            var textarea = container ? container.querySelector('textarea') : null;
+            var chkReupload = container ? container.querySelector('input[type="checkbox"]') : null;
+            var radioStatus = container ? container.querySelector('input[type="radio"]:checked') : null;
+
+            var labelSpan = this.querySelector('span');
+            var defaultLabel = labelSpan ? labelSpan.innerText : 'Lưu ghi chú';
+            if (labelSpan) labelSpan.innerText = 'Đang lưu...';
+            this.disabled = true;
+
+            try {
+                var res = await fetch('/admin/courses/{{ $course->id }}/lessons/' + lessonId + '/note', {
+                    method: 'POST',
+                    headers: aiFetchHeaders(),
+                    body: JSON.stringify({
+                        admin_note: textarea ? textarea.value : '',
+                        require_reupload: chkReupload ? chkReupload.checked : false,
+                        status: radioStatus ? radioStatus.value : 'pass',
+                    }),
+                });
+
+                var data = await parseJsonResponse(res);
+                if (!res.ok) {
+                    throw new Error(data.message || 'Lỗi lưu ghi chú');
+                }
+
+                if (labelSpan) labelSpan.innerText = 'Đã lưu ✓';
+                var btnRef = this;
+                setTimeout(function () {
+                    if (labelSpan) labelSpan.innerText = defaultLabel;
+                    btnRef.disabled = false;
+                }, 1500);
+            } catch (err) {
+                alert('Lỗi lưu ghi chú bài học: ' + err.message);
+                if (labelSpan) labelSpan.innerText = defaultLabel;
+                this.disabled = false;
+            }
+        });
+    });
 });
 </script>
 </div>

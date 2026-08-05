@@ -30,6 +30,7 @@ class LessonProgress extends Model
         'last_watched_at',
         'last_client_updated_at',
         'completed_at',
+        'last_viewed_content_version',
     ];
 
     protected function casts(): array
@@ -39,6 +40,7 @@ class LessonProgress extends Model
             'duration_seconds' => 'integer',
             'last_position_seconds' => 'integer',
             'furthest_position_seconds' => 'integer',
+            'last_viewed_content_version' => 'integer',
             'progress_percent' => 'decimal:2',
             'is_completed' => 'boolean',
             'last_watched_at' => 'datetime',

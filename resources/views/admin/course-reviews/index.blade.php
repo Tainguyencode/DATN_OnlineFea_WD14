@@ -18,6 +18,7 @@
             <thead class="border-b border-slate-200 bg-slate-50">
                 <tr>
                     <th class="px-4 py-3 text-left font-semibold text-slate-600">Khóa học</th>
+                    <th class="px-4 py-3 text-left font-semibold text-slate-600">Trạng thái</th>
                     <th class="px-4 py-3 text-left font-semibold text-slate-600">Giảng viên</th>
                     <th class="px-4 py-3 text-left font-semibold text-slate-600">Danh mục</th>
                     <th class="px-4 py-3 text-left font-semibold text-slate-600">Ngày gửi</th>
@@ -29,6 +30,21 @@
                 @forelse($courses as $course)
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-medium text-slate-900">{{ $course->title }}</td>
+                        <td class="px-4 py-3">
+                            @if($course->status === 'pending_update')
+                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                                    Cập nhật chờ duyệt
+                                </span>
+                            @elseif($course->status === 'pending_review')
+                                <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800 border border-blue-300">
+                                    Mới chờ duyệt
+                                </span>
+                            @else
+                                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                                    {{ $statusOptions[$course->status] ?? $course->status }}
+                                </span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-slate-600">{{ $course->instructor?->name }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ $course->category?->name ?? '—' }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ $course->submitted_at?->format('d/m/Y H:i') ?? '—' }}</td>
@@ -38,7 +54,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-12 text-center text-slate-500">Không có khóa học nào.</td></tr>
+                    <tr><td colspan="7" class="px-4 py-12 text-center text-slate-500">Không có khóa học nào.</td></tr>
                 @endforelse
             </tbody>
         </table>

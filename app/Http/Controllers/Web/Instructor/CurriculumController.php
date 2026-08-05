@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Instructor;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Instructor\StoreChapterRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
@@ -19,13 +20,16 @@ class CurriculumController extends Controller
     {
         $this->authorizeCourse($course);
 
-        $course->load([
-            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with(['videoModeration', 'assignment']),
-            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with(['videoModeration', 'assignment']),
-        ]);
+        $curriculumSections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
+
+        $pendingContentUpdates = \App\Models\ContentUpdate::where('course_id', $course->id)
+            ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+            ->get();
 
         return view('instructor.courses.curriculum', [
             'course' => $course,
+            'curriculumSections' => $curriculumSections,
+            'pendingContentUpdates' => $pendingContentUpdates,
             'lessonTypes' => $this->lessonTypes(),
             'lessonStatuses' => $this->lessonStatuses(),
         ]);
@@ -36,6 +40,19 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
 
         $validated = $request->validated();
+
+        if ($course->isPublished()) {
+            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_CHAPTER,
+                \App\Models\ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, ['sort_order' => $course->courseSections()->count()]),
+                $request->user()
+            );
+
+            return back()->with('success', 'Đã lưu bản cập nhật chương học mới. Chương học sẽ xuất hiện sau khi Admin duyệt.');
+        }
 
         CourseSection::create([
             ...$validated,
@@ -50,7 +67,22 @@ class CurriculumController extends Controller
     {
         $this->authorizeSection($course, $section);
 
-        $section->update($request->validated());
+        $validated = $request->validated();
+
+        if ($course->isPublished()) {
+            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_CHAPTER,
+                \App\Models\ContentUpdate::ACTION_UPDATE,
+                $course->id,
+                $section->id,
+                $validated,
+                $request->user()
+            );
+
+            return back()->with('success', 'Đã lưu bản cập nhật chương học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
+        }
+
+        $section->update($validated);
 
         return back()->with('success', 'Đã cập nhật chương học.');
     }
@@ -58,6 +90,19 @@ class CurriculumController extends Controller
     public function destroySection(Course $course, CourseSection $section): RedirectResponse
     {
         $this->authorizeSection($course, $section);
+
+        if ($course->isPublished()) {
+            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_CHAPTER,
+                \App\Models\ContentUpdate::ACTION_DELETE,
+                $course->id,
+                $section->id,
+                [],
+                auth()->user()
+            );
+
+            return back()->with('success', 'Đã gửi yêu cầu xóa chương học. Yêu cầu sẽ áp dụng sau khi Admin duyệt.');
+        }
 
         $section->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
         $section->delete();
@@ -73,6 +118,32 @@ class CurriculumController extends Controller
         $lessonData = $this->lessonData($validated);
         $lessonData = $this->storeLessonDocument($request, $lessonData);
         $lessonData = $this->storeLessonVideo($request, $lessonData);
+
+        if ($course->isPublished()) {
+            $payload = array_merge($lessonData, [
+                'section_id' => $section->id,
+                'chapter_id' => null,
+                'duration_seconds' => $lessonData['duration'] ?? 0,
+                'is_preview' => $request->boolean('is_preview'),
+                'sort_order' => $lessonData['sort_order'] ?? $section->lessons()->count(),
+            ]);
+
+            $contentUpdate = app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_LESSON,
+                \App\Models\ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                $payload,
+                $request->user(),
+                \App\Models\ContentUpdate::STATUS_DRAFT
+            );
+
+            if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+                \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            }
+
+            return back()->with('success', 'Đã lưu bản nháp bài học mới. Video đang được xử lý HLS ngầm.');
+        }
 
         $lesson = Lesson::create([
             ...$lessonData,
@@ -109,6 +180,30 @@ class CurriculumController extends Controller
         $lessonData = $this->storeLessonDocument($request, $lessonData, $lesson);
         $lessonData = $this->storeLessonVideo($request, $lessonData, $lesson);
 
+        if ($course->isPublished()) {
+            $payload = array_merge($lessonData, [
+                'duration_seconds' => $lessonData['duration'] ?? 0,
+                'is_preview' => $request->boolean('is_preview'),
+                'sort_order' => $lessonData['sort_order'] ?? $lesson->sort_order,
+                'status' => $lessonData['status'] ?? 'draft',
+            ]);
+
+            $contentUpdate = app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_LESSON,
+                \App\Models\ContentUpdate::ACTION_UPDATE,
+                $course->id,
+                $lesson->id,
+                $payload,
+                $request->user()
+            );
+
+            if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+                \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            }
+
+            return back()->with('success', 'Đã lưu bản cập nhật nội dung bài học. Video đang được xử lý HLS ngầm.');
+        }
+
         $lesson->update([
             ...$lessonData,
             'duration_seconds' => $lessonData['duration'] ?? 0,
@@ -137,10 +232,63 @@ class CurriculumController extends Controller
     {
         $this->authorizeLesson($course, $lesson);
 
+        if ($course->isPublished()) {
+            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_LESSON,
+                \App\Models\ContentUpdate::ACTION_DELETE,
+                $course->id,
+                $lesson->id,
+                [],
+                auth()->user()
+            );
+
+            return back()->with('success', 'Đã gửi yêu cầu xóa bài học. Yêu cầu sẽ áp dụng sau khi Admin duyệt.');
+        }
+
         $this->deleteLessonFiles($lesson);
         $lesson->delete();
 
         return back()->with('success', 'Đã xóa bài học.');
+    }
+
+    public function updateContentUpdate(StoreLessonRequest $request, Course $course, ContentUpdate $contentUpdate): RedirectResponse
+    {
+        $this->authorizeCourse($course);
+        abort_unless((int) $contentUpdate->course_id === (int) $course->id, 403);
+
+        $validated = $request->validated();
+        $lessonData = $this->lessonData($validated);
+        $lessonData = $this->storeLessonDocument($request, $lessonData);
+        $lessonData = $this->storeLessonVideo($request, $lessonData);
+
+        $existingPayload = $contentUpdate->payload ?? [];
+        $newPayload = array_merge($existingPayload, $lessonData, [
+            'duration_seconds' => $lessonData['duration'] ?? ($existingPayload['duration'] ?? 0),
+            'is_preview' => $request->boolean('is_preview'),
+            'sort_order' => $lessonData['sort_order'] ?? ($existingPayload['sort_order'] ?? 0),
+            'status' => $lessonData['status'] ?? 'draft',
+        ]);
+
+        $contentUpdate->update([
+            'payload' => $newPayload,
+            'status' => ContentUpdate::STATUS_DRAFT,
+        ]);
+
+        if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+            \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+        }
+
+        return back()->with('success', 'Đã cập nhật bản nháp bài học. Nếu có video mới, video đang được xử lý HLS ngầm.');
+    }
+
+    public function destroyContentUpdate(Course $course, ContentUpdate $contentUpdate): RedirectResponse
+    {
+        $this->authorizeCourse($course);
+        abort_unless((int) $contentUpdate->course_id === (int) $course->id, 403);
+
+        $contentUpdate->delete();
+
+        return back()->with('success', 'Đã xóa bản nháp bài học.');
     }
 
     private function authorizeCourse(Course $course): void
