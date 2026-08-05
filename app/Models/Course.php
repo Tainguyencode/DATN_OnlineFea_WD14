@@ -41,6 +41,10 @@ class Course extends Model
 
     public const STATUS_ARCHIVED = 'archived';
 
+    public const STATUS_PENDING_UPDATE = 'pending_update';
+
+    public const STATUS_REJECTED_UPDATE = 'rejected_update';
+
     /** Danh sách tất cả trạng thái hợp lệ của khóa học */
     public const STATUSES = [
         'draft',
@@ -50,6 +54,8 @@ class Course extends Model
         'published',
         'suspended',
         'archived',
+        'pending_update',
+        'rejected_update',
     ];
 
     /** Nhãn tiếng Việt cho từng trạng thái */
@@ -61,6 +67,8 @@ class Course extends Model
         'rejected' => 'Bị từ chối',
         'suspended' => 'Tạm ngừng',
         'archived' => 'Đã lưu trữ',
+        'pending_update' => 'Cập nhật chờ duyệt',
+        'rejected_update' => 'Bị từ chối cập nhật',
     ];
 
     /** Số lượng bài học tối thiểu bắt buộc để có thể nộp duyệt */
@@ -219,15 +227,15 @@ class Course extends Model
      */
     public function isPublished(): bool
     {
-        return $this->status === self::STATUS_PUBLISHED && (bool) $this->is_published;
+        return (bool) $this->is_published || in_array($this->status, [self::STATUS_PUBLISHED, self::STATUS_PENDING_UPDATE, self::STATUS_REJECTED_UPDATE], true);
     }
 
     /**
-     * Kiểm tra xem giảng viên có thể chỉnh sửa khóa học hay không (chỉ ở dạng Nháp hoặc Bị từ chối).
+     * Kiểm tra xem giảng viên có thể chỉnh sửa khóa học hay không.
      */
     public function isEditable(): bool
     {
-        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED], true);
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED, self::STATUS_PUBLISHED, self::STATUS_REJECTED_UPDATE], true);
     }
 
     public function statusEnum(): CourseStatus
@@ -267,13 +275,16 @@ class Course extends Model
         return in_array($this->status, [
             self::STATUS_DRAFT,
             self::STATUS_REJECTED,
+            self::STATUS_PUBLISHED,
+            self::STATUS_PENDING_UPDATE,
+            self::STATUS_REJECTED_UPDATE,
         ], true);
     }
 
     /** Kiểm tra khóa học có đang chờ Admin phê duyệt hay không */
     public function isAwaitingAdminReview(): bool
     {
-        return $this->status === self::STATUS_SUBMITTED;
+        return in_array($this->status, [self::STATUS_SUBMITTED, self::STATUS_PENDING_UPDATE], true);
     }
 
     /** Tính tổng thời lượng video (giây) của tất cả bài học */

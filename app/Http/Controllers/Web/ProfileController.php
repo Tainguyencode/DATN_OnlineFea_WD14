@@ -62,6 +62,14 @@ class ProfileController extends Controller
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => ['nullable', 'string', 'max:50'],
             'bank_account_name' => ['nullable', 'string', 'max:100'],
+        ], [
+            'name.required' => 'Vui lòng nhập họ và tên.',
+            'username.required' => 'Vui lòng nhập tên đăng nhập.',
+            'username.min' => 'Tên đăng nhập phải có ít nhất :min ký tự.',
+            'username.unique' => 'Tên đăng nhập này đã tồn tại.',
+            'phone.unique' => 'Số điện thoại này đã được sử dụng.',
+            'avatar.image' => 'Ảnh đại diện phải là tập tin hình ảnh.',
+            'avatar.max' => 'Kích thước ảnh đại diện tối đa là 2MB.',
         ]);
 
         if ($request->hasFile('avatar')) {
@@ -86,6 +94,12 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email,'.$user->id],
             'current_password' => ['required', 'current_password'],
+        ], [
+            'email.required' => 'Vui lòng nhập email mới.',
+            'email.email' => 'Địa chỉ email không hợp lệ.',
+            'email.unique' => 'Email này đã được sử dụng bởi tài khoản khác.',
+            'current_password.required' => 'Vui lòng nhập mật khẩu hiện tại để xác nhận.',
+            'current_password.current_password' => 'Mật khẩu hiện tại không chính xác.',
         ]);
 
         $emailVerificationService->invalidateActiveCodes($user);
@@ -115,6 +129,12 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
+        ], [
+            'current_password.required' => 'Vui lòng nhập mật khẩu hiện tại.',
+            'current_password.current_password' => 'Mật khẩu hiện tại không chính xác.',
+            'password.required' => 'Vui lòng nhập mật khẩu mới.',
+            'password.confirmed' => 'Xác nhận mật khẩu mới không trùng khớp.',
+            'password.min' => 'Mật khẩu mới phải có ít nhất :min ký tự.',
         ]);
 
         $newPassword = $validated['password'];

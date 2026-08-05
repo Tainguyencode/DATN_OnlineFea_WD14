@@ -14,7 +14,7 @@ class Lesson extends Model
         'video_url', 'video_path', 'video_original_name', 'video_mime',
         'video_size', 'content', 'document_file', 'duration',
         'duration_seconds', 'is_preview', 'is_required', 'sort_order', 'status',
-        'attachments', 'subtitles', 'ai_summary',
+        'attachments', 'subtitles', 'ai_summary', 'content_version',
     ];
 
     protected function casts(): array
@@ -23,6 +23,7 @@ class Lesson extends Model
             'is_preview' => 'boolean',
             'is_required' => 'boolean',
             'video_size' => 'integer',
+            'content_version' => 'integer',
             'attachments' => 'array',
             'subtitles' => 'array',
         ];
