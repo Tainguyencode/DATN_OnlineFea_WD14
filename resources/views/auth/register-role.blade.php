@@ -19,7 +19,7 @@
             showConfirm: false,
             loading: false,
             avatarPreview: null,
-            password: @js(old('password', '')),
+            passwordVal: '',
             emailMessage: '',
             emailOk: null,
             phoneMessage: '',
@@ -27,10 +27,11 @@
             availabilityUrl: @js(route('auth.availability')),
             get strength() {
                 let score = 0;
-                if (this.password.length >= 8) score++;
-                if (/[a-z]/.test(this.password) && /[A-Z]/.test(this.password)) score++;
-                if (/[0-9]/.test(this.password)) score++;
-                if (/[^A-Za-z0-9]/.test(this.password)) score++;
+                let pwd = this.passwordVal || '';
+                if (pwd.length >= 8) score++;
+                if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+                if (/[0-9]/.test(pwd)) score++;
+                if (/[^A-Za-z0-9]/.test(pwd)) score++;
                 return score;
             },
             async check(field, value) {
@@ -135,9 +136,8 @@
             <x-auth.input
                 label="Mật khẩu"
                 name="password"
-                :value="old('password')"
                 x-bind:type="showPassword ? 'text' : 'password'"
-                x-model="password"
+                x-model="passwordVal"
                 placeholder="Tối thiểu 8 ký tự"
                 inputClass="pr-14"
             >
@@ -149,7 +149,6 @@
             <x-auth.input
                 label="Xác nhận mật khẩu"
                 name="password_confirmation"
-                :value="old('password_confirmation')"
                 x-bind:type="showConfirm ? 'text' : 'password'"
                 placeholder="Nhập lại mật khẩu"
                 inputClass="pr-14"

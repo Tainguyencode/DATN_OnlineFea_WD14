@@ -115,8 +115,23 @@ class CourseController extends Controller
         $validated = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
-            $this->deleteThumbnail($course);
+            if (! $course->isPublished()) {
+                $this->deleteThumbnail($course);
+            }
             $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
+        }
+
+        if ($course->isPublished()) {
+            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
+                \App\Models\ContentUpdate::TYPE_COURSE,
+                \App\Models\ContentUpdate::ACTION_UPDATE,
+                $course->id,
+                $course->id,
+                array_merge($validated, ['sale_price' => $validated['discount_price'] ?? null]),
+                $request->user()
+            );
+
+            return back()->with('success', 'Đã lưu bản cập nhật thông tin khóa học. Bản cập nhật sẽ được hiển thị sau khi Admin duyệt.');
         }
 
         $course->update([

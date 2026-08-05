@@ -15,13 +15,6 @@
 
 <x-dynamic-component :component="$layout" title="Hồ sơ" page-title="Hồ sơ cá nhân" breadcrumb="Bảo mật tài khoản và hoạt động đăng nhập">
     <div class="space-y-6">
-        @if($errors->any())
-            <div class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                @foreach($errors->all() as $error)
-                    <p>{{ $error }}</p>
-                @endforeach
-            </div>
-        @endif
 
         {{-- Header card --}}
         <div class="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-6 text-white shadow-md">
@@ -68,23 +61,27 @@
                         <div class="grid gap-5 sm:grid-cols-2">
                             <div>
                                 <label class="mb-1.5 block text-sm font-semibold text-slate-700">Họ và tên</label>
-                                <input name="name" value="{{ old('name', $user->name) }}" required
-                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                                <input name="name" value="{{ old('name', $user->name) }}"
+                                    class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('name') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                                @error('name') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
                                 <label class="mb-1.5 block text-sm font-semibold text-slate-700">Username</label>
-                                <input name="username" value="{{ old('username', $user->username) }}" required
-                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                                <input name="username" value="{{ old('username', $user->username) }}"
+                                    class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('username') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                                @error('username') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
                                 <label class="mb-1.5 block text-sm font-semibold text-slate-700">Số điện thoại</label>
                                 <input name="phone" value="{{ old('phone', $user->phone) }}"
-                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                                    class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('phone') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                                @error('phone') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
                                 <label class="mb-1.5 block text-sm font-semibold text-slate-700">Avatar</label>
                                 <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp"
                                     class="block w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-bold file:text-[#0056D2]">
+                                @error('avatar') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                         </div>
                         <div>
@@ -135,13 +132,15 @@
                         @method('PUT')
                         <div>
                             <label class="mb-1.5 block text-sm font-semibold text-slate-700">Email mới</label>
-                            <input type="email" name="email" value="{{ old('email', $user->email) }}" required
-                                class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                            <input type="email" name="email" value="{{ old('email', $user->email) }}"
+                                class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('email') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                            @error('email') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <label class="mb-1.5 block text-sm font-semibold text-slate-700">Mật khẩu hiện tại</label>
-                            <input type="password" name="current_password" required placeholder="Nhập mật khẩu để xác nhận"
-                                class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                            <input type="password" name="current_password" placeholder="Nhập mật khẩu để xác nhận"
+                                class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('current_password') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                            @error('current_password') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                         </div>
                         <button class="rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700">Cập nhật email</button>
                     </form>
@@ -154,19 +153,22 @@
                         @method('PUT')
                         <div>
                             <label class="mb-1.5 block text-sm font-semibold text-slate-700">Mật khẩu hiện tại</label>
-                            <input type="password" name="current_password" required placeholder="Nhập mật khẩu hiện tại"
-                                class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                            <input type="password" name="current_password" placeholder="Nhập mật khẩu hiện tại"
+                                class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('current_password') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                            @error('current_password') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                         </div>
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div>
                                 <label class="mb-1.5 block text-sm font-semibold text-slate-700">Mật khẩu mới</label>
-                                <input type="password" name="password" required placeholder="Mật khẩu mới"
-                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                                <input type="password" name="password" placeholder="Mật khẩu mới"
+                                    class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('password') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                                @error('password') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                             <div>
                                 <label class="mb-1.5 block text-sm font-semibold text-slate-700">Xác nhận mật khẩu</label>
-                                <input type="password" name="password_confirmation" required placeholder="Nhập lại mật khẩu mới"
-                                    class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10">
+                                <input type="password" name="password_confirmation" placeholder="Nhập lại mật khẩu mới"
+                                    class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('password_confirmation') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
+                                @error('password_confirmation') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                         </div>
                         <button class="rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700">Cập nhật mật khẩu</button>

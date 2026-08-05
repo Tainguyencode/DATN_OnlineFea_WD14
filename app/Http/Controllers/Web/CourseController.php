@@ -290,9 +290,24 @@ class CourseController extends Controller
                 ->first();
         }
 
+        $hasNewContentVersion = false;
+        if ($user && $player['isEnrolled']) {
+            $progressModel = \App\Models\LessonProgress::where('user_id', $user->id)
+                ->where('lesson_id', $lesson->id)
+                ->first();
+
+            if ($progressModel) {
+                if ((int) $lesson->content_version > (int) $progressModel->last_viewed_content_version) {
+                    $hasNewContentVersion = true;
+                    $progressModel->update(['last_viewed_content_version' => (int) $lesson->content_version]);
+                }
+            }
+        }
+
         return view('courses.lesson', [
             'course' => $course,
             'lesson' => $lesson,
+            'hasNewContentVersion' => $hasNewContentVersion,
             'submission' => $submission,
             'enrollment' => $player['enrollment'],
             'isEnrolled' => $player['isEnrolled'],
