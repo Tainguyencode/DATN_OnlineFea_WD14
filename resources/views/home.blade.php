@@ -86,54 +86,54 @@
         <div class="ui-container">
             <p class="mb-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">Được thiết kế cho sinh viên, giảng viên và đội ngũ đào tạo hiện đại</p>
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                <div class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
+                <a href="{{ route('pages.academy') }}" class="group flex items-start gap-4 p-3 rounded-2xl transition duration-300 hover:-translate-y-1 hover:bg-slate-50 dark:hover:bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2]">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] group-hover:bg-[#0056D2] group-hover:text-white dark:bg-blue-900/20 dark:text-blue-400 dark:group-hover:bg-blue-600 dark:group-hover:text-white transition duration-300 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-900 dark:text-white">FEA Academy</h3>
+                        <h3 class="font-bold text-slate-900 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-400 transition duration-200">FEA Academy</h3>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Chương trình đào tạo chuyên sâu</p>
                     </div>
-                </div>
-                <div class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
+                </a>
+                <a href="{{ route('pages.innovation-lab') }}" class="group flex items-start gap-4 p-3 rounded-2xl transition duration-300 hover:-translate-y-1 hover:bg-slate-50 dark:hover:bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2]">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] group-hover:bg-[#0056D2] group-hover:text-white dark:bg-blue-900/20 dark:text-blue-400 dark:group-hover:bg-blue-600 dark:group-hover:text-white transition duration-300 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-900 dark:text-white">Innovation Lab</h3>
+                        <h3 class="font-bold text-slate-900 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-400 transition duration-200">Innovation Lab</h3>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Thực hành dự án công nghệ mới</p>
                     </div>
-                </div>
-                <div class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
+                </a>
+                <a href="{{ route('pages.career-accelerator') }}" class="group flex items-start gap-4 p-3 rounded-2xl transition duration-300 hover:-translate-y-1 hover:bg-slate-50 dark:hover:bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2]">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] group-hover:bg-[#0056D2] group-hover:text-white dark:bg-blue-900/20 dark:text-blue-400 dark:group-hover:bg-blue-600 dark:group-hover:text-white transition duration-300 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-900 dark:text-white">Career Accelerator</h3>
+                        <h3 class="font-bold text-slate-900 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-400 transition duration-200">Career Accelerator</h3>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Định hướng và kết nối việc làm</p>
                     </div>
-                </div>
-                <div class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
+                </a>
+                <a href="{{ route('pages.corporate-training') }}" class="group flex items-start gap-4 p-3 rounded-2xl transition duration-300 hover:-translate-y-1 hover:bg-slate-50 dark:hover:bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2]">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] group-hover:bg-[#0056D2] group-hover:text-white dark:bg-blue-900/20 dark:text-blue-400 dark:group-hover:bg-blue-600 dark:group-hover:text-white transition duration-300 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-900 dark:text-white">Corporate Training</h3>
+                        <h3 class="font-bold text-slate-900 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-400 transition duration-200">Corporate Training</h3>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Giải pháp đào tạo doanh nghiệp</p>
                     </div>
-                </div>
+                </a>
             </div>
         </div>
     </section>
@@ -267,27 +267,27 @@
     </section>
 
     {{-- CATEGORIES SECTION (COMPACT & EXPANDABLE) (STU-FE-03, STU-BE-01) --}}
-    <section id="categories" class="bg-slate-50/50 py-16 sm:py-20 dark:bg-slate-950/30 border-t border-b border-slate-200/60 dark:border-slate-800/50" x-data="{ expanded: false }">
-        <div class="ui-container">
-            <div class="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-                <div>
-                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl inline-block relative">
-                        Danh mục môn học
-                        <span class="absolute -bottom-2 left-0 h-1 w-12 bg-gradient-to-r from-[#0056D2] to-blue-400 rounded-full"></span>
-                    </h2>
-                    <p class="mt-4 text-slate-500 dark:text-slate-400">Khám phá các môn học giúp bạn phát triển kỹ năng chuyên môn.</p>
+    @if($categories->isNotEmpty())
+        <section id="categories" class="bg-slate-50/50 py-16 sm:py-20 dark:bg-slate-950/30 border-t border-b border-slate-200/60 dark:border-slate-800/50" x-data="{ expanded: false }">
+            <div class="ui-container">
+                <div class="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl inline-block relative">
+                            Danh mục môn học
+                            <span class="absolute -bottom-2 left-0 h-1 w-12 bg-gradient-to-r from-[#0056D2] to-blue-400 rounded-full"></span>
+                        </h2>
+                        <p class="mt-4 text-slate-500 dark:text-slate-400">Khám phá các môn học giúp bạn phát triển kỹ năng chuyên môn.</p>
+                    </div>
+                    @if($categories->count() > 4)
+                        <button type="button" @click="expanded = !expanded" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer">
+                            <span x-text="expanded ? 'Thu gọn danh mục' : 'Xem tất cả {{ $categories->count() }} danh mục'"></span>
+                            <svg class="h-4 w-4 transition-transform duration-200" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    @endif
                 </div>
-                @if($categories->count() > 4)
-                    <button type="button" @click="expanded = !expanded" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer">
-                        <span x-text="expanded ? 'Thu gọn danh mục' : 'Xem tất cả {{ $categories->count() }} danh mục'"></span>
-                        <svg class="h-4 w-4 transition-transform duration-200" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
-                @endif
-            </div>
 
-            @if($categories->isNotEmpty())
                 @php
                     $categoryStyles = [
                         0 => [ // Blue
@@ -374,8 +374,9 @@
                         </div>
                     @endforeach
                 </div>
-            @endif
-        </div>
+            </div>
+        </section>
+    @endif
     {{-- LEARNING PATHS SECTION --}}
     @if ($learningPaths->isNotEmpty())
         <section id="paths" class="border-t border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
@@ -438,17 +439,17 @@
     </section>
 
     {{-- TESTIMONIALS / STUDENT REVIEWS (STU-FE-06) --}}
-    <section class="bg-white py-16 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
-        <div class="ui-container">
-            <div class="mb-10 max-w-2xl">
-                <h2 class="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl inline-block relative">
-                    Học viên nói gì về FEA Learning
-                    <span class="absolute -bottom-2 left-0 h-1 w-12 bg-gradient-to-r from-[#0056D2] to-blue-400 rounded-full"></span>
-                </h2>
-                <p class="mt-4 text-slate-500 dark:text-slate-400">Trải nghiệm và đánh giá thực tế từ các học viên đang học tập trên hệ thống.</p>
-            </div>
+    @if($testimonials->isNotEmpty())
+        <section class="bg-white py-16 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
+            <div class="ui-container">
+                <div class="mb-10 max-w-2xl">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl inline-block relative">
+                        Học viên nói gì về FEA Learning
+                        <span class="absolute -bottom-2 left-0 h-1 w-12 bg-gradient-to-r from-[#0056D2] to-blue-400 rounded-full"></span>
+                    </h2>
+                    <p class="mt-4 text-slate-500 dark:text-slate-400">Trải nghiệm và đánh giá thực tế từ các học viên đang học tập trên hệ thống.</p>
+                </div>
 
-            @if($testimonials->isNotEmpty())
                 <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     @foreach ($testimonials as $testimonial)
                         <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50/50 p-6 shadow-sm transition-all duration-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60">
@@ -491,51 +492,9 @@
                         </div>
                     @endforeach
                 </div>
-            @else
-                <div class="grid gap-6 md:grid-cols-3">
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-                        <div class="flex items-center gap-1 text-amber-400 mb-3">
-                            @for($i=1;$i<=5;$i++) <svg class="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg> @endfor
-                        </div>
-                        <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300">“Nội dung các bài học được cấu trúc rõ ràng, video mượt và hệ thống theo dõi tiến độ rất hữu ích.”</p>
-                        <div class="mt-5 flex items-center gap-3 border-t border-slate-200/60 dark:border-slate-800 pt-4">
-                            <div class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-[#0056D2]">MA</div>
-                            <div>
-                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Minh Anh</h4>
-                                <p class="text-xs text-slate-500">Học viên lập trình</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-                        <div class="flex items-center gap-1 text-amber-400 mb-3">
-                            @for($i=1;$i<=5;$i++) <svg class="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg> @endfor
-                        </div>
-                        <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300">“Trợ lý AI hỗ trợ giải đáp câu hỏi trong từng bài học giúp mình hiểu sâu hơn và tiết kiệm nhiều thời gian.”</p>
-                        <div class="mt-5 flex items-center gap-3 border-t border-slate-200/60 dark:border-slate-800 pt-4">
-                            <div class="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">QH</div>
-                            <div>
-                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Quốc Huy</h4>
-                                <p class="text-xs text-slate-500">Học viên công nghệ</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-                        <div class="flex items-center gap-1 text-amber-400 mb-3">
-                            @for($i=1;$i<=5;$i++) <svg class="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg> @endfor
-                        </div>
-                        <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300">“Giao diện hiện đại, tinh gọn, tốc độ tải nhanh và lộ trình học tập được chuẩn hóa rõ ràng.”</p>
-                        <div class="mt-5 flex items-center gap-3 border-t border-slate-200/60 dark:border-slate-800 pt-4">
-                            <div class="flex h-9 w-9 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700">LP</div>
-                            <div>
-                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Lan Phương</h4>
-                                <p class="text-xs text-slate-500">Học viên thiết kế</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            @endif
-        </div>
-    </section>
+            </div>
+        </section>
+    @endif
 
     {{-- FAQS SECTION --}}
     @if ($faqs->isNotEmpty())
