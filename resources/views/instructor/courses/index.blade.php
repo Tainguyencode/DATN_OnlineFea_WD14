@@ -8,6 +8,8 @@
             'need_revision' => 'bg-orange-50 text-orange-700 border-orange-200',
             'approved' => 'bg-sky-50 text-sky-700 border-sky-200',
             'published' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            'pending_update' => 'bg-amber-50 text-amber-800 border-amber-300 font-bold',
+            'rejected_update' => 'bg-rose-50 text-rose-800 border-rose-300 font-bold',
             'rejected' => 'bg-rose-50 text-rose-700 border-rose-200',
             'archived' => 'bg-zinc-100 text-zinc-700 border-zinc-200',
         ];

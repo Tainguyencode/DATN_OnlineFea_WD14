@@ -11,6 +11,8 @@ enum CourseStatus: string
     case Published = 'published';
     case Suspended = 'suspended';
     case Archived = 'archived';
+    case PendingUpdate = 'pending_update';
+    case RejectedUpdate = 'rejected_update';
 
     public function label(): string
     {
@@ -22,6 +24,8 @@ enum CourseStatus: string
             self::Published => 'Đã xuất bản',
             self::Suspended => 'Tạm ngừng',
             self::Archived => 'Đã lưu trữ',
+            self::PendingUpdate => 'Cập nhật chờ duyệt',
+            self::RejectedUpdate => 'Bị từ chối cập nhật',
         };
     }
 
