@@ -28,6 +28,11 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            \App\Models\User::where('id', $userId)->update([
+                'last_learning_at' => now(),
+                'engagement_email_stage' => 0,
+            ]);
+
             $lessonIds = $this->courseLessonIds($course);
             abort_unless($lessonIds->contains((int) $lesson->id), 404);
 
@@ -129,6 +134,11 @@ class LearningProgressService
                 ->withLearningAccess()
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            \App\Models\User::where('id', $userId)->update([
+                'last_learning_at' => now(),
+                'engagement_email_stage' => 0,
+            ]);
 
             $lessonIds = $this->courseLessonIds($course);
             abort_unless($lessonIds->contains((int) $lesson->id), 404);
