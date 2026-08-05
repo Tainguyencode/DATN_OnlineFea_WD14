@@ -248,8 +248,9 @@ class CourseController extends Controller
 
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
 
-        if ($player['canAccessLesson'] || $player['isEnrolled']) {
+        if ($user && ($player['canAccessLesson'] || $player['isEnrolled'])) {
             $recentlyViewedCourseService->record($user, $course);
+            app(\App\Services\EngagementService::class)->recordLearningActivity($user);
         }
 
         $discussions = collect();
