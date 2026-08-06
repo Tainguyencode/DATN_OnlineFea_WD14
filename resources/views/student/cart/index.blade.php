@@ -23,7 +23,7 @@
             ])) }},
             checkedIds: {{ json_encode($cart->courses->pluck('id')) }},
             selectAll: true,
-            paymentMethod: 'vnpay',
+            paymentMethod: 'payos',
             couponCode: '',
             appliedCoupon: null,
             couponError: '',
@@ -248,19 +248,19 @@
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Phương thức thanh toán</label>
                         
                         <div class="grid grid-cols-1 gap-2.5">
-                            <!-- VNPay Option -->
-                            <div @click="paymentMethod = 'vnpay'" 
-                                 :class="paymentMethod === 'vnpay' ? 'border-[#0056D2] bg-blue-50/20 dark:border-blue-500' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
+                            <!-- PayOS Option -->
+                            <div @click="paymentMethod = 'payos'" 
+                                 :class="paymentMethod === 'payos' ? 'border-[#0056D2] bg-blue-50/20 dark:border-blue-500' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
                                  class="flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition select-none">
                                 <div class="flex items-center gap-3">
-                                    <div class="h-6 w-16 flex items-center justify-center shrink-0">
-                                        <img src="{{ asset('images/vnpay-logo.png') }}" alt="VNPay" class="h-full w-auto object-contain">
+                                    <div class="h-6 w-10 flex items-center justify-center shrink-0 bg-blue-600 rounded font-extrabold text-white text-xs">
+                                        PayOS
                                     </div>
-                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Cổng thanh toán VNPay</span>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Cổng thanh toán VietQR (PayOS)</span>
                                 </div>
                                 <div class="h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                                     :class="paymentMethod === 'vnpay' ? 'border-[#0056D2] bg-[#0056D2]' : 'border-slate-300'">
-                                    <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'vnpay'"></div>
+                                     :class="paymentMethod === 'payos' ? 'border-[#0056D2] bg-[#0056D2]' : 'border-slate-300'">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'payos'"></div>
                                 </div>
                             </div>
 

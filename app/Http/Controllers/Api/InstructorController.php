@@ -121,6 +121,7 @@ class InstructorController extends Controller
 
         $lesson = Lesson::create([
             ...$validated,
+            'course_id' => $chapter->course_id,
             'chapter_id' => $chapter->id,
             'sort_order' => $validated['sort_order'] ?? $chapter->lessons()->count(),
         ]);

@@ -44,11 +44,14 @@ class AiModerationController extends Controller
      * Stream video bài học với hỗ trợ HTTP Range requests (cho phép seek).
      * Chỉ dùng cho trang Admin Review – giúp admin nhảy đến đoạn AI phát hiện.
      */
-    public function streamVideo(string|int $lessonId)
+    public function streamVideo(Request $request, string|int $lessonId)
     {
         [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
 
         if (empty($videoPath)) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'Bài học này không có video.'], 404);
+            }
             abort(404, 'Bài học này không có video.');
         }
 
@@ -60,6 +63,9 @@ class AiModerationController extends Controller
         }
 
         if (!$path || !file_exists($path)) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
+            }
             abort(404, 'File video không tồn tại trên máy chủ.');
         }
 

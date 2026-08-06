@@ -130,4 +130,51 @@ class WithdrawalController extends Controller
 
         return back()->with('success', 'Đã từ chối yêu cầu rút tiền #' . $withdrawal->id . '. Số tiền đã được hoàn trả lại số dư khả dụng cho giảng viên.');
     }
+
+    /**
+     * Tự động chi chuyển khoản ngân hàng qua PayOS Payout API cho Giảng viên.
+     */
+    public function autoPayout(Request $request, Withdrawal $withdrawal, PayoutService $payoutService): RedirectResponse
+    {
+        if ($withdrawal->status !== Withdrawal::STATUS_PENDING) {
+            return back()->withErrors(['error' => 'Yêu cầu rút tiền này đã được xử lý từ trước.']);
+        }
+
+        try {
+            $payoutResult = $payoutService->processAutoPayout($withdrawal);
+            $txnRef = $payoutResult['transactions'][0]['reference']
+                ?? $payoutResult['referenceId']
+                ?? $payoutResult['id']
+                ?? ('PAYOS-PO-' . time());
+
+            $withdrawal->update([
+                'status' => Withdrawal::STATUS_APPROVED,
+                'transaction_ref' => $txnRef,
+                'admin_note' => 'Đã tự động chuyển khoản qua PayOS Payout API.',
+                'processed_at' => now(),
+            ]);
+
+            PushNotification::create([
+                'user_id' => $withdrawal->user_id,
+                'title' => 'Rút tiền tự động thành công! ⚡',
+                'message' => 'Yêu cầu rút ' . number_format($withdrawal->amount, 0, ',', '.') . ' VNĐ đã được hệ thống tự động chuyển khoản thành công vào ' . $withdrawal->bank_name . ' (' . $withdrawal->bank_account_number . '). Mã GD: ' . $txnRef . '.',
+                'type' => 'order_paid',
+                'url' => route('instructor.wallet.index'),
+            ]);
+
+            ActivityLogService::log(
+                auth()->id(),
+                'auto_payout_withdrawal',
+                Withdrawal::class,
+                $withdrawal->id,
+                ['amount' => $withdrawal->amount, 'ref' => $txnRef, 'instructor_id' => $withdrawal->user_id],
+                $request,
+                "Admin đã kích hoạt tự động chi rút tiền PayOS #" . $withdrawal->id . " cho " . $withdrawal->user->name
+            );
+
+            return back()->with('success', 'Đã tự động chuyển khoản ' . number_format($withdrawal->amount, 0, ',', '.') . 'đ qua PayOS cho giảng viên ' . $withdrawal->user->name . ' thành công! Mã GD: ' . $txnRef);
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Lỗi tự động chi PayOS: ' . $e->getMessage()]);
+        }
+    }
 }

@@ -91,7 +91,7 @@ class DatabaseSeeder extends Seeder
 
             // Bảng phụ thuộc cấp 2 (Phụ thuộc vào khóa học và bài học)
             LearningPathSeeder::class, // Phụ thuộc vào courses qua bảng pivot
-            // InteractionSeeder::class,  // Đã comment vì thiếu mock data users/courses
+            // InteractionSeeder::class,
 
             // Bảng ghi chép lịch sử và hoạt động hệ thống
             // SystemSeeder::class, // Đã comment vì thiếu mock data users/courses
