@@ -87,3 +87,6 @@
 ### Commit 29: test: bo sung kiem thu tich hop luong hoc tap va lam bai kiem tra (2026-08-04 14:40:15 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 30: refactor: toi uu hoa toc do render view va truy van co so du lieu (2026-08-06 09:30:50 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
