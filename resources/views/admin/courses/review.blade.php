@@ -245,6 +245,9 @@
                                         @if($lesson->type === 'video' && $lesson->video_path)
                                             @php
                                                 $isHls = !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4');
+                                                $videoLessonKey = (isset($lesson->draft_update) && $lesson->draft_update->action === 'create')
+                                                    ? ('update_les_' . $lesson->draft_update->id)
+                                                    : $lesson->id;
                                             @endphp
                                             @if(! $isHls)
                                                 <div class="mt-4 flex h-36 max-w-xl items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
@@ -257,8 +260,8 @@
                                             @else
                                                 <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
                                                     <video
-                                                        id="admin-video-{{ $lesson->id }}"
-                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $lesson->id]) }}"
+                                                        id="admin-video-{{ $videoLessonKey }}"
+                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $videoLessonKey]) }}"
                                                         controls
                                                         preload="metadata"
                                                         class="h-full w-full"
@@ -268,7 +271,7 @@
                                             @endif
                                             
                                             {{-- Nút và khu vực hiển thị quét AI --}}
-                                            <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $lesson->id }}">
+                                            <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $videoLessonKey }}">
                                                 <button type="button" class="btn-scan-ai inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
                                                     <span>Quét nội dung</span>
                                                 </button>
@@ -347,7 +350,7 @@
                                                                                 <button
                                                                                     type="button"
                                                                                     class="admin-seek-btn flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
-                                                                                    data-video-id="admin-video-{{ $lesson->id }}"
+                                                                                    data-video-id="admin-video-{{ $videoLessonKey }}"
                                                                                     data-timestamp="{{ $tsSeconds }}"
                                                                                     title="Nhảy đến {{ $vf['timestamp'] }} và phát video"
                                                                                 >
@@ -702,16 +705,50 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     // Khởi tạo các video HLS (nếu có)
-    document.querySelectorAll('video[data-hls-src]').forEach(function (video) {
-        var hlsSrc = video.getAttribute('data-hls-src');
-        if (Hls.isSupported()) {
-            var hls = new Hls();
-            hls.loadSource(hlsSrc);
-            hls.attachMedia(video);
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = hlsSrc;
+    function initAdminHlsVideos() {
+        if (typeof Hls === 'undefined') {
+            setTimeout(initAdminHlsVideos, 150);
+            return;
         }
-    });
+
+        document.querySelectorAll('video[data-hls-src]').forEach(function (video) {
+            if (video.dataset.hlsReady) return;
+            video.dataset.hlsReady = 'true';
+
+            var hlsSrc = video.getAttribute('data-hls-src');
+
+            if (Hls.isSupported()) {
+                var hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                });
+                hls.loadSource(hlsSrc);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.warn('[Admin HLS] Fatal network error, recovering...', data);
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.warn('[Admin HLS] Fatal media error, recovering...', data);
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.error('[Admin HLS] Unrecoverable error:', data);
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = hlsSrc;
+            }
+        });
+    }
+
+    initAdminHlsVideos();
 
     // 1. Logic duyệt khóa học
     var form     = document.getElementById('course-review-form');
@@ -851,7 +888,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
             'X-Requested-With': 'XMLHttpRequest',
         };
     }
@@ -999,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', function () {
             progressArea.classList.remove('hidden');
 
             try {
-                await scanLesson(lessonId, function (state) {
+                var saveData = await scanLesson(lessonId, function (state) {
                     if (state.phase === 'extract') {
                         statusText.innerText = 'Đang cắt frame (mỗi 30s)...';
                         progressBar.style.width = '10%';
@@ -1011,6 +1048,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         progressBar.style.width = '98%';
                     }
                 });
+
+                statusText.innerText = 'Quét AI hoàn tất!';
+                progressBar.style.width = '100%';
+
+                var modSummary = (saveData && saveData.moderation && saveData.moderation.summary)
+                    ? saveData.moderation.summary
+                    : 'Không phát hiện dấu hiệu đáng chú ý.';
+
+                alert('✅ Quét AI hoàn tất thành công!\n\nAI Nhận xét: ' + modSummary);
 
                 window.location.reload();
             } catch (err) {
