@@ -250,25 +250,29 @@
                                     @php
                                         $lessonUpdate = $lesson->draft_update ?? null;
                                         $lPayload = $lessonUpdate?->payload ?? [];
-                                        $adminNote = $lPayload['admin_note'] ?? null;
+                                        $adminNote = $lPayload['admin_note'] ?? $lessonUpdate?->rejection_reason ?? null;
                                         $requireReupload = !empty($lPayload['require_reupload']);
-                                        $reviewStatus = $lPayload['review_status'] ?? ($lessonUpdate?->status === 'rejected' ? 'fail' : null);
-                                        $isRejectedOrNeedsRevision = in_array($reviewStatus, ['rejected', 'fail', 'need_revision'], true) || filled($adminNote) || $requireReupload;
+                                        $updateStatus = $lesson->update_status ?? $lessonUpdate?->status ?? null;
+                                        $reviewStatus = $lPayload['review_status'] ?? ($updateStatus === 'rejected' ? 'rejected' : 'pass');
+                                        $isNeedsRevision = in_array($reviewStatus, ['rejected', 'fail', 'need_revision'], true) || $updateStatus === 'rejected';
+                                        $hasAdminFeedback = filled($adminNote) || $requireReupload || $isNeedsRevision;
                                     @endphp
 
-                                    @if($isRejectedOrNeedsRevision && in_array($course->status, ['rejected', 'rejected_update', 'need_revision', 'pending_update'], true))
-                                        <div class="mt-4 max-w-2xl rounded-xl border border-amber-200 bg-amber-50/90 p-4 shadow-2xs">
+                                    @if($hasAdminFeedback)
+                                        <div class="mt-4 max-w-2xl rounded-xl border {{ $isNeedsRevision ? 'border-amber-200 bg-amber-50/90' : 'border-emerald-200 bg-emerald-50/90' }} p-4 shadow-2xs">
                                             <div class="flex items-start gap-3">
-                                                <span class="text-xl">⚠️</span>
+                                                <span class="text-xl">{{ $isNeedsRevision ? '⚠️' : '💬' }}</span>
                                                 <div class="w-full">
                                                     <div class="flex items-center justify-between">
-                                                        <h5 class="text-sm font-bold text-amber-950">Phản hồi từ Admin</h5>
-                                                        <span class="rounded-full bg-amber-200/80 px-2.5 py-0.5 text-xs font-bold text-amber-900">Video này cần chỉnh sửa</span>
+                                                        <h5 class="text-sm font-bold {{ $isNeedsRevision ? 'text-amber-950' : 'text-emerald-950' }}">Phản hồi từ Admin</h5>
+                                                        <span class="rounded-full {{ $isNeedsRevision ? 'bg-amber-200/80 text-amber-900' : 'bg-emerald-200/80 text-emerald-900' }} px-2.5 py-0.5 text-xs font-bold">
+                                                            {{ $isNeedsRevision ? 'Bài học cần chỉnh sửa' : 'Ghi chú đánh giá (Đạt)' }}
+                                                        </span>
                                                     </div>
                                                     
                                                     @if(filled($adminNote))
-                                                        <div class="mt-2.5 rounded-lg border border-amber-200 bg-white p-3 text-xs leading-relaxed font-medium text-slate-800 shadow-2xs">
-                                                            <p class="font-bold text-amber-900 mb-1">Lý do:</p>
+                                                        <div class="mt-2.5 rounded-lg border {{ $isNeedsRevision ? 'border-amber-200' : 'border-emerald-200' }} bg-white p-3 text-xs leading-relaxed font-medium text-slate-800 shadow-2xs">
+                                                            <p class="font-bold {{ $isNeedsRevision ? 'text-amber-900' : 'text-emerald-900' }} mb-1">Ghi chú từ Admin:</p>
                                                             <div class="whitespace-pre-line text-slate-700">{!! nl2br(e($adminNote)) !!}</div>
                                                         </div>
                                                     @endif
