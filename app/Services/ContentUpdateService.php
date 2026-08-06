@@ -296,6 +296,10 @@ class ContentUpdateService
                 $draftLesson->update_status = $lUpdate->status;
                 $draftLesson->is_draft_create = true;
 
+                if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                    $draftLesson->setRelation('videoModeration', new \App\Models\VideoModeration($payload['ai_moderation']));
+                }
+
                 // Attach to matching section
                 $matchedSection = $sections->first(function ($s) use ($secId, $lUpdate) {
                     if ($secId && (string)$s->id === (string)$secId) {
@@ -323,6 +327,10 @@ class ContentUpdateService
                         $existingLesson->draft_update = $lUpdate;
                         $existingLesson->update_status = $lUpdate->status;
                         $existingLesson->is_draft_update = true;
+
+                        if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                            $existingLesson->setRelation('videoModeration', new \App\Models\VideoModeration($payload['ai_moderation']));
+                        }
                         break;
                     }
                 }
