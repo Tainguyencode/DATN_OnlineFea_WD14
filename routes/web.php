@@ -235,6 +235,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
     Route::post('/cart/coupon/apply', [CartController::class, 'applyCoupon'])->name('cart.coupon.apply');
     Route::get('/checkout/{order_code}/pay', [CartController::class, 'showPaymentPage'])->name('checkout.pay');
+    Route::post('/checkout/{order_code}/pay', [CartController::class, 'processPayment'])->name('checkout.process_payment');
     Route::get('/checkout/mock-gateway/{order_code}', [CartController::class, 'mockGateway'])->name('checkout.mock_gateway');
     Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->name('checkout.simulate');
     Route::get('/checkout/{order_code}/success', [CartController::class, 'successPage'])->name('checkout.success');
@@ -243,7 +244,8 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::get('/certificates', [StudentMiscController::class, 'certificates'])->name('certificates');
     Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
-    Route::get('/orders', fn() => redirect(route('student.dashboard') . '#orders'))->name('orders');
+    Route::get('/orders', [StudentMiscController::class, 'orders'])->name('orders');
+    Route::get('/orders/{order}', [StudentMiscController::class, 'showOrder'])->name('orders.show');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
@@ -383,6 +385,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/commissions/instructors/{user}', [CommissionController::class, 'updateInstructorRate'])->name('commissions.update-instructor');
     Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals.index');
     Route::post('/withdrawals/{withdrawal}/approve', [AdminWithdrawalController::class, 'approve'])->name('withdrawals.approve');
+    Route::post('/withdrawals/{withdrawal}/auto-payout', [AdminWithdrawalController::class, 'autoPayout'])->name('withdrawals.auto-payout');
     Route::post('/withdrawals/{withdrawal}/reject', [AdminWithdrawalController::class, 'reject'])->name('withdrawals.reject');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
@@ -416,10 +419,10 @@ if (app()->environment('local')) {
 }
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───
-Route::get('/payments/vnpay/callback', [PaymentController::class, 'vnpayCallback'])->name('payments.vnpay.callback');
-Route::post('/payments/vnpay/ipn', [PaymentController::class, 'vnpayIpn'])->name('payments.vnpay.ipn');
-
 Route::get('/payments/momo/callback', [PaymentController::class, 'momoCallback'])->name('payments.momo.callback');
 Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
 
 Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');
+
+Route::get('/payments/vnpay/return', [PaymentController::class, 'vnpayReturn'])->name('payments.vnpay.return');
+Route::match(['get', 'post'], '/payments/vnpay/ipn', [PaymentController::class, 'vnpayIpn'])->name('payments.vnpay.ipn');

@@ -14,6 +14,7 @@ class UserPoint extends Model
         'source',
         'description',
         'course_id',
+        'reason',
     ];
 
     protected function casts(): array

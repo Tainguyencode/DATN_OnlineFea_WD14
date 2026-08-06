@@ -9,6 +9,7 @@ class PushNotification extends Model
 {
     protected $fillable = [
         'user_id',
+        'created_by',
         'title',
         'message',
         'type',

@@ -80,17 +80,17 @@
 
         {{-- Current Logged-In User Personal Rank Banner --}}
         @if($currentUserData)
-            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-900 dark:to-indigo-950 text-white rounded-2xl p-6 shadow-md mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="bg-[#0056D2] bg-linear-to-r from-blue-700 to-indigo-900 dark:from-blue-900 dark:to-indigo-950 text-white rounded-2xl p-6 shadow-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
                 <div class="flex items-center gap-4">
-                    <div class="h-16 w-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-3xl font-extrabold shadow-inner border border-white/30 shrink-0">
+                    <div class="h-16 w-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-3xl font-extrabold text-white shadow-inner border border-white/30 shrink-0">
                         #{{ $currentUserData['rank'] }}
                     </div>
                     <div class="min-w-0">
-                        <div class="text-xs uppercase tracking-wider text-blue-200 font-bold">Thứ hạng của bạn</div>
-                        <div class="text-xl font-black truncate max-w-xs md:max-w-md">{{ $currentUserData['user']->name }}</div>
+                        <div class="text-xs uppercase tracking-wider text-blue-100 font-bold">Thứ hạng của bạn</div>
+                        <div class="text-xl font-black text-white truncate max-w-xs md:max-w-md">{{ $currentUserData['user']->name }}</div>
                         <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-blue-100">
-                            <span>🎓 Khóa đã xong: <strong>{{ $currentUserData['completed_courses_count'] }}</strong></span>
-                            <span>🎯 Điểm Quiz TB: <strong>{{ round($currentUserData['avg_quiz_score'], 1) }}%</strong></span>
+                            <span>🎓 Khóa đã xong: <strong class="text-white">{{ $currentUserData['completed_courses_count'] }}</strong></span>
+                            <span>🎯 Điểm Quiz TB: <strong class="text-white">{{ round($currentUserData['avg_quiz_score'], 1) }}%</strong></span>
                         </div>
                     </div>
                 </div>
@@ -98,17 +98,17 @@
                 {{-- Badges Earned --}}
                 <div class="flex items-center gap-4 shrink-0">
                     <div class="text-right hidden sm:block">
-                        <div class="text-xs text-blue-200">Tổng điểm tích lũy</div>
+                        <div class="text-xs text-blue-100">Tổng điểm tích lũy</div>
                         <div class="text-2xl font-black text-amber-300">{{ $currentUserData['total_points'] }} pts</div>
                     </div>
-                    <div class="h-px w-8 bg-white/20 hidden sm:block"></div>
+                    <div class="h-8 w-px bg-white/20 hidden sm:block"></div>
                     <div class="flex items-center gap-2">
                         @forelse($currentUserData['badges'] as $badge)
                             <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-white shadow-md border-2 border-white cursor-pointer" title="{{ $badge->name }}: {{ $badge->description }}">
                                 🎖️
                             </span>
                         @empty
-                            <span class="text-xs text-blue-200 italic">Chưa có huy hiệu</span>
+                            <span class="text-xs text-blue-100 italic bg-white/10 px-3 py-1.5 rounded-full border border-white/20">Chưa có huy hiệu</span>
                         @endforelse
                     </div>
                 </div>

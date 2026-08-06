@@ -133,14 +133,43 @@ class MiscController extends Controller
         return view('student.certificates', compact('certificates'));
     }
 
-    public function orders(): View
+    public function orders(Request $request): View
     {
-        $orders = Order::where('user_id', auth()->id())
-            ->with(['items.course:id,title', 'payment'])
-            ->orderByDesc('created_at')
-            ->paginate(10);
+        $status = $request->query('status');
 
-        return view('student.orders', compact('orders'));
+        $query = Order::where('user_id', auth()->id())
+            ->with(['items.course' => fn ($q) => $q->with('instructor:id,name,avatar'), 'payment', 'coupon']);
+
+        if ($status && in_array($status, ['paid', 'pending', 'cancelled', 'failed'], true)) {
+            $query->where('status', $status);
+        }
+
+        if ($request->filled('search')) {
+            $search = trim($request->query('search'));
+            $query->where(function ($q) use ($search) {
+                $q->where('order_code', 'like', "%{$search}%")
+                  ->orWhereHas('items.course', function ($cq) use ($search) {
+                      $cq->where('title', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $orders = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
+
+        return view('student.orders', compact('orders', 'status'));
+    }
+
+    public function showOrder(Order $order): View
+    {
+        abort_unless((int) $order->user_id === (int) auth()->id(), 403, 'Bạn không có quyền xem đơn hàng này.');
+
+        $order->load([
+            'items.course' => fn ($query) => $query->with('instructor:id,name,avatar')->withCount('lessons'),
+            'payment',
+            'coupon',
+        ]);
+
+        return view('student.orders.show', compact('order'));
     }
 
     public function profile(): View

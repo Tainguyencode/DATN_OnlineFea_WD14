@@ -309,6 +309,7 @@ class AuthenticationTest extends TestCase
             'email' => 'role-instructor@example.com',
             'password' => Hash::make('password'),
             'role' => 'instructor',
+            'instructor_status' => 'approved',
             'email_verified_at' => now(),
         ]);
         $admin = User::factory()->create([
@@ -389,14 +390,26 @@ class AuthenticationTest extends TestCase
      */
     private function registerPayload(string $role, array $overrides = []): array
     {
-        return array_merge([
+        $base = [
             'name' => $overrides['name'] ?? 'Người dùng '.$role,
             'email' => $overrides['email'] ?? $role.'-'.uniqid().'@example.com',
-            'phone' => '0912345678',
+            'phone' => '09'.rand(10000000, 99999999),
             'password' => self::REGISTER_PASSWORD,
             'password_confirmation' => self::REGISTER_PASSWORD,
             'terms' => '1',
-        ], $overrides);
+        ];
+
+        if ($role === 'instructor') {
+            $base = array_merge($base, [
+                'specialty' => 'Công nghệ thông tin',
+                'experience' => '5 năm kinh nghiệm lập trình',
+                'bio' => 'Giới thiệu bản thân ngắn gọn.',
+                'agree_information' => '1',
+                'agree_terms' => '1',
+            ]);
+        }
+
+        return array_merge($base, $overrides);
     }
 
     private function postLogin(string $identifier, string $password, bool $remember = false): TestResponse

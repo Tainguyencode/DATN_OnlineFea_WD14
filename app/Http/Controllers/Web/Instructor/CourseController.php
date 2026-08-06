@@ -203,9 +203,11 @@ class CourseController extends Controller
 
         Lesson::create([
             ...$validated,
+            'course_id' => $chapter->course_id,
             'chapter_id' => $chapter->id,
             'sort_order' => $chapter->lessons()->count(),
             'is_preview' => $request->boolean('is_preview'),
+            'status' => $validated['status'] ?? 'draft',
         ]);
 
         return back()->with('success', 'Đã thêm bài giảng.');
@@ -216,11 +218,13 @@ class CourseController extends Controller
         $this->ensureOwned($course);
         abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
-        $request->validate([
-            'copyright_agreed' => ['required', 'accepted'],
-        ], [
-            'copyright_agreed.accepted' => 'Bạn phải đọc và đồng ý với cam kết bản quyền trước khi gửi duyệt.',
-        ]);
+        if (! $course->copyright_agreed) {
+            $request->validate([
+                'copyright_agreed' => ['required', 'accepted'],
+            ], [
+                'copyright_agreed.accepted' => 'Bạn phải đọc và đồng ý với cam kết bản quyền trước khi gửi duyệt.',
+            ]);
+        }
 
         if (! $course->submissionCheck()->passes()) {
             return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');
@@ -327,12 +331,13 @@ class CourseController extends Controller
             $query->whereYear('created_at', $request->input('year'));
         }
 
-        $orders = $query->get();
+        $orders = $query->with('user:id,name,email,avatar')->get();
 
         $totalGross = 0;
         $totalCommission = 0;
-        $totalRevenue = 0; // Net earning
+        $totalRevenue = 0; // Thu nhập thực nhận
         $courseSales = [];
+        $studentPurchases = [];
 
         foreach ($orders as $order) {
             $items = $order->items;
@@ -346,10 +351,10 @@ class CourseController extends Controller
                     continue;
                 }
 
-                $price = $item['price'] ?? 0;
-                $commRate = $item['commission_rate'] ?? $user->getCommissionRate();
-                $commAmount = $item['commission_amount'] ?? (($price * $commRate) / 100);
-                $earning = $item['instructor_earning'] ?? ($price - $commAmount);
+                $price = (float) ($item['price'] ?? 0);
+                $commRate = (float) ($item['commission_rate'] ?? $user->getCommissionRate());
+                $commAmount = (float) ($item['commission_amount'] ?? (($price * $commRate) / 100));
+                $earning = (float) ($item['instructor_earning'] ?? ($price - $commAmount));
 
                 $totalGross += $price;
                 $totalCommission += $commAmount;
@@ -370,10 +375,24 @@ class CourseController extends Controller
                 $courseSales[$cid]['commission'] += $commAmount;
                 $courseSales[$cid]['total'] += $earning;
                 $courseSales[$cid]['sales'] += 1;
+
+                $studentPurchases[] = (object) [
+                    'order_id' => $order->id,
+                    'order_code' => $order->order_code ?? ('ORD-' . $order->id),
+                    'user' => $order->user,
+                    'course_title' => $item['course_title'] ?? ($courseSales[$cid]['course']?->title ?? 'Khóa học'),
+                    'price' => $price,
+                    'commission_amount' => $commAmount,
+                    'instructor_earning' => $earning,
+                    'payment_method' => strtoupper($order->payment_method ?? 'ONLINE'),
+                    'purchased_at' => $order->created_at,
+                ];
             }
         }
 
         $courseRevenue = collect($courseSales)->map(fn ($item) => (object) $item)->values();
+        $studentPurchases = collect($studentPurchases)->sortByDesc('purchased_at')->values();
+
         $filters = [
             'start_date' => $request->input('start_date'),
             'end_date' => $request->input('end_date'),
@@ -381,7 +400,7 @@ class CourseController extends Controller
             'year' => $request->input('year'),
         ];
 
-        return view('instructor.revenue', compact('totalGross', 'totalCommission', 'totalRevenue', 'courseRevenue', 'filters'));
+        return view('instructor.revenue', compact('totalGross', 'totalCommission', 'totalRevenue', 'courseRevenue', 'studentPurchases', 'filters'));
     }
 
     protected function ensureOwned(Course $course): void

@@ -55,14 +55,24 @@
     </ul>
 
     @if ($canSubmit && $isReady)
-        <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5"
-              onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
-            @csrf
-            <button type="submit"
-                class="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
-                {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
-            </button>
-        </form>
+        @if ($course->copyright_agreed)
+            <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5"
+                  onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
+                @csrf
+                <input type="hidden" name="copyright_agreed" value="1">
+                <button type="submit"
+                    class="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
+                    {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                </button>
+            </form>
+        @else
+            <div class="mt-5">
+                <button type="button" onclick="openCopyrightModal()"
+                    class="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
+                    {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                </button>
+            </div>
+        @endif
     @elseif ($canSubmit)
         <p class="mt-5 text-sm font-semibold text-amber-700">
             Vui lòng hoàn thiện các mục chưa đạt trước khi gửi duyệt.
