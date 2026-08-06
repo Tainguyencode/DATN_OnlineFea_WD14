@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class CourseRecommendationService
 {
@@ -881,6 +882,8 @@ class CourseRecommendationService
         ))));
     }
 
+    private static array $schemaCache = [];
+
     private function cacheKey(Course $course, ?User $user, int $limit): string
     {
         $viewer = $user ? (string) $user->id : 'guest';
@@ -906,46 +909,50 @@ class CourseRecommendationService
         ];
 
         if ($user) {
-            $parts[] = $this->aggregateFingerprint('recently_viewed_courses', $user->id, 'last_viewed_at');
-            $parts[] = $this->aggregateFingerprint('wishlists', $user->id);
-            $parts[] = $this->aggregateFingerprint('enrollments', $user->id);
-            $parts[] = $this->aggregateFingerprint('reviews', $user->id);
-            $parts[] = $this->aggregateFingerprint('orders', $user->id);
-            $parts[] = $this->paidOrderItemsFingerprint($user->id);
+            $parts[] = $this->userSignalsFingerprint($user->id);
         }
 
         return sha1(json_encode($parts));
     }
 
-    private function aggregateFingerprint(string $table, int $userId, string $dateColumn = 'updated_at'): string
+    private function userSignalsFingerprint(int $userId): string
     {
-        $row = DB::table($table)
-            ->where('user_id', $userId)
-            ->selectRaw("COUNT(*) as total, MAX({$dateColumn}) as latest_signal, MAX(updated_at) as latest_update")
+        $row = DB::query()
+            ->selectRaw('
+                (SELECT COUNT(*) FROM recently_viewed_courses WHERE user_id = ?) as rv_count,
+                (SELECT MAX(last_viewed_at) FROM recently_viewed_courses WHERE user_id = ?) as rv_max,
+                (SELECT COUNT(*) FROM wishlists WHERE user_id = ?) as wl_count,
+                (SELECT MAX(updated_at) FROM wishlists WHERE user_id = ?) as wl_max,
+                (SELECT COUNT(*) FROM enrollments WHERE user_id = ?) as en_count,
+                (SELECT MAX(updated_at) FROM enrollments WHERE user_id = ?) as en_max,
+                (SELECT COUNT(*) FROM reviews WHERE user_id = ?) as r_count,
+                (SELECT MAX(updated_at) FROM reviews WHERE user_id = ?) as r_max,
+                (SELECT COUNT(*) FROM orders WHERE user_id = ?) as o_count,
+                (SELECT MAX(updated_at) FROM orders WHERE user_id = ?) as o_max,
+                (SELECT COUNT(*) FROM order_items INNER JOIN orders ON orders.id = order_items.order_id WHERE orders.user_id = ? AND orders.status = ?) as poi_count,
+                (SELECT MAX(order_items.updated_at) FROM order_items INNER JOIN orders ON orders.id = order_items.order_id WHERE orders.user_id = ? AND orders.status = ?) as poi_max
+            ', [
+                $userId, $userId,
+                $userId, $userId,
+                $userId, $userId,
+                $userId, $userId,
+                $userId, $userId,
+                $userId, 'paid',
+                $userId, 'paid',
+            ])
             ->first();
 
-        return implode(':', [
-            $table,
-            (int) ($row->total ?? 0),
-            (string) ($row->latest_signal ?? ''),
-            (string) ($row->latest_update ?? ''),
-        ]);
-    }
-
-    private function paidOrderItemsFingerprint(int $userId): string
-    {
-        $row = DB::table('order_items')
-            ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.user_id', $userId)
-            ->where('orders.status', 'paid')
-            ->selectRaw('COUNT(*) as total, MAX(order_items.updated_at) as latest_item, MAX(orders.updated_at) as latest_order')
-            ->first();
+        if (! $row) {
+            return 'u:'.$userId;
+        }
 
         return implode(':', [
-            'paid_order_items',
-            (int) ($row->total ?? 0),
-            (string) ($row->latest_item ?? ''),
-            (string) ($row->latest_order ?? ''),
+            (int) ($row->rv_count ?? 0), (string) ($row->rv_max ?? ''),
+            (int) ($row->wl_count ?? 0), (string) ($row->wl_max ?? ''),
+            (int) ($row->en_count ?? 0), (string) ($row->en_max ?? ''),
+            (int) ($row->r_count ?? 0), (string) ($row->r_max ?? ''),
+            (int) ($row->o_count ?? 0), (string) ($row->o_max ?? ''),
+            (int) ($row->poi_count ?? 0), (string) ($row->poi_max ?? ''),
         ]);
     }
 

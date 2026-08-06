@@ -14,7 +14,7 @@ class InstructorCourseCreateTest extends TestCase
 
     public function test_instructor_can_create_course_without_language_field_in_form(): void
     {
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
         $parentCategory = Category::create(['name' => 'IT', 'slug' => 'it', 'status' => true]);
         $category = Category::create(['name' => 'Web', 'slug' => 'web', 'parent_id' => $parentCategory->id, 'status' => true]);
 

@@ -20,9 +20,101 @@
 
 @php
     $isMoMo = $gateway === 'momo';
+    $isPayOS = $gateway === 'payos';
 @endphp
 
-    @if($isMoMo)
+    @if($isPayOS)
+        <!-- Giao diện PayOS VietQR -->
+        <header class="bg-white border-b border-slate-100 py-4 px-6 sm:px-12 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-extrabold text-white text-sm">
+                    PayOS
+                </div>
+                <div>
+                    <h1 class="text-sm font-bold text-slate-800">Cổng thanh toán PayOS VietQR</h1>
+                    <p class="text-[10px] text-slate-400">Môi trường thử nghiệm Sandbox / VietQR</p>
+                </div>
+            </div>
+            <a href="{{ route('student.dashboard') }}" class="text-xs text-slate-400 hover:text-slate-600 transition">Quay về</a>
+        </header>
+
+        <main class="flex-1 max-w-5xl w-full mx-auto p-6 sm:p-12 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            <div class="space-y-6">
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
+                    <h3 class="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">Thông tin đơn hàng</h3>
+                    <div class="space-y-3 text-xs">
+                        <div class="flex justify-between text-slate-500">
+                            <span>Đơn vị chấp nhận thanh toán</span>
+                            <strong class="text-slate-900">FEA Online Learning Platform</strong>
+                        </div>
+                        <div class="flex justify-between text-slate-500">
+                            <span>Mã đơn hàng</span>
+                            <strong class="text-slate-900 font-mono">{{ $order->order_code }}</strong>
+                        </div>
+                        <div class="flex justify-between text-slate-500">
+                            <span>Mô tả chuyển khoản</span>
+                            <strong class="text-slate-900 font-mono text-indigo-600">Nap tien don hang {{ $order->order_code }}</strong>
+                        </div>
+                        <div class="border-t border-slate-100 pt-3 flex justify-between items-center">
+                            <span class="text-sm font-semibold text-slate-600">Số tiền thanh toán</span>
+                            <strong class="text-2xl font-black text-blue-600">{{ number_format($order->total_amount, 0, ',', '.') }}đ</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex justify-between items-center text-xs">
+                    <span class="text-slate-500 font-medium">Mã QR hết hạn sau:</span>
+                    <div class="flex items-center gap-1 font-bold text-blue-600">
+                        <span class="bg-blue-100 rounded px-1.5 py-0.5">14</span>
+                        <span>Phút</span>
+                        <span class="bg-blue-100 rounded px-1.5 py-0.5" id="payos-sec">59</span>
+                        <span>Giây</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center">
+                <div class="bg-gradient-to-b from-blue-700 to-indigo-800 w-full max-w-[380px] rounded-3xl p-6 text-white text-center shadow-lg space-y-4">
+                    <div class="flex items-center justify-between text-xs border-b border-white/10 pb-3">
+                        <span class="font-medium opacity-80">Quét mã PayOS VietQR</span>
+                        <span class="font-bold bg-white/20 px-2 py-0.5 rounded uppercase tracking-wider">VietQR NAPAS247</span>
+                    </div>
+                    <div class="relative bg-white p-3 rounded-2xl inline-block shadow-md mx-auto">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=payos://pay?amount={{ $order->total_amount }}&orderId={{ $order->order_code }}" alt="PayOS QR Code" class="w-48 h-48 block">
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <p class="font-bold">Mở ứng dụng Ngân hàng (Vietcombank, MB, Techcombank...) để quét mã</p>
+                    </div>
+                </div>
+
+                <!-- Simulator Control panel for PayOS -->
+                <div class="w-full max-w-[380px] mt-6 bg-blue-50 border border-blue-200 rounded-3xl p-5 text-left text-xs leading-relaxed space-y-4">
+                    <div class="flex items-center gap-2 text-blue-800 font-bold">
+                        <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>Giả lập kết quả PayOS VietQR</span>
+                    </div>
+                    
+                    <div class="flex flex-col gap-2">
+                        <form method="POST" action="{{ route('student.checkout.simulate', $order->order_code) }}">
+                            @csrf
+                            <input type="hidden" name="status" value="success">
+                            <button type="submit" class="w-full text-white bg-emerald-600 hover:bg-emerald-700 font-bold py-2.5 rounded-xl transition duration-150 shadow-sm text-center cursor-pointer">
+                                Thanh toán PayOS Thành Công
+                            </button>
+                        </form>
+
+                        <form method="POST" action="{{ route('student.checkout.simulate', $order->order_code) }}">
+                            @csrf
+                            <input type="hidden" name="status" value="failed">
+                            <button type="submit" class="w-full text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 font-bold py-2.5 rounded-xl transition duration-150 shadow-sm text-center cursor-pointer">
+                                Hủy thanh toán PayOS
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    @elseif($isMoMo)
         <!-- Giao diện MoMo -->
         <header class="bg-white border-b border-slate-100 py-4 px-6 sm:px-12 flex items-center justify-between shadow-sm">
             <div class="flex items-center gap-3">

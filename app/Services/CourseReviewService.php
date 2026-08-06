@@ -234,6 +234,7 @@ class CourseReviewService
 
         PushNotification::create([
             'user_id' => $course->instructor_id,
+            'created_by' => auth()->id() ?? $course->instructor_id,
             'title' => $title,
             'message' => $message,
             'type' => $type,
@@ -247,6 +248,7 @@ class CourseReviewService
         User::query()->where('role', 'admin')->each(function (User $admin) use ($course, $type, $title, $message) {
             PushNotification::create([
                 'user_id' => $admin->id,
+                'created_by' => auth()->id() ?? $course->instructor_id,
                 'title' => $title,
                 'message' => $message,
                 'type' => $type,

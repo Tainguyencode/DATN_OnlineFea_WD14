@@ -31,8 +31,8 @@ class CourseReviewWorkflowTest extends TestCase
 
     public function test_instructor_cannot_edit_other_instructors_course(): void
     {
-        $owner = User::factory()->create(['role' => 'instructor']);
-        $other = User::factory()->create(['role' => 'instructor', 'email_verified_at' => now()]);
+        $owner = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
+        $other = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
         $course = $this->makeDraftCourse($owner);
 
         $this->actingAs($other)
@@ -215,17 +215,18 @@ class CourseReviewWorkflowTest extends TestCase
             'sort_order' => 1,
         ]);
 
-        foreach (range(1, 3) as $i) {
+        foreach (range(1, 5) as $i) {
             Lesson::create([
                 'course_id' => $course->id,
                 'section_id' => $section->id,
                 'title' => "Lesson {$i}",
                 'type' => 'video',
                 'video_url' => 'https://example.com/video.mp4',
-                'duration_seconds' => 300,
+                'duration_seconds' => 360,
                 'content' => 'Lesson content',
                 'sort_order' => $i,
                 'is_required' => true,
+                'status' => 'draft',
             ]);
         }
 
@@ -256,12 +257,69 @@ class CourseReviewWorkflowTest extends TestCase
 
     public function test_controller_validates_copyright_agreement_input(): void
     {
-        $instructor = User::factory()->create(['role' => 'instructor', 'email_verified_at' => now()]);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
         $course = $this->makeSubmittableCourse($instructor);
+        $course->update(['copyright_agreed' => false]);
 
         $this->actingAs($instructor)
             ->withSession(['two_factor_passed_at' => now()->timestamp])
             ->post(route('instructor.courses.submit', $course), [])
             ->assertSessionHasErrors('copyright_agreed');
+    }
+
+    public function test_controller_allows_submission_when_copyright_agreed_in_post_payload(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
+        $course = $this->makeSubmittableCourse($instructor);
+        $course->update(['copyright_agreed' => false]);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.courses.submit', $course), ['copyright_agreed' => '1'])
+            ->assertRedirect(route('instructor.courses.index'))
+            ->assertSessionHas('success');
+
+        $this->assertEquals(CourseStatus::PendingReview->value, $course->fresh()->status);
+        $this->assertTrue((bool) $course->fresh()->copyright_agreed);
+    }
+
+    public function test_controller_allows_submission_when_course_has_prior_copyright_agreement(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
+        $course = $this->makeSubmittableCourse($instructor);
+        $course->update(['copyright_agreed' => true]);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.courses.submit', $course), [])
+            ->assertRedirect(route('instructor.courses.index'))
+            ->assertSessionHas('success');
+
+        $this->assertEquals(CourseStatus::PendingReview->value, $course->fresh()->status);
+    }
+
+    public function test_adding_lesson_to_chapter_assigns_course_id(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
+        $course = $this->makeDraftCourse($instructor);
+        $chapter = \App\Models\Chapter::create([
+            'course_id' => $course->id,
+            'title' => 'Chương 1',
+            'sort_order' => 1,
+        ]);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.chapters.lessons.store', $chapter), [
+                'title' => 'Bài học mới',
+                'type' => 'video',
+                'video_url' => 'https://example.com/video.mp4',
+                'duration_seconds' => 300,
+            ])
+            ->assertRedirect();
+
+        $lesson = Lesson::where('chapter_id', $chapter->id)->first();
+        $this->assertNotNull($lesson);
+        $this->assertEquals($course->id, $lesson->course_id);
     }
 }

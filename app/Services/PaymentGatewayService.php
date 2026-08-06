@@ -33,8 +33,20 @@ class PaymentGatewayService
     {
         $mode = env('PAYMENT_MODE', 'mock');
 
+        // Nếu chọn PayOS, thử gọi PayOS API v2 để tạo checkoutUrl
+        if ($order->payment_method === 'payos') {
+            try {
+                return $this->createPayOSUrl($order);
+            } catch (\Exception $e) {
+                Log::warning('PayOS API creation fallback to mock: ' . $e->getMessage());
+                return route('student.checkout.mock_gateway', [
+                    'order_code' => $order->order_code,
+                    'gateway' => 'payos',
+                ]);
+            }
+        }
+
         if ($mode === 'mock') {
-            // Nếu chọn chuyển khoản ngân hàng, dẫn đến trang hiển thị QR Code và thông tin chuyển khoản nội bộ
             if ($order->payment_method === 'bank_transfer') {
                 return route('student.checkout.pay', $order->order_code);
             }
@@ -48,9 +60,9 @@ class PaymentGatewayService
 
         try {
             return match ($order->payment_method) {
-                'bank_transfer' => $this->createPayOSUrl($order),
-                'vnpay' => $this->createVNPayUrl($order),
+                'payos', 'bank_transfer' => $this->createPayOSUrl($order),
                 'momo' => $this->createMoMoUrl($order),
+                'vnpay' => $this->createVNPayUrl($order),
                 default => throw new \Exception('Cổng thanh toán không được hỗ trợ.'),
             };
         } catch (\Exception $e) {
@@ -58,9 +70,6 @@ class PaymentGatewayService
             // Fallback sang mock để trải nghiệm người dùng không bị gián đoạn khi dev
             if ($mode === 'sandbox') {
                 session()->flash('warning', 'Không kết nối được cổng thanh toán thật, chuyển hướng sang cổng giả lập: ' . $e->getMessage());
-                if ($order->payment_method === 'bank_transfer') {
-                    return route('student.checkout.pay', $order->order_code);
-                }
                 return route('student.checkout.mock_gateway', [
                     'order_code' => $order->order_code,
                     'gateway' => $order->payment_method,
@@ -196,59 +205,6 @@ class PaymentGatewayService
         return false;
     }
 
-    /**
-     * Sinh URL chuyển hướng đến Cổng thanh toán VNPay (vnpayment.vn).
-     * 
-     * @param Order $order Đơn hàng
-     * @return string URL VNPay
-     */
-    protected function createVNPayUrl(Order $order): string
-    {
-        $vnpTmnCode = env('VNP_TMN_CODE');
-        $vnpHashSecret = env('VNP_HASH_SECRET');
-        $vnpUrl = env('VNP_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
-
-        if (empty($vnpTmnCode) || empty($vnpHashSecret)) {
-            throw new \Exception('Chưa cấu hình tài khoản VNPay trong file .env');
-        }
-
-        $vnp_Params = [
-            "vnp_Version" => "2.1.0",
-            "vnp_Command" => "pay",
-            "vnp_TmnCode" => $vnpTmnCode,
-            "vnp_Amount" => $order->total_amount * 100, // VNPay nhân với 100
-            "vnp_CreateDate" => date('YmdHis'),
-            "vnp_CurrCode" => "VND",
-            "vnp_IpAddr" => request()->ip() ?? '127.0.0.1',
-            "vnp_Locale" => "vn",
-            "vnp_OrderInfo" => "Thanh toan khoa hoc " . $order->order_code,
-            "vnp_OrderType" => "other",
-            "vnp_ReturnUrl" => route('payments.vnpay.callback'),
-            "vnp_TxnRef" => $order->order_code,
-        ];
-
-        ksort($vnp_Params);
-        $query = "";
-        $i = 0;
-        $hashdata = "";
-        foreach ($vnp_Params as $key => $value) {
-            if ($i == 1) {
-                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
-            } else {
-                $hashdata .= urlencode($key) . "=" . urlencode($value);
-                $i = 1;
-            }
-            $query .= urlencode($key) . "=" . urlencode($value) . '&';
-        }
-
-        $vnp_Url = $vnpUrl . "?" . rtrim($query, '&');
-        if (isset($vnpHashSecret)) {
-            $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnpHashSecret);
-            $vnp_Url .= '&vnp_SecureHash=' . $vnpSecureHash;
-        }
-
-        return $vnp_Url;
-    }
 
     /**
      * Sinh URL chuyển hướng đến Cổng thanh toán Ví MoMo.
@@ -317,6 +273,67 @@ class PaymentGatewayService
         }
 
         return $payUrl;
+    }
+
+    /**
+     * Sinh URL chuyển hướng đến Cổng thanh toán VNPay (v2.1.0).
+     * 
+     * @param Order $order Đơn hàng
+     * @return string URL VNPay Payment
+     */
+    protected function createVNPayUrl(Order $order): string
+    {
+        $vnp_TmnCode = env('VNP_TMN_CODE');
+        $vnp_HashSecret = env('VNP_HASH_SECRET');
+        $vnp_Url = env('VNP_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
+        $vnp_Returnurl = route('payments.vnpay.return');
+
+        if (empty($vnp_TmnCode) || empty($vnp_HashSecret)) {
+            throw new \Exception('Chưa cấu hình tài khoản VNPay trong file .env');
+        }
+
+        $vnp_TxnRef = $order->order_code;
+        $vnp_OrderInfo = 'Thanh toan don hang ' . $order->order_code;
+        $vnp_OrderType = 'billpayment';
+        $vnp_Amount = (int) ($order->total_amount * 100);
+        $vnp_Locale = 'vn';
+        $vnp_IpAddr = request()->ip() ?? '127.0.0.1';
+
+        $inputData = [
+            "vnp_Version" => "2.1.0",
+            "vnp_TmnCode" => $vnp_TmnCode,
+            "vnp_Amount" => $vnp_Amount,
+            "vnp_Command" => "pay",
+            "vnp_CreateDate" => date('YmdHis'),
+            "vnp_CurrCode" => "VND",
+            "vnp_IpAddr" => $vnp_IpAddr,
+            "vnp_Locale" => $vnp_Locale,
+            "vnp_OrderInfo" => $vnp_OrderInfo,
+            "vnp_OrderType" => $vnp_OrderType,
+            "vnp_ReturnUrl" => $vnp_Returnurl,
+            "vnp_TxnRef" => $vnp_TxnRef,
+        ];
+
+        ksort($inputData);
+        $query = "";
+        $i = 0;
+        $hashdata = "";
+
+        foreach ($inputData as $key => $value) {
+            if ($i == 1) {
+                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
+            } else {
+                $hashdata .= urlencode($key) . "=" . urlencode($value);
+                $i = 1;
+            }
+            $query .= urlencode($key) . "=" . urlencode($value) . '&';
+        }
+
+        $vnp_Url = $vnp_Url . "?" . $query;
+        $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnp_HashSecret);
+        $vnp_Url .= 'vnp_SecureHash=' . $vnpSecureHash;
+
+        return $vnp_Url;
     }
 
     /**
