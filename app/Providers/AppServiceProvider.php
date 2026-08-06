@@ -32,6 +32,11 @@ class AppServiceProvider extends ServiceProvider
             $event->extendSocialite('microsoft', MicrosoftExtendSocialite::class);
         });
 
+        Event::listen(
+            \Illuminate\Auth\Events\Login::class,
+            \App\Listeners\AwardLoginPoints::class
+        );
+
         Gate::before(fn ($user) => $user->isAdmin() ? true : null);
 
         try {

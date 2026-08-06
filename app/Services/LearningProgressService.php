@@ -76,6 +76,10 @@ class LearningProgressService
                 ]
             );
 
+            if ($completed && ! ($existing?->is_completed ?? false)) {
+                app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+            }
+
             $requiredLessonIds = $this->requiredLessonIds($course);
             $completedLessons = LessonProgress::query()
                 ->where('user_id', $userId)
