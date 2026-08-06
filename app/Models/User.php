@@ -155,6 +155,18 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(StudyGroupMessage::class);
     }
 
+    public function points(): HasMany
+    {
+        return $this->hasMany(UserPoint::class);
+    }
+
+    public function badges(): BelongsToMany
+    {
+        return $this->belongsToMany(Badge::class, 'user_badges')
+            ->withPivot('earned_at')
+            ->withTimestamps();
+    }
+
 
     public function emailVerificationCodes(): HasMany
     {
