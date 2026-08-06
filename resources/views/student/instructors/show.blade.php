@@ -131,13 +131,55 @@
                     <h2 style="font-size:17px;font-weight:700;color:#1e293b;margin:0;">Giới thiệu</h2>
                 </div>
                 <div style="padding:24px;">
-                    @if($user->bio)
-                        <p style="font-size:14px;color:#475569;line-height:1.75;margin:0;white-space:pre-line;">{{ $user->bio }}</p>
+                    @if($user->instructorProfile?->bio || $user->bio)
+                        <p style="font-size:14px;color:#475569;line-height:1.75;margin:0;white-space:pre-line;">{{ $user->instructorProfile?->bio ?: $user->bio }}</p>
                     @else
                         <p style="font-size:14px;color:#94a3b8;font-style:italic;">Giảng viên chưa cập nhật thông tin giới thiệu.</p>
                     @endif
                 </div>
             </div>
+
+            {{-- Verified Certificates & Degrees (STU-FE-16, STU-BE-10) --}}
+            @if(isset($approvedCertificates) && $approvedCertificates->isNotEmpty())
+            <div style="background:#fff;border-radius:20px;border:1.5px solid #e2e8f0;overflow:hidden;margin-bottom:24px;">
+                <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+                    <h2 style="font-size:16px;font-weight:700;color:#1e293b;margin:0;display:flex;align-items:center;gap:8px;">
+                        <span>🏅</span>
+                        <span>Chứng chỉ đã xác minh</span>
+                    </h2>
+                    <span style="font-size:12px;font-weight:700;background:#ecfdf5;color:#047857;padding:2px 8px;border-radius:999px;border:1px solid #a7f3d0;">
+                        {{ $approvedCertificates->count() }}
+                    </span>
+                </div>
+                <div style="padding:16px 24px;display:flex;flex-direction:column;gap:14px;">
+                    @foreach($approvedCertificates as $cert)
+                    <div style="padding-bottom:12px;border-bottom:1px solid #f8fafc;last:border-0;last:pb-0;">
+                        <div style="display:flex;align-items:flex-start;gap:10px;">
+                            <div style="width:28px;height:28px;border-radius:8px;background:#eff6ff;color:#2563eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:14px;font-weight:700;color:#1e293b;line-height:1.3;" class="line-clamp-2">{{ $cert->name }}</div>
+                                @if($cert->institution)
+                                    <div style="font-size:12px;color:#64748b;margin-top:2px;">{{ $cert->institution }}</div>
+                                @endif
+                                <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                                    <span style="font-size:10px;font-weight:700;text-transform:uppercase;background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;">
+                                        {{ $cert->document_type === 'degree' ? 'Bằng cấp' : ($cert->document_type === 'portfolio' ? 'Hồ sơ năng lực' : 'Chứng chỉ') }}
+                                    </span>
+                                    @if($cert->issued_at)
+                                        <span style="font-size:11px;color:#94a3b8;">
+                                            {{ \Carbon\Carbon::parse($cert->issued_at)->format('m/Y') }}
+                                        </span>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
 
             {{-- Quick Stats --}}
             <div style="background:#fff;border-radius:20px;border:1.5px solid #e2e8f0;overflow:hidden;margin-bottom:24px;">
