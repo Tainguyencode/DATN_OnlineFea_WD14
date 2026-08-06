@@ -35,7 +35,7 @@ class StoreCourseRequest extends FormRequest
             'short_description' => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string'],
             'objectives' => ['nullable', 'string'],
-            'thumbnail' => ['nullable', 'image', 'max:2048'],
+            'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:2048'],
             'preview_video' => ['nullable', 'string', 'max:2048'],
             'price' => ['required', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000'],
             'discount_price' => ['nullable', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000', 'lte:price'],
@@ -95,7 +95,8 @@ class StoreCourseRequest extends FormRequest
 
             'objectives.string' => 'Mục tiêu khóa học phải là chuỗi ký tự.',
 
-            'thumbnail.image' => 'Ảnh thumbnail phải là file hình ảnh (PNG, JPG, WebP).',
+            'thumbnail.image' => 'Ảnh thumbnail phải là file hình ảnh hợp lệ (PNG, JPG, JPEG, WebP, GIF).',
+            'thumbnail.mimes' => 'Ảnh thumbnail chỉ chấp nhận định dạng JPG, JPEG, PNG, WebP hoặc GIF.',
             'thumbnail.max' => 'Ảnh thumbnail không được vượt quá 2MB.',
 
             'preview_video.string' => 'Link video giới thiệu phải là chuỗi ký tự.',

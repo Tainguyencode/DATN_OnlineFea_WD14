@@ -17,11 +17,6 @@ class AiModerationController extends Controller
      */
     private function resolveLessonAndVideoPath(string|int $lessonId): array
     {
-        $lesson = Lesson::find($lessonId);
-        if ($lesson) {
-            return [$lesson, $lesson->video_path];
-        }
-
         if (str_starts_with((string)$lessonId, 'update_les_')) {
             $updateId = str_replace('update_les_', '', $lessonId);
             $update = \App\Models\ContentUpdate::find($updateId);
@@ -37,6 +32,35 @@ class AiModerationController extends Controller
             }
         }
 
+        $lesson = Lesson::find($lessonId);
+        if ($lesson) {
+            // Check if there is a pending or draft ContentUpdate for this lesson override
+            $pendingUpdate = \App\Models\ContentUpdate::where('entity_id', $lesson->id)
+                ->where('type', \App\Models\ContentUpdate::TYPE_LESSON)
+                ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                ->latest()
+                ->first();
+
+            if ($pendingUpdate && !empty($pendingUpdate->payload['video_path'])) {
+                return [$lesson, $pendingUpdate->payload['video_path']];
+            }
+
+            return [$lesson, $lesson->video_path];
+        }
+
+        // Fallback check if $lessonId is a numeric ContentUpdate ID
+        $update = \App\Models\ContentUpdate::find($lessonId);
+        if ($update && $update->type === \App\Models\ContentUpdate::TYPE_LESSON) {
+            $payload = $update->payload ?? [];
+            $draftLesson = new Lesson([
+                'title' => $payload['title'] ?? 'Bài học nháp',
+                'type' => $payload['type'] ?? 'video',
+                'video_path' => $payload['video_path'] ?? null,
+            ]);
+            $draftLesson->id = 'update_les_' . $update->id;
+            return [$draftLesson, $payload['video_path'] ?? null];
+        }
+
         return [null, null];
     }
 
@@ -44,11 +68,14 @@ class AiModerationController extends Controller
      * Stream video bài học với hỗ trợ HTTP Range requests (cho phép seek).
      * Chỉ dùng cho trang Admin Review – giúp admin nhảy đến đoạn AI phát hiện.
      */
-    public function streamVideo(string|int $lessonId)
+    public function streamVideo(Request $request, string|int $lessonId)
     {
         [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
 
         if (empty($videoPath)) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'Bài học này không có video.'], 404);
+            }
             abort(404, 'Bài học này không có video.');
         }
 
@@ -60,6 +87,9 @@ class AiModerationController extends Controller
         }
 
         if (!$path || !file_exists($path)) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
+            }
             abort(404, 'File video không tồn tại trên máy chủ.');
         }
 
@@ -121,7 +151,7 @@ class AiModerationController extends Controller
         $path = \Illuminate\Support\Facades\Storage::disk('local')->path($segmentPath);
 
         return response()->file($path, [
-            'Content-Type' => 'video/MP2T',
+            'Content-Type' => 'video/mp2t',
             'Cache-Control' => 'no-store',
         ]);
     }

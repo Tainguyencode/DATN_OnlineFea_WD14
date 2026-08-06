@@ -188,6 +188,7 @@ class PasswordResetTest extends TestCase
         $user = $this->createResettableUser([
             'email' => 'instructor-valid@example.com',
             'role' => 'instructor',
+            'instructor_status' => 'approved',
             'email_verified_at' => now(),
         ]);
         $token = Password::broker('users')->createToken($user);

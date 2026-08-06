@@ -83,7 +83,7 @@ class InteractionSeeder extends Seeder
                 'discount_amount' => 219600.00, // 20% của 1098k
                 'total_amount' => 878400.00,
                 'status' => 'paid',
-                'payment_method' => 'vnpay',
+                'payment_method' => 'payos',
                 'created_at' => now()->subDays(5),
                 'updated_at' => now()->subDays(5),
             ],
@@ -158,7 +158,7 @@ class InteractionSeeder extends Seeder
         $payments = [
             [
                 'order_id' => 1,
-                'gateway' => 'vnpay',
+                'gateway' => 'bank_transfer',
                 'transaction_id' => 'VNP2026998877',
                 'amount' => 878400.00,
                 'status' => 'success',
@@ -222,7 +222,7 @@ class InteractionSeeder extends Seeder
             ],
             [
                 'user_id' => 9, // Đặng Công Hùng
-                'course_id' => 5, // Khóa Vue.js
+                'course_id' => 3, // Khóa Vue.js
                 'order_id' => null,
                 'progress_percent' => 35.00,
                 'completed_at' => null,
@@ -240,7 +240,7 @@ class InteractionSeeder extends Seeder
             ],
             [
                 'user_id' => 11, // Tạ Minh Khôi
-                'course_id' => 6, // Khóa Node.js
+                'course_id' => 4, // Khóa Node.js
                 'order_id' => null,
                 'progress_percent' => 50.00,
                 'completed_at' => null,

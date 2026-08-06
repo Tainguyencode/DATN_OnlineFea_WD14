@@ -12,17 +12,34 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_points', function (Blueprint $table) {
-            $table->foreignId('course_id')
-                ->nullable()
-                ->after('description')
-                ->constrained('courses')
-                ->nullOnDelete();
+            if (!Schema::hasColumn('user_points', 'type')) {
+                $table->string('type')->nullable();
+            }
+            if (!Schema::hasColumn('user_points', 'source')) {
+                $table->string('source')->nullable();
+            }
+            if (!Schema::hasColumn('user_points', 'description')) {
+                $table->text('description')->nullable();
+            }
+            if (!Schema::hasColumn('user_points', 'course_id')) {
+                $table->foreignId('course_id')
+                    ->nullable()
+                    ->constrained('courses')
+                    ->nullOnDelete();
+            }
         });
 
         Schema::table('discussion_replies', function (Blueprint $table) {
-            $table->boolean('is_helpful')
-                ->default(false)
-                ->after('is_instructor_answer');
+            if (!Schema::hasColumn('discussion_replies', 'is_helpful')) {
+                $table->boolean('is_helpful')
+                    ->default(false);
+            }
+        });
+
+        Schema::table('user_badges', function (Blueprint $table) {
+            if (!Schema::hasColumn('user_badges', 'created_at')) {
+                $table->timestamps();
+            }
         });
     }
 
@@ -32,12 +49,25 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('user_points', function (Blueprint $table) {
-            $table->dropForeign(['course_id']);
-            $table->dropColumn('course_id');
+            if (Schema::hasColumn('user_points', 'course_id')) {
+                $table->dropForeign(['course_id']);
+                $table->dropColumn('course_id');
+            }
+            if (Schema::hasColumn('user_points', 'description')) {
+                $table->dropColumn('description');
+            }
+            if (Schema::hasColumn('user_points', 'source')) {
+                $table->dropColumn('source');
+            }
+            if (Schema::hasColumn('user_points', 'type')) {
+                $table->dropColumn('type');
+            }
         });
 
         Schema::table('discussion_replies', function (Blueprint $table) {
-            $table->dropColumn('is_helpful');
+            if (Schema::hasColumn('discussion_replies', 'is_helpful')) {
+                $table->dropColumn('is_helpful');
+            }
         });
     }
 };

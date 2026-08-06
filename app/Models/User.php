@@ -163,8 +163,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function badges(): BelongsToMany
     {
         return $this->belongsToMany(Badge::class, 'user_badges')
-            ->withPivot('earned_at')
-            ->withTimestamps();
+            ->withPivot('earned_at');
     }
 
 
@@ -281,14 +280,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function avatarUrl(): string
     {
         if (! $this->avatar) {
-            return 'https://ui-avatars.com/api/?name='.urlencode($this->name).'&background=4f46e5&color=fff';
+            return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
         }
 
-        if (str_starts_with($this->avatar, 'http')) {
+        if (str_starts_with($this->avatar, 'http://') || str_starts_with($this->avatar, 'https://')) {
             return $this->avatar;
         }
 
-        return Storage::disk('public')->url($this->avatar);
+        if (Storage::disk('public')->exists($this->avatar)) {
+            return Storage::disk('public')->url($this->avatar);
+        }
+
+        return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
     }
 
     public function getCommissionRate(): float
