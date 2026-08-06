@@ -57,6 +57,15 @@ class DiscussionController extends Controller
             'is_resolved' => false,
         ]);
 
+        // Cộng +10 điểm cho học viên đặt câu hỏi
+        app(\App\Services\PointService::class)->awardPoints(
+            auth()->id(),
+            10,
+            'ask_question',
+            "Đặt câu hỏi: {$discussion->title} (discussion_id:{$discussion->id})",
+            $course->id
+        );
+
         return redirect()->route('courses.lessons.show', [
             'course' => $course,
             'lesson' => $lesson,
@@ -124,5 +133,45 @@ class DiscussionController extends Controller
         }
 
         return back()->with('success', 'Đã gửi phản hồi.');
+    }
+
+    /**
+     * Đánh dấu hoặc hủy đánh dấu câu trả lời hữu ích.
+     */
+    public function toggleHelpful(DiscussionReply $reply): RedirectResponse
+    {
+        $discussion = $reply->discussion;
+        $user = auth()->user();
+        
+        $course = $discussion->lesson->course;
+        $isOwner = (int) $discussion->user_id === (int) $user->id;
+        $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
+        
+        abort_unless($isOwner || $isInstructor, 403);
+        
+        $reply->is_helpful = !$reply->is_helpful;
+        $reply->save();
+        
+        $pointService = app(\App\Services\PointService::class);
+        $replyTag = "reply_id:{$reply->id}";
+        
+        if ($reply->is_helpful) {
+            // Cộng +20 điểm cho người viết câu trả lời hữu ích
+            $pointService->awardPoints(
+                $reply->user_id, 
+                20, 
+                'reply_marked_helpful', 
+                "Câu trả lời được đánh dấu hữu ích trong thảo luận: {$discussion->title} ({$replyTag})", 
+                $course->id
+            );
+        } else {
+            // Thu hồi điểm khi hủy đánh dấu
+            \App\Models\UserPoint::where('user_id', $reply->user_id)
+                ->where('source', 'reply_marked_helpful')
+                ->where('description', 'like', "%{$replyTag}%")
+                ->delete();
+        }
+        
+        return redirect()->back()->with('success', 'Cập nhật trạng thái câu trả lời thành công.');
     }
 }

@@ -28,6 +28,11 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            \App\Models\User::where('id', $userId)->update([
+                'last_learning_at' => now(),
+                'engagement_email_stage' => 0,
+            ]);
+
             $lessonIds = $this->courseLessonIds($course);
             abort_unless($lessonIds->contains((int) $lesson->id), 404);
 
@@ -70,6 +75,10 @@ class LearningProgressService
                     'completed_at' => $completedAt,
                 ]
             );
+
+            if ($completed && ! ($existing?->is_completed ?? false)) {
+                app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+            }
 
             $requiredLessonIds = $this->requiredLessonIds($course);
             $completedLessons = LessonProgress::query()
@@ -129,6 +138,11 @@ class LearningProgressService
                 ->withLearningAccess()
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            \App\Models\User::where('id', $userId)->update([
+                'last_learning_at' => now(),
+                'engagement_email_stage' => 0,
+            ]);
 
             $lessonIds = $this->courseLessonIds($course);
             abort_unless($lessonIds->contains((int) $lesson->id), 404);
