@@ -152,6 +152,15 @@ class CourseController extends Controller
 
         $recentlyViewedCourseService->record(auth()->user(), $course);
 
+        $topStudents = \App\Models\User::query()
+            ->join('user_points', 'users.id', '=', 'user_points.user_id')
+            ->select('users.*', \Illuminate\Support\Facades\DB::raw('SUM(user_points.points) as course_points'))
+            ->where('user_points.course_id', $course->id)
+            ->groupBy('users.id')
+            ->orderByDesc('course_points')
+            ->limit(10)
+            ->get();
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -177,6 +186,7 @@ class CourseController extends Controller
             'enrollment',
             'recommendationTitle',
             'recommendationSubtitle',
+            'topStudents',
         ));
     }
 
@@ -248,8 +258,9 @@ class CourseController extends Controller
 
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
 
-        if ($player['canAccessLesson'] || $player['isEnrolled']) {
+        if ($user && ($player['canAccessLesson'] || $player['isEnrolled'])) {
             $recentlyViewedCourseService->record($user, $course);
+            app(\App\Services\EngagementService::class)->recordLearningActivity($user);
         }
 
         $discussions = collect();

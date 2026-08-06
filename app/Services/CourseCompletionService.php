@@ -107,6 +107,15 @@ class CourseCompletionService
                     'status' => Enrollment::STATUS_COMPLETED,
                 ]);
 
+                // Cộng +100 điểm hoàn thành khóa học
+                app(\App\Services\PointService::class)->awardPoints(
+                    $userId,
+                    100,
+                    'course_completed',
+                    "Hoàn thành khóa học: {$course->title} (course_id:{$course->id})",
+                    $course->id
+                );
+
                 $certificate = $this->issueCertificate($userId, $course);
 
                 PushNotification::create([

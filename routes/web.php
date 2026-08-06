@@ -78,6 +78,7 @@ Route::get('/courses', [CourseController::class, 'index'])->name('courses.index'
 Route::get('/instructors', [InstructorController::class, 'index'])->name('instructors.index');
 Route::get('/instructors/{user}', [InstructorController::class, 'show'])->name('instructors.show');
 Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
+Route::get('/leaderboard', [\App\Http\Controllers\Web\LeaderboardController::class, 'index'])->name('leaderboard');
 
 // ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───
 Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertificate'])->name('certificates.public');
@@ -112,6 +113,7 @@ Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssi
 Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
     Route::post('/discussions/{discussion}/replies', [DiscussionController::class, 'storeReply'])->name('discussions.replies.store');
+    Route::post('/discussion-replies/{reply}/toggle-helpful', [DiscussionController::class, 'toggleHelpful'])->name('discussions.replies.toggle-helpful');
 });
 
 Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:30,1'])->group(function () {
