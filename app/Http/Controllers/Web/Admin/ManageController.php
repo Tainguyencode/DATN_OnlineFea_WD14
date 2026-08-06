@@ -385,11 +385,19 @@ class ManageController extends Controller
                 $update->payload = $payload;
 
                 if ($action === CourseReview::ACTION_REJECTED || $action === CourseReview::ACTION_NEED_REVISION) {
-                    if ($lessonStatus === 'fail' || $lessonStatus === 'need_revision' || filled($adminNote)) {
+                    if ($lessonStatus === 'fail' || $lessonStatus === 'need_revision') {
                         $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
                         $update->rejection_reason = $adminNote ?: $comment;
                         $update->reviewed_by = $request->user()?->id ?? auth()->id();
                         $update->reviewed_at = now();
+                    } elseif ($lessonStatus === 'pass') {
+                        $update->status = \App\Models\ContentUpdate::STATUS_PENDING;
+                        $update->rejection_reason = null;
+                    }
+                } elseif ($action === CourseReview::ACTION_APPROVED) {
+                    if ($lessonStatus === 'pass') {
+                        $update->status = \App\Models\ContentUpdate::STATUS_APPROVED;
+                        $update->rejection_reason = null;
                     }
                 }
 
@@ -438,10 +446,17 @@ class ManageController extends Controller
             $updateId = str_replace('update_les_', '', $lessonId);
             $update = \App\Models\ContentUpdate::find($updateId);
         } else {
+            // First check if lessonId matches a ContentUpdate primary key directly
             $update = \App\Models\ContentUpdate::where('course_id', $course->id)
-                ->where('entity_id', $lessonId)
-                ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                ->where('id', $lessonId)
                 ->first();
+
+            if (! $update) {
+                $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+                    ->where('entity_id', $lessonId)
+                    ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                    ->first();
+            }
 
             if (! $update) {
                 $lesson = Lesson::find($lessonId);
@@ -471,11 +486,14 @@ class ManageController extends Controller
             $payload['review_status'] = $reviewStatus;
             $update->payload = $payload;
 
-            if (in_array($reviewStatus, ['fail', 'need_revision'], true) || filled($adminNote)) {
+            if (in_array($reviewStatus, ['fail', 'need_revision'], true)) {
                 $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
                 $update->rejection_reason = $adminNote;
                 $update->reviewed_by = $request->user()?->id ?? auth()->id();
                 $update->reviewed_at = now();
+            } elseif ($reviewStatus === 'pass') {
+                $update->status = \App\Models\ContentUpdate::STATUS_PENDING;
+                $update->rejection_reason = null;
             }
 
             $update->save();
