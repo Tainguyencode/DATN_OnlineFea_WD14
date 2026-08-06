@@ -393,6 +393,40 @@
                 </ul>
             </div>
 
+            {{-- Top 10 Học Viên --}}
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
+                <h3 class="text-lg font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
+                    <span>🏆</span> Top 10 Học Viên
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Thành tích cao nhất trong khóa học này.</p>
+                @if($topStudents->isEmpty())
+                    <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4 italic">Chưa có học viên xếp hạng</p>
+                @else
+                    <div class="space-y-3.5">
+                        @foreach($topStudents as $index => $student)
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <span class="w-5 text-center text-xs font-black text-slate-400 dark:text-slate-500">
+                                        @if($index == 0) 🥇
+                                        @elseif($index == 1) 🥈
+                                        @elseif($index == 2) 🥉
+                                        @else {{ $index + 1 }}
+                                        @endif
+                                    </span>
+                                    <img src="{{ $student->avatarUrl() }}" alt="Avatar" class="h-7 w-7 rounded-full border border-slate-200 dark:border-slate-700 object-cover shrink-0">
+                                    <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[100px]" title="{{ $student->name }}">
+                                        {{ $student->name }}
+                                    </span>
+                                </div>
+                                <span class="text-xs font-bold text-[#0056D2] dark:text-blue-400 shrink-0">
+                                    {{ $student->course_points }} pts
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
                 <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Thông tin khóa học</h3>
                 <dl class="mt-4 space-y-3 text-sm">

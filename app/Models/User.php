@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Storage;
     'google_id', 'facebook_id', 'github_id', 'microsoft_id',
     'two_factor_enabled', 'two_factor_secret', 'is_active',
     'last_login_at', 'last_login_ip', 'password_changed_at',
+    'last_learning_at', 'engagement_email_stage', 'last_engagement_sent_at',
     'commission_rate', 'bank_code', 'bank_name', 'bank_account_number', 'bank_account_name',
     'instructor_status', 'approved_at', 'approved_by', 'rejected_reason',
 ])]
@@ -154,6 +155,18 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(StudyGroupMessage::class);
     }
 
+    public function points(): HasMany
+    {
+        return $this->hasMany(UserPoint::class);
+    }
+
+    public function badges(): BelongsToMany
+    {
+        return $this->belongsToMany(Badge::class, 'user_badges')
+            ->withPivot('earned_at')
+            ->withTimestamps();
+    }
+
 
     public function emailVerificationCodes(): HasMany
     {
@@ -213,6 +226,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'two_factor_enabled' => 'boolean',
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_learning_at' => 'datetime',
+            'engagement_email_stage' => 'integer',
+            'last_engagement_sent_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'commission_rate' => 'decimal:2',
         ];

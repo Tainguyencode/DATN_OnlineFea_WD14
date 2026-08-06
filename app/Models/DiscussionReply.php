@@ -13,6 +13,7 @@ class DiscussionReply extends Model
         'user_id',
         'content',
         'is_instructor_answer',
+        'is_helpful',
         'attachment_path',
         'attachment_name',
         'attachment_type',
@@ -22,6 +23,7 @@ class DiscussionReply extends Model
     {
         return [
             'is_instructor_answer' => 'boolean',
+            'is_helpful' => 'boolean',
         ];
     }
 
