@@ -354,11 +354,17 @@
                                                         <span class="text-xs text-[#6a6f73]">{{ $reply->created_at->diffForHumans() }}</span>
                                                     </div>
                                                     
-                                                    @if($reply->is_instructor_answer)
-                                                        <div class="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200 mb-2">Giảng viên</div>
-                                                    @else
-                                                        <div class="inline-flex items-center rounded bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600 border border-gray-200 mb-2">Học viên</div>
-                                                    @endif
+                                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                                        @if($reply->is_instructor_answer)
+                                                            <div class="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">Giảng viên</div>
+                                                        @else
+                                                            <div class="inline-flex items-center rounded bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600 border border-gray-200">Học viên</div>
+                                                        @endif
+                                                        
+                                                        @if($reply->is_helpful)
+                                                            <div class="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">✔️ Hữu ích</div>
+                                                        @endif
+                                                    </div>
                                                     
                                                     <p class="text-sm text-[#1c1d1f] whitespace-pre-line leading-relaxed">{{ $reply->content }}</p>
 
@@ -380,6 +386,23 @@
                                                                 </a>
                                                             @endif
                                                         </div>
+                                                    @endif
+
+                                                    @if(auth()->check() && (int)$reply->user_id !== (int)auth()->id())
+                                                        @php
+                                                            $isDiscussionOwner = (int) $activeDiscussion->user_id === (int) auth()->id();
+                                                            $isInstructor = auth()->user()->role === 'admin' || (auth()->user()->role === 'instructor' && (int) $course->instructor_id === (int) auth()->id());
+                                                        @endphp
+                                                        @if($isDiscussionOwner || $isInstructor)
+                                                            <div class="mt-3 flex justify-end">
+                                                                <form action="{{ route('discussions.replies.toggle-helpful', $reply) }}" method="POST">
+                                                                    @csrf
+                                                                    <button type="submit" class="text-xs font-bold px-2 py-1 rounded border transition duration-200 cursor-pointer {{ $reply->is_helpful ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300' }}">
+                                                                        {{ $reply->is_helpful ? 'Bỏ đánh dấu hữu ích' : '👍 Đánh dấu hữu ích' }}
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        @endif
                                                     @endif
                                                 </div>
                                             </div>
