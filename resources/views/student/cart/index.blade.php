@@ -176,9 +176,11 @@
                         <span x-text="'-' + formatMoney(discount)"></span>
                     </div>
                     <!-- Cảnh báo nếu coupon không đủ điều kiện đơn hàng tối thiểu -->
-                    <div class="text-xs text-rose-500 font-semibold bg-rose-50 dark:bg-rose-950/20 p-2.5 rounded-lg" x-show="appliedCoupon && !isCouponConditionMet">
-                        Mã <span class="font-bold" x-text="appliedCoupon.code"></span> yêu cầu đơn hàng từ <span x-text="formatMoney(appliedCoupon.min_order_amount)"></span>. Hãy chọn thêm khóa học để áp dụng.
-                    </div>
+                    <template x-if="appliedCoupon && !isCouponConditionMet">
+                        <div class="text-xs text-rose-500 font-semibold bg-rose-50 dark:bg-rose-950/20 p-2.5 rounded-lg">
+                            Mã <span class="font-bold" x-text="appliedCoupon?.code"></span> yêu cầu đơn hàng từ <span x-text="formatMoney(appliedCoupon?.min_order_amount || 0)"></span>. Hãy chọn thêm khóa học để áp dụng.
+                        </div>
+                    </template>
                     <div class="flex justify-between text-slate-900 dark:text-white font-extrabold text-lg pt-1 border-t border-slate-50 dark:border-slate-800/40">
                         <span>Tổng cộng</span>
                         <span class="text-[#0056D2] dark:text-blue-300" x-text="formatMoney(grandTotal)"></span>
@@ -233,7 +235,7 @@
                                     </div>
                                     <button type="button" 
                                             @click="applyCoupon(cp.code)"
-                                            :disabled="appliedCoupon !== null && appliedCoupon.code === cp.code"
+                                            :disabled="appliedCoupon?.code === cp.code"
                                             class="bg-blue-50 dark:bg-blue-950/60 text-[#0056D2] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 font-bold px-3 py-1.5 rounded-lg transition text-[11px] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                                         Áp dụng
                                     </button>
