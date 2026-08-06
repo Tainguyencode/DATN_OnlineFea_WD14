@@ -249,7 +249,11 @@ class InstructorCurriculumLessonTest extends TestCase
 
     private function signInInstructor(?User $user = null): User
     {
-        $user ??= User::factory()->create(['role' => 'instructor']);
+        $user ??= User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'email_verified_at' => now(),
+        ]);
 
         $this->actingAs($user)->withSession(['two_factor_passed_at' => now()->timestamp]);
 

@@ -74,7 +74,7 @@ class WalletController extends Controller
         return back()->with('success', 'Cập nhật thông tin tài khoản ngân hàng nhận tiền thành công!');
     }
 
-    public function requestWithdrawal(Request $request): RedirectResponse
+    public function requestWithdrawal(Request $request, PayoutService $payoutService): RedirectResponse
     {
         $user = auth()->user();
 
@@ -109,16 +109,43 @@ class WalletController extends Controller
             'status' => Withdrawal::STATUS_PENDING,
         ]);
 
-        ActivityLogService::log(
-            $user->id,
-            'request_withdrawal',
-            Withdrawal::class,
-            $withdrawal->id,
-            ['amount' => $amount, 'bank_name' => $user->bank_name, 'account' => $user->bank_account_number],
-            $request,
-            "Giảng viên {$user->name} đã gửi yêu cầu rút tiền " . number_format($amount, 0, ',', '.') . " VNĐ."
-        );
+        // Thử tự động chi chuyển khoản qua PayOS API ngay lập tức
+        try {
+            $payoutResult = $payoutService->processAutoPayout($withdrawal);
+            $txnRef = $payoutResult['reference'] ?? $payoutResult['id'] ?? ('PAYOS-PO-' . time());
 
-        return back()->with('success', 'Đã gửi yêu cầu rút tiền ' . number_format($amount, 0, ',', '.') . ' VNĐ thành công! Quản trị viên sẽ kiểm tra và chuyển khoản cho bạn trong thời gian sớm nhất.');
+            $withdrawal->update([
+                'status' => Withdrawal::STATUS_APPROVED,
+                'transaction_ref' => $txnRef,
+                'admin_note' => 'Tự động chi tiền tức thì qua PayOS Payout API khi khởi tạo yêu cầu.',
+                'processed_at' => now(),
+            ]);
+
+            ActivityLogService::log(
+                $user->id,
+                'request_withdrawal_auto_approved',
+                Withdrawal::class,
+                $withdrawal->id,
+                ['amount' => $amount, 'ref' => $txnRef],
+                $request,
+                "Giảng viên {$user->name} đã rút tiền thành công " . number_format($amount, 0, ',', '.') . " VNĐ qua PayOS Auto Payout."
+            );
+
+            return back()->with('success', '⚡ Rút tiền thành công! Hệ thống đã tự động chuyển khoản ' . number_format($amount, 0, ',', '.') . ' VNĐ trực tiếp về tài khoản ' . $user->bank_name . ' (' . $user->bank_account_number . ') của bạn. Mã GD: ' . $txnRef);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("Chưa tự động chi được PayOS cho yêu cầu rút tiền #{$withdrawal->id}: " . $e->getMessage());
+
+            ActivityLogService::log(
+                $user->id,
+                'request_withdrawal',
+                Withdrawal::class,
+                $withdrawal->id,
+                ['amount' => $amount, 'bank_name' => $user->bank_name, 'account' => $user->bank_account_number, 'auto_payout_error' => $e->getMessage()],
+                $request,
+                "Giảng viên {$user->name} đã gửi yêu cầu rút tiền " . number_format($amount, 0, ',', '.') . " VNĐ."
+            );
+
+            return back()->with('success', 'Đã gửi yêu cầu rút tiền ' . number_format($amount, 0, ',', '.') . ' VNĐ thành công! Quản trị viên sẽ kiểm tra và chuyển khoản cho bạn trong thời gian sớm nhất.');
+        }
     }
 }

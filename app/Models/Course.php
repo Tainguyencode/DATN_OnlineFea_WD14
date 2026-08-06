@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Model Quản lý Khóa học Trực tuyến (Course Model)
@@ -212,6 +213,26 @@ class Course extends Model
     public function getEffectivePriceAttribute(): float
     {
         return (float) ($this->discount_price ?? $this->sale_price ?? $this->price);
+    }
+
+    /**
+     * Lấy đường dẫn ảnh đại diện (thumbnail) hợp lệ của khóa học.
+     */
+    public function thumbnailUrl(): string
+    {
+        if (! $this->thumbnail) {
+            return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80';
+        }
+
+        if (str_starts_with($this->thumbnail, 'http://') || str_starts_with($this->thumbnail, 'https://')) {
+            return $this->thumbnail;
+        }
+
+        if (Storage::disk('public')->exists($this->thumbnail)) {
+            return asset('storage/' . $this->thumbnail);
+        }
+
+        return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80';
     }
 
     /**

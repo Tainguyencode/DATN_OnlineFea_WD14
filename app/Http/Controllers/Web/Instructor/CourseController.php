@@ -203,9 +203,11 @@ class CourseController extends Controller
 
         Lesson::create([
             ...$validated,
+            'course_id' => $chapter->course_id,
             'chapter_id' => $chapter->id,
             'sort_order' => $chapter->lessons()->count(),
             'is_preview' => $request->boolean('is_preview'),
+            'status' => $validated['status'] ?? 'draft',
         ]);
 
         return back()->with('success', 'Đã thêm bài giảng.');
@@ -216,11 +218,13 @@ class CourseController extends Controller
         $this->ensureOwned($course);
         abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
-        $request->validate([
-            'copyright_agreed' => ['required', 'accepted'],
-        ], [
-            'copyright_agreed.accepted' => 'Bạn phải đọc và đồng ý với cam kết bản quyền trước khi gửi duyệt.',
-        ]);
+        if (! $course->copyright_agreed) {
+            $request->validate([
+                'copyright_agreed' => ['required', 'accepted'],
+            ], [
+                'copyright_agreed.accepted' => 'Bạn phải đọc và đồng ý với cam kết bản quyền trước khi gửi duyệt.',
+            ]);
+        }
 
         if (! $course->submissionCheck()->passes()) {
             return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');

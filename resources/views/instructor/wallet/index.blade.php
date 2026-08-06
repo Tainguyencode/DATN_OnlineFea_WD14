@@ -95,7 +95,7 @@
                         class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-white/50 active:scale-[0.98] cursor-pointer"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                        Yêu cầu Rút tiền
+                        Rút tiền
                     </button>
                 </div>
             </div>
@@ -158,7 +158,7 @@
                     </div>
                     <div>
                         <h3 class="text-base font-bold text-slate-900">Tài khoản Ngân hàng Nhận tiền</h3>
-                        <p class="text-xs text-slate-500">Thông tin tài khoản để Admin thực hiện chuyển khoản VietQR Napas247 khi bạn rút tiền</p>
+                        <p class="text-xs text-slate-500">Thông tin tài khoản để nhận tiền chuyển khoản tự động khi bạn rút tiền</p>
                     </div>
                 </div>
 
@@ -222,7 +222,7 @@
         <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div class="border-b border-slate-100 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h3 class="text-base font-bold text-slate-900">Lịch sử Yêu cầu Rút tiền</h3>
+                    <h3 class="text-base font-bold text-slate-900">Lịch sử Rút tiền</h3>
                     <p class="text-xs text-slate-500 mt-0.5">Theo dõi trạng thái duyệt và mã đối soát giao dịch từ hệ thống</p>
                 </div>
             </div>
@@ -477,7 +477,7 @@
                 >
                     <div class="flex items-center justify-between border-b border-slate-100 pb-4">
                         <h3 class="text-base font-bold text-slate-900" id="withdraw-modal-title">
-                            Tạo Yêu cầu Rút tiền về Ngân hàng
+                            Rút tiền về Ngân hàng
                         </h3>
                         <button type="button" @click="showWithdrawModal = false" class="text-slate-400 hover:text-slate-600">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -548,7 +548,7 @@
                                 :disabled="!accountNumber || maxAmount < 10000"
                                 class="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
-                                Gửi Yêu cầu Rút tiền
+                                Rút tiền ngay
                             </button>
                         </div>
                     </form>

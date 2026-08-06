@@ -114,7 +114,7 @@
                     ['href' => '#cart', 'label' => 'Giỏ hàng'],
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
-                    ['href' => '#orders', 'label' => 'Đơn hàng'],
+                    ['href' => route('student.orders'), 'label' => 'Đơn hàng', 'external' => true],
                     ['href' => route('study-groups.index'), 'label' => 'Nhóm học tập', 'external' => true],
                     ['href' => route('student.profile'), 'label' => 'Hồ sơ', 'external' => true],
                 ] as $item)
@@ -301,7 +301,7 @@
                                 @csrf
                                 <input type="text" name="coupon_code" placeholder="Mã giảm giá" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
                                 <select name="payment_method" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                                    <option value="vnpay">VNPay</option>
+                                    <option value="payos">PayOS (VietQR)</option>
                                     <option value="momo">MoMo</option>
                                     <option value="bank_transfer">Chuyển khoản</option>
                                 </select>

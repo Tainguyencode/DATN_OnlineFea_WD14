@@ -99,7 +99,7 @@ class CartController extends Controller
     public function checkout(Request $request, PaymentGatewayService $paymentService): RedirectResponse
     {
         $validated = $request->validate([
-            'payment_method' => 'required|in:momo,vnpay,bank_transfer',
+            'payment_method' => 'required|in:payos,momo,bank_transfer',
             'coupon_code' => 'nullable|string',
             'course_ids' => 'required|array',
             'course_ids.*' => 'required|integer|exists:courses,id',
@@ -365,7 +365,7 @@ class CartController extends Controller
     }
 
     /**
-     * Hiển thị giao diện thanh toán chuyển khoản ngân hàng.
+     * Hiển thị trang lựa chọn cổng thanh toán cho đơn hàng chờ thanh toán.
      *
      * @return View|RedirectResponse
      */
@@ -381,10 +381,56 @@ class CartController extends Controller
         }
 
         if ($order->status !== 'pending') {
-            return redirect()->route('student.dashboard')->with('error', 'Đơn hàng này không ở trạng thái chờ thanh toán.');
+            return redirect()->route('student.orders')->with('error', 'Đơn hàng này không ở trạng thái chờ thanh toán.');
         }
 
-        return view('student.cart.bank_transfer', compact('order'));
+        $order->load('items.course');
+
+        return view('student.cart.pay', compact('order'));
+    }
+
+    /**
+     * Xử lý lựa chọn cổng thanh toán và chuyển hướng đến Cổng thanh toán tương ứng (PayOS, VNPay, MoMo, Bank Transfer).
+     */
+    public function processPayment(Request $request, string $orderCode, PaymentGatewayService $paymentService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => 'required|in:payos,vnpay,momo,bank_transfer',
+        ]);
+
+        $order = Order::where('order_code', $orderCode)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        if ($order->status === 'paid') {
+            return redirect()->route('student.checkout.success', $orderCode);
+        }
+
+        if ($order->status !== 'pending') {
+            return redirect()->route('student.orders')->with('error', 'Đơn hàng này không ở trạng thái chờ thanh toán.');
+        }
+
+        $paymentMethod = $validated['payment_method'];
+
+        $dbGateway = ($paymentMethod === 'payos') ? 'bank_transfer' : $paymentMethod;
+
+        // Cập nhật phương thức thanh toán cho đơn hàng
+        $order->update(['payment_method' => $paymentMethod]);
+
+        if ($order->payment) {
+            $order->payment->update(['gateway' => $dbGateway]);
+        } else {
+            Payment::create([
+                'order_id' => $order->id,
+                'gateway' => $dbGateway,
+                'amount' => $order->total_amount,
+                'status' => 'pending',
+            ]);
+        }
+
+        $paymentUrl = $paymentService->getPaymentUrl($order);
+
+        return redirect($paymentUrl);
     }
 
     /**

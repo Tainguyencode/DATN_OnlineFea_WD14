@@ -46,7 +46,7 @@ class StoreLessonRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($lessonTypes)],
-            'video_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,webm', 'max:204800', 'prohibited_unless:type,video'],
+            'video_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,webm,mkv', 'max:204800', 'prohibited_unless:type,video'],
             'video_url' => ['nullable', 'string', 'max:2048', 'prohibited_unless:type,video'],
             'content' => ['nullable', 'string', 'prohibited_if:type,quiz'],
             'document_file' => [
@@ -130,8 +130,8 @@ class StoreLessonRequest extends FormRequest
             'type.required' => 'Vui lòng chọn loại bài học.',
             'type.in' => 'Loại bài học không hợp lệ. Chọn: Video, Tài liệu, Quiz hoặc Bài tập.',
 
-            'video_file.file' => 'Video bài giảng phải là một file.',
-            'video_file.mimes' => 'Video bài giảng chỉ cho phép định dạng MP4, MOV, AVI hoặc WEBM.',
+            'video_file.file' => 'Video bài giảng phải là một tệp tin hợp lệ.',
+            'video_file.mimes' => 'Video bài giảng chỉ cho phép định dạng MP4, MOV, AVI, WEBM hoặc MKV.',
             'video_file.max' => 'Dung lượng video bài giảng tối đa là 200MB.',
             'video_file.prohibited_unless' => 'Chỉ upload video khi loại bài học là Video.',
 

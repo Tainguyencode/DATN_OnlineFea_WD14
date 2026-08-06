@@ -45,6 +45,49 @@ return new class extends Migration
                 $table->softDeletes();
             }
         });
+
+        if (Schema::hasTable('activity_logs')) {
+            Schema::table('activity_logs', function (Blueprint $table) {
+                if (! Schema::hasColumn('activity_logs', 'description')) {
+                    $table->text('description')->nullable();
+                }
+                if (! Schema::hasColumn('activity_logs', 'properties')) {
+                    $table->json('properties')->nullable();
+                }
+                if (! Schema::hasColumn('activity_logs', 'ip_address')) {
+                    $table->ipAddress('ip_address')->nullable();
+                }
+                if (! Schema::hasColumn('activity_logs', 'user_agent')) {
+                    $table->text('user_agent')->nullable();
+                }
+            });
+        }
+
+        if (Schema::hasTable('push_notifications')) {
+            Schema::table('push_notifications', function (Blueprint $table) {
+                if (! Schema::hasColumn('push_notifications', 'user_id')) {
+                    $table->foreignId('user_id')->nullable()->constrained('users')->cascadeOnDelete();
+                }
+                if (! Schema::hasColumn('push_notifications', 'title')) {
+                    $table->string('title')->nullable();
+                }
+                if (! Schema::hasColumn('push_notifications', 'message')) {
+                    $table->text('message')->nullable();
+                }
+                if (! Schema::hasColumn('push_notifications', 'type')) {
+                    $table->string('type')->nullable();
+                }
+                if (! Schema::hasColumn('push_notifications', 'url')) {
+                    $table->string('url')->nullable();
+                }
+                if (! Schema::hasColumn('push_notifications', 'is_read')) {
+                    $table->boolean('is_read')->default(false);
+                }
+                if (! Schema::hasColumn('push_notifications', 'read_at')) {
+                    $table->timestamp('read_at')->nullable();
+                }
+            });
+        }
     }
 
     public function down(): void

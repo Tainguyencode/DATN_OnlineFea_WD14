@@ -142,6 +142,7 @@ class SocialAuthenticationTest extends TestCase
         $user = User::factory()->create([
             'email' => 'social.user@example.com',
             'role' => 'instructor',
+            'instructor_status' => 'approved',
             'google_id' => 'google-existing',
         ]);
 

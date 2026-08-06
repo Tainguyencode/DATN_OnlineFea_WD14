@@ -305,7 +305,7 @@ class EmailVerificationTest extends TestCase
     {
         config(['auth.email_verification_enabled' => false]);
 
-        $instructor = User::factory()->unverified()->create(['role' => 'instructor']);
+        $instructor = User::factory()->unverified()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true]);
 
         $this->actingAs($instructor)
             ->withSession(['two_factor_passed_at' => now()->timestamp])
@@ -330,6 +330,7 @@ class EmailVerificationTest extends TestCase
     {
         $instructor = User::factory()->create([
             'role' => 'instructor',
+            'instructor_status' => 'approved',
             'email_verified_at' => now(),
         ]);
 

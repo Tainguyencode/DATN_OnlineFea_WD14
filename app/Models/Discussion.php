@@ -44,6 +44,18 @@ class Discussion extends Model
 
     public function attachmentUrl(): ?string
     {
-        return $this->attachment_path ? Storage::disk('public')->url($this->attachment_path) : null;
+        if (! $this->attachment_path) {
+            return null;
+        }
+
+        if (str_starts_with($this->attachment_path, 'http://') || str_starts_with($this->attachment_path, 'https://')) {
+            return $this->attachment_path;
+        }
+
+        if (Storage::disk('public')->exists($this->attachment_path)) {
+            return Storage::disk('public')->url($this->attachment_path);
+        }
+
+        return null;
     }
 }

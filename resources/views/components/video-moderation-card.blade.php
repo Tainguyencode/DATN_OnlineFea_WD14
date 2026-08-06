@@ -67,15 +67,32 @@
     @if ($lesson->video_path || $lesson->video_url)
         <div class="border-b border-slate-100 bg-slate-950 p-2 sm:p-3">
             @if ($lesson->video_path)
-                <video
-                    src="{{ asset('storage/'.$lesson->video_path) }}"
-                    controls
-                    preload="metadata"
-                    playsinline
-                    class="mx-auto aspect-video w-full max-w-3xl rounded-lg bg-black"
-                >
-                    Trình duyệt không hỗ trợ phát video.
-                </video>
+                @php
+                    $hlsPath = 'lesson-hls/' . $lesson->id . '/playlist.m3u8';
+                    $hasHls = \Illuminate\Support\Facades\Storage::disk('local')->exists($hlsPath);
+                    $hasLocalFile = \Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path);
+                    $hasPublicFile = \Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path);
+                    $fileExists = $hasHls || $hasLocalFile || $hasPublicFile;
+                @endphp
+                @if ($fileExists)
+                    <video
+                        src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
+                        controls
+                        preload="metadata"
+                        playsinline
+                        class="mx-auto aspect-video w-full max-w-3xl rounded-lg bg-black"
+                    >
+                        Trình duyệt không hỗ trợ phát video.
+                    </video>
+                @else
+                    <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-rose-800 bg-rose-950/40 p-8 text-center text-rose-200">
+                        <svg class="h-10 w-10 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p class="font-bold text-base">Video không tồn tại trên hệ thống</p>
+                        <p class="text-xs text-rose-300">File video của bài học này không có trên máy chủ.</p>
+                    </div>
+                @endif
             @elseif ($lesson->video_url)
                 <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-600 bg-slate-900 px-4 py-10 text-center">
                     <p class="text-sm text-slate-300">Video được liên kết từ URL bên ngoài</p>
