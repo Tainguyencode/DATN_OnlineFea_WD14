@@ -78,6 +78,9 @@ class ProgressController
             ]
         );
 
+        // Cộng điểm hoàn thành bài giảng và kiểm tra hoàn thành chương/streak
+        app(\App\Services\PointService::class)->awardLessonCompletionPoints($user->id, $lessonId);
+
         // 5. Kiểm tra xem user đã hoàn thành tất cả lessons của course này chưa
         $course = $lesson->course;
         $totalLessons = $course->lessons()->count();

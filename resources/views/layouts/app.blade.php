@@ -30,6 +30,7 @@
                     @endphp
                     <a href="{{ route('home') }}" class="{{ $navItemClass }} {{ request()->routeIs('home') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Trang chủ</a>
                     <a href="{{ route('courses.index') }}" class="{{ $navItemClass }} {{ request()->routeIs('courses.*') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Khóa học</a>
+                    <a href="{{ route('leaderboard') }}" class="{{ $navItemClass }} {{ request()->routeIs('leaderboard') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Xếp hạng</a>
                     <a href="{{ route('home') }}#paths" class="{{ $navItemClass }} after:w-0 hover:after:w-full">Lộ trình</a>
                     <a href="{{ route('instructors.index') }}" class="{{ $navItemClass }} {{ request()->routeIs('instructors.*') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Giảng viên</a>
                     <a href="{{ route('home') }}#business" class="{{ $navItemClass }} after:w-0 hover:after:w-full">Doanh nghiệp</a>
@@ -122,6 +123,7 @@
             <nav class="flex flex-col gap-1 p-5 text-base font-semibold text-slate-700 dark:text-slate-300">
                 <a href="{{ route('home') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Trang chủ</a>
                 <a href="{{ route('courses.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
+                <a href="{{ route('leaderboard') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Xếp hạng</a>
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Danh mục</a>
                 <a href="{{ route('home') }}#paths" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Lộ trình</a>
                 <a href="{{ route('instructors.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>
