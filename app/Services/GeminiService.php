@@ -21,8 +21,13 @@ class GeminiService
     /** URL API Google Generative AI */
     private const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
     
-    /** Model Gemini mặc định sử dụng */
-    private const DEFAULT_MODEL = 'gemini-3.5-flash';
+    /** Danh sách các Model Gemini hỗ trợ thử lại khi model chính quá tải / 503 */
+    private const CANDIDATE_MODELS = [
+        'gemini-3.5-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-2.0-flash',
+    ];
 
     /**
      * Sinh phản hồi văn bản từ Gemini cho trợ lý AI bài học (Tóm tắt, Giải đáp thắc mắc).
@@ -41,9 +46,7 @@ class GeminiService
 
         $maxTokens = (int) ($options['max_tokens'] ?? 400);
         $temperature = (float) ($options['temperature'] ?? 0.3);
-        $timeout = (int) ($options['timeout'] ?? 45);
-        
-        $model = self::DEFAULT_MODEL;
+        $timeout = (int) ($options['timeout'] ?? 20);
 
         $body = [
             'contents' => [
@@ -61,45 +64,45 @@ class GeminiService
             ],
         ];
 
-        try {
-            $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
+        $lastError = null;
 
-            $response = Http::timeout($timeout)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($url, $body);
+        foreach (self::CANDIDATE_MODELS as $model) {
+            try {
+                $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
 
-            if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404], true)) {
+                $response = Http::withoutVerifying()
+                    ->timeout($timeout)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post($url, $body);
+
+                if ($response->successful()) {
+                    $rawText = (string) ($response->json('candidates.0.content.parts.0.text') ?? '');
+                    $clean = trim($rawText);
+                    $clean = preg_replace('/^```(?:\w+)?\s*/i', '', $clean) ?? $clean;
+                    $clean = preg_replace('/\s*```\s*$/i', '', $clean) ?? $clean;
+                    $clean = trim($clean);
+
+                    if ($clean !== '') {
+                        return [
+                            'text' => $clean,
+                            '_model_used' => $model,
+                        ];
+                    }
+                }
+
                 $msg = $response->json('error.message') ?? $response->body();
-                Log::warning("Google Gemini text skip [{$model}]", ['status' => $response->status()]);
-                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
+                $lastError = "[{$model}] {$response->status()}: {$msg}";
+                Log::warning("Google Gemini text skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
+
+            } catch (\Throwable $e) {
+                $lastError = "[{$model}] Connection error: " . $e->getMessage();
+                Log::warning("Google Gemini text connection error [{$model}]", ['error' => $e->getMessage()]);
             }
-
-            if ($response->failed()) {
-                $msg = $response->json('error.message') ?? $response->body();
-                Log::error("Google Gemini text error [{$model}]", ['status' => $response->status()]);
-                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
-            }
-
-            $rawText = (string) ($response->json('candidates.0.content.parts.0.text') ?? '');
-            $clean = trim($rawText);
-            $clean = preg_replace('/^```(?:\w+)?\s*/i', '', $clean) ?? $clean;
-            $clean = preg_replace('/\s*```\s*$/i', '', $clean) ?? $clean;
-            $clean = trim($clean);
-
-            if ($clean === '') {
-                return ['error' => "[{$model}] empty response"];
-            }
-
-            return [
-                'text' => $clean,
-                '_model_used' => $model,
-            ];
-        } catch (ConnectionException $e) {
-            Log::error('Google Gemini text connection error', ['exception' => $e::class]);
-            throw $e;
         }
+
+        return ['error' => $lastError ?? 'Dịch vụ AI Gemini tạm thời quá tải. Vui lòng thử lại sau.'];
     }
 
     /**
@@ -208,12 +211,9 @@ JSON phải đúng chính xác định dạng sau:
   "watermark": false,
   "copyright_risk": "none",
   "confidence": 0.98,
-  "reason": "",
   "summary": ""
 }
 PROMPT;
-
-        $model = self::DEFAULT_MODEL;
 
         $body = [
             'contents' => [
@@ -238,53 +238,46 @@ PROMPT;
             ],
         ];
 
-        try {
-            $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
+        $lastError = null;
 
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($url, $body);
+        foreach (self::CANDIDATE_MODELS as $model) {
+            try {
+                $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
 
-            if (in_array($response->status(), [400, 402, 403, 429, 502, 503, 404])) {
+                $response = Http::withoutVerifying()
+                    ->timeout(25)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post($url, $body);
+
+                if ($response->successful()) {
+                    $rawText = $response->json('candidates.0.content.parts.0.text') ?? '';
+
+                    $clean = trim($rawText);
+                    $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
+                    $clean = preg_replace('/\s*```\s*$/i', '', $clean);
+                    $clean = trim($clean);
+
+                    $result = json_decode($clean, true);
+
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($result)) {
+                        $result['_model_used'] = $model;
+                        return $result;
+                    }
+                }
+
                 $msg = $response->json('error.message') ?? $response->body();
-                Log::warning("Google Gemini skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
-                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
+                $lastError = "[{$model}] {$response->status()}: {$msg}";
+                Log::warning("Google Gemini image skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
+
+            } catch (\Throwable $e) {
+                $lastError = "[{$model}] Connection error: " . $e->getMessage();
+                Log::warning("Google Gemini image connection error [{$model}]", ['error' => $e->getMessage()]);
             }
-
-            if ($response->failed()) {
-                $msg = $response->json('error.message') ?? $response->body();
-                Log::error("Google Gemini error [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
-                return ['error' => "[{$model}] {$response->status()}: {$msg}"];
-            }
-
-            // 5. Lấy chuỗi phản hồi text dạng JSON từ Gemini
-            $rawText = $response->json('candidates.0.content.parts.0.text') ?? '';
-
-            // 6. Làm sạch các thẻ markdown (```json ... ```)
-            $clean = trim($rawText);
-            $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
-            $clean = preg_replace('/\s*```\s*$/i', '', $clean);
-            $clean = trim($clean);
-
-            // 7. Parse chuỗi JSON thành mảng PHP
-            $result = json_decode($clean, true);
-
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::warning('Google Gemini JSON parse failed', ['raw' => $rawText, 'model' => $model]);
-
-                return ['error' => 'Không parse được JSON từ Google Gemini.', 'raw' => $rawText];
-            }
-
-            $result['_model_used'] = $model;
-
-            return $result;
-
-        } catch (ConnectionException $e) {
-            Log::error('Google Gemini connection error', ['msg' => $e->getMessage()]);
-            return ['error' => 'Connection error: '.$e->getMessage()];
         }
+
+        return ['error' => $lastError ?? 'Tất cả model Gemini đều tạm thời quá tải. Vui lòng thử lại sau.'];
     }
 
     /**

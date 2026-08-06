@@ -222,6 +222,8 @@ class CourseCategoryManagementTest extends TestCase
     {
         return User::factory()->create([
             'role' => $role,
+            'instructor_status' => 'approved',
+            'email_verified_at' => now(),
             'is_active' => true,
             'two_factor_enabled' => false,
         ]);

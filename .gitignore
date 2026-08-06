@@ -27,3 +27,5 @@ Thumbs.db
 build-output.txt
 route-list-output.txt
 test-output.txt
+/bin
+*.exe

@@ -21,7 +21,7 @@ class EnsureApprovedInstructor
             return $next($request);
         }
 
-        if (! $user->hasVerifiedEmail()) {
+        if (config('auth.email_verification_enabled', true) && ! $user->hasVerifiedEmail()) {
             return redirect()->route('verification.notice');
         }
 

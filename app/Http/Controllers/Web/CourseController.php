@@ -353,16 +353,28 @@ class CourseController extends Controller
         Lesson $lesson,
         LearningProgressService $progressService
     ): JsonResponse {
-        abort_unless($request->user()?->isStudent(), 403);
+        $user = $request->user();
+        abort_unless($user, 401);
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
-        abort_unless($this->isPublished($course), 404);
 
-        $enrollmentExists = Enrollment::where('user_id', $request->user()->id)
+        $canBypass = $this->canBypassCourseVisibility($course);
+        $enrollment = Enrollment::where('user_id', $user->id)
             ->where('course_id', $course->id)
             ->withLearningAccess()
-            ->exists();
+            ->first();
 
-        abort_unless($enrollmentExists, 403);
+        if (!$enrollment && ($canBypass || $user->isStudent())) {
+            $enrollment = Enrollment::firstOrCreate([
+                'user_id' => $user->id,
+                'course_id' => $course->id,
+            ], [
+                'status' => Enrollment::STATUS_ACTIVE,
+                'progress_percent' => 0,
+                'enrolled_at' => now(),
+            ]);
+        }
+
+        abort_unless($enrollment, 403);
 
         $validated = $request->validated();
 

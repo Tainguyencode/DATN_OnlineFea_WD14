@@ -1,8 +1,12 @@
+
 <x-instructor-layout title="Ví tiền & Rút tiền" page-title="Ví tiền & Quản lý rút tiền">
 
     <div x-data="{
         showBankModal: false,
         showWithdrawModal: false,
+        showDetailModal: false,
+        activeDetail: null,
+        copied: false,
         bankCode: '{{ old('bank_code', $user->bank_code ?? '') }}',
         bankName: '{{ old('bank_name', $user->bank_name ?? '') }}',
         accountNumber: '{{ old('bank_account_number', $user->bank_account_number ?? '') }}',
@@ -10,6 +14,17 @@
         withdrawAmount: '{{ old('amount', '') }}',
         maxAmount: {{ floor($stats['available_balance']) }},
         
+        openDetail(item) {
+            this.activeDetail = item;
+            this.showDetailModal = true;
+        },
+        copyCode(code) {
+            if (navigator.clipboard && code) {
+                navigator.clipboard.writeText(code);
+                this.copied = true;
+                setTimeout(() => this.copied = false, 2000);
+            }
+        },
         onBankChange(event) {
             const selectedOption = event.target.options[event.target.selectedIndex];
             this.bankName = selectedOption.getAttribute('data-name') || selectedOption.value;
@@ -80,7 +95,7 @@
                         class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-white/50 active:scale-[0.98] cursor-pointer"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                        Yêu cầu Rút tiền
+                        Rút tiền
                     </button>
                 </div>
             </div>
@@ -143,7 +158,7 @@
                     </div>
                     <div>
                         <h3 class="text-base font-bold text-slate-900">Tài khoản Ngân hàng Nhận tiền</h3>
-                        <p class="text-xs text-slate-500">Thông tin tài khoản để Admin thực hiện chuyển khoản VietQR Napas247 khi bạn rút tiền</p>
+                        <p class="text-xs text-slate-500">Thông tin tài khoản để nhận tiền chuyển khoản tự động khi bạn rút tiền</p>
                     </div>
                 </div>
 
@@ -207,7 +222,7 @@
         <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div class="border-b border-slate-100 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h3 class="text-base font-bold text-slate-900">Lịch sử Yêu cầu Rút tiền</h3>
+                    <h3 class="text-base font-bold text-slate-900">Lịch sử Rút tiền</h3>
                     <p class="text-xs text-slate-500 mt-0.5">Theo dõi trạng thái duyệt và mã đối soát giao dịch từ hệ thống</p>
                 </div>
             </div>
@@ -222,6 +237,7 @@
                             <th class="px-6 py-3.5 text-center">Trạng thái</th>
                             <th class="px-6 py-3.5">Mã Giao dịch / Ghi chú</th>
                             <th class="px-6 py-3.5">Thời gian tạo</th>
+                            <th class="px-6 py-3.5 text-center">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200">
@@ -270,6 +286,27 @@
                                 </td>
                                 <td class="px-6 py-4 text-slate-500">
                                     {{ $item->created_at->format('H:i - d/m/Y') }}
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    <button
+                                        type="button"
+                                        @click="openDetail({{ json_encode([
+                                            'id' => $item->id,
+                                            'amount' => number_format($item->amount, 0, ',', '.') . 'đ',
+                                            'bank_name' => $item->bank_name,
+                                            'bank_account_number' => $item->bank_account_number,
+                                            'bank_account_name' => $item->bank_account_name,
+                                            'status' => $item->status,
+                                            'transaction_ref' => $item->transaction_ref ?? '---',
+                                            'admin_note' => $item->admin_note ?? '',
+                                            'created_at' => $item->created_at->format('H:i:s - d/m/Y'),
+                                            'processed_at' => $item->processed_at ? $item->processed_at->format('H:i:s - d/m/Y') : 'Chưa xử lý',
+                                        ]) }})"
+                                        class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        Xem chi tiết
+                                    </button>
                                 </td>
                             </tr>
                         @empty
@@ -440,7 +477,7 @@
                 >
                     <div class="flex items-center justify-between border-b border-slate-100 pb-4">
                         <h3 class="text-base font-bold text-slate-900" id="withdraw-modal-title">
-                            Tạo Yêu cầu Rút tiền về Ngân hàng
+                            Rút tiền về Ngân hàng
                         </h3>
                         <button type="button" @click="showWithdrawModal = false" class="text-slate-400 hover:text-slate-600">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -511,10 +548,153 @@
                                 :disabled="!accountNumber || maxAmount < 10000"
                                 class="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
-                                Gửi Yêu cầu Rút tiền
+                                Rút tiền ngay
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- Modal Chi tiết Giao dịch Rút tiền --}}
+        <div
+            x-show="showDetailModal"
+            x-cloak
+            class="fixed inset-0 z-50 overflow-y-auto"
+            aria-labelledby="detail-modal-title"
+            role="dialog"
+            aria-modal="true"
+        >
+            <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+                <div
+                    x-show="showDetailModal"
+                    x-transition:enter="ease-out duration-200"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    x-transition:leave="ease-in duration-150"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0"
+                    @click="showDetailModal = false"
+                    class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+                ></div>
+
+                <div
+                    x-show="showDetailModal"
+                    x-transition:enter="ease-out duration-200"
+                    x-transition:enter-start="opacity-0 scale-95"
+                    x-transition:enter-end="opacity-100 scale-100"
+                    x-transition:leave="ease-in duration-150"
+                    x-transition:leave-start="opacity-100 scale-100"
+                    x-transition:leave-end="opacity-0 scale-95"
+                    class="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-6"
+                >
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                                💸
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900" id="detail-modal-title">
+                                    Chi tiết Giao dịch Rút tiền
+                                </h3>
+                                <p class="text-xs text-slate-500 font-mono" x-text="activeDetail ? '#REQ' + activeDetail.id : ''"></p>
+                            </div>
+                        </div>
+                        <button type="button" @click="showDetailModal = false" class="text-slate-400 hover:text-slate-600">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    <template x-if="activeDetail">
+                        <div class="mt-5 space-y-4">
+                            {{-- Amount Banner --}}
+                            <div class="rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 p-4 text-center">
+                                <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider block">Số tiền yêu cầu rút</span>
+                                <span class="text-3xl font-black text-emerald-600 mt-1 block" x-text="activeDetail.amount"></span>
+                            </div>
+
+                            {{-- Details Grid --}}
+                            <div class="rounded-2xl border border-slate-200 divide-y divide-slate-100 bg-slate-50/50 text-xs">
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Trạng thái:</span>
+                                    <template x-if="activeDetail.status === 'pending'">
+                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 font-bold text-amber-800">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            Đang chờ duyệt
+                                        </span>
+                                    </template>
+                                    <template x-if="activeDetail.status === 'approved'">
+                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 font-bold text-emerald-800">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                            Đã chuyển tiền
+                                        </span>
+                                    </template>
+                                    <template x-if="activeDetail.status === 'rejected'">
+                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 font-bold text-rose-800">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                            Từ chối
+                                        </span>
+                                    </template>
+                                </div>
+
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Ngân hàng thụ hưởng:</span>
+                                    <span class="font-bold text-slate-900" x-text="activeDetail.bank_name"></span>
+                                </div>
+
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Số tài khoản:</span>
+                                    <span class="font-mono font-bold text-slate-800" x-text="activeDetail.bank_account_number"></span>
+                                </div>
+
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Chủ tài khoản:</span>
+                                    <span class="font-bold uppercase text-slate-900" x-text="activeDetail.bank_account_name"></span>
+                                </div>
+
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Mã GD đối soát (Ref):</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs" x-text="activeDetail.transaction_ref"></span>
+                                        <button
+                                            type="button"
+                                            @click="copyCode(activeDetail?.transaction_ref)"
+                                            class="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded cursor-pointer"
+                                        >
+                                            <span x-text="copied ? 'Đã chép!' : 'Sao chép'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Thời gian khởi tạo:</span>
+                                    <span class="text-slate-700 font-medium" x-text="activeDetail.created_at"></span>
+                                </div>
+
+                                <div class="p-3.5 flex justify-between items-center">
+                                    <span class="text-slate-500 font-semibold">Thời gian xử lý:</span>
+                                    <span class="text-slate-700 font-medium" x-text="activeDetail.processed_at"></span>
+                                </div>
+                            </div>
+
+                            <template x-if="activeDetail.admin_note">
+                                <div class="rounded-2xl border border-slate-200 bg-amber-50/50 p-4 text-xs">
+                                    <span class="font-bold text-slate-800 block mb-1">Ghi chú từ Admin:</span>
+                                    <p class="text-slate-700 italic" x-text="activeDetail.admin_note"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <div class="mt-6 flex justify-end">
+                        <button
+                            type="button"
+                            @click="showDetailModal = false"
+                            class="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition cursor-pointer"
+                        >
+                            Đóng
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
