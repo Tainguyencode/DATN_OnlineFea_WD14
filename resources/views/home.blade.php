@@ -434,32 +434,33 @@
                             </h3>
                         </div>
                         <div class="divide-y divide-slate-200 p-2 dark:divide-slate-800">
-                            <div class="flex items-center justify-between rounded-lg bg-amber-50 p-3 dark:bg-amber-900/30">
-                                <div class="flex items-center gap-3">
-                                    <span
-                                        class="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-white">1</span>
-                                    <span class="text-sm font-bold text-slate-900 dark:text-white">Nguyễn Hoàng Nam</span>
+                            @forelse($weeklyLeaderboard as $index => $student)
+                                @php
+                                    $isTop1 = $index === 0;
+                                    $rankBg = $isTop1 ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+                                    $itemBg = $isTop1 ? 'bg-[#fffbeb] dark:bg-amber-900/20' : '';
+                                @endphp
+                                <div class="flex items-center justify-between p-3 rounded-lg {{ $itemBg }}">
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex h-7 w-7 items-center justify-center rounded-full {{ $rankBg }} text-sm font-bold">
+                                            {{ $index + 1 }}
+                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            <img src="{{ $student->avatarUrl() }}" alt="Avatar" class="h-6 w-6 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
+                                            <span class="text-sm {{ $isTop1 ? 'font-bold' : 'font-medium' }} text-slate-900 dark:text-white">
+                                                {{ $student->name }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <span class="text-sm font-bold {{ $isTop1 ? 'text-amber-600 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400' }}">
+                                        {{ $student->total_points }} pts
+                                    </span>
                                 </div>
-                                <span class="text-sm font-bold text-amber-600 dark:text-amber-300">450 pts</span>
-                            </div>
-                            <div class="flex items-center justify-between p-3">
-                                <div class="flex items-center gap-3">
-                                    <span
-                                        class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200">2</span>
-                                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Trần Thị
-                                        Lan</span>
+                            @empty
+                                <div class="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                                    Chưa có dữ liệu tuần này.
                                 </div>
-                                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">380 pts</span>
-                            </div>
-                            <div class="flex items-center justify-between p-3">
-                                <div class="flex items-center gap-3">
-                                    <span
-                                        class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200">3</span>
-                                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Vũ Hoàng
-                                        Long</span>
-                                </div>
-                                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">320 pts</span>
-                            </div>
+                            @endforelse
                         </div>
                     </div>
                 </div>

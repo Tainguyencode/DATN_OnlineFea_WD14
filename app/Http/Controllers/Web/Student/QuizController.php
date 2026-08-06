@@ -126,6 +126,13 @@ class QuizController extends Controller
             true,
         );
 
+        app(\App\Services\PointService::class)->awardQuizPoints(
+            $request->user()->id,
+            $quiz,
+            (float) $attempt->percent,
+            $course->id
+        );
+
         return view('courses.quiz-result', [
             'course' => $course,
             'lesson' => $lesson,
@@ -205,6 +212,13 @@ class QuizController extends Controller
             0,
             0,
             true,
+        );
+
+        app(\App\Services\PointService::class)->awardQuizPoints(
+            $request->user()->id,
+            $quiz,
+            (float) $attempt->percent,
+            $course->id
         );
 
         $correctCount = collect($graded['questions'])->filter(fn ($q) => $q['is_correct'])->count();

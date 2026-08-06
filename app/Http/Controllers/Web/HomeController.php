@@ -112,9 +112,28 @@ class HomeController extends Controller
 
         $badges = Badge::all();
 
+        // Lấy bảng xếp hạng tuần thực tế từ cơ sở dữ liệu
+        $startOfWeek = now()->startOfWeek();
+        $weeklyLeaderboard = User::query()
+            ->where('role', 'student')
+            ->joinSub(
+                \Illuminate\Support\Facades\DB::table('user_points')
+                    ->select('user_id', \Illuminate\Support\Facades\DB::raw('SUM(points) as total_points'))
+                    ->where('created_at', '>=', $startOfWeek)
+                    ->groupBy('user_id'),
+                'points_table',
+                'users.id',
+                '=',
+                'points_table.user_id'
+            )
+            ->select('users.*', 'points_table.total_points')
+            ->orderByDesc('points_table.total_points')
+            ->limit(5)
+            ->get();
+
         return view('home', compact(
             'banner', 'featuredCourses', 'categories', 'courses', 'selectedCategory',
-            'learningPaths', 'faqs', 'stats', 'badges'
+            'learningPaths', 'faqs', 'stats', 'badges', 'weeklyLeaderboard'
         ));
     }
 
