@@ -237,7 +237,10 @@ class ContentUpdateService
             : $course->chapters;
 
         $activeUpdates = ContentUpdate::where('course_id', $course->id)
-            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
+            ->where(function ($q) {
+                $q->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
+                  ->orWhereNotNull('payload->admin_note');
+            })
             ->orderBy('id')
             ->get();
 
