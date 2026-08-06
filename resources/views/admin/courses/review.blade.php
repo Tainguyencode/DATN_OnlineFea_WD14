@@ -411,20 +411,20 @@
 
                                                         <div class="mt-3 space-y-3">
                                                             <textarea
-                                                                name="lesson_notes[{{ $lesson->id }}][admin_note]"
+                                                                name="lesson_notes[{{ $videoLessonKey }}][admin_note]"
                                                                 rows="3"
                                                                 placeholder="Ví dụ: Video có watermark TikTok. Vui lòng upload bản gốc. Âm thanh hơi nhỏ..."
                                                                 class="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                                                            >{{ old("lesson_notes.{$lesson->id}.admin_note", $existingAdminNote) }}</textarea>
+                                                            >{{ old("lesson_notes.{$videoLessonKey}.admin_note", $existingAdminNote) }}</textarea>
 
                                                             <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
                                                                 <div class="flex flex-wrap items-center gap-4">
                                                                     <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
                                                                         <input
                                                                             type="checkbox"
-                                                                            name="lesson_notes[{{ $lesson->id }}][require_reupload]"
+                                                                            name="lesson_notes[{{ $videoLessonKey }}][require_reupload]"
                                                                             value="1"
-                                                                            @checked(old("lesson_notes.{$lesson->id}.require_reupload", $existingRequireReupload))
+                                                                            @checked(old("lesson_notes.{$videoLessonKey}.require_reupload", $existingRequireReupload))
                                                                             class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                                                                         >
                                                                         <span class="text-rose-700">☐ Yêu cầu upload lại video</span>
@@ -432,30 +432,38 @@
 
                                                                     <div class="flex items-center gap-3 border-l border-slate-200 pl-4">
                                                                         <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
-                                                                            <input type="radio" name="lesson_notes[{{ $lesson->id }}][status]" value="need_revision" @checked(old("lesson_notes.{$lesson->id}.status", $existingLessonStatus) === 'need_revision') class="h-3.5 w-3.5 text-amber-600 focus:ring-amber-500">
+                                                                            <input type="radio" name="lesson_notes[{{ $videoLessonKey }}][status]" value="need_revision" @checked(old("lesson_notes.{$videoLessonKey}.status", $existingLessonStatus) === 'need_revision') class="h-3.5 w-3.5 text-amber-600 focus:ring-amber-500">
                                                                             <span class="text-amber-700">Cần chỉnh sửa</span>
                                                                         </label>
                                                                         <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
-                                                                            <input type="radio" name="lesson_notes[{{ $lesson->id }}][status]" value="fail" @checked(old("lesson_notes.{$lesson->id}.status", $existingLessonStatus) === 'fail') class="h-3.5 w-3.5 text-rose-600 focus:ring-rose-500">
+                                                                            <input type="radio" name="lesson_notes[{{ $videoLessonKey }}][status]" value="fail" @checked(old("lesson_notes.{$videoLessonKey}.status", $existingLessonStatus) === 'fail') class="h-3.5 w-3.5 text-rose-600 focus:ring-rose-500">
                                                                             <span class="text-rose-700">Từ chối</span>
                                                                         </label>
                                                                         <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
-                                                                            <input type="radio" name="lesson_notes[{{ $lesson->id }}][status]" value="pass" @checked(old("lesson_notes.{$lesson->id}.status", $existingLessonStatus) === 'pass') class="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500">
+                                                                            <input type="radio" name="lesson_notes[{{ $videoLessonKey }}][status]" value="pass" @checked(old("lesson_notes.{$videoLessonKey}.status", $existingLessonStatus) === 'pass') class="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500">
                                                                             <span class="text-emerald-700">Đạt</span>
                                                                         </label>
                                                                     </div>
                                                                 </div>
 
-                                                                <button
-                                                                    type="button"
-                                                                    data-lesson-id="{{ $lesson->id }}"
-                                                                    class="btn-save-lesson-note inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                                                                >
-                                                                    <svg class="h-3.5 w-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
-                                                                    </svg>
-                                                                    <span>Lưu ghi chú</span>
-                                                                </button>
+                                                                @php
+                                                                    $hasSavedNote = filled($existingAdminNote) || $existingRequireReupload;
+                                                                @endphp
+                                                                <div class="flex items-center gap-2">
+                                                                    <span class="note-save-status text-xs font-bold text-emerald-600 {{ $hasSavedNote ? '' : 'hidden' }}">
+                                                                        ✓ Đã lưu trên hệ thống
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        data-lesson-id="{{ $videoLessonKey }}"
+                                                                        class="btn-save-lesson-note inline-flex items-center gap-1.5 rounded-lg border {{ $hasSavedNote ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50' }} px-3 py-1.5 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                                                                    >
+                                                                        <svg class="h-3.5 w-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                                                                        </svg>
+                                                                        <span>{{ $hasSavedNote ? 'Cập nhật ghi chú' : 'Lưu ghi chú' }}</span>
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1140,9 +1148,10 @@ document.addEventListener('DOMContentLoaded', function () {
             var textarea = container ? container.querySelector('textarea') : null;
             var chkReupload = container ? container.querySelector('input[type="checkbox"]') : null;
             var radioStatus = container ? container.querySelector('input[type="radio"]:checked') : null;
+            var statusSpan = container ? container.querySelector('.note-save-status') : null;
 
             var labelSpan = this.querySelector('span');
-            var defaultLabel = labelSpan ? labelSpan.innerText : 'Lưu ghi chú';
+            var originalText = labelSpan ? labelSpan.innerText : 'Lưu ghi chú';
             if (labelSpan) labelSpan.innerText = 'Đang lưu...';
             this.disabled = true;
 
@@ -1162,15 +1171,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     throw new Error(data.message || 'Lỗi lưu ghi chú');
                 }
 
-                if (labelSpan) labelSpan.innerText = 'Đã lưu ✓';
-                var btnRef = this;
-                setTimeout(function () {
-                    if (labelSpan) labelSpan.innerText = defaultLabel;
-                    btnRef.disabled = false;
-                }, 1500);
+                if (labelSpan) labelSpan.innerText = 'Cập nhật ghi chú';
+                this.classList.remove('border-indigo-200', 'bg-white', 'text-indigo-700', 'hover:bg-indigo-50');
+                this.classList.add('border-emerald-300', 'bg-emerald-50', 'text-emerald-700', 'hover:bg-emerald-100');
+
+                if (statusSpan) {
+                    statusSpan.innerText = '✓ Đã lưu trên hệ thống';
+                    statusSpan.classList.remove('hidden');
+                }
+
+                this.disabled = false;
             } catch (err) {
                 alert('Lỗi lưu ghi chú bài học: ' + err.message);
-                if (labelSpan) labelSpan.innerText = defaultLabel;
+                if (labelSpan) labelSpan.innerText = originalText;
                 this.disabled = false;
             }
         });
