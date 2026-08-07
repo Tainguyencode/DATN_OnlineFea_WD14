@@ -15,15 +15,37 @@
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach([
-            ['label' => 'Tổng user', 'value' => $stats['total'], 'tone' => 'from-slate-900 to-slate-700'],
-            ['label' => 'Admin', 'value' => $stats['admins'], 'tone' => 'from-rose-600 to-orange-500'],
-            ['label' => 'Instructor', 'value' => $stats['instructors'], 'tone' => 'from-emerald-600 to-teal-500'],
-            ['label' => 'Student', 'value' => $stats['students'], 'tone' => 'from-blue-700 to-blue-500'],
+            [
+                'label' => 'Tổng user',
+                'value' => $stats['total'],
+                'iconClass' => 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
+                'icon' => '<svg class="h-5 w-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m8-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm6-3a4 4 0 0 1 0 7.75M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
+            ],
+            [
+                'label' => 'Admin',
+                'value' => $stats['admins'],
+                'iconClass' => 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+                'icon' => '<svg class="h-5 w-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3 4 6v5c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V6l-8-3Z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 12 2 2 4-4"/></svg>',
+            ],
+            [
+                'label' => 'Instructor',
+                'value' => $stats['instructors'],
+                'iconClass' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+                'icon' => '<svg class="h-5 w-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m12 3 9 5-9 5-9-5 9-5Z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10v5c2.2 2 4.5 3 7 3s4.8-1 7-3v-5M21 8v6"/></svg>',
+            ],
+            [
+                'label' => 'Student',
+                'value' => $stats['students'],
+                'iconClass' => 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
+                'icon' => '<svg class="h-5 w-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 9a7 7 0 0 0-14 0"/></svg>',
+            ],
         ] as $card)
-            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                <div class="flex items-center justify-between">
+            <div class="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                <div class="flex items-center justify-between gap-3">
                     <span class="text-sm font-semibold text-slate-500">{{ $card['label'] }}</span>
-                    <span class="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800"></span>
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ $card['iconClass'] }}">
+                        {!! $card['icon'] !!}
+                    </span>
                 </div>
                 <div class="mt-4 text-3xl font-black text-slate-950">{{ number_format($card['value']) }}</div>
             </div>
