@@ -8,6 +8,7 @@
     $selectedLevel = old('level', $course->level ?? 'beginner');
     $selectedLanguage = old('language', $course->language ?? 'vi');
     $discountPrice = old('discount_price', $course->discount_price ?? $course->sale_price ?? null);
+    $wideLayout = $wideLayout ?? false;
 @endphp
 
 {{-- @if ($errors->any())
@@ -21,14 +22,14 @@
     </div>
 @endif --}}
 
-<form method="POST" action="{{ $action }}" enctype="multipart/form-data" class="space-y-6">
+<form method="POST" action="{{ $action }}" enctype="multipart/form-data" class="w-full min-w-0 space-y-6">
     @csrf
     @if($method !== 'POST')
         @method($method)
     @endif
 
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <div class="grid min-w-0 gap-6 {{ $wideLayout ? 'lg:grid-cols-[minmax(0,2.2fr)_minmax(300px,1fr)] xl:gap-7' : 'lg:grid-cols-[minmax(0,1fr)_320px]' }}">
+        <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div class="border-b border-slate-100 pb-5">
                 <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600">Course landing</p>
                 <h2 class="mt-1 text-lg font-bold text-slate-950">Thông tin khóa học</h2>
@@ -112,8 +113,8 @@
             </div>
         </section>
 
-        <aside class="space-y-6">
-            <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <aside class="min-w-0 space-y-6">
+            <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 class="text-base font-bold text-slate-950">Hình ảnh & video</h2>
                 <div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                     <div class="aspect-video">
@@ -142,7 +143,7 @@
                 </div>
             </section>
 
-            <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 class="text-base font-bold text-slate-950">Giá bán</h2>
                 <div class="mt-4 space-y-4">
                     <div>
@@ -183,7 +184,7 @@
         </aside>
     </div>
 
-    <div class="sticky bottom-4 z-10 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+    <div class="sticky bottom-4 z-10 w-full rounded-lg border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p class="text-sm text-slate-500">Khóa học sẽ được lưu ở trạng thái nháp cho đến khi bạn gửi duyệt.</p>
             <div class="flex gap-2">
