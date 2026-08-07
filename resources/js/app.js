@@ -130,3 +130,49 @@ function getAiResponse(msg) {
     }
     return 'Cảm ơn bạn đã trò chuyện! Mình ghi nhận câu hỏi. Bạn có thể tham khảo lộ trình học lập trình Web, quản lý đồ án tốt nghiệp, hoặc liên hệ giảng viên hướng dẫn để được giải đáp chuyên sâu.';
 }
+
+function initAdminSidebar() {
+    const toggles = document.querySelectorAll('[data-sidebar-menu-toggle]');
+
+    toggles.forEach((toggle) => {
+        if (toggle.dataset.sidebarBound === 'true') return;
+
+        toggle.dataset.sidebarBound = 'true';
+        const panel = document.getElementById(toggle.getAttribute('aria-controls'));
+        const chevron = toggle.querySelector('[data-sidebar-menu-chevron]');
+
+        if (!panel) return;
+
+        toggle.addEventListener('click', () => {
+            const willOpen = toggle.getAttribute('aria-expanded') !== 'true';
+
+            toggles.forEach((otherToggle) => {
+                if (otherToggle === toggle) return;
+
+                const otherPanel = document.getElementById(otherToggle.getAttribute('aria-controls'));
+                const otherChevron = otherToggle.querySelector('[data-sidebar-menu-chevron]');
+
+                otherToggle.setAttribute('aria-expanded', 'false');
+                otherPanel?.classList.remove('grid-rows-[1fr]');
+                otherPanel?.classList.add('grid-rows-[0fr]');
+                otherPanel?.setAttribute('aria-hidden', 'true');
+                otherPanel?.toggleAttribute('inert', true);
+                otherChevron?.classList.remove('rotate-90', 'text-white');
+            });
+
+            toggle.setAttribute('aria-expanded', String(willOpen));
+            panel.classList.toggle('grid-rows-[1fr]', willOpen);
+            panel.classList.toggle('grid-rows-[0fr]', !willOpen);
+            panel.setAttribute('aria-hidden', String(!willOpen));
+            panel.toggleAttribute('inert', !willOpen);
+            chevron?.classList.toggle('rotate-90', willOpen);
+            chevron?.classList.toggle('text-white', willOpen);
+        });
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAdminSidebar, { once: true });
+} else {
+    initAdminSidebar();
+}
