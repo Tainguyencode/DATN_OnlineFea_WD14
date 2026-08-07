@@ -87,7 +87,53 @@
                 @endif
 
                 @if($lesson->content)
-                    <div class="mt-4 whitespace-pre-line text-sm leading-7 text-[#1c1d1f]">{{ $lesson->content }}</div>
+                    {{-- Collapsible content block --}}
+                    <div
+                        x-data="{
+                            expanded: false,
+                            shouldCollapse: false,
+                            init() {
+                                this.$nextTick(() => {
+                                    const el = this.$refs.contentBody;
+                                    if (el && el.scrollHeight > 220) {
+                                        this.shouldCollapse = true;
+                                    }
+                                });
+                            }
+                        }"
+                        class="mt-4 relative"
+                    >
+                        {{-- Content body with max-height clamp when collapsed --}}
+                        <div
+                            x-ref="contentBody"
+                            class="whitespace-pre-line text-sm leading-7 text-[#1c1d1f] overflow-hidden transition-all duration-300"
+                            :style="shouldCollapse && !expanded ? 'max-height: 200px;' : 'max-height: none;'"
+                        >{{ $lesson->content }}</div>
+
+                        {{-- Fade overlay when collapsed --}}
+                        <div
+                            x-show="shouldCollapse && !expanded"
+                            class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none"
+                        ></div>
+
+                        {{-- Toggle button --}}
+                        <button
+                            x-show="shouldCollapse"
+                            x-on:click="expanded = !expanded"
+                            type="button"
+                            class="mt-2 flex items-center gap-1.5 text-sm font-semibold text-[#0056D2] hover:text-[#0040a0] transition-colors"
+                        >
+                            <span x-text="expanded ? 'Thu gọn' : 'Xem thêm'"></span>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-4 w-4 transition-transform duration-200"
+                                :class="expanded ? 'rotate-180' : ''"
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
+                            >
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    </div>
                 @else
                     <p class="mt-4 text-sm text-[#6a6f73]">Bài học chưa có mô tả chi tiết.</p>
                 @endif
