@@ -19,7 +19,7 @@
             showConfirm: false,
             loading: false,
             avatarPreview: null,
-            password: '',
+            passwordVal: '',
             emailMessage: '',
             emailOk: null,
             phoneMessage: '',
@@ -27,10 +27,11 @@
             availabilityUrl: @js(route('auth.availability')),
             get strength() {
                 let score = 0;
-                if (this.password.length >= 8) score++;
-                if (/[a-z]/.test(this.password) && /[A-Z]/.test(this.password)) score++;
-                if (/[0-9]/.test(this.password)) score++;
-                if (/[^A-Za-z0-9]/.test(this.password)) score++;
+                let pwd = this.passwordVal || '';
+                if (pwd.length >= 8) score++;
+                if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+                if (/[0-9]/.test(pwd)) score++;
+                if (/[^A-Za-z0-9]/.test(pwd)) score++;
                 return score;
             },
             async check(field, value) {
@@ -62,7 +63,7 @@
             </div>
         @endif
 
-        <x-auth.errors />
+        {{-- <x-auth.errors /> --}}
 
         @if($isStudent && \App\Enums\SocialProvider::anyConfigured())
             <x-auth.social-buttons />
@@ -93,6 +94,9 @@
                         <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="sr-only" x-on:change="avatarPreview = URL.createObjectURL($event.target.files[0])">
                     </label>
                     <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">PNG, JPG hoặc WebP tối đa 2MB.</p>
+                    @error('avatar')
+                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                    @enderror
                 </div>
             </div>
 
@@ -133,7 +137,7 @@
                 label="Mật khẩu"
                 name="password"
                 x-bind:type="showPassword ? 'text' : 'password'"
-                x-model="password"
+                x-model="passwordVal"
                 placeholder="Tối thiểu 8 ký tự"
                 inputClass="pr-14"
             >
@@ -166,12 +170,124 @@
                 </div>
             </div>
 
+            @unless($isStudent)
+                <div class="space-y-4 rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-800/40 dark:bg-violet-900/10">
+                    <h3 class="text-sm font-bold text-violet-900 dark:text-violet-200 flex items-center gap-2">
+                        <svg class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+                        Hồ sơ Giảng viên
+                    </h3>
+
+                    <x-auth.input
+                        label="Lĩnh vực chuyên môn *"
+                        name="specialty"
+                        :value="old('specialty')"
+                        placeholder="Ví dụ: Lập trình Web Fullstack, Data Science, AI..."
+                    />
+
+                    <div>
+                        <label for="experience" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                            Kinh nghiệm giảng dạy / làm việc *
+                        </label>
+                        <textarea
+                            id="experience"
+                            name="experience"
+                            rows="3"
+                            placeholder="Mô tả kinh nghiệm thực tế, dự án đã làm hoặc kinh nghiệm giảng dạy..."
+                            class="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-800 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 @error('experience') border-red-500 focus:border-red-500 focus:ring-red-500 @enderror"
+                        >{{ old('experience') }}</textarea>
+                        @error('experience')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label for="bio" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                            Giới thiệu bản thân *
+                        </label>
+                        <textarea
+                            id="bio"
+                            name="bio"
+                            rows="3"
+                            placeholder="Giới thiệu đôi nét về bản thân, phong cách giảng dạy..."
+                            class="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-800 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 @error('bio') border-red-500 focus:border-red-500 focus:ring-red-500 @enderror"
+                        >{{ old('bio') }}</textarea>
+                        @error('bio')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <x-auth.input
+                            label="LinkedIn"
+                            name="linkedin_url"
+                            :value="old('linkedin_url')"
+                            placeholder="https://linkedin.com/in/..."
+                        />
+                        <x-auth.input
+                            label="GitHub"
+                            name="github_url"
+                            :value="old('github_url')"
+                            placeholder="https://github.com/..."
+                        />
+                        <x-auth.input
+                            label="Website"
+                            name="website_url"
+                            :value="old('website_url')"
+                            placeholder="https://yourwebsite.com"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                            Upload CV (Định dạng PDF, tối đa 5MB)
+                        </label>
+                        <input
+                            type="file"
+                            name="cv"
+                            accept="application/pdf"
+                            class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-violet-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 @error('cv') border-red-500 @enderror"
+                        >
+                        @error('cv')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            @endunless
+
             <x-auth.captcha :question="$captcha['question']" />
 
-            <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                <input type="checkbox" name="terms" value="1" class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700">
-                <span>Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.</span>
-            </label>
+            @if($isStudent)
+                <div>
+                    <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                        <input type="checkbox" name="terms" value="1" @checked(old('terms')) class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700">
+                        <span>Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.</span>
+                    </label>
+                    @error('terms')
+                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                    @enderror
+                </div>
+            @else
+                <div class="space-y-3">
+                    <div>
+                        <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-600 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                            <input type="checkbox" name="agree_information" value="1" @checked(old('agree_information')) class="mt-1 rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-slate-700">
+                            <span>Tôi cam kết thông tin trên là chính xác.</span>
+                        </label>
+                        @error('agree_information')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-600 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                            <input type="checkbox" name="agree_terms" value="1" @checked(old('agree_terms')) class="mt-1 rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-slate-700">
+                            <span>Tôi đồng ý Điều khoản dành cho Giảng viên.</span>
+                        </label>
+                        @error('agree_terms')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            @endif
 
             <x-auth.button x-bind:disabled="loading" loading-text="Đang tạo tài khoản...">
                 {{ $submitLabel }}

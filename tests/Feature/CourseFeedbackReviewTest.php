@@ -146,7 +146,7 @@ class CourseFeedbackReviewTest extends TestCase
     {
         $course = $this->course();
         $student = User::factory()->create(['role' => 'student']);
-        $otherInstructor = User::factory()->create(['role' => 'instructor']);
+        $otherInstructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
         $review = $this->review($student, $course, ReviewStatus::Visible);
 
         $this->actingAsTwoFactorVerified($otherInstructor)
@@ -428,7 +428,11 @@ class CourseFeedbackReviewTest extends TestCase
 
     private function course(): Course
     {
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'email_verified_at' => now(),
+        ]);
         $category = Category::query()->create(['name' => 'Danh mục '.uniqid(), 'slug' => 'category-'.uniqid()]);
 
         return Course::query()->create([

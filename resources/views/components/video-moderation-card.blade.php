@@ -6,6 +6,9 @@
 
 @php
     $moderation = $lesson->videoModeration;
+    if (!$moderation && isset($lesson->draft_update) && !empty($lesson->draft_update->payload['ai_moderation'])) {
+        $moderation = new \App\Models\VideoModeration($lesson->draft_update->payload['ai_moderation']);
+    }
     $badgeTones = [
         'red'    => 'border-rose-200 bg-rose-50 text-rose-800',
         'orange' => 'border-orange-200 bg-orange-50 text-orange-800',
@@ -64,15 +67,32 @@
     @if ($lesson->video_path || $lesson->video_url)
         <div class="border-b border-slate-100 bg-slate-950 p-2 sm:p-3">
             @if ($lesson->video_path)
-                <video
-                    src="{{ asset('storage/'.$lesson->video_path) }}"
-                    controls
-                    preload="metadata"
-                    playsinline
-                    class="mx-auto aspect-video w-full max-w-3xl rounded-lg bg-black"
-                >
-                    Trình duyệt không hỗ trợ phát video.
-                </video>
+                @php
+                    $hlsPath = 'lesson-hls/' . $lesson->id . '/playlist.m3u8';
+                    $hasHls = \Illuminate\Support\Facades\Storage::disk('local')->exists($hlsPath);
+                    $hasLocalFile = \Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path);
+                    $hasPublicFile = \Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path);
+                    $fileExists = $hasHls || $hasLocalFile || $hasPublicFile;
+                @endphp
+                @if ($fileExists)
+                    <video
+                        src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
+                        controls
+                        preload="metadata"
+                        playsinline
+                        class="mx-auto aspect-video w-full max-w-3xl rounded-lg bg-black"
+                    >
+                        Trình duyệt không hỗ trợ phát video.
+                    </video>
+                @else
+                    <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-rose-800 bg-rose-950/40 p-8 text-center text-rose-200">
+                        <svg class="h-10 w-10 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p class="font-bold text-base">Video không tồn tại trên hệ thống</p>
+                        <p class="text-xs text-rose-300">File video của bài học này không có trên máy chủ.</p>
+                    </div>
+                @endif
             @elseif ($lesson->video_url)
                 <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-600 bg-slate-900 px-4 py-10 text-center">
                     <p class="text-sm text-slate-300">Video được liên kết từ URL bên ngoài</p>
@@ -90,6 +110,68 @@
     @endif
 
     <div class="space-y-4 p-4 sm:p-5">
+        @php
+            $lessonUpdate = $lesson->draft_update ?? null;
+            if (!$lessonUpdate && isset($lesson->id)) {
+                $lessonUpdate = \App\Models\ContentUpdate::where('entity_id', $lesson->id)
+                    ->latest()
+                    ->first();
+            }
+            $lPayload = $lessonUpdate?->payload ?? [];
+            $cardAdminNote = $lPayload['admin_note'] ?? ($lessonUpdate?->rejection_reason ?? null);
+            $cardRequireReupload = !empty($lPayload['require_reupload']);
+            $cardReviewStatus = $lPayload['review_status'] ?? ($lessonUpdate?->status === 'rejected' ? 'fail' : ($lessonUpdate?->status === 'approved' ? 'pass' : null));
+        @endphp
+
+        @if (filled($cardAdminNote) || $cardRequireReupload || filled($cardReviewStatus))
+            @php
+                $modCardStyle = match($cardReviewStatus) {
+                    'pass' => [
+                        'wrapper' => 'border-emerald-200 bg-emerald-50/90',
+                        'title' => 'text-emerald-900',
+                        'badge' => 'bg-emerald-200/80 text-emerald-900',
+                        'badge_text' => 'Đạt',
+                        'icon' => '✅',
+                    ],
+                    'need_revision' => [
+                        'wrapper' => 'border-amber-200 bg-amber-50/90',
+                        'title' => 'text-amber-900',
+                        'badge' => 'bg-amber-200/80 text-amber-900',
+                        'badge_text' => 'Cần chỉnh sửa',
+                        'icon' => '⚠️',
+                    ],
+                    default => [
+                        'wrapper' => 'border-rose-200 bg-rose-50/90',
+                        'title' => 'text-rose-900',
+                        'badge' => 'bg-rose-200/80 text-rose-900',
+                        'badge_text' => 'Từ chối',
+                        'icon' => '❌',
+                    ],
+                };
+            @endphp
+            <div class="rounded-lg border {{ $modCardStyle['wrapper'] }} p-4 shadow-2xs">
+                <div class="flex items-start gap-2.5">
+                    <span class="text-lg">{{ $modCardStyle['icon'] }}</span>
+                    <div class="w-full">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-bold uppercase tracking-wide {{ $modCardStyle['title'] }}">Ghi chú & Phản hồi từ Admin:</p>
+                            <span class="rounded-full {{ $modCardStyle['badge'] }} px-2.5 py-0.5 text-xs font-bold">{{ $modCardStyle['badge_text'] }}</span>
+                        </div>
+                        @if (filled($cardAdminNote))
+                            <div class="mt-2 text-xs text-slate-800 leading-relaxed font-medium whitespace-pre-line bg-white/90 p-3 rounded-lg border border-slate-200/80">
+                                {!! nl2br(e($cardAdminNote)) !!}
+                            </div>
+                        @endif
+                        @if ($cardRequireReupload)
+                            <p class="mt-2 text-xs font-bold text-rose-700 flex items-center gap-1">
+                                <span>📹</span> Yêu cầu từ Admin: Vui lòng upload lại video gốc mới.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if (! $moderation)
             <p class="text-sm text-slate-500">Chưa có dữ liệu kiểm duyệt AI.</p>
         @else

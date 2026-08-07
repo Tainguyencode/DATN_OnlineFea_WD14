@@ -13,28 +13,86 @@ use Illuminate\Support\Facades\File;
 class AiModerationController extends Controller
 {
     /**
+     * Helper resolve Lesson model or draft ContentUpdate lesson and video path
+     */
+    private function resolveLessonAndVideoPath(string|int $lessonId): array
+    {
+        if (str_starts_with((string)$lessonId, 'update_les_')) {
+            $updateId = str_replace('update_les_', '', $lessonId);
+            $update = \App\Models\ContentUpdate::find($updateId);
+            if ($update) {
+                $payload = $update->payload ?? [];
+                $draftLesson = new Lesson([
+                    'title' => $payload['title'] ?? 'Bài học nháp',
+                    'type' => $payload['type'] ?? 'video',
+                    'video_path' => $payload['video_path'] ?? null,
+                ]);
+                $draftLesson->id = $lessonId;
+                return [$draftLesson, $payload['video_path'] ?? null];
+            }
+        }
+
+        $lesson = Lesson::find($lessonId);
+        if ($lesson) {
+            // Check if there is a pending or draft ContentUpdate for this lesson override
+            $pendingUpdate = \App\Models\ContentUpdate::where('entity_id', $lesson->id)
+                ->where('type', \App\Models\ContentUpdate::TYPE_LESSON)
+                ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                ->latest()
+                ->first();
+
+            if ($pendingUpdate && !empty($pendingUpdate->payload['video_path'])) {
+                return [$lesson, $pendingUpdate->payload['video_path']];
+            }
+
+            return [$lesson, $lesson->video_path];
+        }
+
+        // Fallback check if $lessonId is a numeric ContentUpdate ID
+        $update = \App\Models\ContentUpdate::find($lessonId);
+        if ($update && $update->type === \App\Models\ContentUpdate::TYPE_LESSON) {
+            $payload = $update->payload ?? [];
+            $draftLesson = new Lesson([
+                'title' => $payload['title'] ?? 'Bài học nháp',
+                'type' => $payload['type'] ?? 'video',
+                'video_path' => $payload['video_path'] ?? null,
+            ]);
+            $draftLesson->id = 'update_les_' . $update->id;
+            return [$draftLesson, $payload['video_path'] ?? null];
+        }
+
+        return [null, null];
+    }
+
+    /**
      * Stream video bài học với hỗ trợ HTTP Range requests (cho phép seek).
      * Chỉ dùng cho trang Admin Review – giúp admin nhảy đến đoạn AI phát hiện.
      */
-    public function streamVideo(Lesson $lesson)
+    public function streamVideo(Request $request, string|int $lessonId)
     {
-        if (empty($lesson->video_path)) {
+        [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
+
+        if (empty($videoPath)) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'Bài học này không có video.'], 404);
+            }
             abort(404, 'Bài học này không có video.');
         }
 
         $path = null;
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path)) {
-            $path = \Illuminate\Support\Facades\Storage::disk('local')->path($lesson->video_path);
-        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path)) {
-            $path = \Illuminate\Support\Facades\Storage::disk('public')->path($lesson->video_path);
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPath)) {
+            $path = \Illuminate\Support\Facades\Storage::disk('local')->path($videoPath);
+        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($videoPath)) {
+            $path = \Illuminate\Support\Facades\Storage::disk('public')->path($videoPath);
         }
 
         if (!$path || !file_exists($path)) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
+            }
             abort(404, 'File video không tồn tại trên máy chủ.');
         }
 
-        // response()->file() tự động xử lý HTTP Range requests
-        // → browser có thể seek video đúng cách (seekable range đầy đủ)
         return response()->file($path, [
             'Content-Type'  => 'video/mp4',
             'Cache-Control' => 'no-store',
@@ -44,10 +102,19 @@ class AiModerationController extends Controller
     /**
      * Stream HLS Playlist for Admin Review
      */
-    public function streamHlsPlaylist(Lesson $lesson)
+    public function streamHlsPlaylist(string|int $lessonId)
     {
-        $hlsDir = 'lesson-hls/' . $lesson->id;
-        $m3u8Path = $hlsDir . '/playlist.m3u8';
+        [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
+
+        if (!$videoPath) {
+            $videoPath = str_starts_with((string)$lessonId, 'update_les_')
+                ? 'lesson-hls/update_' . str_replace('update_les_', '', $lessonId) . '/playlist.m3u8'
+                : 'lesson-hls/' . $lessonId . '/playlist.m3u8';
+        }
+
+        $m3u8Path = \Illuminate\Support\Str::endsWith($videoPath, 'playlist.m3u8')
+            ? $videoPath
+            : dirname($videoPath) . '/playlist.m3u8';
 
         if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($m3u8Path)) {
             abort(404, 'HLS Playlist not found.');
@@ -64,9 +131,18 @@ class AiModerationController extends Controller
     /**
      * Stream HLS Segment (.ts) for Admin Review
      */
-    public function streamHlsSegment(Lesson $lesson, $segment)
+    public function streamHlsSegment(string|int $lessonId, $segment)
     {
-        $segmentPath = 'lesson-hls/' . $lesson->id . '/' . $segment;
+        [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
+
+        if ($videoPath) {
+            $hlsDir = \Illuminate\Support\Str::endsWith($videoPath, 'playlist.m3u8') ? dirname($videoPath) : $videoPath;
+            $segmentPath = $hlsDir . '/' . $segment;
+        } else {
+            $segmentPath = str_starts_with((string)$lessonId, 'update_les_')
+                ? 'lesson-hls/update_' . str_replace('update_les_', '', $lessonId) . '/' . $segment
+                : 'lesson-hls/' . $lessonId . '/' . $segment;
+        }
 
         if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($segmentPath)) {
             abort(404, 'Segment not found.');
@@ -75,7 +151,7 @@ class AiModerationController extends Controller
         $path = \Illuminate\Support\Facades\Storage::disk('local')->path($segmentPath);
 
         return response()->file($path, [
-            'Content-Type' => 'video/MP2T',
+            'Content-Type' => 'video/mp2t',
             'Cache-Control' => 'no-store',
         ]);
     }
@@ -83,17 +159,19 @@ class AiModerationController extends Controller
     /**
      * Bước 1: Cắt frame từ video của Lesson và trả về danh sách file để frontend xử lý.
      */
-    public function extractFrames(Lesson $lesson, VideoFrameExtractor $extractor)
+    public function extractFrames(string|int $lessonId, VideoFrameExtractor $extractor)
     {
-        if ($lesson->type !== 'video' || empty($lesson->video_path)) {
+        [$lesson, $videoPathRel] = $this->resolveLessonAndVideoPath($lessonId);
+
+        if (!$videoPathRel) {
             return response()->json(['error' => 'Bài học này không có video hợp lệ.'], 400);
         }
 
         $videoPath = null;
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path)) {
-            $videoPath = \Illuminate\Support\Facades\Storage::disk('local')->path($lesson->video_path);
-        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path)) {
-            $videoPath = \Illuminate\Support\Facades\Storage::disk('public')->path($lesson->video_path);
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPathRel)) {
+            $videoPath = \Illuminate\Support\Facades\Storage::disk('local')->path($videoPathRel);
+        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($videoPathRel)) {
+            $videoPath = \Illuminate\Support\Facades\Storage::disk('public')->path($videoPathRel);
         }
 
         if (!$videoPath || !file_exists($videoPath)) {
@@ -101,14 +179,17 @@ class AiModerationController extends Controller
         }
 
         try {
-            // Cắt frame mỗi 30s, truyền vào lesson_id để lưu riêng thư mục
-            $frames = $extractor->extract($videoPath, 30, $lesson->id);
+            $frames = $extractor->extract($videoPath, 30, $lessonId);
+
+            if (empty($frames)) {
+                return response()->json(['error' => 'Không thể trích xuất hình ảnh từ video này.'], 422);
+            }
 
             return response()->json([
                 'frames' => $frames,
                 'total' => count($frames),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json(['error' => 'Lỗi khi cắt frame: '.$e->getMessage()], 500);
         }
     }
@@ -132,7 +213,6 @@ class AiModerationController extends Controller
 
         $result = $gemini->analyzeImage($framePath);
 
-        // Gắn thêm thông tin thời điểm để front-end dễ gom
         if (! isset($result['error'])) {
             $result['timestamp'] = $timestamp;
             $result['frame_path'] = $framePath;
@@ -144,7 +224,7 @@ class AiModerationController extends Controller
     /**
      * Bước 3: Tổng hợp kết quả từ frontend, lưu DB và xóa ảnh rác.
      */
-    public function saveResults(Request $request, Lesson $lesson)
+    public function saveResults(Request $request, string|int $lessonId)
     {
         $validated = $request->validate([
             'results' => 'present|array',
@@ -167,33 +247,18 @@ class AiModerationController extends Controller
 
         $copyrightRisk = 'none';
         $summary = '';
-        $maxRiskValue = 0; // none=0, low=1, medium=2, high=3
-
+        $maxRiskValue = 0;
         $riskLevels = ['none' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
 
         foreach ($results as $result) {
-            if (! empty($result['violence'])) {
-                $violence = true;
-            }
-            if (! empty($result['adult'])) {
-                $adult = true;
-            }
-            if (! empty($result['weapon'])) {
-                $weapon = true;
-            }
-            if (! empty($result['tiktok_logo'])) {
-                $tiktok_logo = true;
-            }
-            if (! empty($result['youtube_logo'])) {
-                $youtube_logo = true;
-            }
-            if (! empty($result['watermark'])) {
-                $watermark = true;
-            }
+            if (! empty($result['violence'])) $violence = true;
+            if (! empty($result['adult'])) $adult = true;
+            if (! empty($result['weapon'])) $weapon = true;
+            if (! empty($result['tiktok_logo'])) $tiktok_logo = true;
+            if (! empty($result['youtube_logo'])) $youtube_logo = true;
+            if (! empty($result['watermark'])) $watermark = true;
 
-            // Xử lý mức nghi ngờ bản quyền
             $currentRiskStr = strtolower($result['copyright_risk'] ?? 'none');
-            // Tương thích ngược: 'low' từ dữ liệu cũ giữ nguyên ý nghĩa
             $currentRiskValue = $riskLevels[$currentRiskStr] ?? 0;
 
             if ($currentRiskValue > $maxRiskValue) {
@@ -205,7 +270,6 @@ class AiModerationController extends Controller
             }
         }
 
-        // Nếu không có summary từ AI, tự động tạo summary mô tả tổng hợp
         if (empty($summary)) {
             $signs = [];
             if ($tiktok_logo) $signs[] = 'logo TikTok';
@@ -220,24 +284,49 @@ class AiModerationController extends Controller
             }
         }
 
-        // Lưu vào DB
-        $moderation = VideoModeration::updateOrCreate(
-            ['lesson_id' => $lesson->id],
-            [
-                'violence' => $violence,
-                'adult' => $adult,
-                'weapon' => $weapon,
-                'tiktok_logo' => $tiktok_logo,
-                'youtube_logo' => $youtube_logo,
-                'watermark' => $watermark,
-                'copyright_risk' => $copyrightRisk,
-                'summary' => $summary,
-                'details' => $results,
-            ]
-        );
+        $realLesson = Lesson::find($lessonId);
+        $update = null;
 
-        // Xóa thư mục chứa frame của bài học này
-        $lessonDir = storage_path('app/temp_frames/lesson_'.$lesson->id);
+        if (!$realLesson && str_starts_with((string)$lessonId, 'update_les_')) {
+            $updateId = str_replace('update_les_', '', $lessonId);
+            $update = \App\Models\ContentUpdate::find($updateId);
+        } elseif (!$realLesson) {
+            $update = \App\Models\ContentUpdate::find($lessonId);
+        }
+
+        if (!$realLesson && $update && $update->entity_id) {
+            $realLesson = Lesson::find($update->entity_id);
+        }
+
+        $moderationData = [
+            'violence' => $violence,
+            'adult' => $adult,
+            'weapon' => $weapon,
+            'tiktok_logo' => $tiktok_logo,
+            'youtube_logo' => $youtube_logo,
+            'watermark' => $watermark,
+            'copyright_risk' => $copyrightRisk,
+            'summary' => $summary,
+            'details' => $results,
+        ];
+
+        if ($realLesson) {
+            $moderation = VideoModeration::updateOrCreate(
+                ['lesson_id' => $realLesson->id],
+                $moderationData
+            );
+        } else {
+            $moderation = $moderationData;
+        }
+
+        if ($update) {
+            $payload = $update->payload ?? [];
+            $payload['ai_moderation'] = $moderationData;
+            $update->payload = $payload;
+            $update->save();
+        }
+
+        $lessonDir = storage_path('app/temp_frames/lesson_'.$lessonId);
         if (File::exists($lessonDir)) {
             File::deleteDirectory($lessonDir);
         }

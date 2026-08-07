@@ -10,13 +10,27 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * Controller Quản lý & Chấm điểm bài tập dành cho Giảng viên (Instructor)
+ * 
+ * Chức năng chính:
+ * 1. Hiển thị danh sách bài nộp của học viên theo bộ lọc (Khóa học, Bài tập, Trạng thái, Tìm kiếm tên/email).
+ * 2. Xem chi tiết từng bài nộp (file đính kèm, câu trả lời, lịch sử chấm điểm).
+ * 3. Chấm điểm bài tập, lưu lịch sử chấm, gửi thông báo Push/Email cho học viên và tự động kiểm tra hoàn thành khóa học.
+ */
 class SubmissionController extends Controller
 {
+    /**
+     * Danh sách tất cả bài nộp bài tập của học viên trong các khóa học thuộc quản lý của Giảng viên.
+     * 
+     * @param Request $request Chứa các tham số lọc: course_id, assignment_id, status, search
+     * @return View Giao diện danh sách bài nộp (instructor.submissions.index)
+     */
     public function index(Request $request): View
     {
         $instructorId = $request->user()->id;
 
-        // Get courses owned by the instructor
+        // 1. Lấy danh sách các khóa học do Giảng viên này sở hữu để đổ vào bộ lọc Dropdown
         $courses = Course::query()
             ->where('instructor_id', $instructorId)
             ->orderBy('title')
@@ -27,7 +41,7 @@ class SubmissionController extends Controller
         $status = $request->query('status');
         $search = trim((string) $request->query('search'));
 
-        // Query assignments for the course filter dropdown
+        // 2. Lấy danh sách bài tập thuộc khóa học được chọn (nếu có) để lọc chi tiết
         $assignments = collect();
         if ($courseId) {
             $assignments = Assignment::query()
@@ -35,6 +49,7 @@ class SubmissionController extends Controller
                 ->get(['id', 'title']);
         }
 
+        // 3. Truy vấn danh sách bài nộp có phân trang và áp dụng các điều kiện lọc
         $submissions = Submission::query()
             ->whereHas('assignment.lesson.course', fn ($query) => $query->where('instructor_id', $instructorId))
             ->with(['user:id,name,email,avatar', 'assignment.lesson.course:id,title,slug'])
@@ -64,8 +79,16 @@ class SubmissionController extends Controller
         ));
     }
 
+    /**
+     * Xem chi tiết một bài nộp bài tập của học viên.
+     * 
+     * @param Submission $submission Model bài nộp cần xem
+     * @param Request $request
+     * @return View Giao diện xem bài nộp & form chấm điểm (instructor.submissions.show)
+     */
     public function show(Submission $submission, Request $request): View
     {
+        // Xác thực Giảng viên có quyền truy cập bài nộp này hay không
         $this->ensureOwned($submission, $request->user()->id);
 
         $submission->load(['user', 'assignment.lesson.course']);
@@ -73,10 +96,26 @@ class SubmissionController extends Controller
         return view('instructor.submissions.show', compact('submission'));
     }
 
+    /**
+     * Chấm điểm bài tập & Phản hồi cho Học viên.
+     * 
+     * Quy trình xử lý:
+     * 1. Validate điểm số (min: 0, max: điểm tối đa của bài tập) và phản hồi.
+     * 2. Ghi nhận lịch sử chấm điểm (Grading History) vào mảng JSON.
+     * 3. Cập nhật điểm số, trạng thái (graded / resubmit_required) và thời gian chấm.
+     * 4. Gửi thông báo đến tài khoản Học viên.
+     * 5. Kiểm tra tự động điều kiện hoàn thành khóa học (CourseCompletionService).
+     * 
+     * @param Request $request Chứa score, feedback, status
+     * @param Submission $submission
+     * @return RedirectResponse Quay lại trang chi tiết kèm thông báo thành công
+     */
     public function grade(Request $request, Submission $submission): RedirectResponse
     {
+        // 1. Phân quyền: Đảm bảo bài nộp thuộc khóa học của giảng viên hiện tại
         $this->ensureOwned($submission, $request->user()->id);
 
+        // 2. Validate dữ liệu chấm điểm đầu vào
         $validated = $request->validate([
             'score' => [
                 'required',
@@ -86,6 +125,12 @@ class SubmissionController extends Controller
             ],
             'feedback' => 'nullable|string|max:5000',
             'status' => 'required|string|in:graded,returned',
+        ], [
+            'score.required' => 'Vui lòng nhập điểm số.',
+            'score.integer' => 'Điểm số phải là số nguyên.',
+            'score.min' => 'Điểm số không được nhỏ hơn 0.',
+            'score.max' => 'Điểm số không được vượt quá điểm tối đa của bài tập.',
+            'status.required' => 'Vui lòng chọn trạng thái chấm điểm.',
         ]);
 
         $statusValue = $validated['status'];
@@ -93,7 +138,7 @@ class SubmissionController extends Controller
             $statusValue = 'resubmit_required';
         }
 
-        // 1. Save to history
+        // 3. Ghi vết lịch sử chấm điểm (phục vụ xem lại các lần chấm lại)
         $history = $submission->grading_history ?? [];
         $history[] = [
             'score' => (int) $validated['score'],
@@ -103,7 +148,7 @@ class SubmissionController extends Controller
             'graded_at' => now()->toIso8601String(),
         ];
 
-        // 2. Update submission
+        // 4. Cập nhật thông tin bài nộp
         $submission->update([
             'score' => $validated['score'],
             'feedback' => $validated['feedback'],
@@ -113,7 +158,7 @@ class SubmissionController extends Controller
             'grading_history' => $history,
         ]);
 
-        // 3. Send Notification to Student
+        // 5. Gửi thông báo đến Học viên
         try {
             $student = $submission->user;
             $assignmentTitle = $submission->assignment->title;
@@ -143,7 +188,7 @@ class SubmissionController extends Controller
             logger()->error('Failed to send assignment grading notification: ' . $e->getMessage());
         }
 
-        // 4. Check course completion
+        // 6. Tự động kiểm tra điều kiện hoàn thành khóa học & cấp chứng chỉ nếu đủ điều kiện
         try {
             $enrollment = \App\Models\Enrollment::where('user_id', $student->id)
                 ->where('course_id', $course->id)
@@ -160,6 +205,12 @@ class SubmissionController extends Controller
             ->with('success', 'Đã chấm điểm, ghi nhận lịch sử, kiểm tra điều kiện hoàn thành khóa học và gửi thông báo kết quả cho học viên.');
     }
 
+    /**
+     * Hàm trợ lý phân quyền: Đảm bảo Giảng viên chỉ thao tác trên bài nộp thuộc khóa học của chính mình.
+     * 
+     * @param Submission $submission Model bài nộp
+     * @param int $instructorId ID của giảng viên hiện tại
+     */
     private function ensureOwned(Submission $submission, int $instructorId): void
     {
         abort_unless(

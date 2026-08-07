@@ -152,6 +152,15 @@ class CourseController extends Controller
 
         $recentlyViewedCourseService->record(auth()->user(), $course);
 
+        $topStudents = \App\Models\User::query()
+            ->join('user_points', 'users.id', '=', 'user_points.user_id')
+            ->select('users.*', \Illuminate\Support\Facades\DB::raw('SUM(user_points.points) as course_points'))
+            ->where('user_points.course_id', $course->id)
+            ->groupBy('users.id')
+            ->orderByDesc('course_points')
+            ->limit(10)
+            ->get();
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -177,6 +186,7 @@ class CourseController extends Controller
             'enrollment',
             'recommendationTitle',
             'recommendationSubtitle',
+            'topStudents',
         ));
     }
 
@@ -248,8 +258,9 @@ class CourseController extends Controller
 
         $sectionTitle = $lesson->section?->title ?? $lesson->chapter?->title;
 
-        if ($player['canAccessLesson'] || $player['isEnrolled']) {
+        if ($user && ($player['canAccessLesson'] || $player['isEnrolled'])) {
             $recentlyViewedCourseService->record($user, $course);
+            app(\App\Services\EngagementService::class)->recordLearningActivity($user);
         }
 
         $discussions = collect();
@@ -290,9 +301,24 @@ class CourseController extends Controller
                 ->first();
         }
 
+        $hasNewContentVersion = false;
+        if ($user && $player['isEnrolled']) {
+            $progressModel = \App\Models\LessonProgress::where('user_id', $user->id)
+                ->where('lesson_id', $lesson->id)
+                ->first();
+
+            if ($progressModel) {
+                if ((int) $lesson->content_version > (int) $progressModel->last_viewed_content_version) {
+                    $hasNewContentVersion = true;
+                    $progressModel->update(['last_viewed_content_version' => (int) $lesson->content_version]);
+                }
+            }
+        }
+
         return view('courses.lesson', [
             'course' => $course,
             'lesson' => $lesson,
+            'hasNewContentVersion' => $hasNewContentVersion,
             'submission' => $submission,
             'enrollment' => $player['enrollment'],
             'isEnrolled' => $player['isEnrolled'],
@@ -327,16 +353,28 @@ class CourseController extends Controller
         Lesson $lesson,
         LearningProgressService $progressService
     ): JsonResponse {
-        abort_unless($request->user()?->isStudent(), 403);
+        $user = $request->user();
+        abort_unless($user, 401);
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
-        abort_unless($this->isPublished($course), 404);
 
-        $enrollmentExists = Enrollment::where('user_id', $request->user()->id)
+        $canBypass = $this->canBypassCourseVisibility($course);
+        $enrollment = Enrollment::where('user_id', $user->id)
             ->where('course_id', $course->id)
             ->withLearningAccess()
-            ->exists();
+            ->first();
 
-        abort_unless($enrollmentExists, 403);
+        if (!$enrollment && ($canBypass || $user->isStudent())) {
+            $enrollment = Enrollment::firstOrCreate([
+                'user_id' => $user->id,
+                'course_id' => $course->id,
+            ], [
+                'status' => Enrollment::STATUS_ACTIVE,
+                'progress_percent' => 0,
+                'enrolled_at' => now(),
+            ]);
+        }
+
+        abort_unless($enrollment, 403);
 
         $validated = $request->validated();
 

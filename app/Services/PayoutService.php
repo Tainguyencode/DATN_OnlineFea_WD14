@@ -7,6 +7,14 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Service Quản lý Rút tiền Giảng viên & Danh sách Ngân hàng VietQR (PayoutService)
+ * 
+ * Chức năng chính:
+ * 1. Lấy danh sách 50+ Ngân hàng thương mại tại Việt Nam (MBBank, Vietcombank, Techcombank, Agribank, VPBank...) từ VietQR API v2.
+ * 2. Lưu Cache 24 giờ (`vietnam_banks_list`) tránh quá tải API bên thứ ba.
+ * 3. Sinh đường dẫn ảnh mã QR Chuyển khoản nhanh Napas247 (VietQR Compact2) động cho Admin chuyển khoản rút tiền.
+ */
 class PayoutService
 {
     /**
@@ -36,7 +44,9 @@ class PayoutService
     ];
 
     /**
-     * Lấy danh sách ngân hàng Việt Nam (VietQR API) có caching 24 giờ.
+     * Lấy danh sách ngân hàng Việt Nam từ VietQR API có caching 24 giờ.
+     * 
+     * @return array Danh sách ngân hàng [code, shortName, name, bin, logo]
      */
     public function getVietNamBanks(): array
     {
@@ -66,7 +76,10 @@ class PayoutService
     }
 
     /**
-     * Sinh URL ảnh mã VietQR Chuyển khoản Thật (Napas247)
+     * Sinh URL ảnh mã QR Chuyển khoản VietQR (Napas247) động chứa sẵn số tiền, nội dung rút tiền và tên tài khoản.
+     * 
+     * @param Withdrawal $withdrawal Yêu cầu rút tiền
+     * @return string URL ảnh QR Code VietQR
      */
     public function generateVietQrUrl(Withdrawal $withdrawal): string
     {
@@ -77,5 +90,75 @@ class PayoutService
         $addInfo = urlencode("RUT TIEN MAGV " . $withdrawal->user_id . " REQ" . $withdrawal->id);
 
         return "https://img.vietqr.io/image/{$bankCode}-{$accNo}-compact2.png?amount={$amount}&addInfo={$addInfo}&accountName={$accountName}";
+    }
+
+    /**
+     * Tự động chi tiền cho Giảng viên qua PayOS Payout API
+     * 
+     * @param Withdrawal $withdrawal Yêu cầu rút tiền
+     * @return array Kết quả trả về từ PayOS
+     */
+    public function processAutoPayout(Withdrawal $withdrawal): array
+    {
+        $clientId = env('PAYOS_PAYOUT_CLIENT_ID', env('PAYOS_CLIENT_ID'));
+        $apiKey = env('PAYOS_PAYOUT_API_KEY', env('PAYOS_API_KEY'));
+        $checksumKey = env('PAYOS_PAYOUT_CHECKSUM_KEY', env('PAYOS_CHECKSUM_KEY'));
+
+        if (empty($clientId) || empty($apiKey) || empty($checksumKey)) {
+            throw new \Exception('Chưa cấu hình API Keys Chi hộ (PayOS Payout) trong file .env');
+        }
+
+        $banks = $this->getVietNamBanks();
+        $bankInfo = collect($banks)->first(function ($b) use ($withdrawal) {
+            $code = strtolower($withdrawal->bank_code ?? '');
+            return strtolower($b['code'] ?? '') === $code || strtolower($b['shortName'] ?? '') === $code;
+        });
+
+        $bin = $bankInfo['bin'] ?? '970422'; // Mặc định BIN MBBank nếu không khớp
+
+        $amount = (int) $withdrawal->amount;
+        $description = 'RUT TIEN REQ ' . $withdrawal->id;
+        $description = preg_replace('/[^a-zA-Z0-9 ]/', '', $description);
+        $description = substr($description, 0, 25);
+
+        $referenceId = 'PO' . $withdrawal->id . 'T' . time();
+
+        $params = [
+            'amount' => $amount,
+            'description' => $description,
+            'referenceId' => $referenceId,
+            'toAccountNumber' => (string) $withdrawal->bank_account_number,
+            'toBin' => (string) $bin,
+        ];
+
+        // Sắp xếp các tham số theo bảng chữ cái và mã hóa URI (rawurlencode) theo chuẩn PayOS SDK
+        ksort($params);
+        $stringToSign = collect($params)
+            ->map(fn($v, $k) => rawurlencode((string) $k) . '=' . rawurlencode((string) $v))
+            ->implode('&');
+
+        $signature = hash_hmac('sha256', $stringToSign, $checksumKey);
+
+        $params['signature'] = $signature;
+
+        $idempotencyKey = 'PO-REQ-' . $withdrawal->id . '-' . time();
+
+        $response = Http::withoutVerifying()->withHeaders([
+            'x-client-id' => $clientId,
+            'x-api-key' => $apiKey,
+            'x-idempotency-key' => $idempotencyKey,
+            'x-signature' => $signature,
+            'Content-Type' => 'application/json',
+        ])->post('https://api-merchant.payos.vn/v1/payouts/', $params);
+
+        $resData = $response->json();
+        $code = (string) ($resData['code'] ?? '');
+
+        if ($response->failed() || ($code !== '' && $code !== '00' && $code !== '0')) {
+            $msg = $resData['desc'] ?? $resData['message'] ?? $response->body();
+            throw new \Exception('Lỗi từ PayOS Payout API (' . ($code ?: 'HTTP ' . $response->status()) . '): ' . $msg);
+        }
+
+        return $resData['data'] ?? $resData;
     }
 }

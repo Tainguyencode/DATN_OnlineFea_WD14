@@ -12,6 +12,7 @@ use App\Models\CourseReview;
 use App\Models\CourseReviewItem;
 use App\Models\Enrollment;
 use App\Models\HomepageSetting;
+use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Review;
@@ -158,23 +159,13 @@ class ManageController extends Controller
 
     public function review(Course $course): View|RedirectResponse
     {
-        if (! in_array($course->status, [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value], true)) {
-            return redirect()
-                ->route('admin.courses.pending')
-                ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm tra tại trang này.');
-        }
-
         $course->load([
             'instructor:id,name,email,avatar,bio',
             'category:id,parent_id,name',
             'category.parent:id,name',
-            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
-            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order')->with('videoModeration'),
         ]);
 
-        $curriculumSections = $course->courseSections->isNotEmpty()
-            ? $course->courseSections
-            : $course->chapters;
+        $curriculumSections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
 
         $allLessons = $curriculumSections->flatMap(fn ($section) => $section->lessons);
         $totalLessons = $allLessons->count();
@@ -286,7 +277,7 @@ class ManageController extends Controller
 
     public function approve(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        $pendingStatuses = [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value];
+        $pendingStatuses = [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value, Course::STATUS_PENDING_UPDATE];
 
         if (! in_array($course->status, $pendingStatuses, true)) {
             return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được duyệt.');
@@ -310,7 +301,7 @@ class ManageController extends Controller
 
     public function reject(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        $pendingStatuses = [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value];
+        $pendingStatuses = [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value, Course::STATUS_PENDING_UPDATE];
 
         if (! in_array($course->status, $pendingStatuses, true)) {
             return back()->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.');
@@ -338,15 +329,81 @@ class ManageController extends Controller
 
     public function submitReview(AdminCourseReviewRequest $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
-        if (! in_array($course->status, [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value], true)) {
+        if (! in_array($course->status, [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value, Course::STATUS_PENDING_UPDATE], true)) {
             return redirect()
-                ->route('admin.courses.pending')
+                ->route('admin.course-reviews.index')
                 ->with('error', 'Chỉ khóa học đang chờ duyệt mới có thể được kiểm duyệt.');
         }
 
         $action = $request->input('action');
         $comment = trim((string) $request->input('comment'));
         $checklist = $request->input('checklist', []);
+
+        // Process per-lesson review notes & requirements
+        $lessonNotes = $request->input('lesson_notes', []);
+        foreach ($lessonNotes as $lessonId => $noteData) {
+            $adminNote = trim((string) ($noteData['admin_note'] ?? ''));
+            $requireReupload = ! empty($noteData['require_reupload']);
+            $lessonStatus = (string) ($noteData['status'] ?? 'pass');
+
+            $update = null;
+            if (str_starts_with((string) $lessonId, 'update_les_')) {
+                $updateId = str_replace('update_les_', '', $lessonId);
+                $update = \App\Models\ContentUpdate::find($updateId);
+            } else {
+                $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+                    ->where('entity_id', $lessonId)
+                    ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                    ->first();
+
+                if (! $update) {
+                    $lesson = Lesson::find($lessonId);
+                    if ($lesson) {
+                        $update = \App\Models\ContentUpdate::create([
+                            'course_id' => $course->id,
+                            'created_by' => $course->instructor_id ?? $course->user_id ?? 1,
+                            'type' => \App\Models\ContentUpdate::TYPE_LESSON,
+                            'action' => \App\Models\ContentUpdate::ACTION_UPDATE,
+                            'entity_id' => $lesson->id,
+                            'status' => \App\Models\ContentUpdate::STATUS_PENDING,
+                            'payload' => [
+                                'title' => $lesson->title,
+                                'type' => $lesson->type,
+                                'video_path' => $lesson->video_path,
+                                'video_url' => $lesson->video_url,
+                            ],
+                        ]);
+                    }
+                }
+            }
+
+            if ($update) {
+                $payload = $update->payload ?? [];
+                $payload['admin_note'] = $adminNote;
+                $payload['require_reupload'] = $requireReupload;
+                $payload['review_status'] = $lessonStatus;
+                $update->payload = $payload;
+
+                if ($action === CourseReview::ACTION_REJECTED || $action === CourseReview::ACTION_NEED_REVISION) {
+                    if ($lessonStatus === 'fail' || $lessonStatus === 'need_revision') {
+                        $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
+                        $update->rejection_reason = $adminNote ?: $comment;
+                        $update->reviewed_by = $request->user()?->id ?? auth()->id();
+                        $update->reviewed_at = now();
+                    } elseif ($lessonStatus === 'pass') {
+                        $update->status = \App\Models\ContentUpdate::STATUS_PENDING;
+                        $update->rejection_reason = null;
+                    }
+                } elseif ($action === CourseReview::ACTION_APPROVED) {
+                    if ($lessonStatus === 'pass') {
+                        $update->status = \App\Models\ContentUpdate::STATUS_APPROVED;
+                        $update->rejection_reason = null;
+                    }
+                }
+
+                $update->save();
+            }
+        }
 
         if ($action === CourseReview::ACTION_APPROVED) {
             $reviewService->approve(
@@ -358,8 +415,8 @@ class ManageController extends Controller
         } else {
             if (strlen($comment) < config('course.reject_reason_min_length', 10)) {
                 return back()->withErrors([
-                    'comment' => 'Lý do / ghi chú phải có ít nhất '.config('course.reject_reason_min_length', 10).' ký tự.',
-                ]);
+                    'comment' => 'Lý do / ghi chú bắt buộc khi yêu cầu chỉnh sửa hoặc từ chối (tối thiểu '.config('course.reject_reason_min_length', 10).' ký tự).',
+                ])->withInput();
             }
 
             $reviewService->reject($course, $request->user(), $comment, $checklist);
@@ -376,6 +433,77 @@ class ManageController extends Controller
         return redirect()
             ->route('admin.courses.pending')
             ->with('success', "{$label} khóa học \"{$course->title}\".");
+    }
+
+    public function saveLessonNote(Request $request, Course $course, string|int $lessonId)
+    {
+        $adminNote = trim((string) $request->input('admin_note'));
+        $requireReupload = (bool) $request->input('require_reupload', false);
+        $reviewStatus = (string) $request->input('status', 'pass');
+
+        $update = null;
+        if (str_starts_with((string) $lessonId, 'update_les_')) {
+            $updateId = str_replace('update_les_', '', $lessonId);
+            $update = \App\Models\ContentUpdate::find($updateId);
+        } else {
+            // First check if lessonId matches a ContentUpdate primary key directly
+            $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+                ->where('id', $lessonId)
+                ->first();
+
+            if (! $update) {
+                $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+                    ->where('entity_id', $lessonId)
+                    ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                    ->first();
+            }
+
+            if (! $update) {
+                $lesson = Lesson::find($lessonId);
+                if ($lesson) {
+                    $update = \App\Models\ContentUpdate::create([
+                        'course_id' => $course->id,
+                        'created_by' => $course->instructor_id ?? $course->user_id ?? 1,
+                        'type' => \App\Models\ContentUpdate::TYPE_LESSON,
+                        'action' => \App\Models\ContentUpdate::ACTION_UPDATE,
+                        'entity_id' => $lesson->id,
+                        'status' => \App\Models\ContentUpdate::STATUS_PENDING,
+                        'payload' => [
+                            'title' => $lesson->title,
+                            'type' => $lesson->type,
+                            'video_path' => $lesson->video_path,
+                            'video_url' => $lesson->video_url,
+                        ],
+                    ]);
+                }
+            }
+        }
+
+        if ($update) {
+            $payload = $update->payload ?? [];
+            $payload['admin_note'] = $adminNote;
+            $payload['require_reupload'] = $requireReupload;
+            $payload['review_status'] = $reviewStatus;
+            $update->payload = $payload;
+
+            if ($reviewStatus === 'pass') {
+                $update->status = \App\Models\ContentUpdate::STATUS_APPROVED;
+                $update->rejection_reason = null;
+            } else {
+                $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
+                $update->rejection_reason = $adminNote;
+            }
+
+            $update->reviewed_by = $request->user()?->id ?? auth()->id();
+            $update->reviewed_at = now();
+
+            $update->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã lưu ghi chú bài học.',
+        ]);
     }
 
     /**

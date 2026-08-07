@@ -149,7 +149,8 @@ class GeminiService
         ];
 
         try {
-            $response = Http::timeout($timeout)
+            $response = Http::withoutVerifying()
+                ->timeout($timeout)
                 ->connectTimeout(min(15, $timeout))
                 ->acceptJson()
                 ->withHeaders([

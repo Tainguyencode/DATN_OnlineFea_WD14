@@ -87,7 +87,53 @@
                 @endif
 
                 @if($lesson->content)
-                    <div class="mt-4 whitespace-pre-line text-sm leading-7 text-[#1c1d1f]">{{ $lesson->content }}</div>
+                    {{-- Collapsible content block --}}
+                    <div
+                        x-data="{
+                            expanded: false,
+                            shouldCollapse: false,
+                            init() {
+                                this.$nextTick(() => {
+                                    const el = this.$refs.contentBody;
+                                    if (el && el.scrollHeight > 220) {
+                                        this.shouldCollapse = true;
+                                    }
+                                });
+                            }
+                        }"
+                        class="mt-4 relative"
+                    >
+                        {{-- Content body with max-height clamp when collapsed --}}
+                        <div
+                            x-ref="contentBody"
+                            class="whitespace-pre-line text-sm leading-7 text-[#1c1d1f] overflow-hidden transition-all duration-300"
+                            :style="shouldCollapse && !expanded ? 'max-height: 200px;' : 'max-height: none;'"
+                        >{{ $lesson->content }}</div>
+
+                        {{-- Fade overlay when collapsed --}}
+                        <div
+                            x-show="shouldCollapse && !expanded"
+                            class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none"
+                        ></div>
+
+                        {{-- Toggle button --}}
+                        <button
+                            x-show="shouldCollapse"
+                            x-on:click="expanded = !expanded"
+                            type="button"
+                            class="mt-2 flex items-center gap-1.5 text-sm font-semibold text-[#0056D2] hover:text-[#0040a0] transition-colors"
+                        >
+                            <span x-text="expanded ? 'Thu gọn' : 'Xem thêm'"></span>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-4 w-4 transition-transform duration-200"
+                                :class="expanded ? 'rotate-180' : ''"
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
+                            >
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    </div>
                 @else
                     <p class="mt-4 text-sm text-[#6a6f73]">Bài học chưa có mô tả chi tiết.</p>
                 @endif
@@ -354,11 +400,17 @@
                                                         <span class="text-xs text-[#6a6f73]">{{ $reply->created_at->diffForHumans() }}</span>
                                                     </div>
                                                     
-                                                    @if($reply->is_instructor_answer)
-                                                        <div class="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200 mb-2">Giảng viên</div>
-                                                    @else
-                                                        <div class="inline-flex items-center rounded bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600 border border-gray-200 mb-2">Học viên</div>
-                                                    @endif
+                                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                                        @if($reply->is_instructor_answer)
+                                                            <div class="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">Giảng viên</div>
+                                                        @else
+                                                            <div class="inline-flex items-center rounded bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600 border border-gray-200">Học viên</div>
+                                                        @endif
+                                                        
+                                                        @if($reply->is_helpful)
+                                                            <div class="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">✔️ Hữu ích</div>
+                                                        @endif
+                                                    </div>
                                                     
                                                     <p class="text-sm text-[#1c1d1f] whitespace-pre-line leading-relaxed">{{ $reply->content }}</p>
 
@@ -380,6 +432,23 @@
                                                                 </a>
                                                             @endif
                                                         </div>
+                                                    @endif
+
+                                                    @if(auth()->check() && (int)$reply->user_id !== (int)auth()->id())
+                                                        @php
+                                                            $isDiscussionOwner = (int) $activeDiscussion->user_id === (int) auth()->id();
+                                                            $isInstructor = auth()->user()->role === 'admin' || (auth()->user()->role === 'instructor' && (int) $course->instructor_id === (int) auth()->id());
+                                                        @endphp
+                                                        @if($isDiscussionOwner || $isInstructor)
+                                                            <div class="mt-3 flex justify-end">
+                                                                <form action="{{ route('discussions.replies.toggle-helpful', $reply) }}" method="POST">
+                                                                    @csrf
+                                                                    <button type="submit" class="text-xs font-bold px-2 py-1 rounded border transition duration-200 cursor-pointer {{ $reply->is_helpful ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300' }}">
+                                                                        {{ $reply->is_helpful ? 'Bỏ đánh dấu hữu ích' : '👍 Đánh dấu hữu ích' }}
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        @endif
                                                     @endif
                                                 </div>
                                             </div>

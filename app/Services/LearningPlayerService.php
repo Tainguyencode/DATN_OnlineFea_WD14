@@ -122,6 +122,7 @@ class LearningPlayerService
                 'furthest_position_seconds' => (int) ($progress->furthest_position_seconds ?: $progress->watched_seconds),
                 'progress_percent' => (float) $progress->progress_percent,
                 'is_completed' => (bool) $progress->is_completed,
+                'last_viewed_content_version' => (int) $progress->last_viewed_content_version,
                 'completed_at' => $progress->completed_at?->toIso8601String(),
                 'last_client_updated_at' => $progress->last_client_updated_at?->toIso8601String(),
             ])

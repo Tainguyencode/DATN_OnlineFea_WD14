@@ -10,6 +10,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -23,7 +24,9 @@ use Illuminate\Support\Facades\Storage;
     'google_id', 'facebook_id', 'github_id', 'microsoft_id',
     'two_factor_enabled', 'two_factor_secret', 'is_active',
     'last_login_at', 'last_login_ip', 'password_changed_at',
+    'last_learning_at', 'engagement_email_stage', 'last_engagement_sent_at',
     'commission_rate', 'bank_code', 'bank_name', 'bank_account_number', 'bank_account_name',
+    'instructor_status', 'approved_at', 'approved_by', 'rejected_reason',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -152,6 +155,17 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(StudyGroupMessage::class);
     }
 
+    public function points(): HasMany
+    {
+        return $this->hasMany(UserPoint::class);
+    }
+
+    public function badges(): BelongsToMany
+    {
+        return $this->belongsToMany(Badge::class, 'user_badges')
+            ->withPivot('earned_at');
+    }
+
 
     public function emailVerificationCodes(): HasMany
     {
@@ -192,19 +206,28 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SocialAccount::class);
     }
 
-    public function instructorApplication(): HasOne
+    public function instructorProfile(): HasOne
     {
-        return $this->hasOne(InstructorApplication::class);
+        return $this->hasOne(InstructorProfile::class);
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
+            'approved_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_enabled' => 'boolean',
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_learning_at' => 'datetime',
+            'engagement_email_stage' => 'integer',
+            'last_engagement_sent_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'commission_rate' => 'decimal:2',
         ];
@@ -240,9 +263,16 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function dashboardUrl(): string
     {
+        if ($this->role === 'instructor') {
+            if ($this->instructor_status !== 'approved') {
+                return route('instructor.pending');
+            }
+
+            return route('instructor.dashboard');
+        }
+
         return match ($this->role) {
             'admin' => route('admin.dashboard'),
-            'instructor' => route('instructor.dashboard'),
             default => route('student.dashboard'),
         };
     }
@@ -250,14 +280,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function avatarUrl(): string
     {
         if (! $this->avatar) {
-            return 'https://ui-avatars.com/api/?name='.urlencode($this->name).'&background=4f46e5&color=fff';
+            return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
         }
 
-        if (str_starts_with($this->avatar, 'http')) {
+        if (str_starts_with($this->avatar, 'http://') || str_starts_with($this->avatar, 'https://')) {
             return $this->avatar;
         }
 
-        return Storage::disk('public')->url($this->avatar);
+        if (Storage::disk('public')->exists($this->avatar)) {
+            return Storage::disk('public')->url($this->avatar);
+        }
+
+        return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
     }
 
     public function getCommissionRate(): float

@@ -76,18 +76,18 @@
             <table class="w-full min-w-[1280px] text-sm">
                 <thead class="bg-slate-50">
                     <tr>
-                        <th class="rounded-l-lg px-4 py-3 text-left font-semibold text-slate-600">Thumbnail</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Tên khóa học</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Giảng viên</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Danh mục</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Giá</th>
-                        <th class="px-4 py-3 text-center font-semibold text-slate-600">Học viên</th>
-                        <th class="px-4 py-3 text-center font-semibold text-slate-600">Chương</th>
-                        <th class="px-4 py-3 text-center font-semibold text-slate-600">Bài học</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Trạng thái</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Ngày tạo</th>
-                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Xuất bản</th>
-                        <th class="rounded-r-lg px-4 py-3 text-right font-semibold text-slate-600">Thao tác</th>
+                        <th class="rounded-l-lg px-4 py-2.5 text-left font-semibold text-slate-600">Thumbnail</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Tên khóa học</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Giảng viên</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Danh mục</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Giá</th>
+                        <th class="px-4 py-2.5 text-center font-semibold text-slate-600">Học viên</th>
+                        <th class="px-4 py-2.5 text-center font-semibold text-slate-600">Chương</th>
+                        <th class="px-4 py-2.5 text-center font-semibold text-slate-600">Bài học</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Trạng thái</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Ngày tạo</th>
+                        <th class="px-4 py-2.5 text-left font-semibold text-slate-600">Xuất bản</th>
+                        <th class="rounded-r-lg px-4 py-2.5 text-right font-semibold text-slate-600">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -100,35 +100,35 @@
                             $statusClass = $statusBadgeClasses[$course->status] ?? 'bg-slate-50 text-slate-700 ring-1 ring-slate-200';
                         @endphp
                         <tr class="transition-colors duration-150 hover:bg-slate-50/80">
-                            <td class="px-4 py-3 align-middle">
-                                <div class="h-14 w-24 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                            <td class="px-4 py-2 align-middle">
+                                <div class="h-10 w-16 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                                     @if($course->thumbnail)
                                         <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
                                     @else
-                                        <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 to-rose-700 text-xs font-bold text-white">EP</div>
+                                        <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 to-rose-700 text-[10px] font-bold text-white">EP</div>
                                     @endif
                                 </div>
                             </td>
-                            <td class="max-w-xs px-4 py-3 align-middle">
+                            <td class="max-w-xs px-4 py-2 align-middle">
                                 <div class="truncate font-bold text-slate-950">{{ $course->title }}</div>
-                                <div class="mt-1 truncate text-xs text-slate-500">{{ $course->slug }}</div>
+                                <div class="mt-0.5 truncate text-[11px] text-slate-500">{{ $course->slug }}</div>
                             </td>
-                            <td class="px-4 py-3 align-middle">
-                                <div class="max-w-[180px] truncate font-semibold text-slate-800">{{ $course->instructor?->name ?? 'Chưa gán' }}</div>
-                                <div class="max-w-[180px] truncate text-xs text-slate-500">{{ $course->instructor?->email }}</div>
+                            <td class="px-4 py-2 align-middle">
+                                <div class="max-w-[150px] truncate font-semibold text-slate-800">{{ $course->instructor?->name ?? 'Chưa gán' }}</div>
+                                <div class="max-w-[150px] truncate text-[11px] text-slate-500">{{ $course->instructor?->email }}</div>
                             </td>
-                            <td class="px-4 py-3 align-middle text-slate-600">{{ $course->category?->full_name ?? 'Chưa chọn' }}</td>
-                            <td class="whitespace-nowrap px-4 py-3 align-middle font-semibold text-slate-900">{{ $formatPrice($price) }}</td>
-                            <td class="px-4 py-3 text-center align-middle font-semibold text-slate-900">{{ number_format((int) $course->active_enrollments_count) }}</td>
-                            <td class="px-4 py-3 text-center align-middle text-slate-700">{{ $sectionsCount }}</td>
-                            <td class="px-4 py-3 text-center align-middle text-slate-700">{{ $lessonCount }}</td>
-                            <td class="px-4 py-3 align-middle">
-                                <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold {{ $statusClass }}">{{ $statusLabels[$course->status] ?? $course->status }}</span>
+                            <td class="px-4 py-2 align-middle text-slate-600 max-w-[150px] truncate" title="{{ $course->category?->full_name ?? 'Chưa chọn' }}">{{ $course->category?->full_name ?? 'Chưa chọn' }}</td>
+                            <td class="whitespace-nowrap px-4 py-2 align-middle font-semibold text-slate-900">{{ $formatPrice($price) }}</td>
+                            <td class="px-4 py-2 text-center align-middle font-semibold text-slate-900">{{ number_format((int) $course->active_enrollments_count) }}</td>
+                            <td class="px-4 py-2 text-center align-middle text-slate-700">{{ $sectionsCount }}</td>
+                            <td class="px-4 py-2 text-center align-middle text-slate-700">{{ $lessonCount }}</td>
+                            <td class="px-4 py-2 align-middle">
+                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold {{ $statusClass }}">{{ $statusLabels[$course->status] ?? $course->status }}</span>
                             </td>
-                            <td class="whitespace-nowrap px-4 py-3 align-middle text-slate-500">{{ $course->created_at?->format('d/m/Y') }}</td>
-                            <td class="whitespace-nowrap px-4 py-3 align-middle text-slate-500">{{ $course->published_at?->format('d/m/Y') ?? 'Chưa có' }}</td>
-                            <td class="px-4 py-3 align-middle">
-                                <div class="flex flex-wrap items-center justify-end gap-2">
+                            <td class="whitespace-nowrap px-4 py-2 align-middle text-slate-500">{{ $course->created_at?->format('d/m/Y') }}</td>
+                            <td class="whitespace-nowrap px-4 py-2 align-middle text-slate-500">{{ $course->published_at?->format('d/m/Y') ?? 'Chưa có' }}</td>
+                            <td class="px-4 py-2 align-middle">
+                                <div class="flex flex-wrap items-center justify-end gap-1.5">
                                     <a href="{{ route('admin.courses.show', $course) }}" class="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">Chi tiết</a>
                                     <a href="{{ route('admin.courses.students', $course) }}" class="inline-flex h-8 items-center rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 cursor-pointer">Học viên</a>
 

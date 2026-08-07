@@ -28,6 +28,11 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            \App\Models\User::where('id', $userId)->update([
+                'last_learning_at' => now(),
+                'engagement_email_stage' => 0,
+            ]);
+
             $lessonIds = $this->courseLessonIds($course);
             abort_unless($lessonIds->contains((int) $lesson->id), 404);
 
@@ -70,6 +75,10 @@ class LearningProgressService
                     'completed_at' => $completedAt,
                 ]
             );
+
+            if ($completed && ! ($existing?->is_completed ?? false)) {
+                app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+            }
 
             $requiredLessonIds = $this->requiredLessonIds($course);
             $completedLessons = LessonProgress::query()
@@ -130,6 +139,11 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            \App\Models\User::where('id', $userId)->update([
+                'last_learning_at' => now(),
+                'engagement_email_stage' => 0,
+            ]);
+
             $lessonIds = $this->courseLessonIds($course);
             abort_unless($lessonIds->contains((int) $lesson->id), 404);
             abort_unless($lesson->type === 'video', 422);
@@ -160,7 +174,12 @@ class LearningProgressService
 
             $serverElapsed = $this->serverElapsedSeconds($existing, $clientUpdatedAt);
             $trustedPlayedSeconds = min($playedSeconds, $serverElapsed + 5);
+
             $watchedSeconds = $this->normalizeSeconds($previousWatched + $trustedPlayedSeconds, $durationSeconds);
+
+            if (!empty($payload['completed']) || ($durationSeconds > 0 && $lastPosition >= max(1, $durationSeconds - 2))) {
+                $watchedSeconds = $durationSeconds;
+            }
 
             $safeFurthestLimit = $durationSeconds > 0
                 ? min($durationSeconds, max($previousFurthest, $previousFurthest + $trustedPlayedSeconds + 5))
@@ -172,8 +191,11 @@ class LearningProgressService
                 : (float) ($existing?->progress_percent ?? 0);
 
             $threshold = $course->requiredVideoPercent();
-            $completed = $previousCompleted || $progressPercent >= $threshold || !empty($payload['completed']);
-            
+            // Đảm bảo học viên xem đủ thời lượng hoặc khi video kết thúc
+            $completed = $previousCompleted || $progressPercent >= $threshold;
+            if (!$completed && (!empty($payload['completed']) || ($durationSeconds > 0 && $watchedSeconds >= max(1, $durationSeconds - 2)))) {
+                $completed = true;
+            }            
             if ($completed) {
                 $progressPercent = 100;
                 $watchedSeconds = max($watchedSeconds, $durationSeconds);
@@ -200,6 +222,10 @@ class LearningProgressService
                 ]
             );
 
+            if ($completed) {
+                app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+            }
+
             return $this->refreshCourseProgress($enrollment, $userId, $course, $progress);
         });
     }
@@ -220,7 +246,7 @@ class LearningProgressService
 
     public function requiredLessonIds(Course $course): Collection
     {
-        return Lesson::query()
+        $ids = Lesson::query()
             ->where(function ($query) use ($course) {
                 $query->where('course_id', $course->id)
                     ->orWhereHas('section', fn ($q) => $q->where('course_id', $course->id))
@@ -234,6 +260,12 @@ class LearningProgressService
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
+
+        if ($ids->isEmpty()) {
+            return $this->courseLessonIds($course);
+        }
+
+        return $ids;
     }
 
     private function refreshCourseProgress(Enrollment $enrollment, int $userId, Course $course, LessonProgress $lessonProgress): array
@@ -316,6 +348,14 @@ class LearningProgressService
     {
         $clientDuration = (int) floor((float) ($payload['video_duration_seconds'] ?? $payload['duration_seconds'] ?? 0));
         $storedDuration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+
+        if ($clientDuration > 0 && ($storedDuration <= 0 || abs($storedDuration - $clientDuration) > 3)) {
+            $lesson->update([
+                'duration_seconds' => $clientDuration,
+                'duration' => $clientDuration,
+            ]);
+            return $clientDuration;
+        }
 
         return max(0, $storedDuration > 0 ? $storedDuration : $clientDuration);
     }

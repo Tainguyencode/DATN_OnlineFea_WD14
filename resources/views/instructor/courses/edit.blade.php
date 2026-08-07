@@ -4,6 +4,8 @@
     $statusStyles = [
         'draft' => 'bg-slate-100 text-slate-700 border-slate-200',
         'pending_review' => 'bg-amber-50 text-amber-700 border-amber-200',
+        'pending_update' => 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
+        'rejected_update' => 'bg-rose-100 text-rose-900 border-rose-300 font-bold',
         'approved' => 'bg-sky-50 text-sky-700 border-sky-200',
         'published' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
         'rejected' => 'bg-rose-50 text-rose-700 border-rose-200',
@@ -37,24 +39,30 @@
                    class="inline-flex min-h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">
                     Quản lý nội dung
                 </a>
-                @if($course->status === 'published')
+                @if($course->isPublished())
                     <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
                        class="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 cursor-pointer">
-                        Xem trước
+                        Xem bản đang phát sóng
                     </a>
                 @endif
                 @if($course->canBeSubmittedForReview() && $submissionCheck->passes())
                     <button type="button" onclick="openCopyrightModal()"
                             class="inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
-                        {{ in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                        {{ in_array($course->status, ['published', 'rejected_update'], true) ? 'Gửi duyệt cập nhật' : (in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt') }}
                     </button>
                 @endif
             </div>
         </div>
 
-        @if($course->status === 'rejected' && $course->rejectionReasonText())
+        @if(in_array($course->status, ['rejected', 'rejected_update'], true) && $course->rejectionReasonText())
             <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
                 <strong>Lý do từ chối:</strong> {{ $course->rejectionReasonText() }}
+            </div>
+        @endif
+
+        @if($course->status === 'pending_update')
+            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <strong>Đang chờ Admin duyệt bản cập nhật:</strong> Các chỉnh sửa mới của bạn đang được Ban quản trị xem xét. Học viên vẫn đang học phiên bản đã phát sóng trước đó.
             </div>
         @endif
 
@@ -70,7 +78,7 @@
         @endif
     </div>
 
-    @if($course->status === 'rejected')
+    @if(in_array($course->status, ['rejected', 'rejected_update'], true))
         @include('instructor.courses.partials.ai-moderation-results', ['course' => $course])
     @endif
 

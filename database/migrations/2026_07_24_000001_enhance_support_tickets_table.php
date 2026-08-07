@@ -10,39 +10,47 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('support_tickets', function (Blueprint $table): void {
-            $table->string('code', 32)
-                ->nullable()
-                ->after('id');
+        if (! Schema::hasColumn('support_tickets', 'code')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->string('code', 32)->nullable()->after('id');
+            });
+        }
 
-            $table->string('category', 50)
-                ->default('other')
-                ->after('message');
+        if (! Schema::hasColumn('support_tickets', 'category')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->string('category', 50)->default('other')->after('subject');
+            });
+        }
 
-            $table->foreignId('assigned_to')
-                ->nullable()
-                ->after('priority')
-                ->constrained('users')
-                ->nullOnDelete();
+        if (! Schema::hasColumn('support_tickets', 'assigned_to')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->foreignId('assigned_to')->nullable()->after('priority')->constrained('users')->nullOnDelete();
+            });
+        }
 
-            $table->timestamp('last_replied_at')
-                ->nullable()
-                ->after('assigned_to');
+        if (! Schema::hasColumn('support_tickets', 'last_replied_at')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->timestamp('last_replied_at')->nullable()->after('assigned_to');
+            });
+        }
 
-            $table->foreignId('last_replied_by')
-                ->nullable()
-                ->after('last_replied_at')
-                ->constrained('users')
-                ->nullOnDelete();
+        if (! Schema::hasColumn('support_tickets', 'last_replied_by')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->foreignId('last_replied_by')->nullable()->after('last_replied_at')->constrained('users')->nullOnDelete();
+            });
+        }
 
-            $table->timestamp('resolved_at')
-                ->nullable()
-                ->after('last_replied_by');
+        if (! Schema::hasColumn('support_tickets', 'resolved_at')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->timestamp('resolved_at')->nullable()->after('last_replied_by');
+            });
+        }
 
-            $table->timestamp('closed_at')
-                ->nullable()
-                ->after('resolved_at');
-        });
+        if (! Schema::hasColumn('support_tickets', 'closed_at')) {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->timestamp('closed_at')->nullable()->after('resolved_at');
+            });
+        }
 
         // Sinh mã duy nhất cho các ticket cũ.
         DB::table('support_tickets')
@@ -71,12 +79,16 @@ return new class extends Migration
             });
 
         // Chỉ thêm unique sau khi đã backfill dữ liệu cũ.
-        Schema::table('support_tickets', function (Blueprint $table): void {
-            $table->unique(
-                'code',
-                'support_tickets_code_unique'
-            );
-        });
+        try {
+            Schema::table('support_tickets', function (Blueprint $table): void {
+                $table->unique(
+                    'code',
+                    'support_tickets_code_unique'
+                );
+            });
+        } catch (\Throwable $e) {
+            // Already unique
+        }
     }
 
     public function down(): void

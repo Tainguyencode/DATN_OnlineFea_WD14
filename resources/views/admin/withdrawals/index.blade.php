@@ -252,13 +252,26 @@
                                 <td class="px-5 py-4 text-center">
                                     @if ($item->status === 'pending')
                                         <div class="flex items-center justify-center gap-2">
+                                            <form action="{{ route('admin.withdrawals.auto-payout', $item->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn TỰ ĐỘNG CHUYỂN KHOẢN {{ number_format($item->amount, 0, ',', '.') }}đ qua PayOS cho giảng viên {{ addslashes($item->user?->name) }} không?')">
+                                                @csrf
+                                                <button
+                                                    type="submit"
+                                                    class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition active:scale-95 cursor-pointer"
+                                                    title="Hệ thống tự động bắn tiền trực tiếp qua PayOS API sang tài khoản ngân hàng của Giảng viên"
+                                                >
+                                                    <svg class="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                                    ⚡ Tự động chi PayOS
+                                                </button>
+                                            </form>
+
                                             <button
                                                 type="button"
                                                 @click="openQrModal({{ $item->id }}, {{ $item->user_id }}, '{{ addslashes($item->user?->name) }}', {{ $item->amount }}, '{{ addslashes($item->bank_name) }}', '{{ $item->bank_code ?? 'MB' }}', '{{ $item->bank_account_number }}', '{{ addslashes($item->bank_account_name) }}', '{{ $item->viet_qr_url }}')"
-                                                class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition active:scale-95 cursor-pointer"
+                                                class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition active:scale-95 cursor-pointer"
+                                                title="Quét mã VietQR bằng App ngân hàng"
                                             >
                                                 <svg class="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-                                                Quét VietQR & Duyệt Tiền
+                                                Quét VietQR
                                             </button>
 
                                             <button

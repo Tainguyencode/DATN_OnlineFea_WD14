@@ -9,7 +9,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
+/**
+ * Model Quản lý Khóa học Trực tuyến (Course Model)
+ * 
+ * Đại diện cho một khóa học trên hệ thống LMS với đầy đủ thông tin:
+ * - Thông tin cơ bản: Tên khóa học, mô tả, ảnh thumbnail, video preview, danh mục, giảng viên tạo.
+ * - Tài chính & Giá bán: Giá gốc (`price`), giá khuyến mãi (`discount_price`), giá hiệu lực (`effective_price`).
+ * - Phê duyệt & Trạng thái: Nháp (`draft`), Chờ duyệt (`pending_review`), Đã duyệt (`approved`), Đã xuất bản (`published`), Từ chối (`rejected`).
+ * - Điều kiện hoàn thành: Tỷ lệ xem video (`required_video_percent`), tỷ lệ bài học (`required_lesson_percent`), điểm trắc nghiệm tối thiểu (`minimum_quiz_score`).
+ * - Quan hệ: Bài học (`lessons`), Chương/Mục (`chapters`/`sections`), Ghi danh (`enrollments`), Đánh giá (`reviews`), Nhóm học tập (`studyGroups`).
+ */
 class Course extends Model
 {
     /** @deprecated Use CourseStatus enum */
@@ -31,6 +42,11 @@ class Course extends Model
 
     public const STATUS_ARCHIVED = 'archived';
 
+    public const STATUS_PENDING_UPDATE = 'pending_update';
+
+    public const STATUS_REJECTED_UPDATE = 'rejected_update';
+
+    /** Danh sách tất cả trạng thái hợp lệ của khóa học */
     public const STATUSES = [
         'draft',
         'pending_review',
@@ -39,8 +55,11 @@ class Course extends Model
         'published',
         'suspended',
         'archived',
+        'pending_update',
+        'rejected_update',
     ];
 
+    /** Nhãn tiếng Việt cho từng trạng thái */
     public const STATUS_LABELS = [
         'draft' => 'Nháp',
         'pending_review' => 'Chờ duyệt',
@@ -49,10 +68,14 @@ class Course extends Model
         'rejected' => 'Bị từ chối',
         'suspended' => 'Tạm ngừng',
         'archived' => 'Đã lưu trữ',
+        'pending_update' => 'Cập nhật chờ duyệt',
+        'rejected_update' => 'Bị từ chối cập nhật',
     ];
 
+    /** Số lượng bài học tối thiểu bắt buộc để có thể nộp duyệt */
     public const MIN_LESSON_COUNT = 5;
 
+    /** Tổng thời lượng video tối thiểu (phút) bắt buộc để có thể nộp duyệt */
     public const MIN_VIDEO_DURATION_MINUTES = 30;
 
     protected $fillable = [
@@ -90,61 +113,73 @@ class Course extends Model
         ];
     }
 
+    /** Giảng viên sở hữu khóa học này */
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'instructor_id');
     }
 
+    /** Người xác nhận bản quyền khóa học */
     public function copyrightAgreedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'copyright_agreed_by');
     }
 
+    /** Danh mục ngành học của khóa học */
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
     }
 
+    /** Danh sách các chương học */
     public function chapters(): HasMany
     {
         return $this->hasMany(Chapter::class)->orderBy('sort_order');
     }
 
+    /** Danh sách các mục chương học (Sections) */
     public function courseSections(): HasMany
     {
         return $this->hasMany(CourseSection::class)->orderBy('sort_order');
     }
 
+    /** Danh sách tất cả các bài học trong khóa học */
     public function lessons(): HasMany
     {
         return $this->hasMany(Lesson::class)->orderBy('sort_order');
     }
 
+    /** Danh sách các bản ghi ghi danh của học viên */
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
     }
 
+    /** Các nhóm học tập thuộc khóa học */
     public function studyGroups(): HasMany
     {
         return $this->hasMany(StudyGroup::class);
     }
 
+    /** Danh sách yêu thích của học viên */
     public function wishlists(): HasMany
     {
         return $this->hasMany(Wishlist::class);
     }
 
+    /** Danh sách học viên đã thả tim / thêm vào yêu thích */
     public function favoritedByUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'wishlists')->withTimestamps();
     }
 
+    /** Danh sách đánh giá khóa học */
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
     }
 
+    /** Danh sách đánh giá công khai đã được hiển thị */
     public function approvedReviews(): HasMany
     {
         return $this->visibleReviews();
@@ -155,6 +190,7 @@ class Course extends Model
         return $this->reviews()->visible();
     }
 
+    /** Lịch sử các lần duyệt khóa học từ Admin */
     public function courseReviews(): HasMany
     {
         return $this->hasMany(CourseReview::class)->orderByDesc('submission_number');
@@ -165,29 +201,62 @@ class Course extends Model
         return $this->courseReviews()->first();
     }
 
+    /** Danh sách bài tập tự luận */
     public function assignments(): HasMany
     {
         return $this->hasMany(Assignment::class);
     }
 
+    /**
+     * Lấy giá thực tế của khóa học (ưu tiên giá khuyến mãi nếu có).
+     */
     public function getEffectivePriceAttribute(): float
     {
         return (float) ($this->discount_price ?? $this->sale_price ?? $this->price);
     }
 
+    /**
+     * Lấy đường dẫn ảnh đại diện (thumbnail) hợp lệ của khóa học.
+     */
+    public function thumbnailUrl(): string
+    {
+        if (! $this->thumbnail) {
+            return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80';
+        }
+
+        if (str_starts_with($this->thumbnail, 'http://') || str_starts_with($this->thumbnail, 'https://')) {
+            return $this->thumbnail;
+        }
+
+        if (Storage::disk('public')->exists($this->thumbnail)) {
+            return asset('storage/' . $this->thumbnail);
+        }
+
+        return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80';
+    }
+
+    /**
+     * Kiểm tra xem Giảng viên này có phải là người sở hữu khóa học hay không.
+     */
     public function isOwnedBy(User $user): bool
     {
         return (int) $this->instructor_id === (int) $user->id;
     }
 
+    /**
+     * Kiểm tra xem khóa học đã xuất bản công khai hay chưa.
+     */
     public function isPublished(): bool
     {
-        return $this->status === self::STATUS_PUBLISHED && (bool) $this->is_published;
+        return (bool) $this->is_published || in_array($this->status, [self::STATUS_PUBLISHED, self::STATUS_PENDING_UPDATE, self::STATUS_REJECTED_UPDATE], true);
     }
 
+    /**
+     * Kiểm tra xem giảng viên có thể chỉnh sửa khóa học hay không.
+     */
     public function isEditable(): bool
     {
-        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED], true);
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED, self::STATUS_PUBLISHED, self::STATUS_REJECTED_UPDATE], true);
     }
 
     public function statusEnum(): CourseStatus
@@ -195,6 +264,9 @@ class Course extends Model
         return CourseStatus::from($this->status);
     }
 
+    /**
+     * Kiểm tra người dùng hiện tại đã thêm khóa học này vào danh sách yêu thích hay chưa.
+     */
     public function isFavoritedBy(?User $user): bool
     {
         if (! $user) {
@@ -206,29 +278,37 @@ class Course extends Model
             ->exists();
     }
 
+    /** Lý do từ chối phê duyệt (nếu có) */
     public function rejectionReasonText(): ?string
     {
         return $this->reject_reason ?: $this->rejection_reason;
     }
 
+    /** Tên tiếng Việt hiển thị của trạng thái */
     public function statusLabel(): string
     {
         return self::STATUS_LABELS[$this->status] ?? $this->status;
     }
 
+    /** Kiểm tra giảng viên có được phép gửi yêu cầu phê duyệt khóa học hay không */
     public function canBeSubmittedForReview(): bool
     {
         return in_array($this->status, [
             self::STATUS_DRAFT,
             self::STATUS_REJECTED,
+            self::STATUS_PUBLISHED,
+            self::STATUS_PENDING_UPDATE,
+            self::STATUS_REJECTED_UPDATE,
         ], true);
     }
 
+    /** Kiểm tra khóa học có đang chờ Admin phê duyệt hay không */
     public function isAwaitingAdminReview(): bool
     {
-        return $this->status === self::STATUS_SUBMITTED;
+        return in_array($this->status, [self::STATUS_SUBMITTED, self::STATUS_PENDING_UPDATE], true);
     }
 
+    /** Tính tổng thời lượng video (giây) của tất cả bài học */
     public function totalVideoDurationSeconds(): int
     {
         return (int) $this->lessons()
@@ -236,21 +316,25 @@ class Course extends Model
             ->sum(fn (Lesson $lesson) => (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0));
     }
 
+    /** Tính tổng thời lượng video (phút) */
     public function totalVideoDurationMinutes(): int
     {
         return (int) floor($this->totalVideoDurationSeconds() / 60);
     }
 
+    /** Tổng số bài học */
     public function lessonCount(): int
     {
         return $this->lessons()->count();
     }
 
+    /** Gọi Validator kiểm tra tính đầy đủ của khóa học trước khi cho nộp duyệt */
     public function submissionCheck(): CourseSubmissionCheckResult
     {
         return app(CourseSubmissionValidator::class)->validate($this);
     }
 
+    /** Kiểm tra xem khóa học đã sẵn sàng để gửi duyệt hay chưa */
     public function isReadyForSubmission(): bool
     {
         return $this->submissionCheck()->passes();
@@ -278,6 +362,7 @@ class Course extends Model
             : $this->chapters;
     }
 
+    /** Lấy bài học đầu tiên của khóa học để làm lối vào học ngay */
     public function firstLesson(): ?Lesson
     {
         $this->loadMissing([
@@ -297,6 +382,7 @@ class Course extends Model
         return $this->lessons()->orderBy('sort_order')->first();
     }
 
+    /** Đường dẫn tham gia trình phát bài học */
     public function learningEntryUrl(): ?string
     {
         $lesson = $this->firstLesson();

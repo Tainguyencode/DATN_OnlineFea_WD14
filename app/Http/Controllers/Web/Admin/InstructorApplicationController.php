@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
-use App\Enums\UserRole;
-use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
-use App\Models\InstructorApplication;
+use App\Models\User;
+use App\Notifications\InstructorApprovedNotification;
+use App\Notifications\InstructorRejectedNotification;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,72 +15,104 @@ class InstructorApplicationController extends Controller
 {
     public function index(Request $request): View
     {
-        $status = $request->get('status', 'pending');
+        $status = $request->query('status', 'all');
 
-        $applications = InstructorApplication::with('user')
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->latest()
+        $query = User::where('role', 'instructor')
+            ->with(['instructorProfile', 'approver']);
+
+        if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
+            $query->where('instructor_status', $status);
+        }
+
+        $applications = $query->orderByDesc('created_at')
             ->paginate(15)
             ->withQueryString();
 
-        return view('admin.instructor-applications.index', compact('applications', 'status'));
+        $counts = [
+            'all' => User::where('role', 'instructor')->count(),
+            'pending' => User::where('role', 'instructor')->where('instructor_status', 'pending')->count(),
+            'approved' => User::where('role', 'instructor')->where('instructor_status', 'approved')->count(),
+            'rejected' => User::where('role', 'instructor')->where('instructor_status', 'rejected')->count(),
+        ];
+
+        return view('admin.instructors.applications.index', [
+            'applications' => $applications,
+            'status' => $status,
+            'counts' => $counts,
+        ]);
     }
 
-    public function approve(Request $request, InstructorApplication $application): RedirectResponse
+    public function show(User $user): View|RedirectResponse
     {
-        if (! $application->isPending()) {
-            return back()->with('error', 'Đơn này đã được xử lý.');
+        if ($user->role !== 'instructor') {
+            return redirect()->route('admin.instructors.applications.index')
+                ->with('error', 'Người dùng này không phải là Giảng viên.');
         }
 
-        $application->update([
-            'status' => 'approved',
-            'reviewed_by' => auth('admin')->id(),
-            'reviewed_at' => now(),
-            'admin_notes' => $request->input('admin_notes'),
+        $user->load(['instructorProfile', 'approver']);
+
+        return view('admin.instructors.applications.show', [
+            'application' => $user,
+            'profile' => $user->instructorProfile,
         ]);
-
-        $application->user->update([
-            'role' => UserRole::Instructor->value,
-            'status' => UserStatus::Active->value,
-            'is_active' => true,
-        ]);
-
-        ActivityLogService::log(
-            auth('admin')->id(),
-            'instructor_application_approved',
-            InstructorApplication::class,
-            $application->id,
-            ['user_id' => $application->user_id],
-            $request
-        );
-
-        return back()->with('success', 'Đã duyệt đơn đăng ký giảng viên.');
     }
 
-    public function reject(Request $request, InstructorApplication $application): RedirectResponse
+    public function approve(Request $request, User $user): RedirectResponse
     {
-        if (! $application->isPending()) {
-            return back()->with('error', 'Đơn này đã được xử lý.');
+        if ($user->role !== 'instructor') {
+            return back()->with('error', 'Người dùng không phải giảng viên.');
         }
 
-        $request->validate(['admin_notes' => 'nullable|string|max:1000']);
-
-        $application->update([
-            'status' => 'rejected',
-            'reviewed_by' => auth('admin')->id(),
-            'reviewed_at' => now(),
-            'admin_notes' => $request->input('admin_notes'),
+        $user->update([
+            'instructor_status' => 'approved',
+            'approved_at' => now(),
+            'approved_by' => $request->user()->id,
+            'rejected_reason' => null,
         ]);
 
-        ActivityLogService::log(
-            auth('admin')->id(),
-            'instructor_application_rejected',
-            InstructorApplication::class,
-            $application->id,
-            ['user_id' => $application->user_id],
-            $request
-        );
+        try {
+            $user->notify(new InstructorApprovedNotification());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Gửi email Duyệt giảng viên thất bại: ' . $e->getMessage());
+        }
 
-        return back()->with('success', 'Đã từ chối đơn đăng ký giảng viên.');
+        ActivityLogService::log($request->user()->id, 'approve_instructor', User::class, $user->id, [], $request);
+
+        return redirect()->route('admin.instructors.applications.index')
+            ->with('success', 'Đã duyệt hồ sơ Giảng viên "' . $user->name . '" thành công!');
+    }
+
+    public function reject(Request $request, User $user): RedirectResponse
+    {
+        if ($user->role !== 'instructor') {
+            return back()->with('error', 'Người dùng không phải giảng viên.');
+        }
+
+        $request->validate([
+            'rejected_reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'rejected_reason.required' => 'Vui lòng nhập lý do từ chối hồ sơ.',
+            'rejected_reason.max' => 'Lý do từ chối không quá 1000 ký tự.',
+        ]);
+
+        $reason = $request->input('rejected_reason');
+
+        $user->update([
+            'instructor_status' => 'rejected',
+            'rejected_reason' => $reason,
+        ]);
+
+        try {
+            $user->notify(new InstructorRejectedNotification($reason));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Gửi email Từ chối giảng viên thất bại: ' . $e->getMessage());
+        }
+
+        ActivityLogService::log($request->user()->id, 'reject_instructor', User::class, $user->id, [
+            'reason' => $reason,
+        ], $request);
+
+        return redirect()->route('admin.instructors.applications.index')
+            ->with('success', 'Đã từ chối hồ sơ Giảng viên "' . $user->name . '".');
     }
 }

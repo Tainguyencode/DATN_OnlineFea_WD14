@@ -24,13 +24,17 @@
                     <img src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-16 w-auto object-contain">
                 </a>
 
-                <nav class="hidden items-center gap-5 text-sm font-semibold text-slate-700 dark:text-slate-300 lg:flex">
-                    <a href="{{ route('home') }}#categories" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khám phá</a>
-                    <a href="{{ route('courses.index') }}" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Khóa học</a>
-                    <a href="{{ route('home') }}#paths" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Lộ trình</a>
-                    <a href="{{ route('instructors.index') }}" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Giảng viên</a>
-                    <a href="{{ route('home') }}#business" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">Doanh nghiệp</a>
-                    <a href="{{ route('home') }}#faq" class="transition duration-200 hover:text-[#0056D2] dark:hover:text-blue-300">FAQ</a>
+                <nav class="hidden items-center gap-6 text-sm font-semibold text-slate-700 dark:text-slate-300 lg:flex">
+                    @php
+                        $navItemClass = "relative py-1 transition-colors duration-200 hover:text-[#0056D2] dark:hover:text-blue-300 after:content-[''] after:absolute after:-bottom-1 after:left-0 after:h-[2.5px] after:bg-[#0056D2] dark:after:bg-blue-400 after:transition-all after:duration-300";
+                    @endphp
+                    <a href="{{ route('home') }}" class="{{ $navItemClass }} {{ request()->routeIs('home') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Trang chủ</a>
+                    <a href="{{ route('courses.index') }}" class="{{ $navItemClass }} {{ request()->routeIs('courses.*') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Khóa học</a>
+                    <a href="{{ route('leaderboard') }}" class="{{ $navItemClass }} {{ request()->routeIs('leaderboard') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Xếp hạng</a>
+                    <a href="{{ route('home') }}#paths" class="{{ $navItemClass }} after:w-0 hover:after:w-full">Lộ trình</a>
+                    <a href="{{ route('instructors.index') }}" class="{{ $navItemClass }} {{ request()->routeIs('instructors.*') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Giảng viên</a>
+                    <a href="{{ route('home') }}#business" class="{{ $navItemClass }} after:w-0 hover:after:w-full">Doanh nghiệp</a>
+                    <a href="{{ route('home') }}#faq" class="{{ $navItemClass }} after:w-0 hover:after:w-full">FAQ</a>
                 </nav>
 
                 <form method="GET" action="{{ route('home') }}" class="hidden min-w-0 flex-1 items-center lg:flex">
@@ -117,8 +121,9 @@
                 </button>
             </div>
             <nav class="flex flex-col gap-1 p-5 text-base font-semibold text-slate-700 dark:text-slate-300">
-                <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khám phá</a>
+                <a href="{{ route('home') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Trang chủ</a>
                 <a href="{{ route('courses.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Khóa học</a>
+                <a href="{{ route('leaderboard') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Xếp hạng</a>
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Danh mục</a>
                 <a href="{{ route('home') }}#paths" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Lộ trình</a>
                 <a href="{{ route('instructors.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>

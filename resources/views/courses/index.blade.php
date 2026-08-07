@@ -160,7 +160,7 @@
                         <div class="relative aspect-video overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-800">
                             <a href="{{ route('courses.show', $course->slug) }}" class="block h-full" aria-label="Xem chi tiết {{ $course->title }}">
                                 @if($course->thumbnail)
-                                    <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                                    <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80'">
                                 @else
                                     <div class="flex h-full w-full items-center justify-center text-3xl font-extrabold text-white/80">Fea</div>
                                 @endif

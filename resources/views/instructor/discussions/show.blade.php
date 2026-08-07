@@ -76,22 +76,29 @@
 
                             <!-- Đính kèm tin gốc -->
                             @if($discussion->attachment_path)
-                                <div class="mt-3 p-2 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 inline-block max-w-full">
-                                    @if($discussion->attachment_type === 'image')
-                                        <a href="{{ $discussion->attachmentUrl() }}" target="_blank">
-                                            <img src="{{ $discussion->attachmentUrl() }}" alt="Attachment" class="rounded max-h-[220px] object-contain border border-slate-100">
-                                        </a>
-                                    @elseif($discussion->attachment_type === 'video')
-                                        <video controls class="rounded w-full max-h-[220px] max-w-[360px]">
-                                            <source src="{{ $discussion->attachmentUrl() }}">
-                                            Trình duyệt không hỗ trợ xem video.
-                                        </video>
-                                    @else
-                                        <a href="{{ $discussion->attachmentUrl() }}" target="_blank" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
-                                            <span>📎</span> Tải xuống: {{ $discussion->attachment_name }}
-                                        </a>
-                                    @endif
-                                </div>
+                                @php $discussionAttachUrl = $discussion->attachmentUrl(); @endphp
+                                @if($discussionAttachUrl)
+                                    <div class="mt-3 p-2 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 inline-block max-w-full">
+                                        @if($discussion->attachment_type === 'image')
+                                            <a href="{{ $discussionAttachUrl }}" target="_blank">
+                                                <img src="{{ $discussionAttachUrl }}" alt="Attachment" class="rounded max-h-[220px] object-contain border border-slate-100" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Ảnh+Không+Tồn+Tại&background=fee2e2&color=dc2626'">
+                                            </a>
+                                        @elseif($discussion->attachment_type === 'video')
+                                            <video controls class="rounded w-full max-h-[220px] max-w-[360px]">
+                                                <source src="{{ $discussionAttachUrl }}">
+                                                Trình duyệt không hỗ trợ xem video.
+                                            </video>
+                                        @else
+                                            <a href="{{ $discussionAttachUrl }}" target="_blank" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
+                                                <span>📎</span> Tải xuống: {{ $discussion->attachment_name }}
+                                            </a>
+                                        @endif
+                                    </div>
+                                @else
+                                    <div class="mt-3 px-3 py-2 rounded bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200 inline-flex items-center gap-1.5">
+                                        <span>⚠️</span> File đính kèm không tồn tại hoặc đã bị xóa
+                                    </div>
+                                @endif
                             @endif
                         </div>
                     </div>
@@ -117,22 +124,29 @@
 
                                 <!-- Đính kèm ở reply -->
                                 @if($reply->attachment_path)
-                                    <div class="mt-3 p-2 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 inline-block max-w-full">
-                                        @if($reply->attachment_type === 'image')
-                                            <a href="{{ $reply->attachmentUrl() }}" target="_blank">
-                                                <img src="{{ $reply->attachmentUrl() }}" alt="Attachment" class="rounded max-h-[180px] object-contain border border-slate-100">
-                                            </a>
-                                        @elseif($reply->attachment_type === 'video')
-                                            <video controls class="rounded w-full max-h-[180px] max-w-[320px]">
-                                                <source src="{{ $reply->attachmentUrl() }}">
-                                                Trình duyệt không hỗ trợ xem video.
-                                            </video>
-                                        @else
-                                            <a href="{{ $reply->attachmentUrl() }}" target="_blank" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
-                                                <span>📎</span> Tải xuống: {{ $reply->attachment_name }}
-                                            </a>
-                                        @endif
-                                    </div>
+                                    @php $replyAttachUrl = $reply->attachmentUrl(); @endphp
+                                    @if($replyAttachUrl)
+                                        <div class="mt-3 p-2 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 inline-block max-w-full">
+                                            @if($reply->attachment_type === 'image')
+                                                <a href="{{ $replyAttachUrl }}" target="_blank">
+                                                    <img src="{{ $replyAttachUrl }}" alt="Attachment" class="rounded max-h-[180px] object-contain border border-slate-100" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Ảnh+Không+Tồn+Tại&background=fee2e2&color=dc2626'">
+                                                </a>
+                                            @elseif($reply->attachment_type === 'video')
+                                                <video controls class="rounded w-full max-h-[180px] max-w-[320px]">
+                                                    <source src="{{ $replyAttachUrl }}">
+                                                    Trình duyệt không hỗ trợ xem video.
+                                                </video>
+                                            @else
+                                                <a href="{{ $replyAttachUrl }}" target="_blank" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
+                                                    <span>📎</span> Tải xuống: {{ $reply->attachment_name }}
+                                                </a>
+                                            @endif
+                                        </div>
+                                    @else
+                                        <div class="mt-3 px-3 py-2 rounded bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200 inline-flex items-center gap-1.5">
+                                            <span>⚠️</span> File đính kèm không tồn tại hoặc đã bị xóa
+                                        </div>
+                                    @endif
                                 @endif
                             </div>
                         </div>

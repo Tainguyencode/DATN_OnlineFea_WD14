@@ -12,20 +12,41 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Service quản lý các cổng thanh toán (VNPay, MoMo, Chuyển khoản)
- * Được cấu trúc sẵn sàng để thay thế bằng API thật trong tương lai.
+ * Service Quản lý Cổng Thanh toán & Xử lý Giao dịch Đơn hàng (PaymentGatewayService)
+ * 
+ * Chức năng chính:
+ * 1. Khởi tạo liên kết thanh toán (VNPay, MoMo, PayOS VietQR, Giả lập Mock).
+ * 2. Xác thực tính hợp lệ của đơn hàng, mã giảm giá (Coupon), kiểm tra chống trùng lặp giao dịch (Replay attack).
+ * 3. Đánh dấu trạng thái đơn hàng (paid / failed) an toàn với DB Transaction & Row Locking (`lockForUpdate`).
+ * 4. Tự động ghi danh học viên (`Enrollment`), xóa sản phẩm đã mua khỏi Giỏ hàng (`Cart`).
+ * 5. Bắn thông báo `NotificationService` tới Giảng viên khi có học viên mới đăng ký khóa học.
  */
 class PaymentGatewayService
 {
     /**
-     * Lấy URL thanh toán tương ứng cho đơn hàng.
+     * Lấy URL chuyển hướng thanh toán tương ứng cho đơn hàng theo phương thức thanh toán được chọn.
+     * 
+     * @param Order $order Model đơn hàng cần thanh toán
+     * @return string URL chuyển hướng tới Cổng thanh toán hoặc Trang chuyển khoản QR
      */
     public function getPaymentUrl(Order $order): string
     {
         $mode = env('PAYMENT_MODE', 'mock');
 
+        // Nếu chọn PayOS, thử gọi PayOS API v2 để tạo checkoutUrl
+        if ($order->payment_method === 'payos') {
+            try {
+                return $this->createPayOSUrl($order);
+            } catch (\Exception $e) {
+                Log::warning('PayOS API creation fallback to mock: ' . $e->getMessage());
+                return route('student.checkout.mock_gateway', [
+                    'order_code' => $order->order_code,
+                    'gateway' => 'payos',
+                ]);
+            }
+        }
+
         if ($mode === 'mock') {
-            // Nếu chọn chuyển khoản ngân hàng, dẫn đến trang hiển thị QR Code và thông tin chuyển khoản nội bộ
             if ($order->payment_method === 'bank_transfer') {
                 return route('student.checkout.pay', $order->order_code);
             }
@@ -39,9 +60,9 @@ class PaymentGatewayService
 
         try {
             return match ($order->payment_method) {
-                'bank_transfer' => $this->createPayOSUrl($order),
-                'vnpay' => $this->createVNPayUrl($order),
+                'payos', 'bank_transfer' => $this->createPayOSUrl($order),
                 'momo' => $this->createMoMoUrl($order),
+                'vnpay' => $this->createVNPayUrl($order),
                 default => throw new \Exception('Cổng thanh toán không được hỗ trợ.'),
             };
         } catch (\Exception $e) {
@@ -49,9 +70,6 @@ class PaymentGatewayService
             // Fallback sang mock để trải nghiệm người dùng không bị gián đoạn khi dev
             if ($mode === 'sandbox') {
                 session()->flash('warning', 'Không kết nối được cổng thanh toán thật, chuyển hướng sang cổng giả lập: ' . $e->getMessage());
-                if ($order->payment_method === 'bank_transfer') {
-                    return route('student.checkout.pay', $order->order_code);
-                }
                 return route('student.checkout.mock_gateway', [
                     'order_code' => $order->order_code,
                     'gateway' => $order->payment_method,
@@ -62,7 +80,10 @@ class PaymentGatewayService
     }
 
     /**
-     * Sinh link thanh toán PayOS (VietQR)
+     * Sinh URL tạo link thanh toán VietQR qua PayOS API v2.
+     * 
+     * @param Order $order Đơn hàng cần tạo mã QR thanh toán
+     * @return string URL link thanh toán PayOS Checkout
      */
     protected function createPayOSUrl(Order $order): string
     {
@@ -124,6 +145,9 @@ class PaymentGatewayService
 
     /**
      * Kiểm tra trạng thái thanh toán trực tiếp từ PayOS API hoặc URL callback nếu đơn hàng chưa xác nhận paid.
+     * 
+     * @param Order $order Đơn hàng cần đối soát
+     * @return bool True nếu thanh toán thành công, False nếu chưa hoặc thất bại
      */
     public function checkAndUpdatePayOSStatus(Order $order): bool
     {
@@ -181,59 +205,12 @@ class PaymentGatewayService
         return false;
     }
 
-    /**
-     * Sinh link thanh toán VNPay
-     */
-    protected function createVNPayUrl(Order $order): string
-    {
-        $vnpTmnCode = env('VNP_TMN_CODE');
-        $vnpHashSecret = env('VNP_HASH_SECRET');
-        $vnpUrl = env('VNP_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
-
-        if (empty($vnpTmnCode) || empty($vnpHashSecret)) {
-            throw new \Exception('Chưa cấu hình tài khoản VNPay trong file .env');
-        }
-
-        $vnp_Params = [
-            "vnp_Version" => "2.1.0",
-            "vnp_Command" => "pay",
-            "vnp_TmnCode" => $vnpTmnCode,
-            "vnp_Amount" => $order->total_amount * 100, // VNPay nhân với 100
-            "vnp_CreateDate" => date('YmdHis'),
-            "vnp_CurrCode" => "VND",
-            "vnp_IpAddr" => request()->ip() ?? '127.0.0.1',
-            "vnp_Locale" => "vn",
-            "vnp_OrderInfo" => "Thanh toan khoa hoc " . $order->order_code,
-            "vnp_OrderType" => "other",
-            "vnp_ReturnUrl" => route('payments.vnpay.callback'),
-            "vnp_TxnRef" => $order->order_code,
-        ];
-
-        ksort($vnp_Params);
-        $query = "";
-        $i = 0;
-        $hashdata = "";
-        foreach ($vnp_Params as $key => $value) {
-            if ($i == 1) {
-                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
-            } else {
-                $hashdata .= urlencode($key) . "=" . urlencode($value);
-                $i = 1;
-            }
-            $query .= urlencode($key) . "=" . urlencode($value) . '&';
-        }
-
-        $vnp_Url = $vnpUrl . "?" . rtrim($query, '&');
-        if (isset($vnpHashSecret)) {
-            $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnpHashSecret);
-            $vnp_Url .= '&vnp_SecureHash=' . $vnpSecureHash;
-        }
-
-        return $vnp_Url;
-    }
 
     /**
-     * Sinh link thanh toán MoMo
+     * Sinh URL chuyển hướng đến Cổng thanh toán Ví MoMo.
+     * 
+     * @param Order $order Đơn hàng
+     * @return string URL MoMo PayUrl
      */
     protected function createMoMoUrl(Order $order): string
     {
@@ -299,18 +276,81 @@ class PaymentGatewayService
     }
 
     /**
-     * Xử lý kết quả giao dịch (Thành công / Thất bại).
-     * Áp dụng cho cả chuyển khoản giả lập lẫn callback từ các cổng VNPay, MoMo.
+     * Sinh URL chuyển hướng đến Cổng thanh toán VNPay (v2.1.0).
+     * 
+     * @param Order $order Đơn hàng
+     * @return string URL VNPay Payment
+     */
+    protected function createVNPayUrl(Order $order): string
+    {
+        $vnp_TmnCode = env('VNP_TMN_CODE');
+        $vnp_HashSecret = env('VNP_HASH_SECRET');
+        $vnp_Url = env('VNP_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
+        $vnp_Returnurl = route('payments.vnpay.return');
+
+        if (empty($vnp_TmnCode) || empty($vnp_HashSecret)) {
+            throw new \Exception('Chưa cấu hình tài khoản VNPay trong file .env');
+        }
+
+        $vnp_TxnRef = $order->order_code;
+        $vnp_OrderInfo = 'Thanh toan don hang ' . $order->order_code;
+        $vnp_OrderType = 'billpayment';
+        $vnp_Amount = (int) ($order->total_amount * 100);
+        $vnp_Locale = 'vn';
+        $vnp_IpAddr = request()->ip() ?? '127.0.0.1';
+
+        $inputData = [
+            "vnp_Version" => "2.1.0",
+            "vnp_TmnCode" => $vnp_TmnCode,
+            "vnp_Amount" => $vnp_Amount,
+            "vnp_Command" => "pay",
+            "vnp_CreateDate" => date('YmdHis'),
+            "vnp_CurrCode" => "VND",
+            "vnp_IpAddr" => $vnp_IpAddr,
+            "vnp_Locale" => $vnp_Locale,
+            "vnp_OrderInfo" => $vnp_OrderInfo,
+            "vnp_OrderType" => $vnp_OrderType,
+            "vnp_ReturnUrl" => $vnp_Returnurl,
+            "vnp_TxnRef" => $vnp_TxnRef,
+        ];
+
+        ksort($inputData);
+        $query = "";
+        $i = 0;
+        $hashdata = "";
+
+        foreach ($inputData as $key => $value) {
+            if ($i == 1) {
+                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
+            } else {
+                $hashdata .= urlencode($key) . "=" . urlencode($value);
+                $i = 1;
+            }
+            $query .= urlencode($key) . "=" . urlencode($value) . '&';
+        }
+
+        $vnp_Url = $vnp_Url . "?" . $query;
+        $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnp_HashSecret);
+        $vnp_Url .= 'vnp_SecureHash=' . $vnpSecureHash;
+
+        return $vnp_Url;
+    }
+
+    /**
+     * Xử lý xác nhận kết quả giao dịch Đơn hàng (Thành công / Thất bại).
+     * Áp dụng khóa hàng DB Transaction & LockForUpdate để chống tình trạng ghi đè trùng lặp.
      *
-     * @param  string  $status  ('success' hoặc 'failed')
-     * @param  string|null  $transactionId  Mã giao dịch thực tế hoặc giả lập
+     * @param Order $order Đơn hàng
+     * @param string $status Trạng thái ('success' hoặc 'failed')
+     * @param string|null $transactionId Mã giao dịch thực tế hoặc giả lập
+     * @return bool Thành công hay thất bại
      */
     public function processMockPayment(Order $order, string $status, ?string $transactionId = null): bool
     {
         return DB::transaction(function () use ($order, $status, $transactionId): bool {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
 
-            // A repeated callback for a completed order must be a no-op.
+            // Nếu đơn hàng đã được xác nhận paid trước đó thì giữ nguyên
             if ($lockedOrder->status === 'paid') {
                 return true;
             }
@@ -360,6 +400,13 @@ class PaymentGatewayService
         });
     }
 
+    /**
+     * Đánh dấu giao dịch đơn hàng thất bại.
+     * 
+     * @param Order $order
+     * @param Payment|null $payment
+     * @param string $message Lý do thất bại
+     */
     protected function markPaymentFailed(Order $order, ?Payment $payment, string $message): void
     {
         $order->update(['status' => 'failed']);
@@ -375,7 +422,9 @@ class PaymentGatewayService
     }
 
     /**
-     * Đăng ký ghi danh cho học viên khi thanh toán thành công.
+     * Tự động đăng ký Ghi danh (Enrollment) cho học viên khi thanh toán thành công và bắn thông báo tới Giảng viên.
+     * 
+     * @param Order $order
      */
     protected function enrollStudent(Order $order): void
     {
@@ -420,7 +469,9 @@ class PaymentGatewayService
     }
 
     /**
-     * Xóa các khóa học đã mua khỏi giỏ hàng của người dùng.
+     * Tự động xóa các khóa học đã mua khỏi giỏ hàng của học viên.
+     * 
+     * @param Order $order
      */
     protected function clearCart(Order $order): void
     {

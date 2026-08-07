@@ -3,17 +3,6 @@
     $selectedParent = old('parent_id', $category->parent_id);
 @endphp
 
-@if ($errors->any())
-    <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-        <p class="font-bold">Vui lòng kiểm tra lại thông tin danh mục.</p>
-        <ul class="mt-2 list-inside list-disc space-y-1">
-            @foreach ($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    </div>
-@endif
-
 <form method="POST" action="{{ $action }}" class="space-y-5">
     @csrf
     @if($method !== 'POST')
@@ -25,14 +14,14 @@
             <div>
                 <label for="name" class="mb-1.5 block text-sm font-bold text-slate-700">Tên danh mục <span class="text-rose-500">*</span></label>
                 <input id="name" type="text" name="name" value="{{ old('name', $category->name) }}" maxlength="255"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-rose-400 focus:ring-4 focus:ring-rose-100">
+                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 @error('name') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 @else border-slate-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100 @enderror">
                 @error('name') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </div>
 
             <div>
                 <label for="parent_id" class="mb-1.5 block text-sm font-bold text-slate-700">Danh mục cha</label>
                 <select id="parent_id" name="parent_id"
-                        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-rose-400 focus:ring-4 focus:ring-rose-100">
+                        class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 @error('parent_id') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 @else border-slate-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100 @enderror">
                     <option value="">Không chọn - tạo danh mục cha</option>
                     @foreach($parents as $parent)
                         <option value="{{ $parent->id }}" @selected((string) $selectedParent === (string) $parent->id)>{{ $parent->name }}</option>
@@ -45,7 +34,7 @@
                 <label for="slug" class="mb-1.5 block text-sm font-bold text-slate-700">Slug</label>
                 <input id="slug" type="text" name="slug" value="{{ old('slug', $category->slug) }}" maxlength="255"
                        placeholder="Tự tạo từ tên nếu để trống"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-rose-400 focus:ring-4 focus:ring-rose-100">
+                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 @error('slug') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 @else border-slate-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100 @enderror">
                 @error('slug') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </div>
 
@@ -54,14 +43,14 @@
                     <label for="icon" class="mb-1.5 block text-sm font-bold text-slate-700">Icon</label>
                     <input id="icon" type="text" name="icon" value="{{ old('icon', $category->icon) }}" maxlength="100"
                            placeholder="code, briefcase..."
-                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-rose-400 focus:ring-4 focus:ring-rose-100">
+                           class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 @error('icon') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 @else border-slate-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100 @enderror">
                     @error('icon') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label for="sort_order" class="mb-1.5 block text-sm font-bold text-slate-700">Thứ tự hiển thị</label>
                     <input id="sort_order" type="number" name="sort_order" value="{{ old('sort_order', $category->sort_order ?? 0) }}" min="0"
-                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-rose-400 focus:ring-4 focus:ring-rose-100">
+                           class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 @error('sort_order') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 @else border-slate-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100 @enderror">
                     @error('sort_order') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
             </div>
@@ -69,7 +58,7 @@
             <div class="lg:col-span-2">
                 <label for="description" class="mb-1.5 block text-sm font-bold text-slate-700">Mô tả</label>
                 <textarea id="description" name="description" rows="4"
-                          class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-rose-400 focus:ring-4 focus:ring-rose-100">{{ old('description', $category->description) }}</textarea>
+                          class="w-full resize-y rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 @error('description') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 @else border-slate-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100 @enderror">{{ old('description', $category->description) }}</textarea>
                 @error('description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </div>
 

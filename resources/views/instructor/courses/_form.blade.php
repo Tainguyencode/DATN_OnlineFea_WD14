@@ -10,7 +10,7 @@
     $discountPrice = old('discount_price', $course->discount_price ?? $course->sale_price ?? null);
 @endphp
 
-@if ($errors->any())
+{{-- @if ($errors->any())
     <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
         <p class="font-bold">Vui lòng kiểm tra lại thông tin khóa học.</p>
         <ul class="mt-2 list-inside list-disc space-y-1">
@@ -19,7 +19,7 @@
             @endforeach
         </ul>
     </div>
-@endif
+@endif --}}
 
 <form method="POST" action="{{ $action }}" enctype="multipart/form-data" class="space-y-6">
     @csrf
@@ -40,7 +40,7 @@
                     <label for="title" class="mb-1.5 block text-sm font-bold text-slate-700">Tên khóa học <span class="text-rose-500">*</span></label>
                     <input id="title" type="text" name="title" value="{{ old('title', $course->title ?? '') }}" maxlength="255"
                            placeholder="Ví dụ: Laravel từ Zero đến Hero"
-                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                           class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('title') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
                     @error('title') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
@@ -48,7 +48,7 @@
                     <label for="short_description" class="mb-1.5 block text-sm font-bold text-slate-700">Mô tả ngắn</label>
                     <textarea id="short_description" name="short_description" rows="3" maxlength="500"
                               placeholder="Tóm tắt giá trị khóa học trong 1-2 câu."
-                              class="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('short_description', $course->short_description ?? '') }}</textarea>
+                              class="w-full resize-none rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('short_description') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('short_description', $course->short_description ?? '') }}</textarea>
                     @error('short_description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
@@ -56,7 +56,7 @@
                     <label for="description" class="mb-1.5 block text-sm font-bold text-slate-700">Mô tả chi tiết</label>
                     <textarea id="description" name="description" rows="7"
                               placeholder="Nội dung khóa học, đối tượng phù hợp, kết quả sau khi hoàn thành..."
-                              class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('description', $course->description ?? '') }}</textarea>
+                              class="w-full resize-y rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('description') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('description', $course->description ?? '') }}</textarea>
                     @error('description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
@@ -64,7 +64,7 @@
                     <label for="objectives" class="mb-1.5 block text-sm font-bold text-slate-700">Mục tiêu khóa học</label>
                     <textarea id="objectives" name="objectives" rows="4"
                               placeholder="Học viên sẽ đạt được những kỹ năng/kiến thức gì sau khóa học..."
-                              class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">{{ old('objectives', $course->objectives ?? '') }}</textarea>
+                              class="w-full resize-y rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('objectives') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('objectives', $course->objectives ?? '') }}</textarea>
                     @error('objectives') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
@@ -72,7 +72,7 @@
                     <div>
                         <label for="category_id" class="mb-1.5 block text-sm font-bold text-slate-700">Danh mục <span class="text-rose-500">*</span></label>
                         <select id="category_id" name="category_id"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer">
+                                class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer @error('category_id') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
                             <option value="">Chọn danh mục khóa học</option>
                             @if($selectedCategory && $currentCategory && ! $selectedCategoryIsVisible)
                                 <option value="{{ $currentCategory->id }}" selected disabled>
@@ -101,7 +101,7 @@
                     <div>
                         <label for="level" class="mb-1.5 block text-sm font-bold text-slate-700">Trình độ</label>
                         <select id="level" name="level"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer">
+                                class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer @error('level') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
                             <option value="beginner" @selected($selectedLevel === 'beginner')>Beginner</option>
                             <option value="intermediate" @selected($selectedLevel === 'intermediate')>Intermediate</option>
                             <option value="advanced" @selected($selectedLevel === 'advanced')>Advanced</option>
@@ -128,7 +128,7 @@
                 <div class="mt-4">
                     <label for="thumbnail" class="mb-1.5 block text-sm font-bold text-slate-700">Ảnh thumbnail</label>
                     <input id="thumbnail" type="file" name="thumbnail" accept="image/*"
-                           class="block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800">
+                           class="block w-full cursor-pointer rounded-lg border bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800 @error('thumbnail') border-rose-500 @else border-slate-300 @enderror">
                     <p class="mt-1 text-xs text-slate-500">PNG/JPG/WebP, tối đa 2MB.</p>
                     @error('thumbnail') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
@@ -137,7 +137,7 @@
                     <label for="preview_video" class="mb-1.5 block text-sm font-bold text-slate-700">Video giới thiệu</label>
                     <input id="preview_video" type="text" name="preview_video" value="{{ old('preview_video', $course->preview_video ?? '') }}"
                            placeholder="https://..."
-                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                           class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('preview_video') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
                     @error('preview_video') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
             </section>
@@ -147,22 +147,32 @@
                 <div class="mt-4 space-y-4">
                     <div>
                         <label for="price" class="mb-1.5 block text-sm font-bold text-slate-700">Giá gốc <span class="text-rose-500">*</span></label>
-                        <input id="price" type="number" name="price" value="{{ old('price', $course->price ?? 0) }}" min="0" step="1000"
-                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                        <input id="price" type="number" name="price" value="{{ old('price', $course->price ?? 0) }}"
+                               oninput="if(this.value.length > 9) this.value = this.value.slice(0, 9); formatPricePreview('price', 'price-preview-txt');"
+                               class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('price') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
+                        <div class="mt-1 flex items-center justify-between text-xs">
+                            <span id="price-preview-txt" class="font-bold text-emerald-600"></span>
+                            <span class="text-slate-400">Tối đa 100.000.000 VNĐ</span>
+                        </div>
                         @error('price') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>
 
                     <div>
                         <label for="discount_price" class="mb-1.5 block text-sm font-bold text-slate-700">Giá khuyến mãi</label>
-                        <input id="discount_price" type="number" name="discount_price" value="{{ $discountPrice }}" min="0" step="1000"
-                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                        <input id="discount_price" type="number" name="discount_price" value="{{ $discountPrice }}"
+                               oninput="if(this.value.length > 9) this.value = this.value.slice(0, 9); formatPricePreview('discount_price', 'discount-preview-txt');"
+                               class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('discount_price') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
+                        <div class="mt-1 flex items-center justify-between text-xs">
+                            <span id="discount-preview-txt" class="font-bold text-emerald-600"></span>
+                            <span class="text-slate-400">Phải ≤ giá gốc</span>
+                        </div>
                         @error('discount_price') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>
 
                     <div>
                         <label for="language" class="mb-1.5 block text-sm font-bold text-slate-700">Ngôn ngữ</label>
                         <select id="language" name="language"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer">
+                                class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer @error('language') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
                             <option value="vi" @selected($selectedLanguage === 'vi')>Tiếng Việt</option>
                             <option value="en" @selected($selectedLanguage === 'en')>English</option>
                         </select>
@@ -189,3 +199,21 @@
         </div>
     </div>
 </form>
+
+<script>
+    function formatPricePreview(inputId, previewId) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+        if (!input || !preview) return;
+        const val = parseFloat(input.value);
+        if (isNaN(val) || val <= 0) {
+            preview.textContent = val === 0 ? 'Miễn phí (0đ)' : '';
+        } else {
+            preview.textContent = '=> ' + new Intl.NumberFormat('vi-VN').format(val) + 'đ';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        formatPricePreview('price', 'price-preview-txt');
+        formatPricePreview('discount_price', 'discount-preview-txt');
+    });
+</script>
