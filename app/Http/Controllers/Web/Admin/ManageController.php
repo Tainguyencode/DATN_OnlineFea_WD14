@@ -471,12 +471,16 @@ class ManageController extends Controller
             $payload['review_status'] = $reviewStatus;
             $update->payload = $payload;
 
-            if (in_array($reviewStatus, ['fail', 'need_revision'], true) || filled($adminNote)) {
+            if ($reviewStatus === 'pass') {
+                $update->status = \App\Models\ContentUpdate::STATUS_APPROVED;
+                $update->rejection_reason = null;
+            } else {
                 $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
                 $update->rejection_reason = $adminNote;
-                $update->reviewed_by = $request->user()?->id ?? auth()->id();
-                $update->reviewed_at = now();
             }
+
+            $update->reviewed_by = $request->user()?->id ?? auth()->id();
+            $update->reviewed_at = now();
 
             $update->save();
         }
