@@ -23,6 +23,7 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 .codegraph/
+.codex/
 
 build-output.txt
 route-list-output.txt
