@@ -18,7 +18,6 @@
             showPassword: false,
             showConfirm: false,
             loading: false,
-            avatarPreview: null,
             passwordVal: '',
             emailMessage: '',
             emailOk: null,
@@ -80,25 +79,6 @@
         <form method="POST" action="{{ route('register.role', $role) }}" enctype="multipart/form-data" class="space-y-4" x-on:submit="loading = true">
             @csrf
             <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
-
-            <div class="flex flex-col items-center gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60 sm:flex-row sm:items-center">
-                <div class="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
-                    <template x-if="avatarPreview">
-                        <img :src="avatarPreview" alt="Avatar preview" class="h-full w-full object-cover">
-                    </template>
-                    <img x-show="!avatarPreview" src="{{ asset('images/fea-logo.png') }}" alt="Website học online FEA" class="h-full w-full object-contain p-2">
-                </div>
-                <div class="text-center sm:text-left">
-                    <label class="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
-                        Chọn avatar
-                        <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="sr-only" x-on:change="avatarPreview = URL.createObjectURL($event.target.files[0])">
-                    </label>
-                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">PNG, JPG hoặc WebP tối đa 2MB.</p>
-                    @error('avatar')
-                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
-                    @enderror
-                </div>
-            </div>
 
             <x-auth.input
                 label="Họ và tên"
