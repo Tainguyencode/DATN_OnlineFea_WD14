@@ -15,6 +15,18 @@
         'rose' => ['bg' => 'bg-rose-600', 'hover' => 'hover:bg-rose-700', 'light' => 'bg-rose-50', 'text' => 'text-rose-500', 'ring' => 'ring-rose-500', 'gradient' => 'from-rose-600 to-orange-600', 'sidebar' => 'bg-slate-950'],
     ];
     $c = $accents[$accent] ?? $accents['indigo'];
+    $isMenuItemActive = static function (array $item): bool {
+        if (! isset($item['route'])) {
+            return false;
+        }
+
+        $activePatterns = $item['active'] ?? [$item['route'], $item['route'].'.*'];
+
+        return collect((array) $activePatterns)->contains(fn ($pattern) => request()->routeIs($pattern));
+    };
+    $mobileMenu = collect($menu)
+        ->flatMap(fn (array $item) => $item['children'] ?? [$item])
+        ->take(4);
 @endphp
 
 <!DOCTYPE html>
@@ -42,17 +54,60 @@
             <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
                 @foreach($menu as $item)
                     @php
-                        $activePatterns = $item['active'] ?? [$item['route'], $item['route'].'.*'];
-                        $active = collect((array) $activePatterns)->contains(fn ($pattern) => request()->routeIs($pattern));
+                        $children = $item['children'] ?? [];
+                        $childrenActive = collect($children)->contains(fn (array $child) => $isMenuItemActive($child));
+                        $active = $isMenuItemActive($item) || $childrenActive;
+                        $menuPanelId = 'sidebar-menu-'.$loop->index;
                     @endphp
-                    <a href="{{ route($item['route']) }}"
-                       class="group flex items-center gap-3 px-3.5 py-2.5 rounded-[11px] text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30
-                              {{ $active ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
-                        <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $active ? 'text-white' : '' }}">
-                            {!! $item['icon'] !!}
-                        </span>
-                        <span class="truncate">{{ $item['label'] }}</span>
-                    </a>
+                    @if($children)
+                        <button
+                            type="button"
+                            class="group flex w-full cursor-pointer items-center gap-3 rounded-[11px] px-3.5 py-2.5 text-left text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 {{ $active ? 'bg-white/5 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}"
+                            data-sidebar-menu-toggle
+                            aria-controls="{{ $menuPanelId }}"
+                            aria-expanded="{{ $childrenActive ? 'true' : 'false' }}"
+                        >
+                            <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $active ? 'text-white' : '' }}">
+                                {!! $item['icon'] !!}
+                            </span>
+                            <span class="min-w-0 flex-1 truncate">{{ $item['label'] }}</span>
+                            <svg data-sidebar-menu-chevron class="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ease-out motion-reduce:transition-none {{ $childrenActive ? 'rotate-90 text-white' : '' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+
+                        <div
+                            id="{{ $menuPanelId }}"
+                            class="grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none {{ $childrenActive ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]' }}"
+                            data-sidebar-menu-panel
+                            aria-hidden="{{ $childrenActive ? 'false' : 'true' }}"
+                            @if(! $childrenActive) inert @endif
+                        >
+                            <div class="min-h-0 overflow-hidden">
+                                <div class="ml-2 mt-1 space-y-0.5">
+                                    @foreach($children as $child)
+                                        @php $childActive = $isMenuItemActive($child); @endphp
+                                        <a href="{{ route($child['route']) }}"
+                                           class="group flex w-full cursor-pointer items-center gap-3 rounded-[11px] px-3 py-2.5 text-sm font-medium leading-5 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 {{ $childActive ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $childActive ? 'text-white' : '' }}">
+                                                {!! $child['icon'] !!}
+                                            </span>
+                                            <span class="min-w-0 truncate">{{ $child['label'] }}</span>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <a href="{{ route($item['route']) }}"
+                           class="group flex items-center gap-3 rounded-[11px] px-3.5 py-2.5 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30
+                                  {{ $active ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                            <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $active ? 'text-white' : '' }}">
+                                {!! $item['icon'] !!}
+                            </span>
+                            <span class="truncate">{{ $item['label'] }}</span>
+                        </a>
+                    @endif
                 @endforeach
             </nav>
 
@@ -132,13 +187,16 @@
     </div>
 
     <nav class="lg:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200/70 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] z-30 flex justify-around py-2">
-        @foreach(array_slice($menu, 0, 4) as $item)
-            @php
-                $activePatterns = $item['active'] ?? [$item['route'], $item['route'].'.*'];
-                $active = collect((array) $activePatterns)->contains(fn ($pattern) => request()->routeIs($pattern));
-            @endphp
+        @foreach($mobileMenu as $item)
+            @php $active = $isMenuItemActive($item); @endphp
             <a href="{{ route($item['route']) }}" class="flex flex-col items-center gap-0.5 px-3 py-1 text-xs {{ $active ? $c['text'] : 'text-slate-400' }}">
-                <span class="w-5 h-5">{!! $item['icon'] !!}</span>
+                <span class="flex h-5 w-5 items-center justify-center">
+                    @if(isset($item['icon']))
+                        {!! $item['icon'] !!}
+                    @else
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    @endif
+                </span>
                 <span class="truncate max-w-[60px]">{{ Str::before($item['label'], ' ') }}</span>
             </a>
         @endforeach
