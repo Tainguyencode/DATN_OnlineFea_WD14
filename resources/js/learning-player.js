@@ -441,6 +441,8 @@ function initQuizPlayer() {
         progressLabel.textContent = `Câu ${currentIndex + 1} / ${quiz.questions.length}`;
         progressBar.style.width = `${((currentIndex + 1) / quiz.questions.length) * 100}%`;
         prevBtn.disabled = currentIndex === 0;
+        // Always re-enable nextBtn when rendering a question (prevents it getting stuck disabled)
+        nextBtn.disabled = false;
         nextBtn.textContent = currentIndex === quiz.questions.length - 1 ? 'Nộp bài' : 'Câu tiếp theo';
 
         questionContainer.innerHTML = `
@@ -510,7 +512,10 @@ function initQuizPlayer() {
             if (!ok) return;
         }
 
+        // Disable both navigation buttons while submitting
         nextBtn.disabled = true;
+        nextBtn.textContent = 'Đang nộp bài...';
+        prevBtn.disabled = true;
         if (timerId) window.clearInterval(timerId);
 
         const payload = { answers: {} };
@@ -544,7 +549,10 @@ function initQuizPlayer() {
                 updateHeaderProgress(data.course_progress);
             }
         } catch (error) {
+            // Restore both buttons so user can retry or navigate
             nextBtn.disabled = false;
+            nextBtn.textContent = 'Nộp bài';
+            prevBtn.disabled = currentIndex === 0;
             showToast(error.message || 'Không thể nộp bài quiz.', 'error');
         }
     };
