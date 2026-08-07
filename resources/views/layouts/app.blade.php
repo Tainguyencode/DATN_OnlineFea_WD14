@@ -144,7 +144,7 @@
     </div>
 
     @if(session('success'))
-        <div class="ui-alert-success mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
+        <div data-flash-message="success" role="status" aria-live="polite" class="ui-alert-success mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
             {{ session('success') }}
         </div>
     @endif

@@ -3,10 +3,6 @@
 @endphp
 
 <x-dynamic-component :component="$layout" title="Chi tiết Ticket" page-title="Chi tiết Ticket">
-    @if(session('success'))
-        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ session('success') }}</div>
-    @endif
-
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
             <p class="font-mono text-sm font-bold text-indigo-600">{{ $ticket->code }}</p>

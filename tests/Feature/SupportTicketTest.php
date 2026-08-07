@@ -57,6 +57,21 @@ class SupportTicketTest extends TestCase
         Notification::assertSentTo($admin, SupportTicketCreatedNotification::class);
     }
 
+    public function test_success_flash_is_rendered_once_on_ticket_show(): void
+    {
+        $student = $this->makeUser('student');
+        $ticket = $this->makeTicket($student);
+        $message = 'Đã gửi ticket hỗ trợ '.$ticket->code.'.';
+
+        $response = $this->loginAs($student)
+            ->withSession(['success' => $message])
+            ->get(route('support.tickets.show', $ticket));
+
+        $response->assertOk();
+        $response->assertSee('data-flash-message="success"', false);
+        $this->assertSame(1, substr_count($response->getContent(), $message));
+    }
+
     public function test_student_cannot_view_others_ticket(): void
     {
         $owner = $this->makeUser('student');
