@@ -9,6 +9,10 @@
     $selectedLanguage = old('language', $course->language ?? 'vi');
     $discountPrice = old('discount_price', $course->discount_price ?? $course->sale_price ?? null);
     $wideLayout = $wideLayout ?? false;
+    $existingThumbnailUrl = $isEdit && $course->thumbnail
+        ? asset('storage/' . $course->thumbnail)
+        : '';
+    $existingThumbnailAlt = $isEdit ? ($course->title ?? 'Ảnh thumbnail khóa học') : 'Ảnh thumbnail khóa học';
 @endphp
 
 {{-- @if ($errors->any())
@@ -116,10 +120,14 @@
         <aside class="min-w-0 space-y-6">
             <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 class="text-base font-bold text-slate-950">Hình ảnh & video</h2>
-                <div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                <div id="course-media-preview"
+                     data-existing-image-url="{{ $existingThumbnailUrl }}"
+                     data-existing-image-alt="{{ $existingThumbnailAlt }}"
+                     class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                     aria-live="polite">
                     <div class="aspect-video">
-                        @if($isEdit && $course->thumbnail)
-                            <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
+                        @if($existingThumbnailUrl)
+                            <img src="{{ $existingThumbnailUrl }}" alt="{{ $existingThumbnailAlt }}" class="h-full w-full object-cover">
                         @else
                             <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 to-emerald-700 text-sm font-bold text-white">Fea LMS</div>
                         @endif
@@ -202,6 +210,193 @@
 </form>
 
 <script>
+    (() => {
+        const preview = document.getElementById('course-media-preview');
+        const thumbnailInput = document.getElementById('thumbnail');
+        const videoInput = document.getElementById('preview_video');
+
+        if (!preview || !thumbnailInput || !videoInput) return;
+
+        const state = {
+            imageObjectUrl: null,
+            videoTimer: null,
+            videoError: false,
+        };
+
+        const existingImageUrl = preview.dataset.existingImageUrl || '';
+        const existingImageAlt = preview.dataset.existingImageAlt || 'Ảnh thumbnail khóa học';
+
+        function clearImageObjectUrl() {
+            if (state.imageObjectUrl) {
+                URL.revokeObjectURL(state.imageObjectUrl);
+                state.imageObjectUrl = null;
+            }
+        }
+
+        function getSelectedImageUrl() {
+            const file = thumbnailInput.files?.[0];
+
+            if (!file || !file.type.startsWith('image/')) {
+                clearImageObjectUrl();
+                return null;
+            }
+
+            clearImageObjectUrl();
+            state.imageObjectUrl = URL.createObjectURL(file);
+
+            return state.imageObjectUrl;
+        }
+
+        function getYouTubeEmbedUrl(value) {
+            let url;
+
+            try {
+                url = new URL(value);
+            } catch {
+                return null;
+            }
+
+            if (!['http:', 'https:'].includes(url.protocol)) return null;
+
+            const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+            let videoId = null;
+
+            if (hostname === 'youtube.com') {
+                if (url.pathname === '/watch') {
+                    videoId = url.searchParams.get('v');
+                } else if (url.pathname.startsWith('/embed/')) {
+                    videoId = url.pathname.split('/')[2];
+                }
+            } else if (hostname === 'youtu.be') {
+                videoId = url.pathname.split('/')[1];
+            }
+
+            if (!videoId || !/^[a-zA-Z0-9_-]+$/.test(videoId)) return null;
+
+            return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`;
+        }
+
+        function getDirectVideoUrl(value) {
+            let url;
+
+            try {
+                url = new URL(value);
+            } catch {
+                return null;
+            }
+
+            if (!['http:', 'https:'].includes(url.protocol)) return null;
+
+            const pathname = url.pathname.toLowerCase();
+
+            return /\.(mp4|webm)$/.test(pathname) ? url.href : null;
+        }
+
+        function getVideoSource(value) {
+            const trimmedValue = value.trim();
+
+            if (!trimmedValue) return null;
+
+            const youtubeUrl = getYouTubeEmbedUrl(trimmedValue);
+            if (youtubeUrl) return { type: 'youtube', url: youtubeUrl };
+
+            const directVideoUrl = getDirectVideoUrl(trimmedValue);
+            if (directVideoUrl) return { type: 'direct', url: directVideoUrl };
+
+            return null;
+        }
+
+        function renderPlaceholder() {
+            preview.innerHTML = `
+                <div class="aspect-video">
+                    <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 to-emerald-700 text-sm font-bold text-white">
+                        Fea LMS
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderImage(imageUrl) {
+            const image = document.createElement('img');
+            image.src = imageUrl;
+            image.alt = imageUrl === existingImageUrl ? existingImageAlt : 'Ảnh thumbnail khóa học';
+            image.className = 'h-full w-full object-cover';
+
+            const frame = document.createElement('div');
+            frame.className = 'aspect-video';
+            frame.appendChild(image);
+
+            preview.replaceChildren(frame);
+        }
+
+        function renderVideo(videoSource) {
+            const frame = document.createElement('div');
+            frame.className = 'aspect-video';
+
+            if (videoSource.type === 'youtube') {
+                const iframe = document.createElement('iframe');
+                iframe.src = videoSource.url;
+                iframe.title = 'Video giới thiệu khóa học';
+                iframe.className = 'h-full w-full border-0 bg-black';
+                iframe.allowFullscreen = true;
+                iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+                frame.appendChild(iframe);
+            } else {
+                const video = document.createElement('video');
+                video.src = videoSource.url;
+                video.controls = true;
+                video.playsInline = true;
+                video.preload = 'metadata';
+                video.className = 'h-full w-full object-contain bg-black';
+                video.addEventListener('error', () => {
+                    state.videoError = true;
+                    renderPreview();
+                }, { once: true });
+                frame.appendChild(video);
+            }
+
+            preview.replaceChildren(frame);
+        }
+
+        function renderPreview() {
+            const videoSource = getVideoSource(videoInput.value);
+            const imageUrl = state.imageObjectUrl || existingImageUrl;
+
+            if (videoSource && !state.videoError) {
+                renderVideo(videoSource);
+                return;
+            }
+
+            if (imageUrl) {
+                renderImage(imageUrl);
+                return;
+            }
+
+            renderPlaceholder();
+        }
+
+        function scheduleVideoPreview() {
+            window.clearTimeout(state.videoTimer);
+            state.videoError = false;
+            state.videoTimer = window.setTimeout(renderPreview, 400);
+        }
+
+        thumbnailInput.addEventListener('change', () => {
+            getSelectedImageUrl();
+            state.videoError = false;
+            renderPreview();
+        });
+        videoInput.addEventListener('input', scheduleVideoPreview);
+        videoInput.addEventListener('blur', () => {
+            window.clearTimeout(state.videoTimer);
+            state.videoError = false;
+            renderPreview();
+        });
+        window.addEventListener('pagehide', clearImageObjectUrl, { once: true });
+
+        renderPreview();
+    })();
+
     function formatPricePreview(inputId, previewId) {
         const input = document.getElementById(inputId);
         const preview = document.getElementById(previewId);
