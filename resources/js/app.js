@@ -7,6 +7,27 @@ window.Chart = Chart;
 
 Alpine.start();
 
+function initializeFlashMessages() {
+    document.querySelectorAll('[data-flash-message="success"]').forEach((flash) => {
+        if (flash.dataset.flashDismissScheduled === 'true') return;
+
+        flash.dataset.flashDismissScheduled = 'true';
+        window.setTimeout(() => {
+            flash.classList.add('flash-message--fading');
+
+            window.setTimeout(() => {
+                flash.remove();
+            }, 250);
+        }, 2000);
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeFlashMessages, { once: true });
+} else {
+    initializeFlashMessages();
+}
+
 // Initialize Theme on Load
 (function () {
     const savedTheme = localStorage.getItem('theme');
