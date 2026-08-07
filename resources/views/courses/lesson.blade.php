@@ -60,7 +60,6 @@
                             </p>
                             
                             <div class="mt-4 flex flex-wrap gap-4 text-xs font-semibold text-slate-300 bg-white/5 p-3 rounded-lg w-fit">
-                                <div>HẠN NỘP: <span class="text-amber-400">{{ $lesson->assignment->due_date?->format('d/m/Y H:i') ?? 'Không giới hạn' }}</span></div>
                                 <div>ĐIỂM TỐI ĐA: <span class="text-emerald-400">{{ $lesson->assignment->max_score ?? 100 }}đ</span></div>
                             </div>
                         </div>
