@@ -25,28 +25,13 @@
                 </div>
 
                 <div class="mt-5 space-y-4">
-                    <!-- Thời gian nộp & hạn nộp -->
-                    <div class="grid gap-4 sm:grid-cols-2 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl">
-                        <div>
-                            <span class="text-xs font-semibold text-slate-400 block uppercase">Hạn nộp bài</span>
-                            <span class="text-sm font-bold text-slate-800 dark:text-slate-200">
-                                {{ $submission->assignment->due_date?->format('d/m/Y H:i') ?? 'Không giới hạn' }}
-                            </span>
-                        </div>
+                    <!-- Thời gian nộp -->
+                    <div class="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl">
                         <div>
                             <span class="text-xs font-semibold text-slate-400 block uppercase">Thời gian nộp thực tế</span>
                             <span class="text-sm font-bold text-slate-800 dark:text-slate-200">
                                 {{ $submission->submitted_at?->format('d/m/Y H:i') ?? 'N/A' }}
                             </span>
-                            @if($submission->isLate())
-                                <span class="ml-2 inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
-                                    Nộp trễ
-                                </span>
-                            @else
-                                <span class="ml-2 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
-                                    Đúng hạn
-                                </span>
-                            @endif
                         </div>
                     </div>
 
