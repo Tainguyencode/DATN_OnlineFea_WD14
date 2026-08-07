@@ -90,3 +90,6 @@
 ### Commit 30: refactor: toi uu hoa toc do render view va truy van co so du lieu (2026-08-06 09:30:50 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 31: docs: cap nhat nhat ky phat trien va tien do cac module sprint 3 (2026-08-07 16:25:30 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
