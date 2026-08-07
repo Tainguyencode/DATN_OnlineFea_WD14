@@ -120,16 +120,45 @@
             $lPayload = $lessonUpdate?->payload ?? [];
             $cardAdminNote = $lPayload['admin_note'] ?? ($lessonUpdate?->rejection_reason ?? null);
             $cardRequireReupload = !empty($lPayload['require_reupload']);
+            $cardReviewStatus = $lPayload['review_status'] ?? ($lessonUpdate?->status === 'rejected' ? 'fail' : ($lessonUpdate?->status === 'approved' ? 'pass' : null));
         @endphp
 
-        @if (filled($cardAdminNote) || $cardRequireReupload)
-            <div class="rounded-lg border border-amber-200 bg-amber-50/90 p-4 shadow-2xs">
+        @if (filled($cardAdminNote) || $cardRequireReupload || filled($cardReviewStatus))
+            @php
+                $modCardStyle = match($cardReviewStatus) {
+                    'pass' => [
+                        'wrapper' => 'border-emerald-200 bg-emerald-50/90',
+                        'title' => 'text-emerald-900',
+                        'badge' => 'bg-emerald-200/80 text-emerald-900',
+                        'badge_text' => 'Đạt',
+                        'icon' => '✅',
+                    ],
+                    'need_revision' => [
+                        'wrapper' => 'border-amber-200 bg-amber-50/90',
+                        'title' => 'text-amber-900',
+                        'badge' => 'bg-amber-200/80 text-amber-900',
+                        'badge_text' => 'Cần chỉnh sửa',
+                        'icon' => '⚠️',
+                    ],
+                    default => [
+                        'wrapper' => 'border-rose-200 bg-rose-50/90',
+                        'title' => 'text-rose-900',
+                        'badge' => 'bg-rose-200/80 text-rose-900',
+                        'badge_text' => 'Từ chối',
+                        'icon' => '❌',
+                    ],
+                };
+            @endphp
+            <div class="rounded-lg border {{ $modCardStyle['wrapper'] }} p-4 shadow-2xs">
                 <div class="flex items-start gap-2.5">
-                    <span class="text-lg">⚠️</span>
+                    <span class="text-lg">{{ $modCardStyle['icon'] }}</span>
                     <div class="w-full">
-                        <p class="text-xs font-bold uppercase tracking-wide text-amber-900">Ghi chú & Phản hồi từ Admin cho bài học này:</p>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-bold uppercase tracking-wide {{ $modCardStyle['title'] }}">Ghi chú & Phản hồi từ Admin:</p>
+                            <span class="rounded-full {{ $modCardStyle['badge'] }} px-2.5 py-0.5 text-xs font-bold">{{ $modCardStyle['badge_text'] }}</span>
+                        </div>
                         @if (filled($cardAdminNote))
-                            <div class="mt-2 text-xs text-amber-950 leading-relaxed font-medium whitespace-pre-line bg-white/90 p-3 rounded-lg border border-amber-200/80">
+                            <div class="mt-2 text-xs text-slate-800 leading-relaxed font-medium whitespace-pre-line bg-white/90 p-3 rounded-lg border border-slate-200/80">
                                 {!! nl2br(e($cardAdminNote)) !!}
                             </div>
                         @endif

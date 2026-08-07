@@ -200,13 +200,32 @@
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $typeClass }}">{{ $lessonTypes[$lesson->type] ?? $lesson->type }}</span>
-                                        @if(isset($lesson->update_status))
+                                        @php
+                                            $lessonUpdate = $lesson->draft_update ?? null;
+                                            if (!$lessonUpdate && isset($lesson->id)) {
+                                                $lessonUpdate = \App\Models\ContentUpdate::where('course_id', $course->id)
+                                                    ->where('entity_id', $lesson->id)
+                                                    ->latest()
+                                                    ->first();
+                                            }
+                                            $lPayload = $lessonUpdate?->payload ?? [];
+                                            $effectiveReviewStatus = $lPayload['review_status'] ?? null;
+                                            if (!$effectiveReviewStatus && isset($lesson->update_status)) {
+                                                if ($lesson->update_status === 'rejected') $effectiveReviewStatus = 'fail';
+                                                elseif ($lesson->update_status === 'approved') $effectiveReviewStatus = 'pass';
+                                            }
+                                        @endphp
+                                        @if($effectiveReviewStatus === 'pass')
+                                            <span class="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">Đạt</span>
+                                        @elseif($effectiveReviewStatus === 'need_revision')
+                                            <span class="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">Cần chỉnh sửa</span>
+                                        @elseif($effectiveReviewStatus === 'fail')
+                                            <span class="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">Từ chối</span>
+                                        @elseif(isset($lesson->update_status))
                                             @if($lesson->update_status === 'draft')
                                                 <span class="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">Draft</span>
                                             @elseif($lesson->update_status === 'pending')
                                                 <span class="rounded-full border border-blue-300 bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">Đã gửi duyệt</span>
-                                            @elseif($lesson->update_status === 'rejected')
-                                                <span class="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">Từ chối</span>
                                             @endif
                                         @else
                                             <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">{{ $lessonStatuses[$lesson->status] ?? $lesson->status }}</span>
@@ -248,31 +267,56 @@
 
                                     {{-- Ghi chú kiểm duyệt của Admin dành riêng cho bài học này --}}
                                     @php
-                                        $lessonUpdate = $lesson->draft_update ?? null;
-                                        $lPayload = $lessonUpdate?->payload ?? [];
-                                        $adminNote = $lPayload['admin_note'] ?? $lessonUpdate?->rejection_reason ?? null;
+                                        $adminNote = $lPayload['admin_note'] ?? null;
                                         $requireReupload = !empty($lPayload['require_reupload']);
-                                        $updateStatus = $lesson->update_status ?? $lessonUpdate?->status ?? null;
-                                        $reviewStatus = $lPayload['review_status'] ?? ($updateStatus === 'rejected' ? 'rejected' : 'pass');
-                                        $isNeedsRevision = in_array($reviewStatus, ['rejected', 'fail', 'need_revision'], true) || $updateStatus === 'rejected';
-                                        $hasAdminFeedback = filled($adminNote) || $requireReupload || $isNeedsRevision;
+                                        $reviewStatus = $effectiveReviewStatus;
+                                        $hasAdminFeedback = filled($adminNote) || $requireReupload || filled($reviewStatus);
                                     @endphp
 
                                     @if($hasAdminFeedback)
-                                        <div class="mt-4 max-w-2xl rounded-xl border {{ $isNeedsRevision ? 'border-amber-200 bg-amber-50/90' : 'border-emerald-200 bg-emerald-50/90' }} p-4 shadow-2xs">
+                                        @php
+                                            $cardBoxStyle = match($reviewStatus) {
+                                                'pass' => [
+                                                    'wrapper' => 'border-emerald-200 bg-emerald-50/90',
+                                                    'title' => 'text-emerald-950',
+                                                    'badge' => 'bg-emerald-200/80 text-emerald-900',
+                                                    'badge_text' => 'Đạt',
+                                                    'icon' => '✅',
+                                                    'note_box' => 'border-emerald-200 bg-white text-slate-800',
+                                                    'note_title' => 'text-emerald-900',
+                                                ],
+                                                'need_revision' => [
+                                                    'wrapper' => 'border-amber-200 bg-amber-50/90',
+                                                    'title' => 'text-amber-950',
+                                                    'badge' => 'bg-amber-200/80 text-amber-900',
+                                                    'badge_text' => 'Cần chỉnh sửa',
+                                                    'icon' => '⚠️',
+                                                    'note_box' => 'border-amber-200 bg-white text-slate-800',
+                                                    'note_title' => 'text-amber-900',
+                                                ],
+                                                default => [
+                                                    'wrapper' => 'border-rose-200 bg-rose-50/90',
+                                                    'title' => 'text-rose-950',
+                                                    'badge' => 'bg-rose-200/80 text-rose-900',
+                                                    'badge_text' => 'Từ chối',
+                                                    'icon' => '❌',
+                                                    'note_box' => 'border-rose-200 bg-white text-slate-800',
+                                                    'note_title' => 'text-rose-900',
+                                                ],
+                                            };
+                                        @endphp
+                                        <div class="mt-4 max-w-2xl rounded-xl border {{ $cardBoxStyle['wrapper'] }} p-4 shadow-2xs">
                                             <div class="flex items-start gap-3">
-                                                <span class="text-xl">{{ $isNeedsRevision ? '⚠️' : '💬' }}</span>
+                                                <span class="text-xl">{{ $cardBoxStyle['icon'] }}</span>
                                                 <div class="w-full">
                                                     <div class="flex items-center justify-between">
-                                                        <h5 class="text-sm font-bold {{ $isNeedsRevision ? 'text-amber-950' : 'text-emerald-950' }}">Phản hồi từ Admin</h5>
-                                                        <span class="rounded-full {{ $isNeedsRevision ? 'bg-amber-200/80 text-amber-900' : 'bg-emerald-200/80 text-emerald-900' }} px-2.5 py-0.5 text-xs font-bold">
-                                                            {{ $isNeedsRevision ? 'Bài học cần chỉnh sửa' : 'Ghi chú đánh giá (Đạt)' }}
-                                                        </span>
+                                                        <h5 class="text-sm font-bold {{ $cardBoxStyle['title'] }}">Phản hồi từ Admin</h5>
+                                                        <span class="rounded-full {{ $cardBoxStyle['badge'] }} px-2.5 py-0.5 text-xs font-bold">{{ $cardBoxStyle['badge_text'] }}</span>
                                                     </div>
                                                     
                                                     @if(filled($adminNote))
-                                                        <div class="mt-2.5 rounded-lg border {{ $isNeedsRevision ? 'border-amber-200' : 'border-emerald-200' }} bg-white p-3 text-xs leading-relaxed font-medium text-slate-800 shadow-2xs">
-                                                            <p class="font-bold {{ $isNeedsRevision ? 'text-amber-900' : 'text-emerald-900' }} mb-1">Ghi chú từ Admin:</p>
+                                                        <div class="mt-2.5 rounded-lg border {{ $cardBoxStyle['note_box'] }} p-3 text-xs leading-relaxed font-medium shadow-2xs">
+                                                            <p class="font-bold {{ $cardBoxStyle['note_title'] }} mb-1">Ghi chú từ Admin:</p>
                                                             <div class="whitespace-pre-line text-slate-700">{!! nl2br(e($adminNote)) !!}</div>
                                                         </div>
                                                     @endif
