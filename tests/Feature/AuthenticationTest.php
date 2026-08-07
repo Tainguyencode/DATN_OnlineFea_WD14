@@ -8,6 +8,7 @@ use App\Notifications\VerifyEmailCodeNotification;
 use App\Services\CaptchaService;
 use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -32,8 +33,48 @@ class AuthenticationTest extends TestCase
     public function test_register_page_is_accessible(): void
     {
         $this->get(route('register'))->assertOk();
-        $this->get(route('register.role', 'student'))->assertOk();
-        $this->get(route('register.role', 'instructor'))->assertOk();
+
+        $this->get(route('register.role', 'student'))
+            ->assertOk()
+            ->assertDontSee('name="avatar"', false)
+            ->assertDontSee('Avatar preview', false)
+            ->assertDontSee('PNG, JPG', false);
+
+        $this->get(route('register.role', 'instructor'))
+            ->assertOk()
+            ->assertDontSee('name="avatar"', false)
+            ->assertDontSee('Avatar preview', false)
+            ->assertDontSee('PNG, JPG', false);
+    }
+
+    public function test_instructor_registration_ignores_avatar_upload(): void
+    {
+        Notification::fake();
+
+        $response = $this->postRegister('instructor', [
+            'email' => 'instructor-without-avatar@example.com',
+            'avatar' => UploadedFile::fake()->image('avatar.jpg'),
+        ]);
+
+        $response->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-without-avatar@example.com')->firstOrFail();
+        $this->assertNull($user->avatar);
+    }
+
+    public function test_student_registration_ignores_avatar_upload(): void
+    {
+        Notification::fake();
+
+        $response = $this->postRegister('student', [
+            'email' => 'student-without-avatar@example.com',
+            'avatar' => UploadedFile::fake()->image('avatar.jpg'),
+        ]);
+
+        $response->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'student-without-avatar@example.com')->firstOrFail();
+        $this->assertNull($user->avatar);
     }
 
     public function test_student_registration_succeeds(): void

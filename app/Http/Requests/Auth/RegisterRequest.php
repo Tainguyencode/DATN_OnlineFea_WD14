@@ -20,7 +20,6 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/', 'unique:users,phone'],
@@ -35,9 +34,6 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'avatar.image' => 'Tệp tải lên phải là hình ảnh.',
-            'avatar.mimes' => 'Ảnh đại diện chỉ chấp nhận định dạng JPG, JPEG, PNG hoặc WebP.',
-            'avatar.max' => 'Ảnh đại diện không được vượt quá 2MB.',
             'name.required' => 'Vui lòng nhập họ và tên.',
             'name.string' => 'Họ và tên không hợp lệ.',
             'name.max' => 'Họ và tên không được vượt quá 255 ký tự.',
@@ -67,7 +63,6 @@ class RegisterRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'avatar' => 'ảnh đại diện',
             'name' => 'họ và tên',
             'email' => 'email',
             'phone' => 'số điện thoại',

@@ -62,12 +62,6 @@ class AuthService
      */
     public function register(array $validated, Request $request): User
     {
-        $avatarPath = null;
-
-        if ($request->hasFile('avatar')) {
-            $avatarPath = $request->file('avatar')->store('avatars', 'public');
-        }
-
         $user = User::create([
             'name' => $validated['name'],
             'username' => self::generateUniqueUsername($validated['name']),
@@ -75,7 +69,7 @@ class AuthService
             'phone' => $validated['phone'],
             'password' => $validated['password'],
             'role' => $validated['role'],
-            'avatar' => $avatarPath,
+            'avatar' => null,
             'bio' => $validated['bio'] ?? null,
             'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
             'is_active' => true,
