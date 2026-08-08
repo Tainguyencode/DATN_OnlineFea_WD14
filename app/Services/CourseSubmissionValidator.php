@@ -79,7 +79,7 @@ class CourseSubmissionValidator
                 $durationMinutes >= Course::MIN_VIDEO_DURATION_MINUTES
                     ? null
                     : sprintf(
-                        'Tổng thời lượng mới %d phút (yêu cầu tối thiểu %d phút)',
+                        'Tổng thời lượng tất cả video cộng lại mới đạt %d phút (yêu cầu tối thiểu tổng %d phút)',
                         $durationMinutes,
                         Course::MIN_VIDEO_DURATION_MINUTES,
                     ),

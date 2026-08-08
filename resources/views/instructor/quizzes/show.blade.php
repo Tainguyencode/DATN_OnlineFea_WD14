@@ -32,32 +32,23 @@
             </div>
         </div>
 
-        @if ($errors->any())
-            <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-                <p class="font-bold">Vui long kiem tra lai thong tin.</p>
-                <ul class="mt-2 list-inside list-disc space-y-1">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <form method="POST" action="{{ route('instructor.courses.lessons.quiz.store', [$course, $lesson]) }}"
             class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             @csrf
             <div class="grid gap-4 lg:grid-cols-2">
                 <label class="block">
-                    <span class="mb-1.5 block text-sm font-bold text-slate-700">Tieu de quiz</span>
-                    <input type="text" name="title" value="{{ $quizTitle }}" required maxlength="255"
-                        class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                    <span class="mb-1.5 block text-sm font-bold text-slate-700">Tiêu đề quiz</span>
+                    <input type="text" name="title" value="{{ $quizTitle }}" maxlength="255"
+                        class="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('title') border-rose-500 focus:border-rose-500 @else border-slate-300 @enderror">
+                    @error('title') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </label>
                 <div class="grid gap-4 sm:grid-cols-3">
                     <label class="block">
-                        <span class="mb-1.5 block text-sm font-bold text-slate-700">Diem dat (%)</span>
+                        <span class="mb-1.5 block text-sm font-bold text-slate-700">Điểm đạt (%)</span>
                         <input type="number" name="pass_score" value="{{ old('pass_score', $quiz->pass_score ?? 70) }}"
-                            min="0" max="100" required
-                            class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500">
+                            min="0" max="100"
+                            class="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-emerald-500 @error('pass_score') border-rose-500 focus:border-rose-500 @else border-slate-300 @enderror">
+                        @error('pass_score') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </label>
                     <label class="block">
                         <span class="mb-1.5 block text-sm font-bold text-slate-700">Thoi gian (phut)</span>
@@ -168,11 +159,15 @@
                                         class="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:w-[620px]">
                                         @csrf
                                         @method('PUT')
+                                        <input type="hidden" name="editing_question_id" value="{{ $question->id }}">
                                         <label class="block">
-                                            <span class="mb-1 block text-xs font-bold text-slate-600">Noi dung cau
-                                                hoi</span>
-                                            <textarea name="question_text" rows="3" required
-                                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500">{{ $question->question }}</textarea>
+                                            <span class="mb-1 block text-xs font-bold text-slate-600">Nội dung câu
+                                                hỏi</span>
+                                            <textarea name="question_text" rows="3"
+                                                class="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-emerald-500 @if($errors->has('question_text') && old('editing_question_id') == $question->id) border-rose-500 focus:border-rose-500 @else border-slate-300 @endif">{{ $question->question }}</textarea>
+                                            @if($errors->has('question_text') && old('editing_question_id') == $question->id)
+                                                <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('question_text') }}</p>
+                                            @endif
                                         </label>
                                         <div class="grid gap-3 sm:grid-cols-3">
                                             <label class="block">
@@ -234,7 +229,7 @@
                                 <div
                                     class="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(0,1fr)_110px_150px_110px] lg:items-center">
                                     <input type="text" name="answers[{{ $answer->id }}][answer_text]"
-                                        value="{{ $answer->option_text }}" required
+                                        value="{{ $answer->option_text }}"
                                         class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500">
                                     <input type="number" name="answers[{{ $answer->id }}][sort_order]"
                                         value="{{ $answer->sort_order }}" min="0"
@@ -281,8 +276,14 @@
                             action="{{ route('instructor.quiz-questions.answers.store', $question) }}"
                             class="mt-3 grid gap-3 rounded-lg border border-dashed border-slate-300 p-3 lg:grid-cols-[minmax(0,1fr)_120px_150px_auto] lg:items-center">
                             @csrf
-                            <input type="text" name="answer_text" placeholder="Nhập đáp án" required
-                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500">
+                            <input type="hidden" name="target_question_id" value="{{ $question->id }}">
+                            <div>
+                                <input type="text" name="answer_text" placeholder="Nhập đáp án"
+                                    class="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-emerald-500 @if($errors->has('answer_text') && old('target_question_id') == $question->id) border-rose-500 focus:border-rose-500 @else border-slate-300 @endif">
+                                @if($errors->has('answer_text') && old('target_question_id') == $question->id)
+                                    <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('answer_text') }}</p>
+                                @endif
+                            </div>
                             <input type="number" name="sort_order" value="{{ $question->options->count() }}"
                                 min="0"
                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500">
@@ -310,7 +311,7 @@
                 Thêm câu hỏi
             </button>
 
-            <div data-question-panel class="fixed inset-0 z-50 hidden">
+            <div data-question-panel class="fixed inset-0 z-50 {{ ($errors->has('question_text') || $errors->has('score')) && old('is_creating_question') ? '' : 'hidden' }}">
                 <button type="button" data-close-question-panel class="absolute inset-0 bg-slate-950/45"></button>
                 <aside
                     class="absolute right-0 top-0 h-full w-full overflow-y-auto bg-white p-5 shadow-2xl sm:w-[540px] sm:p-6">
@@ -328,10 +329,14 @@
                     <form method="POST" action="{{ route('instructor.quizzes.questions.store', $quiz) }}"
                         class="mt-5 space-y-4">
                         @csrf
+                        <input type="hidden" name="is_creating_question" value="1">
                         <label class="block">
                             <span class="mb-1.5 block text-sm font-bold text-slate-700">Nội dung câu hỏi</span>
-                            <textarea name="question_text" rows="4" required maxlength="10000"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500"></textarea>
+                            <textarea name="question_text" rows="4" maxlength="10000"
+                                class="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-emerald-500 @if($errors->has('question_text') && old('is_creating_question')) border-rose-500 focus:border-rose-500 @else border-slate-300 @endif">{{ old('question_text') }}</textarea>
+                            @if($errors->has('question_text') && old('is_creating_question'))
+                                <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('question_text') }}</p>
+                            @endif
                         </label>
                         <div class="grid gap-4 sm:grid-cols-3">
                             <label class="block">
@@ -346,9 +351,11 @@
                             </label>
                             <label class="block">
                                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Điểm</span>
-                                <input type="number" name="score" value="1" min="1" max="1000"
-                                    required
-                                    class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500">
+                                <input type="number" name="score" value="{{ old('score', 1) }}" min="1" max="1000"
+                                    class="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-emerald-500 @if($errors->has('score') && old('is_creating_question')) border-rose-500 focus:border-rose-500 @else border-slate-300 @endif">
+                                @if($errors->has('score') && old('is_creating_question'))
+                                    <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('score') }}</p>
+                                @endif
                             </label>
                             <label class="block">
                                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Thứ tự</span>
@@ -360,7 +367,7 @@
                         <label class="block">
                             <span class="mb-1.5 block text-sm font-bold text-slate-700">Giải thích đáp án</span>
                             <textarea name="explanation" rows="3"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500"></textarea>
+                                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500">{{ old('explanation') }}</textarea>
                         </label>
                         <button type="submit"
                             class="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">

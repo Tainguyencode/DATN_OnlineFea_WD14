@@ -37,4 +37,28 @@ class StoreDiscussionReplyRequest extends FormRequest
             'attachment.max' => 'Tệp đính kèm không được vượt quá 50MB.',
         ];
     }
+
+    /**
+     * Handle a failed validation attempt.
+     *
+     * @param  \Illuminate\Contracts\Validation\Validator  $validator
+     * @return void
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator)
+    {
+        $discussion = $this->route('discussion');
+
+        $redirectUrl = route('courses.lessons.show', [
+            'course' => $discussion->lesson->course,
+            'lesson' => $discussion->lesson,
+            'discussion_id' => $discussion->id,
+            'tab' => 'qa',
+        ]);
+
+        throw (new \Illuminate\Validation\ValidationException($validator))
+            ->errorBag($this->errorBag)
+            ->redirectTo($redirectUrl);
+    }
 }

@@ -26,7 +26,7 @@
 
 <div class="learning-tabs border-t border-[#d1d7dc] bg-white" id="learning-tabs">
     <div class="border-b border-[#d1d7dc] px-4 sm:px-6" 
-         x-data="{ tab: '{{ (request()->has('discussion_id') || request()->query('tab') === 'qa') ? 'qa' : 'overview' }}' }"
+         x-data="{ tab: '{{ ($errors->any() || old('title') !== null || request()->has('discussion_id') || request()->query('tab') === 'qa') ? 'qa' : 'overview' }}' }"
          x-init="
             $watch('tab', value => {
                 if (value === 'qa') {
@@ -461,7 +461,8 @@
                                     <form action="{{ route('discussions.replies.store', $activeDiscussion) }}" method="POST" enctype="multipart/form-data">
                                         @csrf
                                         <div class="mb-3">
-                                            <textarea name="content" rows="3" class="w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm text-[#1c1d1f] focus:outline-none focus:ring-2 focus:ring-[#0056D2]" placeholder="Nhập câu trả lời của bạn..." required></textarea>
+                                            <textarea name="content" rows="3" class="w-full rounded border px-3 py-2 text-sm text-[#1c1d1f] focus:outline-none focus:ring-2 focus:ring-[#0056D2] @error('content') border-rose-500 focus:ring-rose-500 @else border-[#d1d7dc] @enderror" placeholder="Nhập câu trả lời của bạn...">{{ old('content') }}</textarea>
+                                            @error('content') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                         </div>
                                         <div class="flex flex-wrap items-center justify-between gap-3">
                                             <div class="flex items-center gap-2">
@@ -476,7 +477,7 @@
                             </div>
                         @else
                             <!-- DANH SÁCH CUỘC HỘI THOẠI -->
-                            <div x-data="{ showAskForm: false }">
+                            <div x-data="{ showAskForm: {{ ($errors->any() || old('title') !== null) ? 'true' : 'false' }} }">
                                 <!-- Form đặt câu hỏi mới (chỉ hiện khi click nút) -->
                                 <div x-show="showAskForm" class="rounded-lg border border-[#d1d7dc] bg-white overflow-hidden shadow-sm mb-4" x-transition x-cloak>
                                     <div class="bg-[#f7f9fa] border-b border-[#d1d7dc] flex items-center justify-between px-4 py-3">
@@ -484,19 +485,22 @@
                                         <button type="button" class="text-[#6a6f73] hover:text-[#1c1d1f] text-lg font-bold" @click="showAskForm = false">&times;</button>
                                     </div>
                                     <div class="p-4 space-y-4">
-                                        <form action="{{ route('courses.lessons.discussions.store', [$course, $lesson]) }}" method="POST" enctype="multipart/form-data" class="space-y-3">
+                                        <form action="{{ route('courses.lessons.discussions.store', [$course, $lesson]) }}?tab=qa" method="POST" enctype="multipart/form-data" class="space-y-3">
                                             @csrf
                                             <div>
                                                 <label for="new-title" class="block text-xs font-bold text-[#1c1d1f] mb-1">Tiêu đề câu hỏi <span class="text-red-500">*</span></label>
-                                                <input type="text" name="title" id="new-title" class="w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm text-[#1c1d1f] focus:outline-none focus:ring-2 focus:ring-[#0056D2]" placeholder="Tóm tắt ngắn gọn câu hỏi..." required>
+                                                <input type="text" name="title" id="new-title" value="{{ old('title') }}" class="w-full rounded border px-3 py-2 text-sm text-[#1c1d1f] focus:outline-none focus:ring-2 focus:ring-[#0056D2] @error('title') border-rose-500 focus:ring-rose-500 @else border-[#d1d7dc] @enderror" placeholder="Tóm tắt ngắn gọn câu hỏi...">
+                                                @error('title') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                             </div>
                                             <div>
                                                 <label for="new-content" class="block text-xs font-bold text-[#1c1d1f] mb-1">Nội dung chi tiết <span class="text-red-500">*</span></label>
-                                                <textarea name="content" id="new-content" rows="4" class="w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm text-[#1c1d1f] focus:outline-none focus:ring-2 focus:ring-[#0056D2]" placeholder="Chi tiết câu hỏi của bạn để giảng viên dễ trả lời..." required></textarea>
+                                                <textarea name="content" id="new-content" rows="4" class="w-full rounded border px-3 py-2 text-sm text-[#1c1d1f] focus:outline-none focus:ring-2 focus:ring-[#0056D2] @error('content') border-rose-500 focus:ring-rose-500 @else border-[#d1d7dc] @enderror" placeholder="Chi tiết câu hỏi của bạn để giảng viên dễ trả lời...">{{ old('content') }}</textarea>
+                                                @error('content') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                             </div>
                                             <div>
                                                 <label for="new-file" class="block text-xs font-bold text-[#1c1d1f] mb-1">Tệp đính kèm (Ảnh, video hoặc tài liệu)</label>
                                                 <input type="file" name="attachment" id="new-file" class="w-full rounded border border-[#d1d7dc] px-3 py-1.5 text-xs text-[#1c1d1f]">
+                                                @error('attachment') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                             </div>
                                             <div class="flex justify-end gap-2 pt-2">
                                                 <button type="button" class="inline-flex items-center rounded border border-[#d1d7dc] bg-white px-3 py-2 text-xs font-semibold text-[#6a6f73] hover:bg-[#f7f9fa]" @click="showAskForm = false">Hủy</button>

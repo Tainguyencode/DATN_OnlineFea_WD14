@@ -935,7 +935,7 @@ document.addEventListener('DOMContentLoaded', function () {
         statusText.innerText = 'Đang quét video ' + (videoIndex + 1) + ' / ' + totalVideos + ': ' + lessonTitle;
 
         if (phase === 'extract') {
-            frameText.innerText = 'Đang cắt frame (mỗi 30s)...';
+            frameText.innerText = 'Đang cắt frame (mỗi 300s)...';
         } else if (phase === 'analyze') {
             frameText.innerText = 'Frame ' + frameIndex + ' / ' + frameTotal;
         } else if (phase === 'save') {
@@ -976,7 +976,7 @@ document.addEventListener('DOMContentLoaded', function () {
         for (var i = 0; i < total; i++) {
             var framePath = frames[i];
             var match = framePath.match(/frame_(\d+)\.jpg$/);
-            var timestamp = match ? parseInt(match[1], 10) : i * 30;
+            var timestamp = match ? parseInt(match[1], 10) : i * 300;
 
             onProgress({ phase: 'analyze', frameIndex: i + 1, frameTotal: total });
 
@@ -1038,7 +1038,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 var saveData = await scanLesson(lessonId, function (state) {
                     if (state.phase === 'extract') {
-                        statusText.innerText = 'Đang cắt frame (mỗi 30s)...';
+                        statusText.innerText = 'Đang cắt frame (mỗi 300s)...';
                         progressBar.style.width = '10%';
                     } else if (state.phase === 'analyze') {
                         statusText.innerText = 'Đang phân tích ' + state.frameIndex + '/' + state.frameTotal + ' frame...';

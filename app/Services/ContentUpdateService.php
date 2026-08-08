@@ -133,6 +133,8 @@ class ContentUpdateService
                 'title' => $payload['title'] ?? 'Chương mới',
                 'sort_order' => $payload['sort_order'] ?? 0,
             ]);
+
+            $update->update(['entity_id' => $section->id]);
         } elseif ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
             $section = CourseSection::find($update->entity_id);
             if ($section) {
@@ -159,6 +161,30 @@ class ContentUpdateService
     private function applyLessonUpdate(ContentUpdate $update, array $payload): void
     {
         if ($update->action === ContentUpdate::ACTION_CREATE) {
+            $secId = $payload['section_id'] ?? null;
+
+            if ($secId && ! CourseSection::where('id', $secId)->exists()) {
+                $chapterUpdate = ContentUpdate::find($secId);
+                if ($chapterUpdate && $chapterUpdate->entity_id) {
+                    $secId = $chapterUpdate->entity_id;
+                } else {
+                    $firstSection = CourseSection::where('course_id', $update->course_id)->orderBy('sort_order')->first();
+                    $secId = $firstSection ? $firstSection->id : null;
+                }
+                $payload['section_id'] = $secId;
+            }
+
+            $chapId = $payload['chapter_id'] ?? null;
+            if ($chapId && ! Chapter::where('id', $chapId)->exists()) {
+                if ($secId && Chapter::where('id', $secId)->exists()) {
+                    $chapId = $secId;
+                } else {
+                    $matchingChapter = Chapter::where('course_id', $update->course_id)->orderBy('sort_order')->first();
+                    $chapId = $matchingChapter ? $matchingChapter->id : null;
+                }
+                $payload['chapter_id'] = $chapId;
+            }
+
             $lesson = Lesson::create(array_merge([
                 'course_id' => $update->course_id,
                 'content_version' => 1,

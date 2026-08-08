@@ -48,7 +48,7 @@
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{ $result['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">
-                                {{ $result['is_correct'] ? 'Dung' : 'Sai' }}
+                                {{ $result['is_correct'] ? 'Đúng' : 'Sai' }}
                             </span>
                             <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">
                                 Cau {{ $loop->iteration }}. {{ $question->question }}
