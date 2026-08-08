@@ -416,4 +416,44 @@
     </div>
 </div>
 
+<script>
+    document.addEventListener('change', function (e) {
+        var target = e.target;
+        if (!target || target.name !== 'video_file' || !target.files || !target.files[0]) {
+            return;
+        }
+
+        var file = target.files[0];
+        var form = target.closest('form');
+        if (!form) return;
+
+        var durationInput = form.querySelector('input[name="duration"]');
+        if (!durationInput) return;
+
+        var video = document.createElement('video');
+        video.preload = 'metadata';
+        var objectUrl = URL.createObjectURL(file);
+
+        video.onloadedmetadata = function () {
+            URL.revokeObjectURL(objectUrl);
+            if (video.duration && !isNaN(video.duration) && isFinite(video.duration)) {
+                var seconds = Math.round(video.duration);
+                durationInput.value = seconds;
+
+                // Thêm hiệu ứng highlight thông báo cho giảng viên biết thời lượng đã tự đồng bộ
+                durationInput.classList.add('ring-2', 'ring-emerald-500', 'border-emerald-500');
+                setTimeout(function () {
+                    durationInput.classList.remove('ring-2', 'ring-emerald-500');
+                }, 2500);
+            }
+        };
+
+        video.onerror = function () {
+            URL.revokeObjectURL(objectUrl);
+        };
+
+        video.src = objectUrl;
+    });
+</script>
+
 </x-instructor-layout>

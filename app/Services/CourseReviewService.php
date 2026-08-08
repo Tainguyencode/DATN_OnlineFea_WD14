@@ -99,9 +99,10 @@ class CourseReviewService
                 ]);
             }
 
-            // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này
+            // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này (phê duyệt chapter trước lesson)
             $pendingUpdates = \App\Models\ContentUpdate::where('course_id', $course->id)
                 ->where('status', \App\Models\ContentUpdate::STATUS_PENDING)
+                ->orderByRaw("FIELD(type, 'chapter', 'lesson', 'course')")
                 ->get();
 
             $contentUpdateService = app(\App\Services\ContentUpdateService::class);

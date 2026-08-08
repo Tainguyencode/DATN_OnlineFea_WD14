@@ -22,10 +22,20 @@ class StoreLessonRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] START REQUEST', [
+            'has_video_file' => $this->hasFile('video_file'),
+            'video_size_bytes' => $this->hasFile('video_file') ? $this->file('video_file')->getSize() : null,
+            'type' => $this->input('type'),
+        ]);
+
         if ($this->route('lesson')) {
-            $this->errorBag = 'updateLesson_'.$this->route('lesson')->id;
+            $lessonRoute = $this->route('lesson');
+            $lessonId = is_object($lessonRoute) ? $lessonRoute->id : $lessonRoute;
+            $this->errorBag = 'updateLesson_'.$lessonId;
         } elseif ($this->route('section')) {
-            $this->errorBag = 'storeLesson_'.$this->route('section')->id;
+            $sectionRoute = $this->route('section');
+            $sectionId = is_object($sectionRoute) ? $sectionRoute->id : $sectionRoute;
+            $this->errorBag = 'storeLesson_'.$sectionId;
         }
 
         $this->merge([
@@ -33,6 +43,34 @@ class StoreLessonRequest extends FormRequest
             'type' => $this->input('type') ?: null,
             'status' => $this->input('status') ?: null,
         ]);
+    }
+
+    protected function passedValidation(): void
+    {
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] VALIDATION PASSED');
+    }
+
+    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void
+    {
+        $videoFile = $this->file('video_file');
+
+        \Illuminate\Support\Facades\Log::warning('[EXACT VALIDATION FAILED LOG]', [
+            'failed_rules' => $validator->failed(),
+            'errors' => $validator->errors()->toArray(),
+            'all' => $this->except(['video_file', 'document_file']),
+            'has_video' => $this->hasFile('video_file'),
+            'video_exists' => $this->file('video_file') !== null,
+            'video_valid' => $videoFile?->isValid(),
+            'video_error' => $videoFile?->getError(),
+            'video_error_message' => $videoFile?->getErrorMessage(),
+            'client_mime' => $videoFile?->getClientMimeType(),
+            'server_mime' => $videoFile?->getMimeType(),
+            'extension' => $videoFile?->extension(),
+            'client_extension' => $videoFile?->getClientOriginalExtension(),
+            'size' => $videoFile?->getSize(),
+        ]);
+
+        parent::failedValidation($validator);
     }
 
     /**
@@ -46,7 +84,7 @@ class StoreLessonRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($lessonTypes)],
-            'video_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,webm,mkv', 'max:204800', 'prohibited_unless:type,video'],
+            'video_file' => ['nullable', 'file', 'mimes:mp4,m4v,mov,avi,webm,mkv', 'max:204800', 'prohibited_unless:type,video'],
             'video_url' => ['nullable', 'string', 'max:2048', 'prohibited_unless:type,video'],
             'content' => ['nullable', 'string', 'prohibited_if:type,quiz'],
             'document_file' => [
@@ -96,7 +134,7 @@ class StoreLessonRequest extends FormRequest
                 $type = $this->input('type');
 
                 if ($type === 'video' && ! $this->hasVideoContent($lesson)) {
-                    $validator->errors()->add('video_url', 'Vui lòng nhập Video URL hoặc tải file video lên.');
+                    $validator->errors()->add('video_file', 'Vui lòng tải file video bài giảng lên.');
                 }
 
                 if ($type === 'document' && ! $this->hasDocumentContent($lesson)) {

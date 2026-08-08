@@ -311,9 +311,20 @@ class Course extends Model
     /** Tính tổng thời lượng video (giây) của tất cả bài học */
     public function totalVideoDurationSeconds(): int
     {
-        return (int) $this->lessons()
-            ->get(['duration_seconds', 'duration'])
-            ->sum(fn (Lesson $lesson) => (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0));
+        $sections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+        
+        $totalSeconds = 0;
+        foreach ($sections as $section) {
+            foreach ($section->lessons as $lesson) {
+                if (!empty($lesson->is_pending_deletion)) {
+                    continue;
+                }
+                $dur = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+                $totalSeconds += $dur;
+            }
+        }
+
+        return $totalSeconds;
     }
 
     /** Tính tổng thời lượng video (phút) */
@@ -325,7 +336,19 @@ class Course extends Model
     /** Tổng số bài học */
     public function lessonCount(): int
     {
-        return $this->lessons()->count();
+        $sections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+        
+        $count = 0;
+        foreach ($sections as $section) {
+            foreach ($section->lessons as $lesson) {
+                if (!empty($lesson->is_pending_deletion)) {
+                    continue;
+                }
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /** Gọi Validator kiểm tra tính đầy đủ của khóa học trước khi cho nộp duyệt */
