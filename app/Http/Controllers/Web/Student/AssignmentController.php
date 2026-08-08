@@ -37,7 +37,7 @@ class AssignmentController extends Controller
      * @param Lesson $lesson Bài học hiện tại
      * @return RedirectResponse Quay lại trang bài học kèm thông báo kết quả
      */
-    public function submit(Request $request, Course $course, Lesson $lesson): RedirectResponse
+    public function submit(Request $request, Course $course, Lesson $lesson, \App\Services\LearningProgressService $progressService): RedirectResponse
     {
         // 1. Kiểm tra xem học viên đã ghi danh vào khóa học này chưa
         $isEnrolled = $course->enrollments()
@@ -47,9 +47,17 @@ class AssignmentController extends Controller
 
         abort_unless($isEnrolled, 403, 'Bạn cần đăng ký khóa học để thực hiện hành động này.');
 
-        // 2. Đảm bảo bài học hiện tại có bài tập tự luận
+        // 2. Đảm bảo bài học hiện tại có bài tập tự luận (tự động tạo nếu thiếu để tránh lỗi 404)
         $assignment = $lesson->assignment;
-        abort_unless($assignment, 404, 'Bài học này không có bài tập tự luận.');
+        if (!$assignment) {
+            $assignment = \App\Models\Assignment::create([
+                'course_id' => $course->id,
+                'lesson_id' => $lesson->id,
+                'title' => $lesson->title ?? 'Bài tập thực hành',
+                'description' => 'Hãy thực hiện yêu cầu của bài tập tự luận dưới đây.',
+                'max_score' => 100,
+            ]);
+        }
 
         // 3. Kiểm tra trạng thái bài nộp hiện tại (nếu đang chờ chấm hoặc đã chấm thành công thì không cho nộp đè)
         $submission = Submission::query()
@@ -101,18 +109,15 @@ class AssignmentController extends Controller
             ]
         );
 
-        // 7. Cập nhật tiến độ hoàn thành bài học
-        LessonProgress::updateOrCreate(
-            [
-                'user_id' => $request->user()->id,
-                'course_id' => $course->id,
-                'lesson_id' => $lesson->id,
-            ],
-            [
-                'is_completed' => true,
-                'completed_at' => now(),
-                'last_watched_at' => now(),
-            ]
+        // 7. Cập nhật tiến độ hoàn thành bài học và đồng bộ tiến độ khóa học (chưa hoàn thành cho tới khi được chấm đạt)
+        $progressService->recordLessonProgress(
+            $request->user()->id,
+            $course,
+            $lesson,
+            0,
+            0,
+            false,
+            false
         );
 
         return back()->with('success', 'Đã nộp bài tập tự luận thành công!');
