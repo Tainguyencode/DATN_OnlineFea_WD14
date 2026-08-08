@@ -28,7 +28,7 @@
                     <option value="">Tất cả trạng thái</option>
                     <option value="submitted" @selected($status === 'submitted')>Chưa chấm (Submitted)</option>
                     <option value="graded" @selected($status === 'graded')>Đã chấm (Graded)</option>
-                    <option value="returned" @selected($status === 'returned')>Yêu cầu nộp lại (Returned)</option>
+                    <option value="resubmit_required" @selected($status === 'resubmit_required' || $status === 'returned')>Yêu cầu nộp lại (Returned)</option>
                 </select>
             </div>
 
@@ -52,7 +52,6 @@
                         <tr>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Học viên</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Khóa học / Bài tập</th>
-                            <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Thời gian nộp</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Bài làm</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Trạng thái</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Điểm</th>
@@ -85,21 +84,7 @@
                                     </p>
                                 </td>
 
-                                <!-- Thời gian nộp -->
-                                <td class="px-6 py-4">
-                                    <span class="text-slate-600 dark:text-slate-300 text-xs">
-                                        {{ $submission->submitted_at?->format('d/m/Y H:i') ?? 'N/A' }}
-                                    </span>
-                                    @if($submission->isLate())
-                                        <span class="block mt-1 w-fit rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
-                                            Nộp trễ
-                                        </span>
-                                    @else
-                                        <span class="block mt-1 w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
-                                            Đúng hạn
-                                        </span>
-                                    @endif
-                                </td>
+
 
                                 <!-- Bài làm -->
                                 <td class="px-6 py-4">
@@ -123,7 +108,7 @@
                                         <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
                                             Đã chấm
                                         </span>
-                                    @elseif($submission->status === 'returned')
+                                    @elseif($submission->status === 'resubmit_required' || $submission->status === 'returned')
                                         <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
                                             Nộp lại
                                         </span>

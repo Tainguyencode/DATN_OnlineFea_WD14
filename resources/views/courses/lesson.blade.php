@@ -60,13 +60,13 @@
                     <div class="max-w-3xl mx-auto space-y-6">
                         <!-- Tiêu đề & Mô tả bài tập -->
                         <div class="border-b border-white/10 pb-5">
-                            <h2 class="text-xl font-extrabold text-white">{{ $lesson->assignment->title ?? 'Bài tập thực hành' }}</h2>
+                            <h2 class="text-xl font-extrabold text-white">{{ $lesson->assignment?->title ?? 'Bài tập thực hành' }}</h2>
                             <p class="text-sm text-slate-400 mt-2 whitespace-pre-line">
-                                {{ $lesson->assignment->description ?? 'Hãy thực hiện yêu cầu của bài tập tự luận dưới đây.' }}
+                                {{ $lesson->assignment?->description ?? 'Hãy thực hiện yêu cầu của bài tập tự luận dưới đây.' }}
                             </p>
                             
                             <div class="mt-4 flex flex-wrap gap-4 text-xs font-semibold text-slate-300 bg-white/5 p-3 rounded-lg w-fit">
-                                <div>ĐIỂM TỐI ĐA: <span class="text-emerald-400">{{ $lesson->assignment->max_score ?? 100 }}đ</span></div>
+                                <div>ĐIỂM TỐI ĐA: <span class="text-emerald-400">{{ $lesson->assignment?->max_score ?? 100 }}đ</span></div>
                             </div>
                         </div>
 
@@ -96,9 +96,9 @@
                                             </span>
                                         @elseif($submission->status === 'graded')
                                             <span class="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-400 ring-1 ring-inset ring-emerald-500/20">
-                                                Đã chấm điểm: {{ $submission->score }} / {{ $lesson->assignment->max_score ?? 100 }}đ
+                                                Đã chấm điểm: {{ $submission->score }} / {{ $lesson->assignment?->max_score ?? 100 }}đ
                                             </span>
-                                        @elseif($submission->status === 'returned')
+                                        @elseif($submission->status === 'resubmit_required' || $submission->status === 'returned')
                                             <span class="rounded-full bg-rose-500/10 px-3 py-1 text-xs font-bold text-rose-400 ring-1 ring-inset ring-rose-500/20">
                                                 Yêu cầu làm lại
                                             </span>
@@ -138,7 +138,7 @@
                         @endif
 
                         <!-- Form nộp bài / Nộp lại bài làm -->
-                        @if(!$submission || $submission->status === 'returned')
+                        @if(!$submission || $submission->status === 'resubmit_required' || $submission->status === 'returned')
                             <form method="POST" action="{{ route('courses.lessons.assignment.submit', [$course, $lesson]) }}" enctype="multipart/form-data" class="space-y-4 bg-white/5 rounded-xl p-5">
                                 @csrf
                                 <h3 class="font-bold text-white border-b border-white/10 pb-2">

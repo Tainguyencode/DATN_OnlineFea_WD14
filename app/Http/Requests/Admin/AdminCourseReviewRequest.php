@@ -72,4 +72,26 @@ class AdminCourseReviewRequest extends FormRequest
 
         return $attrs;
     }
+
+    /**
+     * Configure the validator instance.
+     */
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            if ($this->input('action') === CourseReview::ACTION_APPROVED) {
+                $checklist = $this->input('checklist', []);
+                foreach (CourseReviewItem::ADMIN_CHECKLIST_KEYS as $key) {
+                    $status = $checklist[$key]['status'] ?? null;
+                    if ($status !== 'pass') {
+                        $validator->errors()->add(
+                            "checklist.{$key}.status",
+                            'Mục checklist này phải đạt (PASS) trước khi duyệt khóa học.'
+                        );
+                    }
+                }
+            }
+        });
+    }
 }
+

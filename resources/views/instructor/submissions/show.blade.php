@@ -144,7 +144,7 @@
                                 </div>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 p-3 hover:bg-slate-50 dark:hover:bg-slate-950 cursor-pointer">
-                                <input type="radio" name="status" value="returned" @checked(old('status', $submission->status) === 'returned') class="text-[#0056D2] focus:ring-[#0056D2] border-slate-300">
+                                <input type="radio" name="status" value="returned" @checked(old('status', $submission->status) === 'returned' || old('status', $submission->status) === 'resubmit_required') class="text-[#0056D2] focus:ring-[#0056D2] border-slate-300">
                                 <div>
                                     <span class="block text-sm font-bold text-slate-900 dark:text-white">Yêu cầu nộp lại (Returned)</span>
                                     <span class="block text-xs text-slate-500">Trả bài và yêu cầu học viên chỉnh sửa, nộp lại bài làm.</span>
