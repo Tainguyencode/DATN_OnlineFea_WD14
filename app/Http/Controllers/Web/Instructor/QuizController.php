@@ -258,6 +258,16 @@ class QuizController extends Controller
             'score' => ['required', 'integer', 'min:1', 'max:1000'],
             'explanation' => ['nullable', 'string', 'max:10000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ], [
+            'question_text.required' => 'Vui lòng nhập nội dung câu hỏi.',
+            'question_text.string' => 'Nội dung câu hỏi phải là chuỗi ký tự.',
+            'question_text.max' => 'Nội dung câu hỏi không được vượt quá 10.000 ký tự.',
+            'question_type.required' => 'Vui lòng chọn loại câu hỏi.',
+            'question_type.in' => 'Loại câu hỏi không hợp lệ.',
+            'score.required' => 'Vui lòng nhập số điểm cho câu hỏi.',
+            'score.integer' => 'Điểm phải là số nguyên.',
+            'score.min' => 'Điểm tối thiểu là 1.',
+            'score.max' => 'Điểm tối đa là 1000.',
         ]);
     }
 
@@ -267,6 +277,10 @@ class QuizController extends Controller
             'answer_text' => ['required', 'string', 'max:5000'],
             'is_correct' => ['sometimes', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ], [
+            'answer_text.required' => 'Vui lòng nhập nội dung đáp án.',
+            'answer_text.string' => 'Nội dung đáp án phải là chuỗi ký tự.',
+            'answer_text.max' => 'Nội dung đáp án không được vượt quá 5000 ký tự.',
         ]);
 
         $validated['is_correct'] = $request->boolean('is_correct');
@@ -321,7 +335,7 @@ class QuizController extends Controller
         }
 
         $question->options()->createMany([
-            ['option_text' => 'Dung', 'is_correct' => true, 'sort_order' => 0],
+            ['option_text' => 'Đúng', 'is_correct' => true, 'sort_order' => 0],
             ['option_text' => 'Sai', 'is_correct' => false, 'sort_order' => 1],
         ]);
     }

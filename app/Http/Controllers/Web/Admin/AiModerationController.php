@@ -179,7 +179,7 @@ class AiModerationController extends Controller
         }
 
         try {
-            $frames = $extractor->extract($videoPath, 30, $lessonId);
+            $frames = $extractor->extract($videoPath, 300, $lessonId);
 
             if (empty($frames)) {
                 return response()->json(['error' => 'Không thể trích xuất hình ảnh từ video này.'], 422);

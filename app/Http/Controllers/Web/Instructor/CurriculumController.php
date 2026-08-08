@@ -63,18 +63,34 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã thêm chương học.');
     }
 
-    public function updateSection(StoreChapterRequest $request, Course $course, CourseSection $section): RedirectResponse
+    public function updateSection(StoreChapterRequest $request, Course $course, $section): RedirectResponse
     {
-        $this->authorizeSection($course, $section);
+        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
+        $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
+
+        if ($sectionModel) {
+            $this->authorizeSection($course, $sectionModel);
+        } else {
+            $this->authorizeCourse($course);
+        }
 
         $validated = $request->validated();
 
         if ($course->isPublished()) {
+            $contentUpdate = \App\Models\ContentUpdate::find($sectionId);
+            if ($contentUpdate && $contentUpdate->type === \App\Models\ContentUpdate::TYPE_CHAPTER) {
+                $contentUpdate->update([
+                    'payload' => array_merge($contentUpdate->payload ?? [], $validated),
+                ]);
+
+                return back()->with('success', 'Đã cập nhật bản nháp chương học.');
+            }
+
             app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
                 \App\Models\ContentUpdate::TYPE_CHAPTER,
                 \App\Models\ContentUpdate::ACTION_UPDATE,
                 $course->id,
-                $section->id,
+                $sectionId,
                 $validated,
                 $request->user()
             );
@@ -82,21 +98,37 @@ class CurriculumController extends Controller
             return back()->with('success', 'Đã lưu bản cập nhật chương học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
         }
 
-        $section->update($validated);
+        if ($sectionModel) {
+            $sectionModel->update($validated);
+        }
 
         return back()->with('success', 'Đã cập nhật chương học.');
     }
 
-    public function destroySection(Course $course, CourseSection $section): RedirectResponse
+    public function destroySection(Course $course, $section): RedirectResponse
     {
-        $this->authorizeSection($course, $section);
+        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
+        $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
+
+        if ($sectionModel) {
+            $this->authorizeSection($course, $sectionModel);
+        } else {
+            $this->authorizeCourse($course);
+        }
 
         if ($course->isPublished()) {
+            $contentUpdate = \App\Models\ContentUpdate::find($sectionId);
+            if ($contentUpdate && $contentUpdate->type === \App\Models\ContentUpdate::TYPE_CHAPTER) {
+                $contentUpdate->delete();
+
+                return back()->with('success', 'Đã xóa bản nháp chương học.');
+            }
+
             app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
                 \App\Models\ContentUpdate::TYPE_CHAPTER,
                 \App\Models\ContentUpdate::ACTION_DELETE,
                 $course->id,
-                $section->id,
+                $sectionId,
                 [],
                 auth()->user()
             );
@@ -104,30 +136,43 @@ class CurriculumController extends Controller
             return back()->with('success', 'Đã gửi yêu cầu xóa chương học. Yêu cầu sẽ áp dụng sau khi Admin duyệt.');
         }
 
-        $section->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
-        $section->delete();
+        if ($sectionModel) {
+            $sectionModel->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
+            $sectionModel->delete();
+        }
 
         return back()->with('success', 'Đã xóa chương học.');
     }
 
-    public function storeLesson(StoreLessonRequest $request, Course $course, CourseSection $section): RedirectResponse
+    public function storeLesson(StoreLessonRequest $request, Course $course, $section): RedirectResponse
     {
-        $this->authorizeSection($course, $section);
+        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
+        $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
+
+        if ($sectionModel) {
+            $this->authorizeSection($course, $sectionModel);
+        } else {
+            $this->authorizeCourse($course);
+        }
 
         $validated = $request->validated();
         $lessonData = $this->lessonData($validated);
         $lessonData = $this->storeLessonDocument($request, $lessonData);
+
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] START STORE FILE');
         $lessonData = $this->storeLessonVideo($request, $lessonData);
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] STORE FILE DONE', ['video_path' => $lessonData['video_path'] ?? null]);
 
         if ($course->isPublished()) {
             $payload = array_merge($lessonData, [
-                'section_id' => $section->id,
+                'section_id' => $sectionId,
                 'chapter_id' => null,
                 'duration_seconds' => $lessonData['duration'] ?? 0,
                 'is_preview' => $request->boolean('is_preview'),
-                'sort_order' => $lessonData['sort_order'] ?? $section->lessons()->count(),
+                'sort_order' => $lessonData['sort_order'] ?? ($sectionModel ? $sectionModel->lessons()->count() : 0),
             ]);
 
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] SAVE DATABASE (ContentUpdate Draft)');
             $contentUpdate = app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
                 \App\Models\ContentUpdate::TYPE_LESSON,
                 \App\Models\ContentUpdate::ACTION_CREATE,
@@ -139,35 +184,41 @@ class CurriculumController extends Controller
             );
 
             if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+                \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate)', ['content_update_id' => $contentUpdate->id]);
                 \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
 
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] RETURN RESPONSE');
             return back()->with('success', 'Đã lưu bản nháp bài học mới. Video đang được xử lý HLS ngầm.');
         }
 
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] SAVE DATABASE (Lesson)');
         $lesson = Lesson::create([
             ...$lessonData,
             'course_id' => $course->id,
-            'section_id' => $section->id,
+            'section_id' => $sectionId,
             'chapter_id' => null,
             'duration_seconds' => $lessonData['duration'] ?? 0,
             'is_preview' => $request->boolean('is_preview'),
-            'sort_order' => $lessonData['sort_order'] ?? $section->lessons()->count(),
+            'sort_order' => $lessonData['sort_order'] ?? ($sectionModel ? $sectionModel->lessons()->count() : 0),
             'status' => $lessonData['status'] ?? 'draft',
         ]);
 
         if ($request->hasFile('video_file') && $lesson->type === 'video') {
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Lesson)', ['lesson_id' => $lesson->id]);
             \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
         }
 
         $this->syncAssignment($lesson, $validated);
 
         if ($lesson->type === 'quiz') {
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] RETURN RESPONSE (Quiz)');
             return redirect()
                 ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
                 ->with('success', 'Đã tạo bài quiz. Bạn có thể thêm câu hỏi ngay bên dưới.');
         }
 
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] RETURN RESPONSE (Success)');
         return back()->with('success', 'Đã thêm bài học. Video đang được xử lý ngầm, vui lòng đợi trong giây lát.');
     }
 
@@ -178,7 +229,10 @@ class CurriculumController extends Controller
         $validated = $request->validated();
         $lessonData = $this->lessonData($validated);
         $lessonData = $this->storeLessonDocument($request, $lessonData, $lesson);
+
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] START STORE FILE (Update)');
         $lessonData = $this->storeLessonVideo($request, $lessonData, $lesson);
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] STORE FILE DONE (Update)', ['video_path' => $lessonData['video_path'] ?? null]);
 
         if ($course->isPublished()) {
             $payload = array_merge($lessonData, [
@@ -188,6 +242,7 @@ class CurriculumController extends Controller
                 'status' => $lessonData['status'] ?? 'draft',
             ]);
 
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] SAVE DATABASE (ContentUpdate Record)');
             $contentUpdate = app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
                 \App\Models\ContentUpdate::TYPE_LESSON,
                 \App\Models\ContentUpdate::ACTION_UPDATE,
@@ -198,12 +253,15 @@ class CurriculumController extends Controller
             );
 
             if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+                \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate)', ['content_update_id' => $contentUpdate->id]);
                 \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
 
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update ContentUpdate)');
             return back()->with('success', 'Đã lưu bản cập nhật nội dung bài học. Video đang được xử lý HLS ngầm.');
         }
 
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] SAVE DATABASE (Update Lesson)');
         $lesson->update([
             ...$lessonData,
             'duration_seconds' => $lessonData['duration'] ?? 0,
@@ -213,6 +271,7 @@ class CurriculumController extends Controller
         ]);
 
         if ($request->hasFile('video_file') && $lesson->type === 'video') {
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update Lesson)', ['lesson_id' => $lesson->id]);
             \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
         }
 
@@ -220,11 +279,13 @@ class CurriculumController extends Controller
         $this->syncAssignment($lesson, $validated);
 
         if ($lesson->type === 'quiz') {
+            \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update Quiz)');
             return redirect()
                 ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
                 ->with('success', 'Đã cập nhật bài quiz. Bạn có thể quản lý câu hỏi tại đây.');
         }
 
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update Success)');
         return back()->with('success', 'Đã cập nhật bài học. Nếu có video mới, video đang được xử lý ngầm.');
     }
 

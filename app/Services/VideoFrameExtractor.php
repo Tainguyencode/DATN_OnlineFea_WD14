@@ -18,7 +18,7 @@ class VideoFrameExtractor
         $this->ffprobeBin = env('FFPROBE_BIN') ?: null;
     }
 
-    public function extract(string $videoPath, int $intervalSeconds = 30, string|int|null $lessonId = null): array
+    public function extract(string $videoPath, int $intervalSeconds = 300, string|int|null $lessonId = null): array
     {
         $config = [];
         if ($this->ffmpegBin) {

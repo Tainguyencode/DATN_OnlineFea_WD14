@@ -95,20 +95,13 @@
               class="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
         <div class="mb-4">
             <h4 class="text-sm font-extrabold text-indigo-950">Nội dung video</h4>
-            <p class="mt-1 text-xs font-medium text-indigo-700">Nhập Video URL hoặc tải file video lên.</p>
+            <p class="mt-1 text-xs font-medium text-indigo-700">Tải file video bài giảng lên.</p>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-2">
-            <label class="block">
-                <span class="mb-1.5 block text-sm font-bold text-slate-700">Video URL</span>
-                <input type="url" name="video_url" value="{{ $valueFor('video_url', $lesson->video_url ?? '') }}" placeholder="https://..."
-                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('video_url', $bagName) border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-indigo-500 focus-visible:ring-indigo-500/20 @enderror">
-                @error('video_url', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
-            </label>
-
+        <div>
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Video bài giảng</span>
-                <input type="file" name="video_file" accept=".mp4,.mov,.avi,.webm,video/mp4,video/quicktime,video/x-msvideo,video/webm"
+                <input type="file" name="video_file" accept=".mp4,.mov,.avi,.webm,.m4v,video/mp4,video/quicktime,video/x-msvideo,video/webm,video/x-m4v"
                        class="block w-full cursor-pointer rounded-lg border bg-white text-sm text-slate-700 file:mr-4 file:border-0 file:bg-indigo-700 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-800 @error('video_file', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 @enderror">
                 <span class="mt-1 block text-xs font-medium text-slate-500">MP4, MOV, AVI hoặc WEBM. Tối đa 200MB.</span>
                 @error('video_file', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
@@ -128,7 +121,7 @@
         @endif
 
         <label class="mt-4 block">
-            <span class="mb-1.5 block text-sm font-bold text-slate-700">Ghi chú video</span>
+            <span class="mb-1.5 block text-sm font-bold text-slate-700">Nội dung video</span>
             <textarea name="content" rows="3" class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('content', $bagName) border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-indigo-500 focus-visible:ring-indigo-500/20 @enderror">{{ $contentValue }}</textarea>
             @error('content', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
         </label>
