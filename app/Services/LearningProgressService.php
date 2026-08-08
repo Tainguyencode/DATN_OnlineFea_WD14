@@ -19,8 +19,9 @@ class LearningProgressService
         int $watchedSeconds = 0,
         ?int $durationSeconds = null,
         bool $forceCompleted = false,
+        ?bool $statusOverride = null,
     ): array {
-        return DB::transaction(function () use ($userId, $course, $lesson, $watchedSeconds, $durationSeconds, $forceCompleted) {
+        return DB::transaction(function () use ($userId, $course, $lesson, $watchedSeconds, $durationSeconds, $forceCompleted, $statusOverride) {
             $enrollment = Enrollment::query()
                 ->where('user_id', $userId)
                 ->where('course_id', $course->id)
@@ -52,14 +53,11 @@ class LearningProgressService
                 ? min(100, round(($watchedSeconds / $durationSeconds) * 100, 2))
                 : ($forceCompleted ? 100 : (float) ($existing?->progress_percent ?? 0));
 
-            $completed = (bool) ($existing?->is_completed ?? false)
-                || $forceCompleted
-                || $progressPercent >= $threshold;
+            $completed = $statusOverride !== null
+                ? $statusOverride
+                : ((bool) ($existing?->is_completed ?? false) || $forceCompleted || $progressPercent >= $threshold);
 
-            $completedAt = $existing?->completed_at;
-            if ($completed && ! $completedAt) {
-                $completedAt = now();
-            }
+            $completedAt = $completed ? ($existing?->completed_at ?? now()) : null;
 
             LessonProgress::updateOrCreate(
                 ['user_id' => $userId, 'lesson_id' => $lesson->id],

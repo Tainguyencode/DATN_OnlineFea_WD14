@@ -27,7 +27,7 @@
                 </div>
                 <a href="{{ route('instructor.courses.curriculum', $course) }}"
                     class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
-                    Quay lai curriculum
+                    Quay lại đề cương
                 </a>
             </div>
         </div>

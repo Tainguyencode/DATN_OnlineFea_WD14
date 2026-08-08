@@ -158,6 +158,20 @@ class SubmissionController extends Controller
             'grading_history' => $history,
         ]);
 
+        // 4.1 Cập nhật trạng thái hoàn thành bài giảng theo kết quả chấm điểm (Đạt >= passing_score)
+        $passingScore = $submission->assignment->passing_score ?? 70;
+        $isPassed = $statusValue === 'graded' && ((int) $validated['score']) >= $passingScore;
+        
+        app(\App\Services\LearningProgressService::class)->recordLessonProgress(
+            $submission->user_id,
+            $submission->assignment->lesson->course,
+            $submission->assignment->lesson,
+            0,
+            0,
+            false,
+            $isPassed
+        );
+
         // 5. Gửi thông báo đến Học viên
         try {
             $student = $submission->user;

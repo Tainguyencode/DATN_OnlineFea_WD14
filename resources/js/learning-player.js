@@ -376,7 +376,10 @@ function updateCurrentLessonProgress(percent, completed = false) {
 }
 
 function initMarkComplete() {
-    document.querySelector('[data-mark-lesson-complete]')?.addEventListener('click', async (event) => {
+    const markCompleteBtn = document.querySelector('[data-mark-lesson-complete]');
+    if (!markCompleteBtn) return;
+
+    markCompleteBtn.addEventListener('click', async (event) => {
         const button = event.currentTarget;
         const url = document.querySelector('[data-learning-player]')?.dataset.progressUrl;
 
@@ -409,6 +412,32 @@ function initMarkComplete() {
             showToast('Không thể đánh dấu hoàn thành.', 'error');
         }
     });
+
+    // Nếu là bài học video, lắng nghe sự kiện để hiển thị nút khi xem đủ 30 giây
+    const video = document.querySelector('video');
+    if (video) {
+        const checkTime = () => {
+            if (video.currentTime >= 30) {
+                markCompleteBtn.style.display = 'inline-flex';
+            } else {
+                markCompleteBtn.style.display = 'none';
+            }
+        };
+        
+        checkTime();
+        video.addEventListener('timeupdate', checkTime);
+        video.addEventListener('loadedmetadata', checkTime);
+        video.addEventListener('seeked', checkTime);
+    } else {
+        // Nếu dùng trình phát video dạng nhúng iframe (YouTube, Vimeo...)
+        const iframe = document.querySelector('iframe');
+        if (iframe) {
+            // Tự động hiển thị nút sau 30 giây kể từ khi học viên vào bài học
+            setTimeout(() => {
+                markCompleteBtn.style.display = 'inline-flex';
+            }, 30000);
+        }
+    }
 }
 
 function initQuizPlayer() {
