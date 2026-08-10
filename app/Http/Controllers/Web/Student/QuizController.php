@@ -150,7 +150,7 @@ class QuizController extends Controller
     ): JsonResponse {
         $this->authorizePublishedLesson($course, $lesson);
         abort_unless($lesson->type === 'quiz', 404);
-        abort_unless($request->user()?->isStudent(), 403);
+        abort_unless($request->user()?->isStudent() || $request->user()?->isAdmin() || $request->user()?->isInstructor(), 403);
 
         if (! $this->isEnrolled($course)) {
             return response()->json(['success' => false, 'message' => 'Bạn cần đăng ký khóa học để làm quiz.'], 403);
@@ -357,16 +357,38 @@ class QuizController extends Controller
     private function authorizePublishedLesson(Course $course, Lesson $lesson): void
     {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
-        abort_unless($course->status === Course::STATUS_PUBLISHED && (bool) $course->is_published, 404);
+        
+        $user = auth()->user();
+        $canBypass = $user && ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user)));
+        
+        if (!$canBypass) {
+            abort_unless($course->status === Course::STATUS_PUBLISHED && (bool) $course->is_published, 404);
+        }
     }
 
     private function isEnrolled(Course $course): bool
     {
-        return auth()->check()
-            && Enrollment::where('user_id', auth()->id())
-                ->where('course_id', $course->id)
-                ->withLearningAccess()
-                ->exists();
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user))) {
+            Enrollment::firstOrCreate([
+                'user_id' => $user->id,
+                'course_id' => $course->id,
+            ], [
+                'status' => Enrollment::STATUS_ACTIVE,
+                'progress_percent' => 0,
+                'enrolled_at' => now(),
+            ]);
+            return true;
+        }
+
+        return Enrollment::where('user_id', $user->id)
+            ->where('course_id', $course->id)
+            ->withLearningAccess()
+            ->exists();
     }
 
     private function lessonBelongsToCourse(Course $course, Lesson $lesson): bool
