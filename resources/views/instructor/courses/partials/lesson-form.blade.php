@@ -206,7 +206,6 @@
                        class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 @error('assignment_due_days', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-amber-500 @enderror">
                 @error('assignment_due_days', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
-
             <label class="block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Điểm tối đa</span>
                 <input type="number" name="assignment_max_score" value="{{ $valueFor('assignment_max_score', $assignment->max_score ?? 100) }}" min="1" max="1000"

@@ -588,8 +588,11 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            @if($isEnrolled && $lesson->type === 'document' && $canAccessLesson && $lessonState !== 'completed')
-                <button type="button" data-mark-lesson-complete class="inline-flex h-10 items-center rounded bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8]">
+            @if($isEnrolled && $canAccessLesson && $lessonState !== 'completed' && ($lesson->type === 'document' || $lesson->type === 'video'))
+                <button type="button" 
+                        data-mark-lesson-complete 
+                        @if($lesson->type === 'video') style="display: none;" @endif
+                        class="inline-flex h-10 items-center rounded bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8]">
                     Đánh dấu hoàn thành
                 </button>
             @endif

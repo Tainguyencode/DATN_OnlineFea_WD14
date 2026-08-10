@@ -28,7 +28,7 @@
                     <option value="">Tất cả trạng thái</option>
                     <option value="submitted" @selected($status === 'submitted')>Chưa chấm (Submitted)</option>
                     <option value="graded" @selected($status === 'graded')>Đã chấm (Graded)</option>
-                    <option value="returned" @selected($status === 'returned')>Yêu cầu nộp lại (Returned)</option>
+                    <option value="resubmit_required" @selected($status === 'resubmit_required' || $status === 'returned')>Yêu cầu nộp lại (Returned)</option>
                 </select>
             </div>
 
@@ -123,7 +123,7 @@
                                         <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
                                             Đã chấm
                                         </span>
-                                    @elseif($submission->status === 'returned')
+                                    @elseif($submission->status === 'resubmit_required' || $submission->status === 'returned')
                                         <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
                                             Nộp lại
                                         </span>
