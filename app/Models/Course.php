@@ -220,7 +220,21 @@ class Course extends Model
      */
     public function getEffectivePriceAttribute(): float
     {
-        return (float) ($this->discount_price ?? $this->sale_price ?? $this->price);
+        return (float) ($this->discount_price ?? $this->sale_price ?? $this->price ?? 0);
+    }
+
+    /**
+     * Khóa học miễn phí mặc định (giá gốc <= 0).
+     * Khóa học có phí (> 0đ) kể cả khi áp voucher về 0đ vẫn là khóa học có phí và được tính điểm.
+     */
+    public function isFree(): bool
+    {
+        return (float) ($this->price ?? 0) <= 0;
+    }
+
+    public function getIsFreeAttribute(): bool
+    {
+        return $this->isFree();
     }
 
     /**

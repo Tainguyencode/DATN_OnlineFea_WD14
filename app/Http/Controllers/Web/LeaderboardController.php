@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\SystemSetting;
 use App\Models\Enrollment;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Models\UserPoint;
 use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -88,6 +89,7 @@ class LeaderboardController extends Controller
 
         // 4. Current user personal achievement stats
         $currentUserData = null;
+        $myPointsHistory = collect();
         $currentUser = $request->user();
         if ($currentUser && $currentUser->role === 'student') {
             $weeklyXp = $pointService->getUserWeeklyPoints($currentUser->id);
@@ -99,6 +101,11 @@ class LeaderboardController extends Controller
             $completedCourses = Enrollment::where('user_id', $currentUser->id)
                 ->where('status', Enrollment::STATUS_COMPLETED)
                 ->count();
+
+            $myPointsHistory = UserPoint::where('user_id', $currentUser->id)
+                ->with('course:id,title,slug')
+                ->orderByDesc('created_at')
+                ->get();
 
             $currentUserData = [
                 'user' => $currentUser,
@@ -168,13 +175,13 @@ class LeaderboardController extends Controller
                 'rank' => 'TOP 1',
                 'title' => 'Quán Quân Tuần',
                 'voucher' => $formatVoucher('leaderboard_weekly_reward_top1_type', 'leaderboard_weekly_reward_top1_value', 'percent', 30),
-                'badge' => 'Voucher quà tặng TOP 1 Tuần',
+                'badge' => 'Voucher quà tặng Quán Quân Tuần',
             ],
             2 => [
                 'rank' => 'TOP 2',
                 'title' => 'Á Quân Tuần',
                 'voucher' => $formatVoucher('leaderboard_weekly_reward_top2_type', 'leaderboard_weekly_reward_top2_value', 'percent', 20),
-                'badge' => 'Voucher quà tặng TOP 2 Tuần',
+                'badge' => 'Voucher quà tặng Á Quân Tuần',
             ],
             3 => [
                 'rank' => 'TOP 3',
@@ -194,6 +201,7 @@ class LeaderboardController extends Controller
             'leaderboard',
             'top3',
             'currentUserData',
+            'myPointsHistory',
             'period',
             'search',
             'countdownTarget',
