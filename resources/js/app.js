@@ -28,17 +28,6 @@ if (document.readyState === 'loading') {
     initializeFlashMessages();
 }
 
-// Initialize Theme on Load
-(function () {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-        document.documentElement.classList.add('dark');
-    } else {
-        document.documentElement.classList.remove('dark');
-    }
-})();
-
 // Bind functions to window so they are globally accessible from inline HTML event handlers
 window.toggleTheme = function () {
     const isDark = document.documentElement.classList.contains('dark');
