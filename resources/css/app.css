@@ -459,6 +459,404 @@ html.dark body.instructor-shell hr {
     }
 }
 
+/* Admin dark theme. Light mode remains entirely driven by the existing utilities. */
+html.dark body.admin-shell {
+    --admin-page-bg: #0b1220;
+    --admin-sidebar-bg: #070d19;
+    --admin-header-bg: #111827;
+    --admin-surface: #111827;
+    --admin-surface-raised: #182235;
+    --admin-surface-muted: #1e293b;
+    --admin-border: #273449;
+    --admin-border-strong: #3a4961;
+    --admin-text-primary: #f8fafc;
+    --admin-text-secondary: #d5dce8;
+    --admin-text-muted: #9aa9bd;
+    --admin-input-bg: #0d1525;
+    --admin-hover-bg: #1b283c;
+    --admin-focus: #fb7185;
+
+    background-color: var(--admin-page-bg) !important;
+    color: var(--admin-text-primary);
+    color-scheme: dark;
+}
+
+html.dark body.admin-shell > div,
+html.dark body.admin-shell main {
+    background-color: var(--admin-page-bg) !important;
+}
+
+html.dark body.admin-shell aside {
+    background-color: var(--admin-sidebar-bg) !important;
+    border-color: rgb(148 163 184 / 0.12) !important;
+    box-shadow: 12px 0 32px rgb(2 6 23 / 0.24) !important;
+}
+
+html.dark body.admin-shell header,
+html.dark body.admin-shell nav.lg\:hidden {
+    background-color: rgb(17 24 39 / 0.96) !important;
+    border-color: var(--admin-border) !important;
+    box-shadow: 0 1px 0 rgb(2 6 23 / 0.5) !important;
+}
+
+html.dark body.admin-shell [class~="bg-white"],
+html.dark body.admin-shell [class~="bg-white/50"],
+html.dark body.admin-shell [class~="bg-white/80"],
+html.dark body.admin-shell [class~="bg-white/90"],
+html.dark body.admin-shell [class~="bg-white/95"] {
+    background-color: var(--admin-surface) !important;
+}
+
+html.dark body.admin-shell aside [class~="bg-white/[0.04]"] {
+    background-color: rgb(255 255 255 / 0.04) !important;
+}
+
+html.dark body.admin-shell [class~="bg-slate-50"],
+html.dark body.admin-shell [class~="bg-slate-50/40"],
+html.dark body.admin-shell [class~="bg-slate-50/50"],
+html.dark body.admin-shell [class~="bg-slate-50/70"],
+html.dark body.admin-shell [class~="bg-slate-50/80"],
+html.dark body.admin-shell [class~="bg-slate-100"],
+html.dark body.admin-shell [class~="bg-gray-50"],
+html.dark body.admin-shell [class~="bg-gray-100"],
+html.dark body.admin-shell [class~="bg-zinc-100"] {
+    background-color: var(--admin-surface-raised) !important;
+}
+
+html.dark body.admin-shell [class~="bg-slate-200"],
+html.dark body.admin-shell [class~="bg-slate-300"] {
+    background-color: var(--admin-border-strong) !important;
+}
+
+html.dark body.admin-shell [class~="bg-emerald-50"],
+html.dark body.admin-shell [class~="bg-emerald-50/90"],
+html.dark body.admin-shell [class~="bg-emerald-100"],
+html.dark body.admin-shell [class~="bg-emerald-100/70"] {
+    background-color: rgb(16 185 129 / 0.14) !important;
+}
+
+html.dark body.admin-shell [class~="bg-amber-50"],
+html.dark body.admin-shell [class~="bg-amber-100"] {
+    background-color: rgb(245 158 11 / 0.14) !important;
+}
+
+html.dark body.admin-shell [class~="bg-blue-50"],
+html.dark body.admin-shell [class~="bg-blue-50/50"],
+html.dark body.admin-shell [class~="bg-blue-100"],
+html.dark body.admin-shell [class~="bg-indigo-50"],
+html.dark body.admin-shell [class~="bg-indigo-100"],
+html.dark body.admin-shell [class~="bg-indigo-200"],
+html.dark body.admin-shell [class~="bg-violet-50"],
+html.dark body.admin-shell [class~="bg-violet-50/50"],
+html.dark body.admin-shell [class~="bg-violet-100"],
+html.dark body.admin-shell [class~="bg-violet-200"],
+html.dark body.admin-shell [class~="bg-sky-50"] {
+    background-color: rgb(59 130 246 / 0.14) !important;
+}
+
+html.dark body.admin-shell [class~="bg-rose-50"],
+html.dark body.admin-shell [class~="bg-rose-50/20"],
+html.dark body.admin-shell [class~="bg-rose-50/30"],
+html.dark body.admin-shell [class~="bg-rose-50/40"],
+html.dark body.admin-shell [class~="bg-rose-50/50"],
+html.dark body.admin-shell [class~="bg-rose-50/90"],
+html.dark body.admin-shell [class~="bg-rose-100"],
+html.dark body.admin-shell [class~="bg-red-50"],
+html.dark body.admin-shell [class~="bg-red-100"] {
+    background-color: rgb(244 63 94 / 0.14) !important;
+}
+
+html.dark body.admin-shell [class~="bg-orange-100"] {
+    background-color: rgb(249 115 22 / 0.14) !important;
+}
+
+html.dark body.admin-shell [class~="text-slate-950"],
+html.dark body.admin-shell [class~="text-slate-900"],
+html.dark body.admin-shell [class~="text-gray-950"],
+html.dark body.admin-shell [class~="text-gray-900"] {
+    color: var(--admin-text-primary) !important;
+}
+
+html.dark body.admin-shell [class~="text-slate-800"],
+html.dark body.admin-shell [class~="text-slate-700"],
+html.dark body.admin-shell [class~="text-gray-800"],
+html.dark body.admin-shell [class~="text-gray-700"],
+html.dark body.admin-shell [class~="text-zinc-800"],
+html.dark body.admin-shell [class~="text-zinc-700"] {
+    color: var(--admin-text-secondary) !important;
+}
+
+html.dark body.admin-shell [class~="text-slate-600"],
+html.dark body.admin-shell [class~="text-slate-500"],
+html.dark body.admin-shell [class~="text-slate-400"],
+html.dark body.admin-shell [class~="text-gray-600"],
+html.dark body.admin-shell [class~="text-gray-500"],
+html.dark body.admin-shell [class~="text-zinc-500"] {
+    color: var(--admin-text-muted) !important;
+}
+
+html.dark body.admin-shell [class~="text-[#0056D2]"] {
+    color: #93c5fd !important;
+}
+
+html.dark body.admin-shell [class~="text-emerald-600"],
+html.dark body.admin-shell [class~="text-emerald-700"],
+html.dark body.admin-shell [class~="text-emerald-800"],
+html.dark body.admin-shell [class~="text-emerald-900"] {
+    color: #6ee7b7 !important;
+}
+
+html.dark body.admin-shell [class~="text-amber-600"],
+html.dark body.admin-shell [class~="text-amber-700"],
+html.dark body.admin-shell [class~="text-amber-800"],
+html.dark body.admin-shell [class~="text-amber-900"] {
+    color: #fcd34d !important;
+}
+
+html.dark body.admin-shell [class~="text-blue-600"],
+html.dark body.admin-shell [class~="text-blue-700"],
+html.dark body.admin-shell [class~="text-blue-800"],
+html.dark body.admin-shell [class~="text-indigo-600"],
+html.dark body.admin-shell [class~="text-indigo-700"],
+html.dark body.admin-shell [class~="text-violet-600"],
+html.dark body.admin-shell [class~="text-violet-700"],
+html.dark body.admin-shell [class~="text-violet-800"],
+html.dark body.admin-shell [class~="text-sky-700"] {
+    color: #93c5fd !important;
+}
+
+html.dark body.admin-shell [class~="text-rose-600"],
+html.dark body.admin-shell [class~="text-rose-700"],
+html.dark body.admin-shell [class~="text-rose-800"],
+html.dark body.admin-shell [class~="text-rose-900"],
+html.dark body.admin-shell [class~="text-red-600"],
+html.dark body.admin-shell [class~="text-red-700"],
+html.dark body.admin-shell [class~="text-red-800"] {
+    color: #fda4af !important;
+}
+
+html.dark body.admin-shell [class~="text-orange-700"] {
+    color: #fdba74 !important;
+}
+
+html.dark body.admin-shell [class~="border-slate-100"],
+html.dark body.admin-shell [class~="border-slate-200"],
+html.dark body.admin-shell [class~="border-slate-200/90"],
+html.dark body.admin-shell [class~="border-slate-300"],
+html.dark body.admin-shell [class~="border-slate-400"],
+html.dark body.admin-shell [class~="border-gray-200"],
+html.dark body.admin-shell [class~="border-zinc-200"],
+html.dark body.admin-shell [class~="border-black"] {
+    border-color: var(--admin-border) !important;
+}
+
+html.dark body.admin-shell [class~="border-emerald-100"],
+html.dark body.admin-shell [class~="border-emerald-200"],
+html.dark body.admin-shell [class~="border-emerald-300"] {
+    border-color: rgb(16 185 129 / 0.4) !important;
+}
+
+html.dark body.admin-shell [class~="border-amber-100"],
+html.dark body.admin-shell [class~="border-amber-200"],
+html.dark body.admin-shell [class~="border-amber-300"] {
+    border-color: rgb(245 158 11 / 0.4) !important;
+}
+
+html.dark body.admin-shell [class~="border-blue-300"],
+html.dark body.admin-shell [class~="border-indigo-100"],
+html.dark body.admin-shell [class~="border-indigo-200"],
+html.dark body.admin-shell [class~="border-indigo-300"],
+html.dark body.admin-shell [class~="border-sky-200"],
+html.dark body.admin-shell [class~="border-violet-100"],
+html.dark body.admin-shell [class~="border-violet-200"] {
+    border-color: rgb(59 130 246 / 0.4) !important;
+}
+
+html.dark body.admin-shell [class~="border-rose-100"],
+html.dark body.admin-shell [class~="border-rose-200"],
+html.dark body.admin-shell [class~="border-rose-200/60"],
+html.dark body.admin-shell [class~="border-rose-300"],
+html.dark body.admin-shell [class~="border-red-200"] {
+    border-color: rgb(244 63 94 / 0.4) !important;
+}
+
+html.dark body.admin-shell [class~="divide-slate-100"] > :not(:last-child),
+html.dark body.admin-shell [class~="divide-slate-200"] > :not(:last-child),
+html.dark body.admin-shell [class~="divide-slate-800"] > :not(:last-child) {
+    border-color: var(--admin-border) !important;
+}
+
+html.dark body.admin-shell [class~="ring-slate-50"],
+html.dark body.admin-shell [class~="ring-slate-100"],
+html.dark body.admin-shell [class~="ring-slate-200"] {
+    --tw-ring-color: var(--admin-surface-raised) !important;
+}
+
+html.dark body.admin-shell [class~="hover:bg-white"]:hover,
+html.dark body.admin-shell [class~="hover:bg-slate-50"]:hover,
+html.dark body.admin-shell [class~="hover:bg-slate-100"]:hover {
+    background-color: var(--admin-hover-bg) !important;
+}
+
+html.dark body.admin-shell [class~="hover:bg-emerald-100"]:hover,
+html.dark body.admin-shell [class~="hover:bg-emerald-200/80"]:hover {
+    background-color: rgb(16 185 129 / 0.22) !important;
+}
+
+html.dark body.admin-shell [class~="hover:bg-rose-50"]:hover,
+html.dark body.admin-shell [class~="hover:bg-rose-100"]:hover {
+    background-color: rgb(244 63 94 / 0.22) !important;
+}
+
+html.dark body.admin-shell table {
+    background-color: var(--admin-surface) !important;
+    color: var(--admin-text-secondary);
+}
+
+html.dark body.admin-shell table thead {
+    background-color: var(--admin-surface-raised) !important;
+    border-color: var(--admin-border) !important;
+}
+
+html.dark body.admin-shell table tbody tr {
+    border-color: var(--admin-border) !important;
+}
+
+html.dark body.admin-shell table tbody tr:hover {
+    background-color: var(--admin-hover-bg) !important;
+}
+
+html.dark body.admin-shell input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+html.dark body.admin-shell textarea,
+html.dark body.admin-shell select,
+html.dark body.admin-shell .support-ticket-control {
+    border-color: var(--admin-border-strong) !important;
+    background-color: var(--admin-input-bg) !important;
+    color: var(--admin-text-primary) !important;
+    color-scheme: dark;
+}
+
+html.dark body.admin-shell input::placeholder,
+html.dark body.admin-shell textarea::placeholder,
+html.dark body.admin-shell .support-ticket-control::placeholder {
+    color: var(--admin-text-muted) !important;
+    opacity: 1;
+}
+
+html.dark body.admin-shell select option,
+html.dark body.admin-shell select optgroup {
+    background-color: var(--admin-input-bg) !important;
+    color: var(--admin-text-primary) !important;
+}
+
+html.dark body.admin-shell input[type="checkbox"],
+html.dark body.admin-shell input[type="radio"] {
+    accent-color: var(--admin-focus);
+    color-scheme: dark;
+}
+
+html.dark body.admin-shell input[type="file"] {
+    background-color: var(--admin-input-bg) !important;
+    color: var(--admin-text-secondary) !important;
+}
+
+html.dark body.admin-shell input[type="file"]::file-selector-button,
+html.dark body.admin-shell .support-ticket-control::file-selector-button {
+    border-right: 1px solid var(--admin-border-strong);
+    background: var(--admin-surface-muted) !important;
+    color: var(--admin-text-primary) !important;
+}
+
+html.dark body.admin-shell :disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+}
+
+html.dark body.admin-shell input:focus-visible,
+html.dark body.admin-shell textarea:focus-visible,
+html.dark body.admin-shell select:focus-visible,
+html.dark body.admin-shell a:focus-visible,
+html.dark body.admin-shell button:focus-visible,
+html.dark body.admin-shell [role="button"]:focus-visible {
+    outline: 2px solid var(--admin-focus) !important;
+    outline-offset: 2px;
+}
+
+html.dark body.admin-shell input:-webkit-autofill,
+html.dark body.admin-shell textarea:-webkit-autofill,
+html.dark body.admin-shell select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--admin-input-bg) inset !important;
+    -webkit-text-fill-color: var(--admin-text-primary) !important;
+    caret-color: var(--admin-text-primary);
+}
+
+html.dark body.admin-shell hr {
+    border-color: var(--admin-border) !important;
+}
+
+html.dark body.admin-shell .learning-toast {
+    border-color: var(--admin-border);
+    background: var(--admin-surface-raised);
+    color: var(--admin-text-primary);
+}
+
+html.dark body.admin-shell .admin-dashboard .admin-dashboard-scrollbar {
+    scrollbar-color: var(--admin-border-strong) transparent;
+}
+
+html.dark body.admin-shell .admin-dashboard .admin-dashboard-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--admin-border-strong);
+}
+
+html.dark body.admin-shell .admin-dashboard .admin-dashboard-progress,
+html.dark body.admin-shell .admin-dashboard .admin-dashboard-progress::-webkit-progress-bar {
+    background: var(--admin-surface-muted);
+}
+
+html.dark body.admin-shell .role-management-page {
+    --role-bg: transparent;
+    --role-card: var(--admin-surface);
+    --role-card-soft: var(--admin-surface-raised);
+    --role-border: var(--admin-border);
+    --role-border-soft: var(--admin-border);
+    --role-text: var(--admin-text-primary);
+    --role-muted: var(--admin-text-muted);
+    --role-primary: #fb7185;
+    --role-primary-hover: #fda4af;
+    --role-danger: #fb7185;
+    --role-danger-soft: rgb(244 63 94 / 0.14);
+}
+
+html.dark body.admin-shell ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html.dark body.admin-shell ::-webkit-scrollbar-track {
+    background: var(--admin-page-bg);
+}
+
+html.dark body.admin-shell ::-webkit-scrollbar-thumb {
+    border: 2px solid var(--admin-page-bg);
+    border-radius: 9999px;
+    background: var(--admin-border-strong);
+}
+
+html.dark body.admin-shell ::-webkit-scrollbar-thumb:hover {
+    background: #53647e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.dark body.admin-shell *,
+    html.dark body.admin-shell *::before,
+    html.dark body.admin-shell *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
 @keyframes authFadeIn {
     from {
         opacity: 0;

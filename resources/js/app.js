@@ -28,17 +28,46 @@ if (document.readyState === 'loading') {
     initializeFlashMessages();
 }
 
-// Bind functions to window so they are globally accessible from inline HTML event handlers
-window.toggleTheme = function () {
+function syncThemeToggleState() {
     const isDark = document.documentElement.classList.contains('dark');
-    if (isDark) {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
-    } else {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
+
+    document.querySelectorAll('[onclick="toggleTheme()"], [data-theme-toggle]').forEach((toggle) => {
+        toggle.setAttribute('aria-pressed', String(isDark));
+    });
+}
+
+function applyTheme(theme, persist = true) {
+    const isDark = theme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+
+    if (persist) {
+        try {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        } catch (error) {
+            // Keep the current page usable when storage is unavailable.
+        }
     }
+
+    syncThemeToggleState();
+    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: isDark ? 'dark' : 'light' } }));
+}
+
+// Bind functions to window so they are globally accessible from inline HTML event handlers.
+window.toggleTheme = function () {
+    applyTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
 };
+
+window.addEventListener('storage', (event) => {
+    if (event.key === 'theme' && (event.newValue === 'dark' || event.newValue === 'light')) {
+        applyTheme(event.newValue, false);
+    }
+});
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncThemeToggleState, { once: true });
+} else {
+    syncThemeToggleState();
+}
 
 window.toggleChat = function () {
     const drawer = document.getElementById('ai-chat-drawer');

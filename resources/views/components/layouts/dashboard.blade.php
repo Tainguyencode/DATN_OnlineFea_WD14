@@ -36,10 +36,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title }} - EduPlatform</title>
-    @include('partials.theme-init')
+    @include('partials.theme-init', ['useSystemPreference' => $role !== 'admin'])
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/learning-player.js'])
 </head>
-<body class="{{ $role === 'instructor' ? 'instructor-shell' : '' }} bg-[#f3f6fb] text-slate-900 antialiased">
+<body @class([
+    'instructor-shell' => $role === 'instructor',
+    'admin-shell' => $role === 'admin',
+    'bg-[#f3f6fb] text-slate-900 antialiased',
+])>
     <div class="flex min-h-screen">
         <aside class="hidden lg:flex lg:flex-col w-60 bg-[#0f172a] text-white fixed inset-y-0 z-30 shadow-[12px_0_32px_rgba(15,23,42,0.12)]">
             <div class="h-16 px-5 border-b border-white/5 flex items-center">
@@ -132,7 +136,7 @@
             </div>
         </aside>
 
-        <div class="flex-1 lg:ml-60">
+        <div class="min-w-0 flex-1 lg:ml-60">
             <header class="bg-white/95 backdrop-blur border-b border-slate-200/70 shadow-[0_1px_10px_rgba(15,23,42,0.03)] sticky top-0 z-20">
                 <div class="flex h-16 items-center justify-between px-4 sm:px-6 xl:px-7">
                     <div class="min-w-0">

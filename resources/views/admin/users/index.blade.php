@@ -267,21 +267,71 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.Chart) return;
-    new Chart(document.getElementById('registrationChart'), {
+
+    const chartTheme = () => {
+        const isDark = document.documentElement.classList.contains('dark');
+
+        return {
+            text: isDark ? '#d5dce8' : '#475569',
+            muted: isDark ? '#9aa9bd' : '#64748b',
+            grid: isDark ? 'rgba(148, 163, 184, 0.16)' : 'rgba(148, 163, 184, 0.22)',
+            tooltip: isDark ? '#182235' : '#0f172a',
+            tooltipBorder: isDark ? '#3a4961' : '#0f172a',
+        };
+    };
+
+    const chartOptions = () => {
+        const colors = chartTheme();
+
+        return {
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: colors.tooltip,
+                    borderColor: colors.tooltipBorder,
+                    borderWidth: 1,
+                    titleColor: '#f8fafc',
+                    bodyColor: '#d5dce8',
+                },
+            },
+            scales: {
+                x: {
+                    ticks: { color: colors.muted },
+                    grid: { display: false },
+                    border: { color: colors.grid },
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: colors.muted },
+                    grid: { color: colors.grid },
+                    border: { color: colors.grid },
+                },
+            },
+        };
+    };
+
+    const registrationChart = new Chart(document.getElementById('registrationChart'), {
         type: 'line',
         data: {
             labels: @json($registrationGrowth->pluck('label')),
             datasets: [{ label: 'Đăng ký', data: @json($registrationGrowth->pluck('total')), borderColor: 'rgb(79,70,229)', backgroundColor: 'rgba(79,70,229,.12)', tension: .4, fill: true }]
         },
-        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        options: chartOptions(),
     });
-    new Chart(document.getElementById('loginChart'), {
+    const loginChart = new Chart(document.getElementById('loginChart'), {
         type: 'bar',
         data: {
             labels: @json($loginGrowth->pluck('label')),
             datasets: [{ label: 'Login', data: @json($loginGrowth->pluck('total')), backgroundColor: 'rgb(79,70,229)', borderRadius: 10 }]
         },
-        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        options: chartOptions(),
+    });
+
+    window.addEventListener('themechange', () => {
+        [registrationChart, loginChart].forEach((chart) => {
+            chart.options = chartOptions();
+            chart.update('none');
+        });
     });
 });
 </script>
