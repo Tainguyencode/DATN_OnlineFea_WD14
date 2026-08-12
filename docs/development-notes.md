@@ -93,3 +93,6 @@
 ### Commit 31: docs: cap nhat nhat ky phat trien va tien do cac module sprint 3 (2026-08-07 16:25:30 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 32: feat: chuan hoa du lieu thong ke dashboard va breadcrumb dieu huong (2026-08-12 10:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
