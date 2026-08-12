@@ -50,7 +50,7 @@
                                     {{ $coupon->code }}
                                 </td>
                                 <td class="px-6 py-4 font-semibold text-slate-800 dark:text-slate-200">
-                                    @if($coupon->type === 'percent' || $coupon->type === 'percentage')
+                                    @if($coupon->type === 'percent')
                                         Giảm {{ (float)$coupon->value }}%
                                     @else
                                         Giảm {{ number_format($coupon->value, 0, ',', '.') }}đ

@@ -39,7 +39,26 @@ class Coupon extends Model
 
     public function isAdminCoupon(): bool
     {
-        return $this->creator_type === 'admin' || empty($this->creator_type);
+        return ! $this->isInstructorCoupon();
+    }
+
+    public function isPercentType(): bool
+    {
+        return $this->type === 'percent';
+    }
+
+    /**
+     * Tính số tiền giảm giá dựa trên tổng tiền đủ điều kiện.
+     */
+    public function calculateDiscount(float $eligibleSubtotal): float
+    {
+        if ($eligibleSubtotal <= 0) {
+            return 0;
+        }
+
+        return $this->isPercentType()
+            ? $eligibleSubtotal * ($this->value / 100)
+            : min($this->value, $eligibleSubtotal);
     }
 
     public function isEligibleForCourse(Course $course): bool
