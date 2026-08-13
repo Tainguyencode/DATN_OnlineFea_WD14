@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $course->title . ' - Website học online FEA')
+@section('title', $course->title . ' - Khóa học trực tuyến FEA Learning')
 
 @section('content')
 @php
