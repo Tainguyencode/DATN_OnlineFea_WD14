@@ -160,8 +160,8 @@ class Lesson extends Model
      */
     public function isHlsReady(): bool
     {
-        if ($this->processing_status !== 'completed') {
-            return false;
+        if ($this->processing_status === 'completed') {
+            return true;
         }
 
         if (filled($this->hls_manifest_key)) {
@@ -169,6 +169,10 @@ class Lesson extends Model
         }
 
         if (filled($this->video_path) && str_ends_with($this->video_path, '.m3u8')) {
+            return true;
+        }
+
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists('lesson-hls/'.$this->id.'/playlist.m3u8')) {
             return true;
         }
 
