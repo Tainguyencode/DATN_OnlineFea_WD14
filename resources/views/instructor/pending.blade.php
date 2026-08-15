@@ -103,9 +103,28 @@
 
                         <div>
                             <label class="mb-1 block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">Tải lên CV mới (PDF, max 5MB)</label>
-                            <input type="file" name="cv" accept="application/pdf" class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                            <input type="file" name="cv" accept="application/pdf" class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white @error('cv') border-red-500 @enderror">
+                            @error('cv')
+                                <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @enderror
                             @if($profile && $profile->cv)
                                 <p class="mt-1 text-xs text-slate-500">CV đã tải lên hiện tại: <a href="{{ Storage::url($profile->cv) }}" target="_blank" class="text-violet-600 underline">Xem CV</a></p>
+                            @endif
+                        </div>
+
+                        <div>
+                            <label class="mb-1 block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">Tải lên Chứng chỉ mới (PDF, JPG, PNG, max 5MB)</label>
+                            <input type="file" name="certificate" accept=".pdf,.jpg,.jpeg,.png" class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white @error('certificate') border-red-500 @enderror">
+                            @error('certificate')
+                                <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @enderror
+                            @php
+                                $certPath = $application->certificate_path ?? null;
+                            @endphp
+                            @if($certPath)
+                                <p class="mt-1 text-xs text-slate-500">Chứng chỉ đã tải lên hiện tại: <a href="{{ route('admin.instructors.applications.certificate', $user) }}" target="_blank" class="text-violet-600 underline">Xem chứng chỉ</a></p>
+                            @else
+                                <p class="mt-1 text-xs text-amber-600 italic">Chưa tải lên chứng chỉ</p>
                             @endif
                         </div>
 

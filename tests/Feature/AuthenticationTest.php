@@ -445,6 +445,7 @@ class AuthenticationTest extends TestCase
                 'specialty' => 'Công nghệ thông tin',
                 'experience' => '5 năm kinh nghiệm lập trình',
                 'bio' => 'Giới thiệu bản thân ngắn gọn.',
+                'certificate' => UploadedFile::fake()->create('certificate.pdf', 100, 'application/pdf'),
                 'agree_information' => '1',
                 'agree_terms' => '1',
             ]);

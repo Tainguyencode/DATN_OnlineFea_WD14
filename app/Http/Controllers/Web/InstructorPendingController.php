@@ -25,11 +25,12 @@ class InstructorPendingController extends Controller
             return redirect()->route('instructor.dashboard');
         }
 
-        $user->load('instructorProfile');
+        $user->load(['instructorProfile', 'instructorApplication']);
 
         return view('instructor.pending', [
             'user' => $user,
             'profile' => $user->instructorProfile,
+            'application' => $user->instructorApplication,
         ]);
     }
 
@@ -46,6 +47,12 @@ class InstructorPendingController extends Controller
                 Storage::disk('public')->delete($cvPath);
             }
             $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
+        }
+
+        $application = $user->instructorApplication ?? new \App\Models\InstructorApplication(['user_id' => $user->id]);
+        $certificatePath = $application->certificate_path;
+        if ($request->hasFile('certificate')) {
+            $certificatePath = $request->file('certificate')->store('instructor-applications/certificates', 'local');
         }
 
         $user->update([
@@ -66,6 +73,17 @@ class InstructorPendingController extends Controller
             'cv' => $cvPath,
             'agree_information' => true,
             'agree_terms' => true,
+        ])->save();
+
+        $application->fill([
+            'user_id' => $user->id,
+            'expertise' => $validated['specialty'],
+            'experience' => $validated['experience'],
+            'introduction' => $validated['bio'],
+            'cv_path' => $cvPath,
+            'certificate_path' => $certificatePath,
+            'status' => 'pending',
+            'admin_notes' => null,
         ])->save();
 
         ActivityLogService::log($user->id, 'resubmit_instructor_application', get_class($user), $user->id, [], $request);

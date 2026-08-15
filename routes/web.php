@@ -337,6 +337,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::prefix('instructors/applications')->name('instructors.applications.')->group(function () {
         Route::get('/', [InstructorApplicationController::class, 'index'])->name('index');
         Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');
+        Route::get('/{user}/certificate', [InstructorApplicationController::class, 'viewCertificate'])->name('certificate');
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
     });

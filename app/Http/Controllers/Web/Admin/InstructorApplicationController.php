@@ -9,7 +9,9 @@ use App\Notifications\InstructorRejectedNotification;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class InstructorApplicationController extends Controller
 {
@@ -18,7 +20,7 @@ class InstructorApplicationController extends Controller
         $status = $request->query('status', 'all');
 
         $query = User::where('role', 'instructor')
-            ->with(['instructorProfile', 'approver']);
+            ->with(['instructorProfile', 'instructorApplication', 'approver']);
 
         if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $query->where('instructor_status', $status);
@@ -49,12 +51,49 @@ class InstructorApplicationController extends Controller
                 ->with('error', 'Người dùng này không phải là Giảng viên.');
         }
 
-        $user->load(['instructorProfile', 'approver']);
+        $user->load(['instructorProfile', 'instructorApplication', 'approver']);
 
         return view('admin.instructors.applications.show', [
             'application' => $user,
             'profile' => $user->instructorProfile,
         ]);
+    }
+
+    public function viewCertificate(Request $request, User $user): BinaryFileResponse
+    {
+        if (! $request->user()?->isAdmin() && $request->user()?->id !== $user->id) {
+            abort(403, 'Bạn không có quyền truy cập tài liệu này.');
+        }
+
+        $user->load(['instructorApplication', 'instructorProfile']);
+
+        $relativePath = $user->instructorApplication?->certificate_path;
+
+        if (! $relativePath) {
+            abort(404, 'Ứng viên chưa tải lên chứng chỉ.');
+        }
+
+        if (Storage::disk('local')->exists($relativePath)) {
+            $filePath = Storage::disk('local')->path($relativePath);
+            $mimeType = Storage::disk('local')->mimeType($relativePath) ?? 'application/pdf';
+
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($relativePath) . '"',
+            ]);
+        }
+
+        if (Storage::disk('public')->exists($relativePath)) {
+            $filePath = Storage::disk('public')->path($relativePath);
+            $mimeType = Storage::disk('public')->mimeType($relativePath) ?? 'application/pdf';
+
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($relativePath) . '"',
+            ]);
+        }
+
+        abort(404, 'Tệp chứng chỉ không tồn tại trên hệ thống.');
     }
 
     public function approve(Request $request, User $user): RedirectResponse

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\CaptchaService;
 use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -77,6 +78,7 @@ class RoleAndMiddlewareTest extends TestCase
             'specialty' => 'Công nghệ thông tin',
             'experience' => '5 năm kinh nghiệm lập trình Web Laravel',
             'bio' => 'Giảng viên nhiệt tình với nhiều năm kinh nghiệm.',
+            'certificate' => UploadedFile::fake()->create('certificate.pdf', 100, 'application/pdf'),
             'agree_information' => '1',
             'agree_terms' => '1',
             'terms' => '1',

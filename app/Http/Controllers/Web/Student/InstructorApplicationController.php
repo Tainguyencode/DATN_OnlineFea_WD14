@@ -38,7 +38,7 @@ class InstructorApplicationController extends Controller
 
         $cvPath = $request->file('cv')->store('instructor-applications/cv', 'public');
         $certificatePath = $request->hasFile('certificate')
-            ? $request->file('certificate')->store('instructor-applications/certificates', 'public')
+            ? $request->file('certificate')->store('instructor-applications/certificates', 'local')
             : null;
 
         if ($request->hasFile('avatar')) {

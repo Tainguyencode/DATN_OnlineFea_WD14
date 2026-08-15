@@ -62,45 +62,39 @@
                         $children = $item['children'] ?? [];
                         $childrenActive = collect($children)->contains(fn (array $child) => $isMenuItemActive($child));
                         $active = $isMenuItemActive($item) || $childrenActive;
-                        $menuPanelId = 'sidebar-menu-'.$loop->index;
                     @endphp
                     @if($children)
-                        <button
-                            type="button"
-                            class="group flex w-full cursor-pointer items-center gap-3 rounded-[11px] px-3.5 py-2.5 text-left text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 {{ $active ? 'bg-white/5 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}"
-                            data-sidebar-menu-toggle
-                            aria-controls="{{ $menuPanelId }}"
-                            aria-expanded="{{ $childrenActive ? 'true' : 'false' }}"
-                        >
-                            <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $active ? 'text-white' : '' }}">
-                                {!! $item['icon'] !!}
-                            </span>
-                            <span class="min-w-0 flex-1 truncate">{{ $item['label'] }}</span>
-                            <svg data-sidebar-menu-chevron class="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ease-out motion-reduce:transition-none {{ $childrenActive ? 'rotate-90 text-white' : '' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                            </svg>
-                        </button>
+                        <div x-data="{ open: @json($childrenActive) }">
+                            <button
+                                type="button"
+                                @click="open = !open"
+                                class="group flex w-full cursor-pointer items-center gap-3 rounded-[11px] px-3.5 py-2.5 text-left text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 {{ $active ? 'bg-white/5 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}"
+                                :aria-expanded="open ? 'true' : 'false'"
+                            >
+                                <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $active ? 'text-white' : '' }}">
+                                    {!! $item['icon'] !!}
+                                </span>
+                                <span class="min-w-0 flex-1 truncate">{{ $item['label'] }}</span>
+                                <svg class="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ease-out motion-reduce:transition-none" :class="open ? 'rotate-90 text-white' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </button>
 
-                        <div
-                            id="{{ $menuPanelId }}"
-                            class="grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none {{ $childrenActive ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]' }}"
-                            data-sidebar-menu-panel
-                            aria-hidden="{{ $childrenActive ? 'false' : 'true' }}"
-                            @if(! $childrenActive) inert @endif
-                        >
-                            <div class="min-h-0 overflow-hidden">
-                                <div class="ml-2 mt-1 space-y-0.5">
-                                    @foreach($children as $child)
-                                        @php $childActive = $isMenuItemActive($child); @endphp
-                                        <a href="{{ route($child['route']) }}"
-                                           class="group flex w-full cursor-pointer items-center gap-3 rounded-[11px] px-3 py-2.5 text-sm font-medium leading-5 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 {{ $childActive ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
-                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $childActive ? 'text-white' : '' }}">
-                                                {!! $child['icon'] !!}
-                                            </span>
-                                            <span class="min-w-0 truncate">{{ $child['label'] }}</span>
-                                        </a>
-                                    @endforeach
-                                </div>
+                            <div
+                                x-show="open"
+                                x-cloak
+                                class="ml-2 mt-1 space-y-0.5"
+                            >
+                                @foreach($children as $child)
+                                    @php $childActive = $isMenuItemActive($child); @endphp
+                                    <a href="{{ route($child['route']) }}"
+                                       class="group flex w-full cursor-pointer items-center gap-3 rounded-[11px] px-3 py-2.5 text-sm font-medium leading-5 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 {{ $childActive ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-white {{ $childActive ? 'text-white' : '' }}">
+                                            {!! $child['icon'] !!}
+                                        </span>
+                                        <span class="min-w-0 truncate">{{ $child['label'] }}</span>
+                                    </a>
+                                @endforeach
                             </div>
                         </div>
                     @else
