@@ -211,6 +211,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(InstructorProfile::class);
     }
 
+    public function instructorApplication(): HasOne
+    {
+        return $this->hasOne(InstructorApplication::class);
+    }
+
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');

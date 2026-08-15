@@ -82,6 +82,11 @@ class AuthService
                 $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
             }
 
+            $certificatePath = null;
+            if ($request->hasFile('certificate')) {
+                $certificatePath = $request->file('certificate')->store('instructor-applications/certificates', 'local');
+            }
+
             \App\Models\InstructorProfile::create([
                 'user_id' => $user->id,
                 'phone' => $validated['phone'],
@@ -94,6 +99,16 @@ class AuthService
                 'cv' => $cvPath,
                 'agree_information' => true,
                 'agree_terms' => true,
+            ]);
+
+            \App\Models\InstructorApplication::create([
+                'user_id' => $user->id,
+                'expertise' => $validated['specialty'],
+                'experience' => $validated['experience'],
+                'introduction' => $validated['bio'],
+                'cv_path' => $cvPath,
+                'certificate_path' => $certificatePath,
+                'status' => 'pending',
             ]);
         }
 

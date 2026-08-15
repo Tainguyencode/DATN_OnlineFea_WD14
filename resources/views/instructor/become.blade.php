@@ -51,8 +51,8 @@
                         <input type="file" name="cv" accept=".pdf,.doc,.docx" required class="w-full text-sm text-[#6B7280]">
                     </div>
                     <div>
-                        <label class="ui-label">Bằng cấp</label>
-                        <input type="file" name="certificate" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-sm text-[#6B7280]">
+                        <label class="ui-label">Bằng cấp / Chứng chỉ *</label>
+                        <input type="file" name="certificate" accept=".pdf,.jpg,.jpeg,.png" required class="w-full text-sm text-[#6B7280]">
                     </div>
                 </div>
 

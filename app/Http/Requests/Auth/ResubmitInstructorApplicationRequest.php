@@ -25,6 +25,7 @@ class ResubmitInstructorApplicationRequest extends FormRequest
             'github_url' => ['nullable', 'url', 'max:255'],
             'website_url' => ['nullable', 'url', 'max:255'],
             'cv' => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
+            'certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'agree_information' => ['accepted'],
             'agree_terms' => ['accepted'],
         ];
@@ -45,8 +46,11 @@ class ResubmitInstructorApplicationRequest extends FormRequest
             'cv.file' => 'Tệp CV không hợp lệ.',
             'cv.mimes' => 'CV phải ở định dạng PDF.',
             'cv.max' => 'Dung lượng CV tối đa là 5MB.',
+            'certificate.file' => 'Tệp chứng chỉ không hợp lệ.',
+            'certificate.mimes' => 'Chứng chỉ chỉ chấp nhận định dạng PDF, JPG, JPEG hoặc PNG.',
+            'certificate.max' => 'Dung lượng chứng chỉ không được vượt quá 5MB.',
             'agree_information.accepted' => 'Vui lòng cam kết các thông tin là chính xác.',
-            'agree_terms.accepted' => 'Vui lòng đồng ý với Điều khoản dành cho Giảng viên.',
+            'agree_terms.accepted' => 'Bạn phải đọc và đồng ý với Điều khoản dành cho Giảng viên.',
         ];
     }
 }

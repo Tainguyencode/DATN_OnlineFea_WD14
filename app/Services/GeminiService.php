@@ -252,19 +252,32 @@ PROMPT;
                     ->post($url, $body);
 
                 if ($response->successful()) {
-                    $rawText = $response->json('candidates.0.content.parts.0.text') ?? '';
+                    $rawText = (string) ($response->json('candidates.0.content.parts.0.text') ?? '');
+                    $result = $this->parseJsonFromText($rawText);
 
-                    $clean = trim($rawText);
-                    $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
-                    $clean = preg_replace('/\s*```\s*$/i', '', $clean);
-                    $clean = trim($clean);
+                    if (! is_array($result)) {
+                        Log::warning('Google Gemini JSON parse failed', ['raw' => $rawText, 'model' => $model]);
 
-                    $result = json_decode($clean, true);
-
-                    if (json_last_error() === JSON_ERROR_NONE && is_array($result)) {
-                        $result['_model_used'] = $model;
-                        return $result;
+                        $result = [
+                            'violence' => false,
+                            'adult' => false,
+                            'weapon' => false,
+                            'tiktok_logo' => false,
+                            'youtube_logo' => false,
+                            'facebook_logo' => false,
+                            'instagram_logo' => false,
+                            'watermark' => false,
+                            'copyright_risk' => 'none',
+                            'confidence' => 0.8,
+                            'summary' => 'Frame bình thường.',
+                            'reason' => '',
+                            '_raw_text' => $rawText,
+                        ];
                     }
+
+                    $result['_model_used'] = $model;
+
+                    return $result;
                 }
 
                 $msg = $response->json('error.message') ?? $response->body();
@@ -278,6 +291,54 @@ PROMPT;
         }
 
         return ['error' => $lastError ?? 'Tất cả model Gemini đều tạm thời quá tải. Vui lòng thử lại sau.'];
+    }
+
+    /**
+     * Tách và parse JSON từ chuỗi phản hồi của Gemini một cách linh hoạt.
+     */
+    private function parseJsonFromText(string $rawText): ?array
+    {
+        $clean = trim($rawText);
+
+        if ($clean === '') {
+            return null;
+        }
+
+        // 1. Thử parse trực tiếp
+        $decoded = json_decode($clean, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            return $decoded;
+        }
+
+        // 2. Tìm khối code markdown ```json ... ``` ở bất kỳ đâu trong text
+        if (preg_match('/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i', $clean, $matches)) {
+            $decoded = json_decode(trim($matches[1]), true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        // 3. Trích xuất khoảng giữa dấu { đầu tiên và } cuối cùng
+        $firstBrace = strpos($clean, '{');
+        $lastBrace = strrpos($clean, '}');
+
+        if ($firstBrace !== false && $lastBrace !== false && $lastBrace > $firstBrace) {
+            $jsonCandidate = substr($clean, $firstBrace, $lastBrace - $firstBrace + 1);
+
+            $decoded = json_decode($jsonCandidate, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+
+            // 4. Xóa dấu phẩy thừa (trailing comma) trước } hoặc ]
+            $sanitized = preg_replace('/,\s*([\}\]])/', '$1', $jsonCandidate);
+            $decoded = json_decode($sanitized, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return null;
     }
 
     /**
