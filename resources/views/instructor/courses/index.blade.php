@@ -228,6 +228,18 @@
                                                     </button>
                                                 </form>
                                             @endif
+                                            <form method="POST" action="{{ route('instructor.courses.toggle-featured', $course) }}" class="inline-flex">
+                                                @csrf
+                                                @if ($course->is_featured)
+                                                    <button type="submit" title="Tắt khóa học nổi bật" class="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700 hover:bg-amber-100 cursor-pointer">
+                                                        ⭐ Nổi bật
+                                                    </button>
+                                                @else
+                                                    <button type="submit" title="Bật khóa học nổi bật" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-amber-600 cursor-pointer">
+                                                        ☆ Nổi bật
+                                                    </button>
+                                                @endif
+                                            </form>
                                             <form method="POST"
                                                   action="{{ route('instructor.courses.destroy', $course) }}"
                                                   onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
@@ -348,6 +360,14 @@
                                             khóa học</button>
                                     </form>
                                 @endif
+                                <form method="POST" action="{{ route('instructor.courses.toggle-featured', $course) }}">
+                                    @csrf
+                                    @if ($course->is_featured)
+                                        <button type="submit" class="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-700 hover:bg-amber-100 cursor-pointer">⭐ Đang nổi bật</button>
+                                    @else
+                                        <button type="submit" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">☆ Đưa vào nổi bật</button>
+                                    @endif
+                                </form>
                                 <form method="POST" action="{{ route('instructor.courses.destroy', $course) }}"
                                       onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
                                     @csrf
