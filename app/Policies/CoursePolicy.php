@@ -59,4 +59,13 @@ class CoursePolicy
     {
         return $user->isAdmin();
     }
+
+    public function toggleFeatured(User $user, Course $course): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        return $user->isInstructor() && $course->isOwnedBy($user);
+    }
 }

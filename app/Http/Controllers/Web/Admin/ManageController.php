@@ -576,6 +576,21 @@ class ManageController extends Controller
         return back()->with('success', "Đã khôi phục khóa học \"{$course->title}\".");
     }
 
+    public function toggleFeatured(Request $request, Course $course): RedirectResponse
+    {
+        $course->update([
+            'is_featured' => ! $course->is_featured,
+        ]);
+
+        $message = $course->is_featured
+            ? "Đã bật nổi bật khóa học \"{$course->title}\" thành công."
+            : "Đã bỏ nổi bật khóa học \"{$course->title}\" thành công.";
+
+        ActivityLogService::log(auth()->id(), 'toggle_featured_course', Course::class, $course->id, null, $request);
+
+        return back()->with('success', $message);
+    }
+
     public function revenue(Request $request): View
     {
         $query = Order::where('status', 'paid');
