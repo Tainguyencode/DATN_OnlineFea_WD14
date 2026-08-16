@@ -304,6 +304,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
             Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
             Route::post('/courses/{course}/archive', [InstructorCourseController::class, 'archive'])->name('courses.archive');
+            Route::post('/courses/{course}/toggle-featured', [InstructorCourseController::class, 'toggleFeatured'])->name('courses.toggle-featured');
             Route::post('/courses/{course}/chapters', [InstructorCourseController::class, 'addChapter'])->name('courses.chapters.store');
             Route::get('/courses/{course}/submit', [InstructorCourseController::class, 'submitPage'])->name('courses.submit.page');
             Route::post('/courses/{course}/submit', [InstructorCourseController::class, 'submit'])->name('courses.submit');
@@ -380,6 +381,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/ai-moderation/{lesson}/hls/{segment}', [AiModerationController::class, 'streamHlsSegment'])->name('ai-moderation.hls.segment');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
+    Route::post('/courses/{course}/toggle-featured', [ManageController::class, 'toggleFeatured'])->name('courses.toggle-featured');
     Route::get('/courses/{course}', [ManageController::class, 'show'])->name('courses.show');
     Route::get('/revenue', [ManageController::class, 'revenue'])->name('revenue');
     Route::get('/commissions', [CommissionController::class, 'index'])->name('commissions.index');

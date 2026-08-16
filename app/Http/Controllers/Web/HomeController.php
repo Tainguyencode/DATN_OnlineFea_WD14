@@ -23,26 +23,41 @@ class HomeController extends Controller
             'subtitle' => 'Nền tảng học trực tuyến hàng đầu Việt Nam',
         ];
 
-        $featuredIds = [];
+        $limit = 4;
 
-        $featuredCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
+        $manualCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
             ->where('is_published', true)
-            ->when(! empty($featuredIds), fn ($q) => $q->whereIn('id', $featuredIds))
-            ->when(empty($featuredIds), fn ($q) => $q->where('is_featured', true))
+            ->where('is_featured', true)
             ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
             ->withCount('lessons'))
-            ->limit(4)
+            ->orderByDesc('updated_at')
+            ->limit($limit)
             ->get();
 
-        if ($featuredCourses->isEmpty()) {
-            $featuredCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
+        $remainingSlots = $limit - $manualCourses->count();
+        $autoCourses = collect();
+
+        if ($remainingSlots > 0) {
+            $autoQuery = Course::where('status', Course::STATUS_PUBLISHED)
                 ->where('is_published', true)
+                ->where('is_featured', false)
+                ->selectRaw('courses.*, ((COALESCE(rating_avg, 0) / 5.0 * 50) + (LEAST(enrollment_count, 100) / 100.0 * 50)) as auto_score')
                 ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-                ->withCount('lessons'))
+                ->withCount('lessons');
+
+            if ($manualCourses->isNotEmpty()) {
+                $autoQuery->whereNotIn('id', $manualCourses->pluck('id'));
+            }
+
+            $autoCourses = $this->withFavoriteState($autoQuery)
+                ->orderByDesc('auto_score')
                 ->orderByDesc('rating_avg')
-                ->limit(4)
+                ->orderByDesc('enrollment_count')
+                ->limit($remainingSlots)
                 ->get();
         }
+
+        $featuredCourses = $manualCourses->concat($autoCourses);
 
         $categories = Category::query()
             ->active()

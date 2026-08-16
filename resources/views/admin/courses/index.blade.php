@@ -165,6 +165,15 @@
                                             <button type="submit" class="inline-flex h-8 items-center rounded-lg border border-emerald-100 bg-emerald-50 px-3 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 cursor-pointer">Khôi phục</button>
                                         </form>
                                     @endif
+
+                                    <form method="POST" action="{{ route('admin.courses.toggle-featured', $course) }}" class="inline-flex">
+                                        @csrf
+                                        @if($course->is_featured)
+                                            <button type="submit" title="Tắt khóa học nổi bật" class="inline-flex h-8 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 cursor-pointer">⭐ Nổi bật</button>
+                                        @else
+                                            <button type="submit" title="Bật khóa học nổi bật" class="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors duration-200 hover:bg-slate-50 hover:text-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">☆ Nổi bật</button>
+                                        @endif
+                                    </form>
                                 </div>
                             </td>
                         </tr>
