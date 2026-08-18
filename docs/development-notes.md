@@ -96,3 +96,6 @@
 ### Commit 32: feat: chuan hoa du lieu thong ke dashboard va breadcrumb dieu huong (2026-08-12 10:00:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 33: feat: nang cap giao dien quan tri kiem duyet khoa hoc (2026-08-18 14:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
