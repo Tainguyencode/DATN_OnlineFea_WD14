@@ -59,6 +59,11 @@ class Lesson extends Model
         return $this->hasMany(Discussion::class);
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(LessonComment::class);
+    }
+
     public function videoNotes(): HasMany
     {
         return $this->hasMany(VideoNote::class);
