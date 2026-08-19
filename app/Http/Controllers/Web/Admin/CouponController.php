@@ -20,6 +20,7 @@ class CouponController extends Controller
         $status = (string) $request->query('status');
 
         $coupons = Coupon::query()
+            ->with('instructor:id,name')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where('code', 'like', "%{$search}%");
             })

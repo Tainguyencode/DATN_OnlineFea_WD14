@@ -23,9 +23,6 @@ class EngagementReminderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['database.connections.mysql.database' => 'datn_onlinefea_wd14']);
-        \Illuminate\Support\Facades\DB::purge('mysql');
-        \Illuminate\Support\Facades\DB::reconnect('mysql');
     }
 
     public function test_user_learning_activity_records_timestamp_and_resets_stage(): void

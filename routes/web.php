@@ -20,6 +20,7 @@ use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\InstructorController;
 use App\Http\Controllers\Web\DiscussionController;
 use App\Http\Controllers\Web\HomeController;
+use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
@@ -270,6 +271,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
         Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->name('wallet.bank-details.update');
         Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
+        Route::resource('coupons', InstructorCouponController::class)->except(['show']);
+        Route::post('coupons/{coupon}/toggle-status', [InstructorCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
         Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
         Route::get('/submissions', [SubmissionController::class, 'index'])->name('submissions.index');
         Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');

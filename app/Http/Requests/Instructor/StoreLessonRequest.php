@@ -135,6 +135,7 @@ class StoreLessonRequest extends FormRequest
 
                 if ($type === 'video' && ! $this->hasVideoContent($lesson)) {
                     $validator->errors()->add('video_file', 'Vui lòng tải file video bài giảng lên.');
+                    $validator->errors()->add('video_url', 'Vui lòng tải file video bài giảng lên hoặc nhập Video URL.');
                 }
 
                 if ($type === 'document' && ! $this->hasDocumentContent($lesson)) {
