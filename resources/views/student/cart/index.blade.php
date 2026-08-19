@@ -63,7 +63,7 @@
             get discount() {
                 if (!this.appliedCoupon || !this.isCouponConditionMet) return 0;
                 let subtotal = this.total;
-                let isPercentage = this.appliedCoupon.type === 'percent' || this.appliedCoupon.type === 'percentage';
+                let isPercentage = this.appliedCoupon.type === 'percent';
                 if (isPercentage) {
                     return subtotal * (parseFloat(this.appliedCoupon.value) / 100);
                 } else {
@@ -227,7 +227,7 @@
                                     <div class="min-w-0 flex-1 pr-2">
                                         <div class="flex items-center gap-1.5">
                                             <span class="font-mono font-bold text-slate-900 dark:text-white px-1.5 py-0.5 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800" x-text="cp.code"></span>
-                                            <span class="text-slate-500 font-medium" x-text="cp.type === 'percent' || cp.type === 'percentage' ? 'Giảm ' + parseFloat(cp.value) + '%' : 'Giảm ' + formatMoney(cp.value)"></span>
+                                            <span class="text-slate-500 font-medium" x-text="cp.type === 'percent' ? 'Giảm ' + parseFloat(cp.value) + '%' : 'Giảm ' + formatMoney(cp.value)"></span>
                                         </div>
                                         <div class="text-[10px] text-slate-400 mt-1" x-show="parseFloat(cp.min_order_amount) > 0">
                                             Đơn tối thiểu: <span x-text="formatMoney(cp.min_order_amount)"></span>
