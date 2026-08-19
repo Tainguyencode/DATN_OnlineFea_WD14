@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sơ đồ Tên Bảng & Quan Hệ Tổng Quan - DATN_OnlineFea_WD14</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 15px;
+        }
+        h1 {
+            margin: 0;
+            color: #38bdf8;
+            font-size: 22px;
+        }
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .tab-btn {
+            background-color: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 9px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .tab-btn.active {
+            background-color: #0284c7;
+            color: white;
+            border-color: #0284c7;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            background-color: #0284c7;
+            color: white;
+            border: none;
+            padding: 9px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { background-color: #0369a1; }
+        .btn-success { background-color: #16a34a; }
+        .btn-success:hover { background-color: #15803d; }
+        .mermaid-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 25px;
+            overflow: auto;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            min-height: 450px;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .module-desc {
+            background-color: #1e293b;
+            border-left: 4px solid #38bdf8;
+            padding: 10px 14px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Sơ đồ Tên Bảng & Quan Hệ Tổng Quan - DATN_OnlineFea_WD14</h1>
+        <div class="btn-group">
+            <button class="btn btn-success" onclick="downloadPNG(4)">📷 Tải ảnh PNG HD Nét Cao</button>
+            <button class="btn" onclick="downloadSVG()">🎨 Tải Vector SVG</button>
+            <button class="btn" onclick="window.print()">🖨️ In / Xuất PDF</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('mod-overview', this)">🗺️ Sơ đồ Tên Bảng & Quan Hệ Tổng quan</button>
+        <button class="tab-btn" onclick="switchTab('mod-user', this)">👤 1. Người dùng & Phân quyền</button>
+        <button class="tab-btn" onclick="switchTab('mod-course', this)">📚 2. Khóa học & Nội dung</button>
+        <button class="tab-btn" onclick="switchTab('mod-ecom', this)">💳 3. Thương mại & Đơn hàng</button>
+        <button class="tab-btn" onclick="switchTab('mod-assess', this)">📝 4. Bài kiểm tra & Quiz</button>
+        <button class="tab-btn" onclick="switchTab('mod-social', this)">💬 5. Tương tác & Cộng đồng</button>
+        <button class="tab-btn" onclick="switchTab('compact', this)">⭐ Sơ đồ Thu gọn Cột</button>
+        <button class="tab-btn" onclick="switchTab('full', this)">📊 Chi tiết Cột Tất cả 30+ bảng</button>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="mod-overview" class="tab-content active">
+        <div class="module-desc">🗺️ <strong>Sơ đồ Tổng quan Kiến trúc CSDL</strong> — Chỉ thể hiện Tên tất cả các Bảng và Quan hệ chính giữa chúng (không liệt kê chi tiết các cột). Giúp bao quát toàn bộ 35+ bảng trong 1 góc nhìn!</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    users ||--o| instructor_profiles : "1-1 Profile"
+    users ||--o{ instructor_applications : "1-N Application"
+    users ||--o{ user_badges : "1-N Badge"
+    users ||--o{ user_points : "1-N Points"
+    users ||--o{ active_sessions : "1-N Session"
+    users ||--o{ social_accounts : "1-N Social"
+    badges ||--o{ user_badges : "1-N Badge"
+    roles }|--|{ permissions : "N-N Permission"
+    users }|--|{ roles : "N-N Role"
+
+    categories ||--o{ courses : "1-N Course"
+    users ||--o{ courses : "1-N Teaches"
+    courses ||--o{ course_sections : "1-N Section"
+    courses ||--o{ chapters : "1-N Chapter"
+    course_sections ||--o{ lessons : "1-N Lesson"
+    chapters ||--o{ lessons : "1-N Lesson"
+    lessons ||--o{ lesson_attachments : "1-N File"
+    lessons ||--o{ lesson_subtitles : "1-N Subtitle"
+    lessons ||--o{ lesson_progress : "1-N Progress"
+    lessons ||--o{ lesson_notes : "1-N Note"
+    users ||--o{ lesson_progress : "1-N Progress"
+    users ||--o{ lesson_notes : "1-N Note"
+
+    users ||--o{ carts : "1-1 Cart"
+    carts ||--o{ cart_items : "1-N Item"
+    courses ||--o{ cart_items : "1-N Item"
+    users ||--o{ orders : "1-N Order"
+    coupons ||--o{ orders : "1-N Coupon"
+    orders ||--o{ order_items : "1-N Item"
+    courses ||--o{ order_items : "1-N Item"
+    orders ||--o{ payments : "1-N Payment"
+    users ||--o{ withdrawals : "1-N Withdrawal"
+
+    lessons ||--o| quizzes : "1-1 Quiz"
+    quizzes ||--o{ quiz_questions : "1-N Question"
+    quiz_questions ||--o{ quiz_options : "1-N Option"
+    quizzes ||--o{ quiz_attempts : "1-N Attempt"
+    users ||--o{ quiz_attempts : "1-N Attempt"
+    lessons ||--o| assignments : "1-1 Assignment"
+    assignments ||--o{ submissions : "1-N Submission"
+    users ||--o{ submissions : "1-N Submission"
+
+    users ||--o{ enrollments : "1-N Enrollment"
+    courses ||--o{ enrollments : "1-N Enrollment"
+    orders ||--o{ enrollments : "1-N Enrollment"
+    users ||--o{ certificates : "1-N Certificate"
+    courses ||--o{ certificates : "1-N Certificate"
+    users ||--o{ wishlists : "1-N Wishlist"
+    courses ||--o{ wishlists : "1-N Wishlist"
+    users ||--o{ reviews : "1-N Review"
+    courses ||--o{ reviews : "1-N Review"
+    reviews ||--o{ review_replies : "1-N Reply"
+    users ||--o{ review_replies : "1-N Reply"
+    courses ||--o{ study_groups : "1-N Group"
+    users ||--o{ study_groups : "1-N Group"
+    study_groups ||--o{ study_group_members : "1-N Member"
+    users ||--o{ study_group_members : "1-N Member"
+    users ||--o{ activity_logs : "1-N Log"
+    users ||--o{ support_tickets : "1-N Ticket"
+    support_tickets ||--o{ support_ticket_messages : "1-N Message"
+            </pre>
+        </div>
+    </div>
+
+    <!-- MODULE 1 -->
+    <div id="mod-user" class="tab-content">
+        <div class="module-desc">📌 <strong>Phân hệ 1: Người dùng & Phân quyền</strong> — Quản lý tài khoản Học viên, Giảng viên, Admin, Phân quyền RBAC và Danh hiệu tích điểm.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string email UK
+        string password
+        enum role "student, instructor, admin"
+        boolean is_active
+        string avatar
+        string phone
+        timestamp created_at
+    }
+    
+    INSTRUCTOR_PROFILES {
+        bigint id PK
+        bigint user_id FK
+        string experience
+        string bio
+        string bank_name
+        string bank_account_number
+    }
+
+    INSTRUCTOR_APPLICATIONS {
+        bigint id PK
+        bigint user_id FK
+        string resume_path
+        string status "pending, approved, rejected"
+        text reject_reason
+    }
+
+    BADGES {
+        bigint id PK
+        string name
+        string slug UK
+        string icon
+        int points_required
+    }
+
+    USER_BADGES {
+        bigint id PK
+        bigint user_id FK
+        bigint badge_id FK
+        timestamp earned_at
+    }
+
+    USER_POINTS {
+        bigint id PK
+        bigint user_id FK
+        int points
+        string reason
+    }
+
+    ROLES {
+        bigint id PK
+        string name
+        string slug UK
+    }
+
+    PERMISSIONS {
+        bigint id PK
+        string name
+        string slug UK
+    }
+
+    USERS ||--o| INSTRUCTOR_PROFILES : "has profile"
+    USERS ||--o{ INSTRUCTOR_APPLICATIONS : "submits"
+    USERS ||--o{ USER_BADGES : "earns"
+    USERS ||--o{ USER_POINTS : "accumulates"
+    BADGES ||--o{ USER_BADGES : "assigned to"
+    USERS }|--|{ ROLES : "has roles"
+    ROLES }|--|{ PERMISSIONS : "has permissions"
+            </pre>
+        </div>
+    </div>
+
+    <!-- MODULE 2 -->
+    <div id="mod-course" class="tab-content">
+        <div class="module-desc">📌 <strong>Phân hệ 2: Khóa học & Nội dung giảng dạy</strong> — Quản lý Danh mục, Khóa học, Phần học (Sections), Bài học (Lessons), Tài liệu và Tiến độ học.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string role
+    }
+
+    CATEGORIES {
+        bigint id PK
+        string name
+        string slug UK
+        string icon
+    }
+
+    COURSES {
+        bigint id PK
+        bigint instructor_id FK
+        bigint category_id FK
+        string title
+        string slug UK
+        decimal price
+        decimal sale_price
+        enum level "beginner, intermediate, advanced"
+        enum status "draft, pending_review, approved, published, rejected"
+        decimal rating_avg
+        int duration_minutes
+    }
+
+    COURSE_SECTIONS {
+        bigint id PK
+        bigint course_id FK
+        string title
+        int sort_order
+    }
+
+    CHAPTERS {
+        bigint id PK
+        bigint course_id FK
+        string title
+        int sort_order
+    }
+
+    LESSONS {
+        bigint id PK
+        bigint chapter_id FK
+        bigint course_section_id FK
+        string title
+        text content
+        enum type "video, document, quiz, assignment"
+        string video_url
+        int duration_seconds
+        boolean is_preview
+    }
+
+    LESSON_ATTACHMENTS {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        string file_path
+        string file_type
+    }
+
+    LESSON_PROGRESS {
+        bigint id PK
+        bigint user_id FK
+        bigint lesson_id FK
+        int watched_seconds
+        boolean is_completed
+    }
+
+    LESSON_NOTES {
+        bigint id PK
+        bigint user_id FK
+        bigint lesson_id FK
+        int timestamp_seconds
+        text content
+    }
+
+    CATEGORIES ||--o{ COURSES : "categorizes"
+    USERS ||--o{ COURSES : "teaches (instructor)"
+    COURSES ||--o{ COURSE_SECTIONS : "has sections"
+    COURSES ||--o{ CHAPTERS : "has chapters"
+    COURSE_SECTIONS ||--o{ LESSONS : "contains"
+    CHAPTERS ||--o{ LESSONS : "contains (legacy)"
+    LESSONS ||--o{ LESSON_ATTACHMENTS : "has files"
+    LESSONS ||--o{ LESSON_PROGRESS : "tracked in"
+    LESSONS ||--o{ LESSON_NOTES : "noted in"
+    USERS ||--o{ LESSON_PROGRESS : "completes"
+    USERS ||--o{ LESSON_NOTES : "writes"
+            </pre>
+        </div>
+    </div>
+
+    <!-- MODULE 3 -->
+    <div id="mod-ecom" class="tab-content">
+        <div class="module-desc">📌 <strong>Phân hệ 3: Thương mại & Đơn hàng</strong> — Giỏ hàng, Đơn hàng, Thanh toán trực tuyến (VNPay/MoMo), Mã giảm giá và Rút tiền Giảng viên.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string email
+    }
+
+    COURSES {
+        bigint id PK
+        string title
+        decimal price
+    }
+
+    CARTS {
+        bigint id PK
+        bigint user_id FK
+    }
+
+    CART_ITEMS {
+        bigint id PK
+        bigint cart_id FK
+        bigint course_id FK
+    }
+
+    COUPONS {
+        bigint id PK
+        string code UK
+        enum type "percent, fixed"
+        decimal value
+        decimal min_order_amount
+        boolean is_active
+    }
+
+    ORDERS {
+        bigint id PK
+        bigint user_id FK
+        bigint coupon_id FK
+        string order_code UK
+        decimal subtotal
+        decimal discount_amount
+        decimal total_amount
+        enum status "pending, paid, failed, cancelled, refunded"
+        string payment_method
+    }
+
+    ORDER_ITEMS {
+        bigint id PK
+        bigint order_id FK
+        bigint course_id FK
+        decimal price
+        decimal commission_amount
+    }
+
+    PAYMENTS {
+        bigint id PK
+        bigint order_id FK
+        enum gateway "momo, vnpay, bank_transfer"
+        string transaction_id
+        decimal amount
+        enum status "pending, success, failed"
+        timestamp paid_at
+    }
+
+    WITHDRAWALS {
+        bigint id PK
+        bigint user_id FK
+        decimal amount
+        string bank_name
+        string bank_account_number
+        enum status "pending, approved, rejected"
+    }
+
+    USERS ||--o{ CARTS : "owns"
+    CARTS ||--o{ CART_ITEMS : "contains"
+    COURSES ||--o{ CART_ITEMS : "added to cart"
+    
+    USERS ||--o{ ORDERS : "places"
+    COUPONS ||--o{ ORDERS : "applied to"
+    ORDERS ||--o{ ORDER_ITEMS : "contains"
+    COURSES ||--o{ ORDER_ITEMS : "purchased"
+    ORDERS ||--o{ PAYMENTS : "paid via"
+    USERS ||--o{ WITHDRAWALS : "requests (instructor)"
+            </pre>
+        </div>
+    </div>
+
+    <!-- MODULE 4 -->
+    <div id="mod-assess" class="tab-content">
+        <div class="module-desc">📌 <strong>Phân hệ 4: Bài kiểm tra & Quiz</strong> — Quản lý Đề trắc nghiệm, Câu hỏi, Phương án, Lượt làm bài và Bài tập tự luận nộp file.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+    }
+
+    LESSONS {
+        bigint id PK
+        string title
+        enum type "video, document, quiz, assignment"
+    }
+
+    QUIZZES {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        int pass_score
+        int time_limit_minutes
+    }
+
+    QUIZ_QUESTIONS {
+        bigint id PK
+        bigint quiz_id FK
+        text question
+        enum type "single, multiple"
+        int points
+    }
+
+    QUIZ_OPTIONS {
+        bigint id PK
+        bigint quiz_question_id FK
+        text option_text
+        boolean is_correct
+    }
+
+    QUIZ_ATTEMPTS {
+        bigint id PK
+        bigint user_id FK
+        bigint quiz_id FK
+        int score
+        boolean passed
+        json answers
+        timestamp completed_at
+    }
+
+    ASSIGNMENTS {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        text description
+        int max_score
+        timestamp due_date
+    }
+
+    SUBMISSIONS {
+        bigint id PK
+        bigint assignment_id FK
+        bigint user_id FK
+        string file_path
+        text content
+        int score
+        text feedback
+        enum status "submitted, graded, returned"
+        timestamp submitted_at
+    }
+
+    LESSONS ||--o| QUIZZES : "acts as quiz"
+    QUIZZES ||--o{ QUIZ_QUESTIONS : "contains"
+    QUIZ_QUESTIONS ||--o{ QUIZ_OPTIONS : "has options"
+    QUIZZES ||--o{ QUIZ_ATTEMPTS : "attempted"
+    USERS ||--o{ QUIZ_ATTEMPTS : "takes"
+
+    LESSONS ||--o| ASSIGNMENTS : "acts as assignment"
+    ASSIGNMENTS ||--o{ SUBMISSIONS : "has submissions"
+    USERS ||--o{ SUBMISSIONS : "submits"
+            </pre>
+        </div>
+    </div>
+
+    <!-- MODULE 5 -->
+    <div id="mod-social" class="tab-content">
+        <div class="module-desc">📌 <strong>Phân hệ 5: Tương tác & Cộng đồng</strong> — Đăng ký học (Enrollment), Chứng chỉ, Khóa học yêu thích, Đánh giá (Reviews) và Nhóm học tập.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string avatar
+    }
+
+    COURSES {
+        bigint id PK
+        string title
+    }
+
+    ENROLLMENTS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        bigint order_id FK
+        decimal progress_percent
+        string status "active, completed"
+    }
+
+    CERTIFICATES {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        string certificate_code UK
+        string file_path
+        timestamp issued_at
+    }
+
+    WISHLISTS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+    }
+
+    REVIEWS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        int rating
+        text comment
+        string status "pending, approved, hidden"
+    }
+
+    REVIEW_REPLIES {
+        bigint id PK
+        bigint review_id FK
+        bigint user_id FK
+        text content
+    }
+
+    STUDY_GROUPS {
+        bigint id PK
+        bigint course_id FK
+        bigint creator_id FK
+        string name
+        int max_members
+    }
+
+    STUDY_GROUP_MEMBERS {
+        bigint id PK
+        bigint study_group_id FK
+        bigint user_id FK
+        enum role "member, moderator"
+    }
+
+    USERS ||--o{ ENROLLMENTS : "registers"
+    COURSES ||--o{ ENROLLMENTS : "enrolled by"
+    
+    USERS ||--o{ CERTIFICATES : "earns"
+    COURSES ||--o{ CERTIFICATES : "grants"
+    
+    USERS ||--o{ WISHLISTS : "saves"
+    COURSES ||--o{ WISHLISTS : "saved in"
+
+    USERS ||--o{ REVIEWS : "writes"
+    COURSES ||--o{ REVIEWS : "receives"
+    REVIEWS ||--o{ REVIEW_REPLIES : "has replies"
+    USERS ||--o{ REVIEW_REPLIES : "replies"
+
+    COURSES ||--o{ STUDY_GROUPS : "has groups"
+    USERS ||--o{ STUDY_GROUPS : "creates"
+    STUDY_GROUPS ||--o{ STUDY_GROUP_MEMBERS : "has members"
+    USERS ||--o{ STUDY_GROUP_MEMBERS : "joins"
+            </pre>
+        </div>
+    </div>
+
+    <!-- COMPACT -->
+    <div id="compact" class="tab-content">
+        <div class="module-desc">📌 <strong>Sơ đồ Thu gọn Cột</strong> — 14 bảng cốt lõi của toàn bộ hệ thống.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string email
+        string role
+    }
+    CATEGORIES {
+        bigint id PK
+        string name
+        string slug
+    }
+    COURSES {
+        bigint id PK
+        bigint instructor_id FK
+        bigint category_id FK
+        string title
+        decimal price
+        string status
+    }
+    COURSE_SECTIONS {
+        bigint id PK
+        bigint course_id FK
+        string title
+    }
+    LESSONS {
+        bigint id PK
+        bigint course_section_id FK
+        string title
+        string type
+    }
+    ENROLLMENTS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        decimal progress_percent
+    }
+    ORDERS {
+        bigint id PK
+        bigint user_id FK
+        string order_code
+        decimal total_amount
+        string status
+    }
+    ORDER_ITEMS {
+        bigint id PK
+        bigint order_id FK
+        bigint course_id FK
+        decimal price
+    }
+    PAYMENTS {
+        bigint id PK
+        bigint order_id FK
+        string gateway
+        string status
+    }
+    QUIZZES {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        int pass_score
+    }
+    QUIZ_ATTEMPTS {
+        bigint id PK
+        bigint user_id FK
+        bigint quiz_id FK
+        int score
+        boolean passed
+    }
+    ASSIGNMENTS {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+    }
+    SUBMISSIONS {
+        bigint id PK
+        bigint assignment_id FK
+        bigint user_id FK
+        int score
+        string status
+    }
+    REVIEWS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        int rating
+    }
+
+    USERS ||--o{ COURSES : "teaches"
+    USERS ||--o{ ENROLLMENTS : "registers"
+    USERS ||--o{ ORDERS : "places"
+    USERS ||--o{ REVIEWS : "writes"
+    USERS ||--o{ QUIZ_ATTEMPTS : "takes"
+    USERS ||--o{ SUBMISSIONS : "submits"
+
+    CATEGORIES ||--o{ COURSES : "categorizes"
+
+    COURSES ||--o{ COURSE_SECTIONS : "has sections"
+    COURSES ||--o{ ENROLLMENTS : "has enrollments"
+    COURSES ||--o{ REVIEWS : "receives"
+    COURSES ||--o{ ORDER_ITEMS : "purchased"
+
+    COURSE_SECTIONS ||--o{ LESSONS : "has lessons"
+
+    LESSONS ||--o| QUIZZES : "has quiz"
+    LESSONS ||--o| ASSIGNMENTS : "has assignment"
+
+    ORDERS ||--o{ ORDER_ITEMS : "contains"
+    ORDERS ||--o{ PAYMENTS : "paid by"
+    ORDERS ||--o{ ENROLLMENTS : "generates"
+
+    QUIZZES ||--o{ QUIZ_ATTEMPTS : "attempted"
+    ASSIGNMENTS ||--o{ SUBMISSIONS : "submitted"
+            </pre>
+        </div>
+    </div>
+
+    <!-- FULL -->
+    <div id="full" class="tab-content">
+        <div class="module-desc">📌 <strong>Sơ đồ Tất cả 30+ Bảng</strong> — Toàn bộ cơ sở dữ liệu chi tiết.</div>
+        <div class="mermaid-container">
+            <pre class="mermaid">
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string email UK
+        string password
+        enum role "student, instructor, admin"
+        boolean is_active
+        string avatar
+        string phone
+        timestamp created_at
+    }
+    
+    INSTRUCTOR_PROFILES {
+        bigint id PK
+        bigint user_id FK
+        string experience
+        string bio
+        string bank_name
+        string bank_account_number
+    }
+
+    INSTRUCTOR_APPLICATIONS {
+        bigint id PK
+        bigint user_id FK
+        string resume_path
+        string status "pending, approved, rejected"
+        text reject_reason
+    }
+
+    BADGES {
+        bigint id PK
+        string name
+        string slug UK
+        string icon
+        int points_required
+    }
+
+    USER_BADGES {
+        bigint id PK
+        bigint user_id FK
+        bigint badge_id FK
+        timestamp earned_at
+    }
+
+    CATEGORIES {
+        bigint id PK
+        string name
+        string slug UK
+        string icon
+    }
+
+    COURSES {
+        bigint id PK
+        bigint instructor_id FK
+        bigint category_id FK
+        string title
+        string slug UK
+        text description
+        decimal price
+        decimal sale_price
+        enum level "beginner, intermediate, advanced"
+        enum status "draft, pending_review, approved, published, rejected"
+        decimal rating_avg
+        int rating_count
+        int enrollment_count
+    }
+
+    COURSE_SECTIONS {
+        bigint id PK
+        bigint course_id FK
+        string title
+        int sort_order
+    }
+
+    CHAPTERS {
+        bigint id PK
+        bigint course_id FK
+        string title
+        int sort_order
+    }
+
+    LESSONS {
+        bigint id PK
+        bigint chapter_id FK
+        bigint course_section_id FK
+        string title
+        text content
+        enum type "video, document, quiz, assignment"
+        string video_url
+        int duration_seconds
+        boolean is_preview
+        int sort_order
+    }
+
+    LESSON_ATTACHMENTS {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        string file_path
+        string file_type
+        bigint file_size
+    }
+
+    LESSON_PROGRESS {
+        bigint id PK
+        bigint user_id FK
+        bigint lesson_id FK
+        int watched_seconds
+        boolean is_completed
+        timestamp completed_at
+    }
+
+    LESSON_NOTES {
+        bigint id PK
+        bigint user_id FK
+        bigint lesson_id FK
+        int timestamp_seconds
+        text content
+    }
+
+    ENROLLMENTS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        bigint order_id FK
+        decimal progress_percent
+        string status "active, completed, suspended"
+        timestamp completed_at
+    }
+
+    CERTIFICATES {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        string certificate_code UK
+        string file_path
+        timestamp issued_at
+    }
+
+    REVIEWS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+        int rating
+        text comment
+        string status "pending, approved, hidden"
+    }
+
+    WISHLISTS {
+        bigint id PK
+        bigint user_id FK
+        bigint course_id FK
+    }
+
+    STUDY_GROUPS {
+        bigint id PK
+        bigint course_id FK
+        bigint creator_id FK
+        string name
+        int max_members
+    }
+
+    STUDY_GROUP_MEMBERS {
+        bigint id PK
+        bigint study_group_id FK
+        bigint user_id FK
+        enum role "member, moderator"
+    }
+
+    CARTS {
+        bigint id PK
+        bigint user_id FK
+    }
+
+    CART_ITEMS {
+        bigint id PK
+        bigint cart_id FK
+        bigint course_id FK
+    }
+
+    ORDERS {
+        bigint id PK
+        bigint user_id FK
+        bigint coupon_id FK
+        string order_code UK
+        decimal subtotal
+        decimal discount_amount
+        decimal total_amount
+        enum status "pending, paid, failed, cancelled, refunded"
+        string payment_method
+    }
+
+    ORDER_ITEMS {
+        bigint id PK
+        bigint order_id FK
+        bigint course_id FK
+        decimal price
+        decimal commission_amount
+    }
+
+    PAYMENTS {
+        bigint id PK
+        bigint order_id FK
+        enum gateway "momo, vnpay, bank_transfer"
+        string transaction_id
+        decimal amount
+        enum status "pending, success, failed"
+        timestamp paid_at
+    }
+
+    COUPONS {
+        bigint id PK
+        string code UK
+        enum type "percent, fixed"
+        decimal value
+        decimal min_order_amount
+        int max_uses
+        int used_count
+        boolean is_active
+        timestamp expires_at
+    }
+
+    QUIZZES {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        int pass_score
+        int time_limit_minutes
+    }
+
+    QUIZ_QUESTIONS {
+        bigint id PK
+        bigint quiz_id FK
+        text question
+        enum type "single, multiple"
+        int points
+    }
+
+    QUIZ_OPTIONS {
+        bigint id PK
+        bigint quiz_question_id FK
+        option_text text
+        boolean is_correct
+    }
+
+    QUIZ_ATTEMPTS {
+        bigint id PK
+        bigint user_id FK
+        bigint quiz_id FK
+        int score
+        boolean passed
+        timestamp completed_at
+    }
+
+    ASSIGNMENTS {
+        bigint id PK
+        bigint lesson_id FK
+        string title
+        text description
+        int max_score
+        timestamp due_date
+    }
+
+    SUBMISSIONS {
+        bigint id PK
+        bigint assignment_id FK
+        bigint user_id FK
+        string file_path
+        text content
+        int score
+        text feedback
+        enum status "submitted, graded, returned"
+        timestamp submitted_at
+    }
+
+    USERS ||--o| INSTRUCTOR_PROFILES : "has profile"
+    USERS ||--o{ INSTRUCTOR_APPLICATIONS : "submits"
+    USERS ||--o{ USER_BADGES : "earns"
+    USERS ||--o{ ENROLLMENTS : "registers"
+    USERS ||--o{ CERTIFICATES : "receives"
+    USERS ||--o{ REVIEWS : "writes"
+    USERS ||--o{ WISHLISTS : "saves"
+    USERS ||--o{ CARTS : "has"
+    USERS ||--o{ ORDERS : "places"
+    USERS ||--o{ LESSON_PROGRESS : "tracks"
+    USERS ||--o{ LESSON_NOTES : "writes"
+    USERS ||--o{ QUIZ_ATTEMPTS : "takes"
+    USERS ||--o{ SUBMISSIONS : "submits assignment"
+    USERS ||--o{ STUDY_GROUP_MEMBERS : "joins"
+
+    BADGES ||--o{ USER_BADGES : "contains"
+
+    CATEGORIES ||--o{ COURSES : "categorizes"
+    USERS ||--o{ COURSES : "teaches (instructor)"
+    COURSES ||--o{ COURSE_SECTIONS : "has sections"
+    COURSES ||--o{ CHAPTERS : "has chapters"
+    COURSES ||--o{ ENROLLMENTS : "has enrollments"
+    COURSES ||--o{ CERTIFICATES : "grants"
+    COURSES ||--o{ REVIEWS : "receives"
+    COURSES ||--o{ WISHLISTS : "added to"
+    COURSES ||--o{ CART_ITEMS : "in carts"
+    COURSES ||--o{ ORDER_ITEMS : "purchased in"
+    COURSES ||--o{ STUDY_GROUPS : "has groups"
+
+    COURSE_SECTIONS ||--o{ LESSONS : "contains lessons"
+    CHAPTERS ||--o{ LESSONS : "contains lessons (legacy/backup)"
+    LESSONS ||--o{ LESSON_ATTACHMENTS : "has files"
+    LESSONS ||--o{ LESSON_PROGRESS : "tracked in"
+    LESSONS ||--o{ LESSON_NOTES : "noted in"
+    LESSONS ||--o| QUIZZES : "acts as quiz"
+    LESSONS ||--o| ASSIGNMENTS : "acts as assignment"
+
+    CARTS ||--o{ CART_ITEMS : "contains"
+    ORDERS ||--o{ ORDER_ITEMS : "contains"
+    ORDERS ||--o{ PAYMENTS : "paid by"
+    ORDERS ||--o{ ENROLLMENTS : "originates"
+    COUPONS ||--o{ ORDERS : "applied to"
+
+    QUIZZES ||--o{ QUIZ_QUESTIONS : "contains"
+    QUIZ_QUESTIONS ||--o{ QUIZ_OPTIONS : "has options"
+    QUIZZES ||--o{ QUIZ_ATTEMPTS : "attempted"
+    ASSIGNMENTS ||--o{ SUBMISSIONS : "has submissions"
+    
+    STUDY_GROUPS ||--o{ STUDY_GROUP_MEMBERS : "has members"
+    USERS ||--o{ STUDY_GROUPS : "creates"
+            </pre>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+
+        function downloadSVG() {
+            const activeTab = document.querySelector('.tab-content.active');
+            const svg = activeTab.querySelector('.mermaid svg');
+            if (!svg) return alert('Sơ đồ đang được tải...');
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = activeTab.id + '_ERD_Diagram.svg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function downloadPNG(scale = 3) {
+            const activeTab = document.querySelector('.tab-content.active');
+            const svg = activeTab.querySelector('.mermaid svg');
+            if (!svg) return alert('Sơ đồ đang được tải...');
+
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            
+            const img = new Image();
+            img.onload = function() {
+                const bbox = svg.getBoundingClientRect();
+                const canvas = document.createElement('canvas');
+                canvas.width = (svg.viewBox.baseVal.width || bbox.width) * scale;
+                canvas.height = (svg.viewBox.baseVal.height || bbox.height) * scale;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.scale(scale, scale);
+                ctx.drawImage(img, 0, 0);
+
+                const pngUrl = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = pngUrl;
+                link.download = activeTab.id + '_ERD_Diagram_HD.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+            img.src = url;
+        }
+    </script>
+</body>
+</html>

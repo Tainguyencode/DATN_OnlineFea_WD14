@@ -118,6 +118,7 @@ class CartController extends Controller
         $subtotal = $cart->courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
         $discount = 0;
         $coupon = null;
+        $eligibleCourses = $cart->courses;
 
         if (! empty($validated['coupon_code'])) {
             $coupon = Coupon::where('code', $validated['coupon_code'])->first();
@@ -127,16 +128,25 @@ class CartController extends Controller
             if ($coupon->isUsedByUser(auth()->id())) {
                 return back()->with('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
             }
-            if ($subtotal < $coupon->min_order_amount) {
-                return back()->with('error', 'Đơn hàng chưa đạt giá trị tối thiểu để áp dụng mã giảm giá này.');
+
+            $eligibleCourses = $cart->courses->filter(fn ($c) => $coupon->isEligibleForCourse($c));
+            if ($eligibleCourses->isEmpty()) {
+                return back()->with('error', 'Mã giảm giá này không áp dụng cho các khóa học trong giỏ hàng của bạn.');
             }
+
+            $eligibleSubtotal = $eligibleCourses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
+            if ($eligibleSubtotal < $coupon->min_order_amount) {
+                return back()->with('error', 'Giá trị các khóa học đủ điều kiện chưa đạt tối thiểu để áp dụng mã giảm giá này.');
+            }
+
             $isPercentage = $coupon->type === 'percent' || $coupon->type === 'percentage';
             $discount = $isPercentage
-                ? $subtotal * ($coupon->value / 100)
-                : min($coupon->value, $subtotal);
+                ? $eligibleSubtotal * ($coupon->value / 100)
+                : min($coupon->value, $eligibleSubtotal);
         }
 
         $total = max(0, $subtotal - $discount);
+        $eligibleSubtotal = $eligibleCourses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
 
         // Lưu thông tin dưới dạng JSON snapshot
         $itemsSnapshot = $cart->courses->map(fn ($c) => [
@@ -149,7 +159,7 @@ class CartController extends Controller
 
         // Nếu tổng tiền là 0 (Ví dụ coupon giảm 100%), thực hiện hoàn tất thanh toán ngay lập tức
         if ($total <= 0) {
-            $completed = DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds): bool {
+            $completed = DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds, $eligibleSubtotal): bool {
                 $lockedCoupon = null;
                 if ($coupon) {
                     $lockedCoupon = Coupon::query()->lockForUpdate()->find($coupon->id);
@@ -184,15 +194,29 @@ class CartController extends Controller
 
                 foreach ($cart->courses as $course) {
                     $price = $course->discount_price ?? $course->sale_price ?? $course->price;
+                    $isEligible = $coupon ? $coupon->isEligibleForCourse($course) : false;
+                    $itemDiscount = ($isEligible && $eligibleSubtotal > 0) ? ($price / $eligibleSubtotal) * $discount : 0;
+                    $itemNetPrice = max(0, $price - $itemDiscount);
+
                     $commissionRate = (float) $course->instructor->getCommissionRate();
+
+                    if ($coupon && $coupon->isInstructorCoupon()) {
+                        $baseAdminCommission = ($price * $commissionRate) / 100;
+                        $commissionAmount = min($itemNetPrice, $baseAdminCommission);
+                        $instructorEarning = max(0, $itemNetPrice - $commissionAmount);
+                    } else {
+                        $baseInstructorShare = ($price * (100 - $commissionRate)) / 100;
+                        $instructorEarning = min($itemNetPrice, $baseInstructorShare);
+                        $commissionAmount = max(0, $itemNetPrice - $instructorEarning);
+                    }
 
                     OrderItem::create([
                         'order_id' => $order->id,
                         'course_id' => $course->id,
                         'price' => $price,
                         'commission_rate' => $commissionRate,
-                        'commission_amount' => 0,
-                        'instructor_earning' => 0,
+                        'commission_amount' => $commissionAmount,
+                        'instructor_earning' => $instructorEarning,
                     ]);
 
                     $enrollment = Enrollment::firstOrCreate(
@@ -238,7 +262,7 @@ class CartController extends Controller
         }
 
         // Trường hợp đơn hàng cần thanh toán phí (total > 0), tạo đơn hàng chờ thanh toán (pending)
-        $order = DB::transaction(function () use ($cart, $subtotal, $discount, $total, $coupon, $validated, $orderCode, $itemsSnapshot) {
+        $order = DB::transaction(function () use ($cart, $subtotal, $discount, $total, $coupon, $validated, $orderCode, $itemsSnapshot, $eligibleSubtotal) {
             $order = Order::create([
                 'order_code' => $orderCode,
                 'user_id' => auth()->id(),
@@ -260,14 +284,25 @@ class CartController extends Controller
 
             foreach ($cart->courses as $course) {
                 $price = $course->discount_price ?? $course->sale_price ?? $course->price;
-                
-                // Tính toán tỷ lệ giảm giá cho item này
-                $itemDiscount = $subtotal > 0 ? ($price / $subtotal) * $discount : 0;
+                $isEligible = $coupon ? $coupon->isEligibleForCourse($course) : false;
+
+                // Tính toán tỷ lệ giảm giá cho item đủ điều kiện này
+                $itemDiscount = ($isEligible && $eligibleSubtotal > 0) ? ($price / $eligibleSubtotal) * $discount : 0;
                 $itemNetPrice = max(0, $price - $itemDiscount);
-                
+
                 $commissionRate = (float) $course->instructor->getCommissionRate();
-                $commissionAmount = ($itemNetPrice * $commissionRate) / 100;
-                $instructorEarning = $itemNetPrice - $commissionAmount;
+
+                if ($coupon && $coupon->isInstructorCoupon()) {
+                    // Mã giảm giá của Giảng viên: Trừ giá vào thu nhập giảng viên, giữ nguyên hoa hồng Admin
+                    $baseAdminCommission = ($price * $commissionRate) / 100;
+                    $commissionAmount = min($itemNetPrice, $baseAdminCommission);
+                    $instructorEarning = max(0, $itemNetPrice - $commissionAmount);
+                } else {
+                    // Mã giảm giá của Admin hoặc không có mã: Trừ giá vào hoa hồng Admin, giữ nguyên thu nhập Giảng viên
+                    $baseInstructorShare = ($price * (100 - $commissionRate)) / 100;
+                    $instructorEarning = min($itemNetPrice, $baseInstructorShare);
+                    $commissionAmount = max(0, $itemNetPrice - $instructorEarning);
+                }
 
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -333,20 +368,29 @@ class CartController extends Controller
             ]);
         }
 
-        $subtotal = $courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
-
-        if ($subtotal < $coupon->min_order_amount) {
+        $eligibleCourses = $courses->filter(fn ($c) => $coupon->isEligibleForCourse($c));
+        if ($eligibleCourses->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Đơn học chưa đạt giá trị tối thiểu '.number_format($coupon->min_order_amount, 0, ',', '.').'đ để áp dụng mã này.',
+                'message' => 'Mã giảm giá này không áp dụng cho các khóa học đã chọn.',
+            ]);
+        }
+
+        $subtotal = $courses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
+        $eligibleSubtotal = $eligibleCourses->sum(fn ($c) => $c->discount_price ?? $c->sale_price ?? $c->price);
+
+        if ($eligibleSubtotal < $coupon->min_order_amount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Các khóa học đủ điều kiện chưa đạt giá trị tối thiểu '.number_format($coupon->min_order_amount, 0, ',', '.').'đ để áp dụng mã này.',
             ]);
         }
 
         // Tính số tiền giảm giá
         $isPercentage = $coupon->type === 'percent' || $coupon->type === 'percentage';
         $discount = $isPercentage
-            ? $subtotal * ($coupon->value / 100)
-            : min($coupon->value, $subtotal);
+            ? $eligibleSubtotal * ($coupon->value / 100)
+            : min($coupon->value, $eligibleSubtotal);
 
         $total = max(0, $subtotal - $discount);
 

@@ -83,18 +83,45 @@ class VideoPlayerController extends Controller
 
         $content = Storage::disk('local')->get($m3u8Path);
 
-        // Chèn token vào các file .ts
+        // Chèn token vào các file .ts và URI key
         $lines = explode("\n", $content);
         foreach ($lines as &$line) {
             $line = trim($line);
             if ($line && !str_starts_with($line, '#')) {
                 $line .= '?token=' . urlencode($token);
+            } elseif (str_contains($line, 'URI=')) {
+                $line = preg_replace('/URI="([^"]+)"/', 'URI="$1?token=' . urlencode($token) . '"', $line);
             }
         }
         $modifiedContent = implode("\n", $lines);
 
         return response($modifiedContent, 200, [
             'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+
+    /**
+     * Trả về file enc.key cho HLS AES-128
+     */
+    public function key(Request $request, Lesson $lesson)
+    {
+        $token = $request->query('token');
+
+        if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
+            return response('Not found', 404);
+        }
+
+        $keyPath = 'lesson-hls/' . $lesson->id . '/enc.key';
+
+        if (!Storage::disk('local')->exists($keyPath)) {
+            return response('Not found', 404);
+        }
+
+        $content = Storage::disk('local')->get($keyPath);
+
+        return response($content, 200, [
+            'Content-Type' => 'application/octet-stream',
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
         ]);
     }
