@@ -85,14 +85,14 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 align-middle text-slate-600">
-                                @if($coupon->type === 'percent' || $coupon->type === 'percentage')
+                                @if($coupon->type === 'percent')
                                     Giảm theo %
                                 @else
                                     Số tiền cố định
                                 @endif
                             </td>
                             <td class="px-4 py-3 align-middle text-right font-bold text-slate-950">
-                                @if($coupon->type === 'percent' || $coupon->type === 'percentage')
+                                @if($coupon->type === 'percent')
                                     {{ number_format($coupon->value, 0) }}%
                                 @else
                                     {{ number_format($coupon->value, 0, ',', '.') }}đ

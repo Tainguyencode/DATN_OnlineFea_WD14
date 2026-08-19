@@ -23,10 +23,15 @@ class CouponController extends Controller
             ->latest()
             ->paginate(10);
 
+        $stats = Coupon::where('creator_type', 'instructor')
+            ->where('instructor_id', $instructor->id)
+            ->selectRaw('COUNT(*) as total, SUM(is_active = 1) as active, SUM(is_active = 0) as inactive')
+            ->first();
+
         $stats = [
-            'total' => Coupon::where('creator_type', 'instructor')->where('instructor_id', $instructor->id)->count(),
-            'active' => Coupon::where('creator_type', 'instructor')->where('instructor_id', $instructor->id)->where('is_active', true)->count(),
-            'inactive' => Coupon::where('creator_type', 'instructor')->where('instructor_id', $instructor->id)->where('is_active', false)->count(),
+            'total' => (int) $stats->total,
+            'active' => (int) $stats->active,
+            'inactive' => (int) $stats->inactive,
         ];
 
         return view('instructor.coupons.index', compact('coupons', 'stats'));
