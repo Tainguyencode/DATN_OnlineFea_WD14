@@ -315,6 +315,28 @@ class CourseController extends Controller
             }
         }
 
+        $isOwnerInstructor = $user && $user->isInstructor() && (int) $course->instructor_id === (int) $user->id;
+        $isAdmin = $user && $user->isAdmin();
+
+        if ($isOwnerInstructor || $isAdmin) {
+            $lessonComments = \App\Models\LessonComment::where('lesson_id', $lesson->id)
+                ->whereNull('parent_id')
+                ->with(['user', 'replies' => function ($q) {
+                    $q->with('user')->oldest();
+                }])
+                ->latest()
+                ->get();
+        } else {
+            $lessonComments = \App\Models\LessonComment::where('lesson_id', $lesson->id)
+                ->whereNull('parent_id')
+                ->where('is_hidden', false)
+                ->with(['user', 'replies' => function ($q) {
+                    $q->where('is_hidden', false)->with('user')->oldest();
+                }])
+                ->latest()
+                ->get();
+        }
+
         return view('courses.lesson', [
             'course' => $course,
             'lesson' => $lesson,
@@ -344,6 +366,7 @@ class CourseController extends Controller
             'completedLessons' => $player['completedLessons'],
             'discussions' => $discussions,
             'activeDiscussion' => $activeDiscussion,
+            'lessonComments' => $lessonComments,
         ]);
     }
 

@@ -11,6 +11,7 @@
     'aiExplainUrl' => null,
     'discussions' => collect(),
     'activeDiscussion' => null,
+    'lessonComments' => collect(),
     'canUseLessonNotes' => false,
     'lessonNotes' => collect(),
     'lessonNotesIndexUrl' => null,
@@ -22,11 +23,23 @@
 @php
     $videoDurationSeconds = $videoDurationSeconds ?: (isset($lesson) ? ((int) ($lesson->duration_seconds ?: $lesson->duration ?: 0)) : 0);
     $notesPayload = $notesPayload ?? $lessonNotes;
+
+    $tabsList = [
+        'overview' => 'Nội dung',
+        'notes' => 'Ghi chú',
+        'qa' => 'Trao đổi với giảng viên',
+        'ai' => 'AI hỗ trợ',
+        'resources' => 'Tài liệu',
+    ];
+
+    if (!in_array($lesson->type, ['quiz', 'assignment'], true)) {
+        $tabsList['comments'] = 'Bình luận' . (isset($lessonComments) && $lessonComments->isNotEmpty() ? ' (' . $lessonComments->count() . ')' : '');
+    }
 @endphp
 
 <div class="learning-tabs border-t border-[#d1d7dc] bg-white" id="learning-tabs">
     <div class="border-b border-[#d1d7dc] px-4 sm:px-6" 
-         x-data="{ tab: '{{ ($errors->any() || old('title') !== null || request()->has('discussion_id') || request()->query('tab') === 'qa') ? 'qa' : 'overview' }}' }"
+         x-data="{ tab: '{{ ($errors->any() || old('title') !== null || request()->has('discussion_id') || request()->query('tab') === 'qa') ? 'qa' : (request()->query('tab') === 'comments' ? 'comments' : 'overview') }}' }"
          x-init="
             $watch('tab', value => {
                 if (value === 'qa') {
@@ -65,7 +78,7 @@
          "
     >
         <div class="flex gap-1 overflow-x-auto" role="tablist">
-            @foreach(['overview' => 'Nội dung', 'notes' => 'Ghi chú', 'qa' => 'Trao đổi với giảng viên', 'ai' => 'AI hỗ trợ', 'resources' => 'Tài liệu'] as $key => $label)
+            @foreach($tabsList as $key => $label)
                 <button
                     type="button"
                     role="tab"
@@ -579,6 +592,17 @@
                     <p class="text-sm text-[#6a6f73]">Không có tài liệu đính kèm.</p>
                 @endif
             </div>
+
+            @if(!in_array($lesson->type, ['quiz', 'assignment'], true))
+                <div x-show="tab === 'comments'" x-cloak>
+                    <x-learning.lesson-comments
+                        :lesson="$lesson"
+                        :course="$course"
+                        :comments="$lessonComments"
+                        :is-enrolled="$isEnrolled"
+                    />
+                </div>
+            @endif
         </div>
     </div>
 
