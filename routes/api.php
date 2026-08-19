@@ -126,6 +126,9 @@ Route::middleware(['web'])->get('/session/check', function (Illuminate\Http\Requ
 Route::middleware('throttle:300,1')->group(function () {
     Route::get('/video/hls/{lesson}/playlist.m3u8', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'playlist'])
         ->name('video.hls.playlist');
+
+    Route::get('/video/hls/{lesson}/enc.key', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'key'])
+        ->name('video.hls.key');
         
     Route::get('/video/hls/{lesson}/{segment}', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'segment'])
         ->where('segment', '.*\.ts$')

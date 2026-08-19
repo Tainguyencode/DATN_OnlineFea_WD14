@@ -55,6 +55,7 @@
                 <thead class="bg-slate-50">
                     <tr>
                         <th class="rounded-l-lg px-4 py-3 text-left font-semibold text-slate-600">Mã</th>
+                        <th class="px-4 py-3 text-left font-semibold text-slate-600">Người tạo</th>
                         <th class="px-4 py-3 text-left font-semibold text-slate-600">Loại giảm</th>
                         <th class="px-4 py-3 text-right font-semibold text-slate-600">Giá trị giảm</th>
                         <th class="px-4 py-3 text-right font-semibold text-slate-600">Đơn tối thiểu</th>
@@ -71,6 +72,17 @@
                                 <span class="bg-slate-100 border border-slate-200 text-slate-800 px-2 py-1 rounded text-xs">
                                     {{ $coupon->code }}
                                 </span>
+                            </td>
+                            <td class="px-4 py-3 align-middle text-xs font-semibold">
+                                @if($coupon->isInstructorCoupon())
+                                    <span class="inline-flex items-center rounded-lg bg-emerald-50 px-2 py-1 font-bold text-emerald-700">
+                                        Giảng viên: {{ $coupon->instructor?->name ?? 'GV #'.$coupon->instructor_id }}
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center rounded-lg bg-indigo-50 px-2 py-1 font-bold text-indigo-700">
+                                        Sàn (Admin)
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 align-middle text-slate-600">
                                 @if($coupon->type === 'percent' || $coupon->type === 'percentage')
@@ -135,7 +147,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-14 text-center">
+                            <td colspan="9" class="px-4 py-14 text-center">
                                 <h3 class="text-base font-bold text-slate-950">Chưa có mã giảm giá nào</h3>
                                 <p class="mt-1 text-sm text-slate-500">Tạo mã giảm giá để thu hút học viên mua khóa học.</p>
                             </td>

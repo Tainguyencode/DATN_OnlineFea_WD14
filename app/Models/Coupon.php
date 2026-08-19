@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Coupon extends Model
 {
     protected $fillable = [
-        'code', 'type', 'value', 'min_order_amount', 'max_uses',
+        'code', 'creator_type', 'instructor_id', 'course_id', 'type', 'value', 'min_order_amount', 'max_uses',
         'used_count', 'starts_at', 'expires_at', 'is_active',
     ];
 
@@ -20,6 +20,48 @@ class Coupon extends Model
             'expires_at' => 'datetime',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function instructor()
+    {
+        return $this->belongsTo(User::class, 'instructor_id');
+    }
+
+    public function course()
+    {
+        return $this->belongsTo(Course::class, 'course_id');
+    }
+
+    public function isInstructorCoupon(): bool
+    {
+        return $this->creator_type === 'instructor';
+    }
+
+    public function isAdminCoupon(): bool
+    {
+        return $this->creator_type === 'admin' || empty($this->creator_type);
+    }
+
+    public function isEligibleForCourse(Course $course): bool
+    {
+        if ($this->isAdminCoupon()) {
+            if ($this->course_id && (int) $this->course_id !== (int) $course->id) {
+                return false;
+            }
+            return true;
+        }
+
+        if ($this->isInstructorCoupon()) {
+            if ((int) $this->instructor_id !== (int) $course->instructor_id) {
+                return false;
+            }
+            if ($this->course_id && (int) $this->course_id !== (int) $course->id) {
+                return false;
+            }
+            return true;
+        }
+
+        return false;
     }
 
     public function isValid(): bool
