@@ -115,6 +115,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
     Route::post('/discussions/{discussion}/replies', [DiscussionController::class, 'storeReply'])->name('discussions.replies.store');
     Route::post('/discussion-replies/{reply}/toggle-helpful', [DiscussionController::class, 'toggleHelpful'])->name('discussions.replies.toggle-helpful');
+    Route::post('/lessons/{lesson}/comments', [\App\Http\Controllers\Web\LessonCommentController::class, 'store'])->name('lessons.comments.store');
+    Route::put('/comments/{comment}', [\App\Http\Controllers\Web\LessonCommentController::class, 'update'])->name('comments.update');
+    Route::delete('/comments/{comment}', [\App\Http\Controllers\Web\LessonCommentController::class, 'destroy'])->name('comments.destroy');
+    Route::post('/comments/{comment}/toggle-hide', [\App\Http\Controllers\Web\LessonCommentController::class, 'toggleHide'])->name('comments.toggle-hide');
 });
 
 Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:30,1'])->group(function () {
@@ -279,6 +283,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::post('/submissions/{submission}/grade', [SubmissionController::class, 'grade'])->name('submissions.grade');
         Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
         Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
+        Route::get('/comments', [\App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'index'])->name('comments.index');
+        Route::get('/comments/{comment}', [\App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'show'])->name('comments.show');
         Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
         Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
