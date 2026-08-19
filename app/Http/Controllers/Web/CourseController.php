@@ -363,7 +363,7 @@ class CourseController extends Controller
             ->withLearningAccess()
             ->first();
 
-        if (!$enrollment && ($canBypass || $user->isStudent())) {
+        if (!$enrollment && $canBypass) {
             $enrollment = Enrollment::firstOrCreate([
                 'user_id' => $user->id,
                 'course_id' => $course->id,
