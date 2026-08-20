@@ -260,6 +260,10 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
 // ─── GIẢNG VIÊN ───
 Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
     Route::get('/pending', [InstructorPendingController::class, 'show'])->name('pending');
+    Route::post('/certificates/upload', [InstructorPendingController::class, 'uploadCertificate'])->name('certificates.upload');
+    Route::delete('/certificates/{certificate}', [InstructorPendingController::class, 'deleteCertificate'])->name('certificates.delete');
+    Route::get('/certificates/{certificate}/view', [InstructorPendingController::class, 'viewCertificate'])->name('certificates.view');
+    Route::post('/submit-review', [InstructorPendingController::class, 'submitForReview'])->middleware('throttle:5,1')->name('submit-review');
     Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware('throttle:5,1')->name('resubmit');
 
     Route::middleware('approved.instructor')->group(function () {
@@ -354,6 +358,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::get('/', [InstructorApplicationController::class, 'index'])->name('index');
         Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');
         Route::get('/{user}/certificate', [InstructorApplicationController::class, 'viewCertificate'])->name('certificate');
+        Route::get('/certificates/{certificate}/view', [InstructorApplicationController::class, 'viewCertificateItem'])->name('certificates.view');
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
     });

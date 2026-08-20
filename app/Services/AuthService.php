@@ -84,7 +84,25 @@ class AuthService
 
             $certificatePath = null;
             if ($request->hasFile('certificate')) {
-                $certificatePath = $request->file('certificate')->store('instructor-applications/certificates', 'local');
+                $file = $request->file('certificate');
+                $extension = $file->getClientOriginalExtension() ?: 'pdf';
+                $storedPath = $file->storeAs(
+                    "instructor-certificates/{$user->id}",
+                    \Illuminate\Support\Str::uuid() . '.' . $extension,
+                    'local'
+                );
+                $certificatePath = $storedPath;
+
+                \App\Models\InstructorCertificate::create([
+                    'user_id' => $user->id,
+                    'file_path' => $storedPath,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                    'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
+                    'status' => 'pending',
+                    'uploaded_at' => now(),
+                ]);
             }
 
             \App\Models\InstructorProfile::create([

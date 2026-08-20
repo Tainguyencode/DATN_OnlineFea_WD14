@@ -25,6 +25,13 @@ class EnsureApprovedInstructor
             return redirect()->route('verification.notice');
         }
 
+        if ($user->isInstructorDeadlineExpired()) {
+            $user->demoteToStudentDueToExpiry();
+
+            return redirect()->route('student.dashboard')
+                ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ kể từ khi xác thực email. Tài khoản của bạn đã được chuyển về Học viên.');
+        }
+
         if ($user->instructor_status !== 'approved') {
             return redirect()->route('instructor.pending');
         }

@@ -26,6 +26,8 @@ class ResubmitInstructorApplicationRequest extends FormRequest
             'website_url' => ['nullable', 'url', 'max:255'],
             'cv' => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
             'certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'certificates' => ['nullable', 'array', 'max:10'],
+            'certificates.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'agree_information' => ['accepted'],
             'agree_terms' => ['accepted'],
         ];
@@ -49,6 +51,11 @@ class ResubmitInstructorApplicationRequest extends FormRequest
             'certificate.file' => 'Tệp chứng chỉ không hợp lệ.',
             'certificate.mimes' => 'Chứng chỉ chỉ chấp nhận định dạng PDF, JPG, JPEG hoặc PNG.',
             'certificate.max' => 'Dung lượng chứng chỉ không được vượt quá 5MB.',
+            'certificates.array' => 'Danh sách tệp không hợp lệ.',
+            'certificates.max' => 'Bạn chỉ có thể tải lên tối đa 10 tệp cùng một lúc.',
+            'certificates.*.file' => 'Tệp chứng chỉ không hợp lệ.',
+            'certificates.*.mimes' => 'Mỗi chứng chỉ chỉ chấp nhận định dạng PDF, JPG, JPEG hoặc PNG.',
+            'certificates.*.max' => 'Dung lượng mỗi chứng chỉ không được vượt quá 5MB.',
             'agree_information.accepted' => 'Vui lòng cam kết các thông tin là chính xác.',
             'agree_terms.accepted' => 'Bạn phải đọc và đồng ý với Điều khoản dành cho Giảng viên.',
         ];

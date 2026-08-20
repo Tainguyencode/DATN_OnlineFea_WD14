@@ -31,7 +31,7 @@ class RegisterInstructorRequest extends FormRequest
             'github_url' => ['nullable', 'url', 'max:255'],
             'website_url' => ['nullable', 'url', 'max:255'],
             'cv' => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
-            'certificate' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'agree_information' => ['accepted'],
             'agree_terms' => ['accepted'],
             'role' => ['prohibited'],

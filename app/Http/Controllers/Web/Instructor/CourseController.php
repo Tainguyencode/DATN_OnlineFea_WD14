@@ -531,17 +531,7 @@ class CourseController extends Controller
 
     public function toggleFeatured(Course $course): RedirectResponse
     {
-        $this->ensureOwned($course);
-
-        $course->update([
-            'is_featured' => ! $course->is_featured,
-        ]);
-
-        $message = $course->is_featured
-            ? 'Đã bật nổi bật khóa học thành công.'
-            : 'Đã bỏ nổi bật khóa học thành công.';
-
-        return back()->with('success', $message);
+        abort(403, 'Chỉ Quản trị viên (Admin) mới có quyền thiết lập khóa học nổi bật.');
     }
 
     private function uniqueSlug(string $title): string

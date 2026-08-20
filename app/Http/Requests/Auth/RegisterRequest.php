@@ -51,7 +51,7 @@ class RegisterRequest extends FormRequest
             'password.mixed' => 'Mật khẩu phải có cả chữ hoa và chữ thường.',
             'password.numbers' => 'Mật khẩu phải chứa ít nhất một chữ số.',
             'password.symbols' => 'Mật khẩu phải chứa ít nhất một ký tự đặc biệt.',
-            'terms.accepted' => 'Vui lòng đồng ý với điều khoản sử dụng để tiếp tục.',
+            'terms.accepted' => 'Bạn phải đọc và đồng ý với Điều khoản dành cho Học viên để tạo tài khoản.',
             'role.prohibited' => 'Không thể chỉ định vai trò khi đăng ký.',
             'captcha_token.required' => 'Phiên xác nhận đã hết hạn, vui lòng tải lại trang.',
             'captcha_answer.required' => 'Vui lòng nhập kết quả phép tính xác nhận.',
@@ -67,7 +67,7 @@ class RegisterRequest extends FormRequest
             'email' => 'email',
             'phone' => 'số điện thoại',
             'password' => 'mật khẩu',
-            'terms' => 'điều khoản sử dụng',
+            'terms' => 'điều khoản dành cho học viên',
             'captcha_answer' => 'mã xác nhận',
         ];
     }
