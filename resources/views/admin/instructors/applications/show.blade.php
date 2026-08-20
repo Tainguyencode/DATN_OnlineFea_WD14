@@ -76,6 +76,15 @@
                             </div>
                         </div>
 
+                        @if($application->submitted_for_review_at)
+                            <div>
+                                <span class="text-xs font-semibold text-slate-400 uppercase">Ngày gửi xét duyệt</span>
+                                <div class="font-medium text-slate-800 dark:text-slate-200">
+                                    {{ $application->submitted_for_review_at->format('d/m/Y H:i:s') }}
+                                </div>
+                            </div>
+                        @endif
+
                         @if($application->approved_at)
                             <div>
                                 <span class="text-xs font-semibold text-slate-400 uppercase">Người duyệt / Ngày duyệt</span>
@@ -185,27 +194,74 @@
                         @endif
                     </div>
 
-                    {{-- Certificate File --}}
+                    {{-- Certificate Files List --}}
                     <div>
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Tài liệu Chứng chỉ</h4>
-                        @php
-                            $certPath = $application->instructorApplication->certificate_path ?? null;
-                        @endphp
-                        @if($certPath)
-                            <div class="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
-                                <div class="flex items-center gap-3">
-                                    <svg class="h-8 w-8 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
-                                    <div>
-                                        <h5 class="font-bold text-slate-900 dark:text-white">Certificate_Instructor_{{ $application->username }}</h5>
-                                        <p class="text-xs text-slate-500">Tài liệu bằng cấp / chứng chỉ</p>
+                        <div class="mb-3 flex items-center justify-between">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                Danh sách Chứng chỉ / Bằng cấp ({{ $certificates->count() }})
+                            </h4>
+                        </div>
+
+                        @if($certificates->isNotEmpty())
+                            <div class="space-y-3">
+                                @foreach($certificates as $cert)
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4 dark:border-violet-900/30 dark:bg-violet-950/20">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $cert->isPdf() ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600' }} dark:bg-slate-800">
+                                                @if($cert->isPdf())
+                                                    <span class="text-xs font-black">PDF</span>
+                                                @else
+                                                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                                @endif
+                                            </div>
+                                            <div>
+                                                <h5 class="text-sm font-bold text-slate-900 dark:text-white">{{ $cert->title ?? $cert->original_name }}</h5>
+                                                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                                    <span>{{ $cert->original_name }}</span>
+                                                    <span>•</span>
+                                                    <span>{{ $cert->formattedFileSize() }}</span>
+                                                    <span>•</span>
+                                                    <span>Tải lên: {{ $cert->uploaded_at->format('d/m/Y H:i') }}</span>
+                                                    <span>•</span>
+                                                    @if($cert->status === 'approved')
+                                                        <span class="font-bold text-emerald-600">✔ Đã duyệt</span>
+                                                    @elseif($cert->status === 'rejected')
+                                                        <span class="font-bold text-rose-600">✖ Bị từ chối</span>
+                                                    @else
+                                                        <span class="font-bold text-amber-600">⏳ Chờ duyệt</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2 self-end sm:self-center">
+                                            <a href="{{ route('admin.instructors.applications.certificates.view', $cert) }}" target="_blank" class="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                                <span>Xem / Tải về</span>
+                                            </a>
+                                        </div>
                                     </div>
-                                </div>
-                                <a href="{{ route('admin.instructors.applications.certificate', $application) }}" target="_blank" class="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-700">
-                                    Xem chứng chỉ
-                                </a>
+                                @endforeach
                             </div>
                         @else
-                            <p class="text-sm text-slate-500 italic">Ứng viên không tải lên chứng chỉ.</p>
+                            @php
+                                $certPath = $application->instructorApplication->certificate_path ?? null;
+                            @endphp
+                            @if($certPath)
+                                <div class="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                                    <div class="flex items-center gap-3">
+                                        <svg class="h-8 w-8 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+                                        <div>
+                                            <h5 class="font-bold text-slate-900 dark:text-white">Certificate_Instructor_{{ $application->username }}</h5>
+                                            <p class="text-xs text-slate-500">Tài liệu bằng cấp / chứng chỉ</p>
+                                        </div>
+                                    </div>
+                                    <a href="{{ route('admin.instructors.applications.certificate', $application) }}" target="_blank" class="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-700">
+                                        Xem chứng chỉ
+                                    </a>
+                                </div>
+                            @else
+                                <p class="text-sm text-slate-500 italic">Ứng viên chưa tải lên chứng chỉ.</p>
+                            @endif
                         @endif
                     </div>
                 </div>

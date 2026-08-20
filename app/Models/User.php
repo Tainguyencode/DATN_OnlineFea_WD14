@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Storage;
     'last_login_at', 'last_login_ip', 'password_changed_at',
     'last_learning_at', 'engagement_email_stage', 'last_engagement_sent_at',
     'commission_rate', 'bank_code', 'bank_name', 'bank_account_number', 'bank_account_name',
-    'instructor_status', 'approved_at', 'approved_by', 'rejected_reason',
+    'instructor_status', 'submitted_for_review_at', 'approved_at', 'approved_by', 'rejected_reason',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -211,6 +211,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(LessonComment::class);
     }
 
+    public function instructorCertificates(): HasMany
+    {
+        return $this->hasMany(InstructorCertificate::class)->orderByDesc('uploaded_at');
+    }
+
     public function instructorProfile(): HasOne
     {
         return $this->hasOne(InstructorProfile::class);
@@ -230,6 +235,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'submitted_for_review_at' => 'datetime',
             'approved_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_enabled' => 'boolean',
@@ -241,6 +247,54 @@ class User extends Authenticatable implements MustVerifyEmail
             'password_changed_at' => 'datetime',
             'commission_rate' => 'decimal:2',
         ];
+    }
+
+    public function getInstructorDeadlineAtAttribute(): ?\Carbon\Carbon
+    {
+        if (! $this->email_verified_at) {
+            return null;
+        }
+
+        return $this->email_verified_at->copy()->addDays(7);
+    }
+
+    public function getInstructorDeadlineDaysRemainingAttribute(): int
+    {
+        $deadline = $this->instructor_deadline_at;
+        if (! $deadline) {
+            return 7;
+        }
+
+        if (now()->greaterThanOrEqualTo($deadline)) {
+            return 0;
+        }
+
+        return (int) ceil(now()->floatDiffInDays($deadline, false));
+    }
+
+    public function isInstructorDeadlineExpired(): bool
+    {
+        if ($this->role !== 'instructor' || $this->instructor_status === 'approved') {
+            return false;
+        }
+
+        if (! $this->email_verified_at) {
+            return false;
+        }
+
+        // If not submitted yet, and deadline is past
+        return $this->submitted_for_review_at === null && $this->email_verified_at->copy()->addDays(7)->isPast();
+    }
+
+    public function demoteToStudentDueToExpiry(): void
+    {
+        $this->update([
+            'role' => 'student',
+            'instructor_status' => 'expired',
+            'rejected_reason' => 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ kể từ khi xác thực email mà chưa gửi hồ sơ xét duyệt.',
+        ]);
+
+        $this->syncPrimaryRole('student');
     }
 
     public function isAdmin(): bool
@@ -274,6 +328,12 @@ class User extends Authenticatable implements MustVerifyEmail
     public function dashboardUrl(): string
     {
         if ($this->role === 'instructor') {
+            if ($this->isInstructorDeadlineExpired()) {
+                $this->demoteToStudentDueToExpiry();
+
+                return route('student.dashboard');
+            }
+
             if ($this->instructor_status !== 'approved') {
                 return route('instructor.pending');
             }
