@@ -84,6 +84,10 @@ class StoreLessonRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($lessonTypes)],
+            's3_key' => ['nullable', 'string', 'max:500', 'prohibited_unless:type,video'],
+            'video_original_name' => ['nullable', 'string', 'max:255'],
+            'video_mime' => ['nullable', 'string', 'max:100'],
+            'video_size' => ['nullable', 'integer', 'min:0'],
             'video_file' => ['nullable', 'file', 'mimes:mp4,m4v,mov,avi,webm,mkv', 'max:204800', 'prohibited_unless:type,video'],
             'video_url' => ['nullable', 'string', 'max:2048', 'prohibited_unless:type,video'],
             'content' => ['nullable', 'string', 'prohibited_if:type,quiz'],
@@ -134,6 +138,7 @@ class StoreLessonRequest extends FormRequest
                 $type = $this->input('type');
 
                 if ($type === 'video' && ! $this->hasVideoContent($lesson)) {
+                    $validator->errors()->add('video_url', 'Vui lòng tải file video bài giảng lên.');
                     $validator->errors()->add('video_file', 'Vui lòng tải file video bài giảng lên.');
                 }
 
@@ -234,9 +239,10 @@ class StoreLessonRequest extends FormRequest
 
     private function hasVideoContent(?Lesson $lesson): bool
     {
-        return $this->filled('video_url')
+        return $this->filled('s3_key')
+            || $this->filled('video_url')
             || $this->hasFile('video_file')
-            || ($lesson && ($lesson->video_url || $lesson->video_path));
+            || ($lesson && ($lesson->video_url || $lesson->video_path || $lesson->original_video_key || $lesson->hls_manifest_key));
     }
 
     private function hasDocumentContent(?Lesson $lesson): bool

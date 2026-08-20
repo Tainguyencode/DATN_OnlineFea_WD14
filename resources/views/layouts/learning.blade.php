@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/learning-player.js'])
 </head>
 <body class="learning-player-body min-h-screen bg-white font-sans text-[#1c1d1f] antialiased">

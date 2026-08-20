@@ -17,6 +17,8 @@ class AiModerationController extends Controller
      */
     private function resolveLessonAndVideoPath(string|int $lessonId): array
     {
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+
         if (str_starts_with((string)$lessonId, 'update_les_')) {
             $updateId = str_replace('update_les_', '', $lessonId);
             $update = \App\Models\ContentUpdate::find($updateId);
@@ -26,9 +28,11 @@ class AiModerationController extends Controller
                     'title' => $payload['title'] ?? 'Bài học nháp',
                     'type' => $payload['type'] ?? 'video',
                     'video_path' => $payload['video_path'] ?? null,
+                    'original_video_key' => $payload['original_video_key'] ?? null,
+                    'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
                 ]);
                 $draftLesson->id = $lessonId;
-                return [$draftLesson, $payload['video_path'] ?? null];
+                return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
             }
         }
 
@@ -41,11 +45,14 @@ class AiModerationController extends Controller
                 ->latest()
                 ->first();
 
-            if ($pendingUpdate && !empty($pendingUpdate->payload['video_path'])) {
-                return [$lesson, $pendingUpdate->payload['video_path']];
+            if ($pendingUpdate) {
+                $p = $pendingUpdate->payload ?? [];
+                if (!empty($p['original_video_key']) || !empty($p['hls_manifest_key']) || !empty($p['video_path'])) {
+                    return [$lesson, $p['video_path'] ?? $p['hls_manifest_key'] ?? $p['original_video_key']];
+                }
             }
 
-            return [$lesson, $lesson->video_path];
+            return [$lesson, $lesson->video_path ?: ($lesson->hls_manifest_key ?: $lesson->original_video_key)];
         }
 
         // Fallback check if $lessonId is a numeric ContentUpdate ID
@@ -56,17 +63,18 @@ class AiModerationController extends Controller
                 'title' => $payload['title'] ?? 'Bài học nháp',
                 'type' => $payload['type'] ?? 'video',
                 'video_path' => $payload['video_path'] ?? null,
+                'original_video_key' => $payload['original_video_key'] ?? null,
+                'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
             ]);
             $draftLesson->id = 'update_les_' . $update->id;
-            return [$draftLesson, $payload['video_path'] ?? null];
+            return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
         }
 
         return [null, null];
     }
 
     /**
-     * Stream video bài học với hỗ trợ HTTP Range requests (cho phép seek).
-     * Chỉ dùng cho trang Admin Review – giúp admin nhảy đến đoạn AI phát hiện.
+     * Stream video bài học với hỗ trợ HTTP Range requests hoặc S3 stream.
      */
     public function streamVideo(Request $request, string|int $lessonId)
     {
@@ -79,6 +87,27 @@ class AiModerationController extends Controller
             abort(404, 'Bài học này không có video.');
         }
 
+        // 1. Kiểm tra S3
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        if ($useS3) {
+            $s3Key = $lesson?->original_video_key ?: $videoPath;
+            if (\Illuminate\Support\Facades\Storage::disk('s3')->exists($s3Key)) {
+                $stream = \Illuminate\Support\Facades\Storage::disk('s3')->readStream($s3Key);
+                if ($stream) {
+                    return response()->stream(function () use ($stream) {
+                        fpassthru($stream);
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
+                    }, 200, [
+                        'Content-Type' => 'video/mp4',
+                        'Cache-Control' => 'no-store',
+                    ]);
+                }
+            }
+        }
+
+        // 2. Local Disk
         $path = null;
         if (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPath)) {
             $path = \Illuminate\Support\Facades\Storage::disk('local')->path($videoPath);
@@ -100,60 +129,150 @@ class AiModerationController extends Controller
     }
 
     /**
-     * Stream HLS Playlist for Admin Review
+     * Stream HLS Playlist for Admin & Instructor Review.
+     * Tự động sinh Signed URL trực tiếp từ S3 cho từng segment .ts,
+     * loại bỏ hoàn toàn việc proxy dữ liệu video qua PHP giúp phát ngay tức thì (< 1-3 giây).
      */
     public function streamHlsPlaylist(string|int $lessonId)
     {
         [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
 
-        if (!$videoPath) {
-            $videoPath = str_starts_with((string)$lessonId, 'update_les_')
-                ? 'lesson-hls/update_' . str_replace('update_les_', '', $lessonId) . '/playlist.m3u8'
-                : 'lesson-hls/' . $lessonId . '/playlist.m3u8';
+        $isUpdate = str_starts_with((string)$lessonId, 'update_les_');
+        $rawId = $isUpdate ? str_replace('update_les_', '', $lessonId) : $lessonId;
+
+        $cacheKey = 'hls_signed_playlist_' . $lessonId;
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+
+        // Kiểm tra cache đã có playlist đã ký S3 chưa
+        if ($useS3 && \Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            return response(\Illuminate\Support\Facades\Cache::get($cacheKey), 200, [
+                'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
+                'Access-Control-Allow-Origin' => '*',
+                'Cache-Control' => 'public, max-age=1800',
+            ]);
         }
 
-        $m3u8Path = \Illuminate\Support\Str::endsWith($videoPath, 'playlist.m3u8')
-            ? $videoPath
-            : dirname($videoPath) . '/playlist.m3u8';
+        $content = null;
 
-        if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($m3u8Path)) {
+        // 1. Kiểm tra S3
+        if ($useS3) {
+            $s3PlaylistKey = $isUpdate
+                ? 'hls/updates/' . $rawId . '/playlist.m3u8'
+                : 'hls/lessons/' . $rawId . '/playlist.m3u8';
+            $s3MasterKey = $isUpdate
+                ? 'hls/updates/' . $rawId . '/master.m3u8'
+                : 'hls/lessons/' . $rawId . '/master.m3u8';
+
+            $targetKey = null;
+            try {
+                $content = \Illuminate\Support\Facades\Storage::disk('s3')->get($s3PlaylistKey);
+                $targetKey = $s3PlaylistKey;
+            } catch (\Throwable) {
+                try {
+                    $content = \Illuminate\Support\Facades\Storage::disk('s3')->get($s3MasterKey);
+                    $targetKey = $s3MasterKey;
+                } catch (\Throwable) {
+                    $content = null;
+                }
+            }
+
+            if ($content !== null && $targetKey !== null) {
+                $s3Dir = dirname($targetKey);
+                $lines = explode("\n", $content);
+                $signedLines = [];
+                $expiresAt = now()->addHours(12);
+
+                foreach ($lines as $line) {
+                    $trimmed = trim($line);
+                    if ($trimmed !== '' && !str_starts_with($trimmed, '#')) {
+                        // Nếu là file segment .ts hoặc playlist con .m3u8
+                        $segmentKey = $s3Dir . '/' . $trimmed;
+                        try {
+                            $signedUrl = \Illuminate\Support\Facades\Storage::disk('s3')->temporaryUrl($segmentKey, $expiresAt);
+                            $signedLines[] = $signedUrl;
+                        } catch (\Throwable $e) {
+                            $signedLines[] = $line;
+                        }
+                    } else {
+                        $signedLines[] = $line;
+                    }
+                }
+
+                $signedContent = implode("\n", $signedLines);
+
+                // Cache 6 giờ để tăng tốc tức thì
+                \Illuminate\Support\Facades\Cache::put($cacheKey, $signedContent, now()->addHours(6));
+
+                return response($signedContent, 200, [
+                    'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
+                    'Access-Control-Allow-Origin' => '*',
+                    'Cache-Control' => 'public, max-age=1800',
+                ]);
+            }
+        }
+
+        // 2. Fallback: Local
+        if ($content === null) {
+            $localDir = $isUpdate
+                ? 'lesson-hls/update_' . $rawId
+                : 'lesson-hls/' . $rawId;
+            $localPlaylist = $localDir . '/playlist.m3u8';
+            $localMaster = $localDir . '/master.m3u8';
+
+            if (\Illuminate\Support\Facades\Storage::disk('local')->exists($localPlaylist)) {
+                $content = \Illuminate\Support\Facades\Storage::disk('local')->get($localPlaylist);
+            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($localMaster)) {
+                $content = \Illuminate\Support\Facades\Storage::disk('local')->get($localMaster);
+            }
+        }
+
+        if ($content === null) {
             abort(404, 'HLS Playlist not found.');
         }
 
-        $content = \Illuminate\Support\Facades\Storage::disk('local')->get($m3u8Path);
-
         return response($content, 200, [
-            'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
+            'Access-Control-Allow-Origin' => '*',
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
         ]);
     }
 
     /**
-     * Stream HLS Segment (.ts) for Admin Review
+     * Stream HLS Segment (.ts) fallback for Local or direct redirect
      */
     public function streamHlsSegment(string|int $lessonId, $segment)
     {
-        [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
+        $isUpdate = str_starts_with((string)$lessonId, 'update_les_');
+        $rawId = $isUpdate ? str_replace('update_les_', '', $lessonId) : $lessonId;
 
-        if ($videoPath) {
-            $hlsDir = \Illuminate\Support\Str::endsWith($videoPath, 'playlist.m3u8') ? dirname($videoPath) : $videoPath;
-            $segmentPath = $hlsDir . '/' . $segment;
-        } else {
-            $segmentPath = str_starts_with((string)$lessonId, 'update_les_')
-                ? 'lesson-hls/update_' . str_replace('update_les_', '', $lessonId) . '/' . $segment
-                : 'lesson-hls/' . $lessonId . '/' . $segment;
+        // 1. Kiểm tra S3 -> Redirect trực tiếp đến S3 Signed URL thay vì proxy qua PHP
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        if ($useS3) {
+            $s3SegmentKey = $isUpdate
+                ? 'hls/updates/' . $rawId . '/' . $segment
+                : 'hls/lessons/' . $rawId . '/' . $segment;
+
+            if (\Illuminate\Support\Facades\Storage::disk('s3')->exists($s3SegmentKey)) {
+                $signedUrl = \Illuminate\Support\Facades\Storage::disk('s3')->temporaryUrl($s3SegmentKey, now()->addHours(2));
+                return redirect()->away($signedUrl);
+            }
         }
 
-        if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($segmentPath)) {
-            abort(404, 'Segment not found.');
+        // 2. Fallback: Local
+        $localSegment = $isUpdate
+            ? 'lesson-hls/update_' . $rawId . '/' . $segment
+            : 'lesson-hls/' . $rawId . '/' . $segment;
+
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($localSegment)) {
+            $path = \Illuminate\Support\Facades\Storage::disk('local')->path($localSegment);
+            return response()->file($path, [
+                'Content-Type' => 'video/mp2t',
+                'Access-Control-Allow-Origin' => '*',
+                'Cache-Control' => 'public, max-age=3600',
+            ]);
         }
 
-        $path = \Illuminate\Support\Facades\Storage::disk('local')->path($segmentPath);
-
-        return response()->file($path, [
-            'Content-Type' => 'video/mp2t',
-            'Cache-Control' => 'no-store',
-        ]);
+        abort(404, 'Segment not found.');
     }
 
     /**
@@ -284,19 +403,10 @@ class AiModerationController extends Controller
             }
         }
 
-        $realLesson = Lesson::find($lessonId);
-        $update = null;
-
-        if (!$realLesson && str_starts_with((string)$lessonId, 'update_les_')) {
-            $updateId = str_replace('update_les_', '', $lessonId);
-            $update = \App\Models\ContentUpdate::find($updateId);
-        } elseif (!$realLesson) {
-            $update = \App\Models\ContentUpdate::find($lessonId);
-        }
-
-        if (!$realLesson && $update && $update->entity_id) {
-            $realLesson = Lesson::find($update->entity_id);
-        }
+        $isUpdate = str_starts_with((string)$lessonId, 'update_les_');
+        $updateId = $isUpdate ? str_replace('update_les_', '', $lessonId) : null;
+        $update = $updateId ? \App\Models\ContentUpdate::find($updateId) : null;
+        $realLesson = (!$isUpdate && !$update) ? Lesson::find($lessonId) : null;
 
         $moderationData = [
             'violence' => $violence,

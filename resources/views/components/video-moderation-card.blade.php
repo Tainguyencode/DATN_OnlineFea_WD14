@@ -5,10 +5,10 @@
 ])
 
 @php
-    $moderation = $lesson->videoModeration;
-    if (!$moderation && isset($lesson->draft_update) && !empty($lesson->draft_update->payload['ai_moderation'])) {
-        $moderation = new \App\Models\VideoModeration($lesson->draft_update->payload['ai_moderation']);
-    }
+    $hasDraftUpdate = isset($lesson->draft_update) || !empty($lesson->is_draft_update) || !empty($lesson->is_draft_create);
+    $moderation = $hasDraftUpdate
+        ? (!empty($lesson->draft_update?->payload['ai_moderation']) ? (is_array($lesson->draft_update->payload['ai_moderation']) ? new \App\Models\VideoModeration($lesson->draft_update->payload['ai_moderation']) : $lesson->draft_update->payload['ai_moderation']) : null)
+        : $lesson->videoModeration;
     $badgeTones = [
         'red'    => 'border-rose-200 bg-rose-50 text-rose-800',
         'orange' => 'border-orange-200 bg-orange-50 text-orange-800',
@@ -64,36 +64,29 @@
         </div>
     </div>
 
-    @if ($lesson->video_path || $lesson->video_url)
+    @php
+        $videoLessonKey = (isset($lesson->draft_update) && $lesson->draft_update->action === 'create')
+            ? ('update_les_' . $lesson->draft_update->id)
+            : (isset($lesson->draft_update) && $lesson->draft_update->action === 'update'
+                ? ('update_les_' . $lesson->draft_update->id)
+                : $lesson->id);
+
+        $hasVideo = filled($lesson->original_video_key)
+            || filled($lesson->hls_manifest_key)
+            || filled($lesson->video_path)
+            || filled($lesson->video_url)
+            || (isset($lesson->draft_update) && (!empty($lesson->draft_update->payload['original_video_key']) || !empty($lesson->draft_update->payload['hls_manifest_key']) || !empty($lesson->draft_update->payload['video_path'])));
+
+        $isProcessingHls = method_exists($lesson, 'isProcessing') ? $lesson->isProcessing() : false;
+        if (!$isProcessingHls && isset($lesson->draft_update)) {
+            $updatePayload = $lesson->draft_update->payload ?? [];
+            $isProcessingHls = ($updatePayload['processing_status'] ?? '') === 'processing';
+        }
+    @endphp
+
+    @if ($hasVideo)
         <div class="border-b border-slate-100 bg-slate-950 p-2 sm:p-3">
-            @if ($lesson->video_path)
-                @php
-                    $hlsPath = 'lesson-hls/' . $lesson->id . '/playlist.m3u8';
-                    $hasHls = \Illuminate\Support\Facades\Storage::disk('local')->exists($hlsPath);
-                    $hasLocalFile = \Illuminate\Support\Facades\Storage::disk('local')->exists($lesson->video_path);
-                    $hasPublicFile = \Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->video_path);
-                    $fileExists = $hasHls || $hasLocalFile || $hasPublicFile;
-                @endphp
-                @if ($fileExists)
-                    <video
-                        src="{{ route('admin.ai-moderation.stream-video', $lesson) }}"
-                        controls
-                        preload="metadata"
-                        playsinline
-                        class="mx-auto aspect-video w-full max-w-3xl rounded-lg bg-black"
-                    >
-                        Trình duyệt không hỗ trợ phát video.
-                    </video>
-                @else
-                    <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-rose-800 bg-rose-950/40 p-8 text-center text-rose-200">
-                        <svg class="h-10 w-10 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <p class="font-bold text-base">Video không tồn tại trên hệ thống</p>
-                        <p class="text-xs text-rose-300">File video của bài học này không có trên máy chủ.</p>
-                    </div>
-                @endif
-            @elseif ($lesson->video_url)
+            @if ($lesson->video_url && !filled($lesson->original_video_key) && !filled($lesson->video_path))
                 <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-600 bg-slate-900 px-4 py-10 text-center">
                     <p class="text-sm text-slate-300">Video được liên kết từ URL bên ngoài</p>
                     <a href="{{ $lesson->video_url }}" target="_blank" rel="noopener noreferrer"
@@ -101,6 +94,88 @@
                         Mở video
                     </a>
                 </div>
+            @elseif ($isProcessingHls)
+                <div class="mx-auto flex max-w-3xl flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-500/30 bg-slate-900 px-4 py-8 text-center">
+                    <div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400 mb-1">
+                        <svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <p class="text-sm font-bold text-white">Video đang được chuyển đổi HLS...</p>
+                    <p class="text-xs text-slate-400">Vui lòng quay lại sau ít phút hoặc tải lại trang khi hệ thống hoàn tất xử lý.</p>
+                </div>
+            @else
+                <div class="relative mx-auto aspect-video w-full max-w-3xl overflow-hidden rounded-lg bg-black" id="mod-container-{{ $videoLessonKey }}">
+                    <video
+                        id="mod-video-{{ $videoLessonKey }}"
+                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $videoLessonKey]) }}"
+                        controls
+                        preload="metadata"
+                        playsinline
+                        class="h-full w-full bg-black"
+                    >
+                        Trình duyệt không hỗ trợ phát video.
+                    </video>
+                </div>
+                <script>
+                    (function() {
+                        function initModPlayer() {
+                            var v = document.getElementById('mod-video-{{ $videoLessonKey }}');
+                            var container = document.getElementById('mod-container-{{ $videoLessonKey }}');
+                            if (!v || v.dataset.hlsInit) return;
+                            
+                            var hlsUrl = v.getAttribute('data-hls-src');
+                            var retryCount = 0;
+
+                            function showFallbackNotice(msg) {
+                                if (container) {
+                                    container.innerHTML = '<div class="flex flex-col items-center justify-center h-full p-6 text-center text-slate-300 text-xs gap-2"><svg class="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><p class="font-semibold">' + msg + '</p></div>';
+                                }
+                            }
+
+                            function setupHlsInstance() {
+                                if (typeof Hls !== 'undefined' && Hls.isSupported() && hlsUrl) {
+                                    v.dataset.hlsInit = 'true';
+                                    var hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+                                    hls.loadSource(hlsUrl);
+                                    hls.attachMedia(v);
+
+                                    hls.on(Hls.Events.ERROR, function (_, data) {
+                                        if (data.fatal) {
+                                            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                                retryCount++;
+                                                if (retryCount <= 2) {
+                                                    setTimeout(function() { hls.startLoad(); }, 1500);
+                                                } else {
+                                                    hls.destroy();
+                                                    showFallbackNotice('Video đang xử lý HLS hoặc không khả dụng.');
+                                                }
+                                            } else {
+                                                hls.destroy();
+                                                showFallbackNotice('Không thể phát video kiểm duyệt lúc này.');
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+
+                            if (typeof Hls !== 'undefined') {
+                                setupHlsInstance();
+                            } else {
+                                var s = document.createElement('script');
+                                s.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+                                s.onload = function() { setupHlsInstance(); };
+                                document.head.appendChild(s);
+                            }
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', initModPlayer);
+                        } else {
+                            initModPlayer();
+                        }
+                    })();
+                </script>
             @endif
         </div>
     @else
@@ -121,6 +196,7 @@
             $cardAdminNote = $lPayload['admin_note'] ?? ($lessonUpdate?->rejection_reason ?? null);
             $cardRequireReupload = !empty($lPayload['require_reupload']);
             $cardReviewStatus = $lPayload['review_status'] ?? ($lessonUpdate?->status === 'rejected' ? 'fail' : ($lessonUpdate?->status === 'approved' ? 'pass' : null));
+            $reviewedTimestamp = $lessonUpdate?->reviewed_at ?? $lessonUpdate?->updated_at ?? null;
         @endphp
 
         @if (filled($cardAdminNote) || $cardRequireReupload || filled($cardReviewStatus))
@@ -155,7 +231,12 @@
                     <div class="w-full">
                         <div class="flex items-center justify-between">
                             <p class="text-xs font-bold uppercase tracking-wide {{ $modCardStyle['title'] }}">Ghi chú & Phản hồi từ Admin:</p>
-                            <span class="rounded-full {{ $modCardStyle['badge'] }} px-2.5 py-0.5 text-xs font-bold">{{ $modCardStyle['badge_text'] }}</span>
+                            <div class="flex items-center gap-2">
+                                @if($reviewedTimestamp)
+                                    <span class="text-xs text-slate-500">{{ \Carbon\Carbon::parse($reviewedTimestamp)->format('d/m/Y H:i') }}</span>
+                                @endif
+                                <span class="rounded-full {{ $modCardStyle['badge'] }} px-2.5 py-0.5 text-xs font-bold">{{ $modCardStyle['badge_text'] }}</span>
+                            </div>
                         </div>
                         @if (filled($cardAdminNote))
                             <div class="mt-2 text-xs text-slate-800 leading-relaxed font-medium whitespace-pre-line bg-white/90 p-3 rounded-lg border border-slate-200/80">

@@ -215,8 +215,24 @@
                     <div class="divide-y divide-slate-100">
                         @forelse($section->lessons as $lesson)
                             @php
-                                $hasVideo = filled($lesson->video_path) || filled($lesson->video_url);
-                                $lessonDuration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+                                $hasDraftUpdate = isset($lesson->draft_update);
+                                $payload = $hasDraftUpdate ? ($lesson->draft_update->payload ?? []) : [];
+
+                                $effectiveOriginalKey = $hasDraftUpdate ? ($payload['original_video_key'] ?? null) : $lesson->original_video_key;
+                                $effectiveHlsKey = $hasDraftUpdate ? ($payload['hls_manifest_key'] ?? null) : $lesson->hls_manifest_key;
+                                $effectiveVideoPath = $hasDraftUpdate ? ($payload['video_path'] ?? null) : $lesson->video_path;
+                                $effectiveVideoUrl = $hasDraftUpdate ? ($payload['video_url'] ?? null) : $lesson->video_url;
+
+                                $hasVideo = filled($effectiveOriginalKey) || filled($effectiveHlsKey) || filled($effectiveVideoPath) || filled($effectiveVideoUrl);
+                                $lessonDuration = (int) ($hasDraftUpdate ? ($payload['duration_seconds'] ?? ($payload['duration'] ?? 0)) : ($lesson->duration_seconds ?: $lesson->duration ?: 0));
+
+                                $videoLessonKey = $hasDraftUpdate
+                                    ? ('update_les_' . $lesson->draft_update->id)
+                                    : $lesson->id;
+
+                                $effectiveModeration = $hasDraftUpdate
+                                    ? (!empty($payload['ai_moderation']) ? (is_array($payload['ai_moderation']) ? new \App\Models\VideoModeration($payload['ai_moderation']) : $payload['ai_moderation']) : null)
+                                    : $lesson->videoModeration;
                             @endphp
                             <div class="p-4">
                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -253,33 +269,18 @@
                                             <p class="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-6 text-slate-600">{{ $lesson->content }}</p>
                                         @endif
 
-                                        @if($lesson->type === 'video' && $lesson->video_path)
-                                            @php
-                                                $isHls = !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4');
-                                                $videoLessonKey = (isset($lesson->draft_update) && $lesson->draft_update->action === 'create')
-                                                    ? ('update_les_' . $lesson->draft_update->id)
-                                                    : $lesson->id;
-                                            @endphp
-                                            @if(! $isHls)
-                                                <div class="mt-4 flex h-36 max-w-xl items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
-                                                    <div>
-                                                        <span class="text-xl">⏳</span>
-                                                        <p class="mt-1 text-sm font-bold text-amber-800">Đang xử lý HLS</p>
-                                                        <p class="mt-0.5 text-xs text-amber-600">Video gốc đang được chuyển đổi HLS. Không thể phát trực tiếp video MP4 gốc.</p>
-                                                    </div>
-                                                </div>
-                                            @else
-                                                <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-                                                    <video
-                                                        id="admin-video-{{ $videoLessonKey }}"
-                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $videoLessonKey]) }}"
-                                                        controls
-                                                        preload="metadata"
-                                                        class="h-full w-full"
-                                                        data-admin-review-video
-                                                    ></video>
-                                                </div>
-                                            @endif
+                                        @if($lesson->type === 'video' && $hasVideo && !$effectiveVideoUrl)
+                                            <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+                                                <video
+                                                    id="admin-video-{{ $videoLessonKey }}"
+                                                    data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $videoLessonKey]) }}"
+                                                    controls
+                                                    preload="metadata"
+                                                    class="h-full w-full"
+                                                    data-admin-review-video
+                                                ></video>
+                                            </div>
+                                        @endif
                                             
                                             {{-- Nút và khu vực hiển thị quét AI --}}
                                             <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $videoLessonKey }}">
@@ -294,9 +295,9 @@
                                                     </div>
                                                 </div>
 
-                                                <div class="ai-result-area mt-4 {{ $lesson->videoModeration ? '' : 'hidden' }}">
-                                                    @if($lesson->videoModeration)
-                                                        @php $mod = $lesson->videoModeration; @endphp
+                                                <div class="ai-result-area mt-4 {{ $effectiveModeration ? '' : 'hidden' }}">
+                                                    @if($effectiveModeration)
+                                                        @php $mod = $effectiveModeration; @endphp
                                                         @php
                                                             $hasHard = $mod->violence || $mod->adult || $mod->weapon;
                                                             $hasSigns = $mod->hasDetectedSigns();
@@ -480,7 +481,6 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        @endif
                                     </div>
                                     <div class="flex shrink-0 flex-wrap gap-2">
                                         @if($lesson->video_url)
@@ -1215,6 +1215,65 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+
+    // ─── Khởi tạo HLS Player cho các video kiểm duyệt của Admin (Tối ưu tải siêu tốc) ───
+    function initAdminReviewPlayers() {
+        var videoElements = document.querySelectorAll('video[data-admin-review-video]');
+        if (videoElements.length === 0) return;
+
+        function attachHlsToVideo(v) {
+            if (v.dataset.hlsInit) return;
+            var hlsUrl = v.getAttribute('data-hls-src');
+            if (!hlsUrl) return;
+
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                v.dataset.hlsInit = 'true';
+                var hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    startFragPrefetch: true,
+                    maxBufferLength: 10,
+                    maxMaxBufferLength: 30,
+                    maxBufferSize: 30 * 1000 * 1000,
+                    maxBufferHole: 0.5,
+                    highBufferWatchdogPeriod: 2,
+                    startLevel: -1,
+                });
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(v);
+
+                hls.on(Hls.Events.ERROR, function (_, data) {
+                    if (data.fatal) {
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            hls.startLoad();
+                        } else {
+                            hls.destroy();
+                        }
+                    }
+                });
+            } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+                v.dataset.hlsInit = 'true';
+                v.src = hlsUrl;
+            }
+        }
+
+        function initAll() {
+            videoElements.forEach(function (v) {
+                attachHlsToVideo(v);
+            });
+        }
+
+        if (typeof Hls !== 'undefined') {
+            initAll();
+        } else {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
+            s.onload = function () { initAll(); };
+            document.head.appendChild(s);
+        }
+    }
+
+    initAdminReviewPlayers();
 });
 </script>
 </div>
