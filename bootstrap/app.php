@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
             'payments/*/ipn',
+            'instructor/courses/*/s3/multipart/*',
         ]);
 
         $middleware->alias([

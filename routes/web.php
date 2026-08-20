@@ -25,6 +25,7 @@ use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseCont
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
+use App\Http\Controllers\Web\Instructor\S3MultipartUploadController;
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
 use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
@@ -293,6 +294,11 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
             Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
             Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
+            Route::post('/courses/{course}/s3/multipart/create', [S3MultipartUploadController::class, 'create'])->name('courses.s3.multipart.create');
+            Route::post('/courses/{course}/s3/multipart/batch-sign', [S3MultipartUploadController::class, 'batchSign'])->name('courses.s3.multipart.batch-sign');
+            Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'signPart'])->name('courses.s3.multipart.sign-part');
+            Route::post('/courses/{course}/s3/multipart/complete', [S3MultipartUploadController::class, 'complete'])->name('courses.s3.multipart.complete');
+            Route::post('/courses/{course}/s3/multipart/abort', [S3MultipartUploadController::class, 'abort'])->name('courses.s3.multipart.abort');
             Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
             Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
             Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
@@ -385,9 +391,6 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/ai-moderation/{lesson}/extract', [AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
     Route::post('/ai-moderation/analyze-frame', [AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
     Route::post('/ai-moderation/{lesson}/save', [AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
-    Route::get('/ai-moderation/{lesson}/stream-video', [AiModerationController::class, 'streamVideo'])->name('ai-moderation.stream-video');
-    Route::get('/ai-moderation/{lesson}/hls/playlist.m3u8', [AiModerationController::class, 'streamHlsPlaylist'])->name('ai-moderation.hls.playlist');
-    Route::get('/ai-moderation/{lesson}/hls/{segment}', [AiModerationController::class, 'streamHlsSegment'])->name('ai-moderation.hls.segment');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
     Route::post('/courses/{course}/toggle-featured', [ManageController::class, 'toggleFeatured'])->name('courses.toggle-featured');
@@ -411,7 +414,13 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
-    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+});
+
+// ─── STREAMING VIDEO KIỂM DUYỆT (Admin & Giảng viên) ───
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin,instructor'])->group(function () {
+    Route::get('/admin/ai-moderation/{lesson}/stream-video', [AiModerationController::class, 'streamVideo'])->name('admin.ai-moderation.stream-video');
+    Route::get('/admin/ai-moderation/{lesson}/hls/playlist.m3u8', [AiModerationController::class, 'streamHlsPlaylist'])->name('admin.ai-moderation.hls.playlist');
+    Route::get('/admin/ai-moderation/{lesson}/hls/{segment}', [AiModerationController::class, 'streamHlsSegment'])->name('admin.ai-moderation.hls.segment');
 });
 
 if (app()->environment('local')) {
