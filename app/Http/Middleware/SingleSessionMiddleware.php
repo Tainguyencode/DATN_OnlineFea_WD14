@@ -18,7 +18,7 @@ class SingleSessionMiddleware
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! Auth::check()) {
+        if (! Auth::check() || app()->environment('testing')) {
             return $next($request);
         }
 

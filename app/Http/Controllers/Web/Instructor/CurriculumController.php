@@ -183,7 +183,7 @@ class CurriculumController extends Controller
                 \App\Models\ContentUpdate::STATUS_DRAFT
             );
 
-            if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+            if (($request->hasFile('video_file') || $request->filled('s3_key')) && ($lessonData['type'] ?? null) === 'video') {
                 \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate)', ['content_update_id' => $contentUpdate->id]);
                 \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
@@ -204,7 +204,7 @@ class CurriculumController extends Controller
             'status' => $lessonData['status'] ?? 'draft',
         ]);
 
-        if ($request->hasFile('video_file') && $lesson->type === 'video') {
+        if (($request->hasFile('video_file') || $request->filled('s3_key')) && $lesson->type === 'video') {
             \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Lesson)', ['lesson_id' => $lesson->id]);
             \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
         }
@@ -232,7 +232,7 @@ class CurriculumController extends Controller
 
         \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] START STORE FILE (Update)');
         $lessonData = $this->storeLessonVideo($request, $lessonData, $lesson);
-        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] STORE FILE DONE (Update)', ['video_path' => $lessonData['video_path'] ?? null]);
+        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] STORE FILE DONE (Update)', ['video_path' => $lessonData['video_path'] ?? null, 'original_video_key' => $lessonData['original_video_key'] ?? null]);
 
         if ($course->isPublished()) {
             $payload = array_merge($lessonData, [
@@ -252,7 +252,7 @@ class CurriculumController extends Controller
                 $request->user()
             );
 
-            if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+            if (($request->hasFile('video_file') || $request->filled('s3_key')) && ($lessonData['type'] ?? null) === 'video') {
                 \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate)', ['content_update_id' => $contentUpdate->id]);
                 \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
@@ -270,7 +270,7 @@ class CurriculumController extends Controller
             'status' => $lessonData['status'] ?? 'draft',
         ]);
 
-        if ($request->hasFile('video_file') && $lesson->type === 'video') {
+        if (($request->hasFile('video_file') || $request->filled('s3_key')) && $lesson->type === 'video') {
             \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update Lesson)', ['lesson_id' => $lesson->id]);
             \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
         }
@@ -335,7 +335,7 @@ class CurriculumController extends Controller
             'status' => ContentUpdate::STATUS_DRAFT,
         ]);
 
-        if ($request->hasFile('video_file') && ($lessonData['type'] ?? null) === 'video') {
+        if (($request->hasFile('video_file') || $request->filled('s3_key')) && ($lessonData['type'] ?? null) === 'video') {
             \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
         }
 
@@ -380,6 +380,7 @@ class CurriculumController extends Controller
     {
         unset(
             $validated['video_file'],
+            $validated['s3_key'],
             $validated['document_file'],
             $validated['assignment_due_days'],
             $validated['assignment_max_score'],
@@ -387,7 +388,7 @@ class CurriculumController extends Controller
         );
 
         if (($validated['type'] ?? null) !== 'video') {
-            unset($validated['video_url']);
+            unset($validated['video_url'], $validated['original_video_key'], $validated['hls_manifest_key']);
         }
 
         if (! in_array($validated['type'] ?? null, ['video', 'document', 'assignment'], true)) {
@@ -417,9 +418,31 @@ class CurriculumController extends Controller
 
     private function storeLessonVideo(Request $request, array $validated, ?Lesson $lesson = null): array
     {
-        unset($validated['video_file']);
+        unset($validated['video_file'], $validated['s3_key']);
 
-        if (($validated['type'] ?? null) !== 'video' || ! $request->hasFile('video_file')) {
+        if (($validated['type'] ?? null) !== 'video') {
+            return $validated;
+        }
+
+        // Ưu tiên S3 Multipart Direct Upload
+        if ($request->filled('s3_key')) {
+            $s3Key = (string) $request->input('s3_key');
+            $originalName = (string) ($request->input('video_original_name') ?: basename($s3Key));
+            $mime = (string) ($request->input('video_mime') ?: 'video/mp4');
+            $size = $request->input('video_size') ? (int) $request->input('video_size') : null;
+
+            return [
+                ...$validated,
+                'original_video_key' => $s3Key,
+                'video_original_name' => $originalName,
+                'video_mime' => $mime,
+                'video_size' => $size,
+                'upload_status' => 'uploaded',
+                'processing_status' => 'pending',
+            ];
+        }
+
+        if (! $request->hasFile('video_file')) {
             return $validated;
         }
 
@@ -437,6 +460,8 @@ class CurriculumController extends Controller
             'video_original_name' => $file->getClientOriginalName(),
             'video_mime' => $file->getClientMimeType(),
             'video_size' => $file->getSize(),
+            'upload_status' => 'uploaded',
+            'processing_status' => 'pending',
         ];
     }
 

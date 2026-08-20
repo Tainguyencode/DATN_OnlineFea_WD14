@@ -252,6 +252,17 @@ class Course extends Model
     }
 
     /**
+     * Scope lấy các khóa học đang được hiển thị công khai (bao gồm cả khóa học đang cập nhật bản mới).
+     */
+    public function scopePublished($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_published', true)
+              ->orWhereIn('status', [self::STATUS_PUBLISHED, self::STATUS_PENDING_UPDATE, self::STATUS_REJECTED_UPDATE]);
+        });
+    }
+
+    /**
      * Kiểm tra xem giảng viên có thể chỉnh sửa khóa học hay không.
      */
     public function isEditable(): bool

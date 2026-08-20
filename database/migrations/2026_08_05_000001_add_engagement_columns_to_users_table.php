@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->timestamp('last_learning_at')->nullable()->after('last_login_ip');
-            $table->unsignedTinyInteger('engagement_email_stage')->default(0)->after('last_learning_at');
-            $table->timestamp('last_engagement_sent_at')->nullable()->after('engagement_email_stage');
+            if (!Schema::hasColumn('users', 'last_learning_at')) {
+                $table->timestamp('last_learning_at')->nullable()->after('last_login_ip');
+            }
+            if (!Schema::hasColumn('users', 'engagement_email_stage')) {
+                $table->unsignedTinyInteger('engagement_email_stage')->default(0)->after('last_learning_at');
+            }
+            if (!Schema::hasColumn('users', 'last_engagement_sent_at')) {
+                $table->timestamp('last_engagement_sent_at')->nullable()->after('engagement_email_stage');
+            }
         });
     }
 

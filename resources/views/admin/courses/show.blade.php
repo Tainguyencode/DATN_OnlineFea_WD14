@@ -182,7 +182,8 @@
                     <div class="divide-y divide-slate-100">
                         @forelse($section->lessons as $lesson)
                             @php
-                                $hasVideo = filled($lesson->video_path) || filled($lesson->video_url);
+                                $hasVideo = filled($lesson->original_video_key) || filled($lesson->hls_manifest_key) || filled($lesson->video_path) || filled($lesson->video_url);
+                                $lessonDuration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
                             @endphp
                             <div class="p-4">
                                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
