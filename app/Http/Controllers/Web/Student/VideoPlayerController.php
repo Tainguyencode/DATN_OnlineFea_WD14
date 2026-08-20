@@ -60,7 +60,7 @@ class VideoPlayerController extends Controller
     }
 
     /**
-     * Lấy playlist m3u8
+     * Lấy playlist m3u8 (master.m3u8 hoặc playlist.m3u8)
      */
     public function playlist(Request $request, Lesson $lesson)
     {
@@ -71,57 +71,170 @@ class VideoPlayerController extends Controller
                 'token' => $token,
                 'lesson_id' => $lesson->id
             ]);
-            return response('Not found', 404);
+            return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
         }
 
-        $hlsDir = 'lesson-hls/' . $lesson->id;
-        $m3u8Path = $hlsDir . '/playlist.m3u8';
-
-        if (!Storage::disk('local')->exists($m3u8Path)) {
-            return response('Not found', 404);
+        if ($lesson->isProcessing() && !$lesson->isHlsReady()) {
+            return response('Video is processing', 404, [
+                'Access-Control-Allow-Origin' => '*',
+                'X-Video-Status' => 'processing',
+            ]);
         }
 
-        $content = Storage::disk('local')->get($m3u8Path);
+        $content = null;
+        $isPlaylistRequest = str_ends_with($request->path(), 'playlist.m3u8');
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        $cacheKey = 'hls_signed_playlist_student_' . $lesson->id . '_' . ($isPlaylistRequest ? 'playlist' : 'master');
 
-        // Chèn token vào các file .ts
+        // 1. Kiểm tra S3 HLS Manifest với Direct Signed URLs
+        if ($useS3) {
+            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                return response(\Illuminate\Support\Facades\Cache::get($cacheKey), 200, [
+                    'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
+                    'Access-Control-Allow-Origin' => '*',
+                    'Cache-Control' => 'public, max-age=1800',
+                ]);
+            }
+
+            try {
+                $s3ManifestKey = $lesson->hls_manifest_key ?: ('hls/lessons/' . $lesson->id . '/master.m3u8');
+                $s3PlaylistKey = 'hls/lessons/' . $lesson->id . '/playlist.m3u8';
+                $targetKey = null;
+
+                try {
+                    $content = Storage::disk('s3')->get($s3PlaylistKey);
+                    $targetKey = $s3PlaylistKey;
+                } catch (\Throwable) {
+                    try {
+                        $content = Storage::disk('s3')->get($s3ManifestKey);
+                        $targetKey = $s3ManifestKey;
+                    } catch (\Throwable) {
+                        $content = null;
+                    }
+                }
+
+                if ($content !== null && $targetKey !== null) {
+                    $s3Dir = dirname($targetKey);
+                    $lines = explode("\n", $content);
+                    $signedLines = [];
+                    $expiresAt = now()->addHours(12);
+
+                    foreach ($lines as $line) {
+                        $trimmed = trim($line);
+                        if ($trimmed !== '' && !str_starts_with($trimmed, '#')) {
+                            if (str_ends_with($trimmed, '.ts')) {
+                                // Ký trực tiếp S3 URL cho file segment .ts
+                                $segmentKey = $s3Dir . '/' . $trimmed;
+                                try {
+                                    $signedLines[] = Storage::disk('s3')->temporaryUrl($segmentKey, $expiresAt);
+                                } catch (\Throwable $e) {
+                                    $separator = str_contains($line, '?') ? '&' : '?';
+                                    $signedLines[] = $line . $separator . 'token=' . urlencode($token);
+                                }
+                            } else {
+                                // Nếu là file con .m3u8
+                                $separator = str_contains($line, '?') ? '&' : '?';
+                                $signedLines[] = $line . $separator . 'token=' . urlencode($token);
+                            }
+                        } else {
+                            $signedLines[] = $line;
+                        }
+                    }
+
+                    $signedContent = implode("\n", $signedLines);
+                    \Illuminate\Support\Facades\Cache::put($cacheKey, $signedContent, now()->addHours(6));
+
+                    return response($signedContent, 200, [
+                        'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
+                        'Access-Control-Allow-Origin' => '*',
+                        'Cache-Control' => 'public, max-age=1800',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('S3 HLS read error: ' . $e->getMessage());
+            }
+        }
+
+        // 2. Fallback: Local Disk
+        if ($content === null) {
+            $hlsDir = 'lesson-hls/' . $lesson->id;
+            $localMaster = $hlsDir . '/master.m3u8';
+            $localPlaylist = $hlsDir . '/playlist.m3u8';
+
+            if ($isPlaylistRequest) {
+                if (Storage::disk('local')->exists($localPlaylist)) {
+                    $content = Storage::disk('local')->get($localPlaylist);
+                } elseif (Storage::disk('local')->exists($localMaster)) {
+                    $content = Storage::disk('local')->get($localMaster);
+                }
+            } else {
+                if (Storage::disk('local')->exists($localMaster)) {
+                    $content = Storage::disk('local')->get($localMaster);
+                } elseif (Storage::disk('local')->exists($localPlaylist)) {
+                    $content = Storage::disk('local')->get($localPlaylist);
+                }
+            }
+        }
+
+        if ($content === null) {
+            return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
+        }
+
+        // Chèn token vào các dòng URI (.m3u8 và .ts) cho local disk
         $lines = explode("\n", $content);
         foreach ($lines as &$line) {
             $line = trim($line);
             if ($line && !str_starts_with($line, '#')) {
-                $line .= '?token=' . urlencode($token);
+                $separator = str_contains($line, '?') ? '&' : '?';
+                $line .= $separator . 'token=' . urlencode($token);
             }
         }
         $modifiedContent = implode("\n", $lines);
 
         return response($modifiedContent, 200, [
-            'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
+            'Access-Control-Allow-Origin' => '*',
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
         ]);
     }
 
     /**
-     * Trả về file .ts
+     * Trả về file .ts segment
      */
     public function segment(Request $request, Lesson $lesson, $segment)
     {
         $token = $request->query('token');
 
         if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
-            return response('Not found', 404);
+            return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
         }
 
+        // 1. Kiểm tra S3 -> Redirect trực tiếp đến S3 Signed URL
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        if ($useS3) {
+            try {
+                $s3SegmentKey = 'hls/lessons/' . $lesson->id . '/' . $segment;
+                if (Storage::disk('s3')->exists($s3SegmentKey)) {
+                    $signedUrl = Storage::disk('s3')->temporaryUrl($s3SegmentKey, now()->addHours(2));
+                    return redirect()->away($signedUrl);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('S3 segment read error: ' . $e->getMessage());
+            }
+        }
+
+        // 2. Fallback: Local Disk
         $segmentPath = 'lesson-hls/' . $lesson->id . '/' . $segment;
-
-        if (!Storage::disk('local')->exists($segmentPath)) {
-            return response('Not found', 404);
+        if (Storage::disk('local')->exists($segmentPath)) {
+            $path = Storage::disk('local')->path($segmentPath);
+            return response()->file($path, [
+                'Content-Type' => 'video/mp2t',
+                'Access-Control-Allow-Origin' => '*',
+                'Cache-Control' => 'public, max-age=86400',
+            ]);
         }
 
-        $path = Storage::disk('local')->path($segmentPath);
-
-        return response()->file($path, [
-            'Content-Type' => 'video/MP2T',
-            'Cache-Control' => 'public, max-age=3600',
-        ]);
+        return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
     }
 
     /**

@@ -25,8 +25,7 @@ class HomeController extends Controller
 
         $featuredIds = [];
 
-        $featuredCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true)
+        $featuredCourses = $this->withFavoriteState(Course::published()
             ->when(! empty($featuredIds), fn ($q) => $q->whereIn('id', $featuredIds))
             ->when(empty($featuredIds), fn ($q) => $q->where('is_featured', true))
             ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
@@ -35,8 +34,7 @@ class HomeController extends Controller
             ->get();
 
         if ($featuredCourses->isEmpty()) {
-            $featuredCourses = $this->withFavoriteState(Course::where('status', Course::STATUS_PUBLISHED)
-                ->where('is_published', true)
+            $featuredCourses = $this->withFavoriteState(Course::published()
                 ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
                 ->withCount('lessons'))
                 ->orderByDesc('rating_avg')
@@ -50,9 +48,7 @@ class HomeController extends Controller
             ->with([
                 'children' => fn ($q) => $q
                     ->active()
-                    ->withCount(['courses' => fn ($courseQuery) => $courseQuery
-                        ->where('status', Course::STATUS_PUBLISHED)
-                        ->where('is_published', true)])
+                    ->withCount(['courses' => fn ($courseQuery) => $courseQuery->published()])
                     ->orderBy('sort_order')
                     ->orderBy('name'),
             ])
@@ -62,8 +58,7 @@ class HomeController extends Controller
 
         $query = $this->withFavoriteState(Course::with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
             ->withCount('lessons')
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true));
+            ->published());
 
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
@@ -105,7 +100,7 @@ class HomeController extends Controller
         $faqs = Faq::where('is_active', true)->orderBy('sort_order')->limit(5)->get();
 
         $stats = [
-            'courses' => Course::where('status', Course::STATUS_PUBLISHED)->where('is_published', true)->count(),
+            'courses' => Course::published()->count(),
             'students' => Enrollment::distinct('user_id')->count('user_id'),
             'instructors' => User::where('role', 'instructor')->count(),
         ];

@@ -418,7 +418,7 @@ class CourseController extends Controller
 
     public function enroll(Course $course): RedirectResponse
     {
-        if ($course->status !== Course::STATUS_PUBLISHED || ! $course->is_published) {
+        if (! $course->isPublished()) {
             abort(404);
         }
 
@@ -531,9 +531,7 @@ class CourseController extends Controller
                 'children' => fn ($query) => $query
                     ->active()
                     ->withCount([
-                        'courses' => fn ($courseQuery) => $courseQuery
-                            ->where('status', Course::STATUS_PUBLISHED)
-                            ->where('is_published', true),
+                        'courses' => fn ($courseQuery) => $courseQuery->published(),
                     ])
                     ->orderBy('sort_order')
                     ->orderBy('name'),
@@ -585,9 +583,7 @@ class CourseController extends Controller
 
     private function publishedCoursesQuery()
     {
-        return Course::query()
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true);
+        return Course::published();
     }
 
     private function isPublished(Course $course): bool
