@@ -25,16 +25,22 @@ class InstructorApplicationController extends Controller
         $query = User::where('role', 'instructor')
             ->with(['instructorProfile', 'instructorApplication', 'instructorCertificates', 'approver']);
 
-        if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
+        if ($status === 'new_updates') {
+            $query->where('needs_admin_review', true);
+        } elseif (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $query->where('instructor_status', $status);
         }
 
-        $applications = $query->orderByDesc('created_at')
+        $applications = $query
+            ->orderByDesc('needs_admin_review')
+            ->orderByRaw("CASE WHEN instructor_status = 'pending' THEN 1 ELSE 2 END")
+            ->orderByDesc('updated_at')
             ->paginate(15)
             ->withQueryString();
 
         $counts = [
             'all' => User::where('role', 'instructor')->count(),
+            'new_updates' => User::where('role', 'instructor')->where('needs_admin_review', true)->count(),
             'pending' => User::where('role', 'instructor')->where('instructor_status', 'pending')->count(),
             'approved' => User::where('role', 'instructor')->where('instructor_status', 'approved')->count(),
             'rejected' => User::where('role', 'instructor')->where('instructor_status', 'rejected')->count(),
@@ -54,12 +60,19 @@ class InstructorApplicationController extends Controller
                 ->with('error', 'Người dùng này không phải là Giảng viên.');
         }
 
+        $hadNewUpdates = $user->needs_admin_review;
+
+        if ($user->needs_admin_review) {
+            $user->markAdminReviewed();
+        }
+
         $user->load(['instructorProfile', 'instructorApplication', 'instructorCertificates.reviewer', 'approver']);
 
         return view('admin.instructors.applications.show', [
             'application' => $user,
             'profile' => $user->instructorProfile,
             'certificates' => $user->instructorCertificates,
+            'hadNewUpdates' => $hadNewUpdates,
         ]);
     }
 
@@ -146,6 +159,8 @@ class InstructorApplicationController extends Controller
 
         $user->update([
             'instructor_status' => 'approved',
+            'needs_admin_review' => false,
+            'admin_last_reviewed_at' => now(),
             'approved_at' => now(),
             'approved_by' => $adminId,
             'rejected_reason' => null,
@@ -203,6 +218,8 @@ class InstructorApplicationController extends Controller
 
         $user->update([
             'instructor_status' => 'rejected',
+            'needs_admin_review' => false,
+            'admin_last_reviewed_at' => now(),
             'rejected_reason' => $reason,
         ]);
 
@@ -234,5 +251,123 @@ class InstructorApplicationController extends Controller
 
         return redirect()->route('admin.instructors.applications.index')
             ->with('success', 'Đã từ chối hồ sơ Giảng viên "' . $user->name . '".');
+    }
+
+    public function reviewDocument(Request $request, User $user, InstructorCertificate $certificate): RedirectResponse
+    {
+        if ($certificate->user_id !== $user->id) {
+            abort(404, 'Tài liệu không thuộc về giảng viên này.');
+        }
+
+        $request->validate([
+            'status' => ['required', 'in:approved,rejected'],
+            'rejection_reason' => ['nullable', 'required_if:status,rejected', 'string', 'max:1000'],
+        ], [
+            'status.required' => 'Vui lòng chọn trạng thái xét duyệt.',
+            'rejection_reason.required_if' => 'Vui lòng nhập lý do từ chối tài liệu.',
+        ]);
+
+        $status = $request->input('status');
+        $reason = $request->input('rejection_reason');
+        $adminId = $request->user()->id;
+
+        $certificate->update([
+            'status' => $status,
+            'rejection_reason' => $status === 'rejected' ? $reason : null,
+            'reviewed_at' => now(),
+            'reviewed_by' => $adminId,
+        ]);
+
+        ActivityLogService::log($adminId, 'review_instructor_document', InstructorCertificate::class, $certificate->id, [
+            'status' => $status,
+            'reason' => $reason,
+        ], $request);
+
+        $docName = $certificate->title ?: $certificate->original_name;
+        if ($status === 'rejected') {
+            app(NotificationService::class)->send(
+                $user,
+                'Tài liệu minh chứng bị từ chối',
+                "Tài liệu '{$docName}' của bạn đã bị từ chối: {$reason}. Vui lòng cập nhật tài liệu khác.",
+                'instructor_document_rejected',
+                route('instructor.profile')
+            );
+        } else {
+            app(NotificationService::class)->send(
+                $user,
+                'Tài liệu minh chứng đã được duyệt',
+                "Tài liệu '{$docName}' của bạn đã được Admin chấp thuận.",
+                'instructor_document_approved',
+                route('instructor.profile')
+            );
+        }
+
+        return back()->with('success', 'Đã cập nhật trạng thái tài liệu "' . $docName . '" thành công.');
+    }
+
+    public function approveReactivation(Request $request, User $user): RedirectResponse
+    {
+        if ($user->role !== 'instructor') {
+            return back()->with('error', 'Người dùng không phải giảng viên.');
+        }
+
+        $adminId = $request->user()->id;
+
+        $user->unlockAccount('active', 'approved');
+
+        ActivityLogService::log($adminId, 'approve_instructor_reactivation', User::class, $user->id, [], $request);
+
+        try {
+            app(NotificationService::class)->send(
+                $user,
+                'Tài khoản Giảng viên đã được mở khóa',
+                'Chúc mừng! Yêu cầu cấp lại quyền giảng viên của bạn đã được Ban quản trị phê duyệt. Bạn có thể tiếp tục sử dụng đầy đủ các chức năng.',
+                'instructor_reactivation_approved',
+                route('instructor.dashboard')
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gửi thông báo mở khóa tài khoản giảng viên thất bại: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã phê duyệt mở khóa và cấp lại quyền giảng viên cho "' . $user->name . '".');
+    }
+
+    public function rejectReactivation(Request $request, User $user): RedirectResponse
+    {
+        if ($user->role !== 'instructor') {
+            return back()->with('error', 'Người dùng không phải giảng viên.');
+        }
+
+        $request->validate([
+            'notes' => ['required', 'string', 'max:1000'],
+        ], [
+            'notes.required' => 'Vui lòng nhập lý do từ chối yêu cầu cấp lại quyền.',
+        ]);
+
+        $notes = $request->input('notes');
+        $adminId = $request->user()->id;
+
+        $user->update([
+            'reactivation_status' => 'rejected',
+            'locked_reason' => $notes,
+        ]);
+
+        ActivityLogService::log($adminId, 'reject_instructor_reactivation', User::class, $user->id, [
+            'reason' => $notes,
+        ], $request);
+
+        try {
+            app(NotificationService::class)->send(
+                $user,
+                'Yêu cầu cấp lại quyền Giảng viên bị từ chối',
+                'Yêu cầu mở khóa và cấp lại quyền giảng viên của bạn chưa được chấp thuận: ' . $notes,
+                'instructor_reactivation_rejected',
+                route('instructor.profile')
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gửi thông báo từ chối cấp lại giảng viên thất bại: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã từ chối yêu cầu cấp lại quyền giảng viên cho "' . $user->name . '".');
     }
 }

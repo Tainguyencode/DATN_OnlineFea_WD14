@@ -425,4 +425,17 @@ class Course extends Model
             ? route('courses.lessons.show', [$this, $lesson])
             : null;
     }
+
+    public function totalLessonsCount(): int
+    {
+        if ($this->relationLoaded('courseSections') && $this->courseSections->isNotEmpty()) {
+            return $this->courseSections->flatMap(fn ($s) => $s->lessons ?? collect())->count();
+        }
+
+        if ($this->relationLoaded('chapters') && $this->chapters->isNotEmpty()) {
+            return $this->chapters->flatMap(fn ($c) => $c->lessons ?? collect())->count();
+        }
+
+        return \App\Models\Lesson::where('course_id', $this->id)->count();
+    }
 }

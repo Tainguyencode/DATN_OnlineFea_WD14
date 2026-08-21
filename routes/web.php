@@ -32,6 +32,7 @@ use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewCont
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
 use App\Http\Controllers\Web\Instructor\SubmissionController;
+use App\Http\Controllers\Web\Instructor\InstructorProfileController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\PaymentController;
@@ -259,11 +260,21 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
 
 // ─── GIẢNG VIÊN ───
 Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
+    // Trang hồ sơ & quản lý chứng chỉ / tài liệu minh chứng (luôn truy cập được kể cả khi locked)
+    Route::get('/profile', [InstructorProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/documents', [InstructorProfileController::class, 'uploadDocument'])->name('profile.documents.upload');
+    Route::delete('/profile/documents/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('profile.documents.delete');
+    Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('profile.documents.view');
+    Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('profile.submit-review');
+    Route::post('/profile/request-reactivation', [InstructorProfileController::class, 'requestReactivation'])->middleware('throttle:5,1')->name('profile.request-reactivation');
+
+    // Backward compatibility aliases for certificate upload/view/delete
     Route::get('/pending', [InstructorPendingController::class, 'show'])->name('pending');
-    Route::post('/certificates/upload', [InstructorPendingController::class, 'uploadCertificate'])->name('certificates.upload');
-    Route::delete('/certificates/{certificate}', [InstructorPendingController::class, 'deleteCertificate'])->name('certificates.delete');
-    Route::get('/certificates/{certificate}/view', [InstructorPendingController::class, 'viewCertificate'])->name('certificates.view');
-    Route::post('/submit-review', [InstructorPendingController::class, 'submitForReview'])->middleware('throttle:5,1')->name('submit-review');
+    Route::post('/certificates/upload', [InstructorProfileController::class, 'uploadDocument'])->name('certificates.upload');
+    Route::delete('/certificates/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('certificates.delete');
+    Route::get('/certificates/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('certificates.view');
+    Route::post('/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('submit-review');
     Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware('throttle:5,1')->name('resubmit');
 
     Route::middleware('approved.instructor')->group(function () {
@@ -290,8 +301,6 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
         Route::get('/comments', [\App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'index'])->name('comments.index');
         Route::get('/comments/{comment}', [\App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'show'])->name('comments.show');
-        Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
-        Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
         Route::middleware('verified')->group(function () {
             Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
@@ -359,6 +368,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');
         Route::get('/{user}/certificate', [InstructorApplicationController::class, 'viewCertificate'])->name('certificate');
         Route::get('/certificates/{certificate}/view', [InstructorApplicationController::class, 'viewCertificateItem'])->name('certificates.view');
+        Route::post('/{user}/documents/{certificate}/review', [InstructorApplicationController::class, 'reviewDocument'])->name('documents.review');
+        Route::post('/{user}/reactivation/approve', [InstructorApplicationController::class, 'approveReactivation'])->name('reactivation.approve');
+        Route::post('/{user}/reactivation/reject', [InstructorApplicationController::class, 'rejectReactivation'])->name('reactivation.reject');
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
     });

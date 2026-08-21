@@ -322,4 +322,68 @@ class CourseReviewWorkflowTest extends TestCase
         $this->assertNotNull($lesson);
         $this->assertEquals($course->id, $lesson->course_id);
     }
+
+    public function test_admin_course_reviews_index_displays_instructor_verification_status_and_badges(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+        $approvedInstructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'email_verified_at' => now(),
+        ]);
+        $approvedCourse = $this->makeSubmittableCourse($approvedInstructor);
+        $approvedCourse->update(['title' => 'Khóa học GV Đã Duyệt', 'status' => CourseStatus::PendingReview->value, 'submitted_at' => now()]);
+
+        $pendingInstructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'email_verified_at' => now(),
+        ]);
+        $pendingCourse = $this->makeSubmittableCourse($pendingInstructor);
+        $pendingCourse->update(['title' => 'Khóa học GV Chưa Duyệt', 'status' => CourseStatus::PendingReview->value, 'submitted_at' => now()]);
+
+        // Admin views the course reviews index
+        $this->actingAs($admin)
+            ->get(route('admin.course-reviews.index'))
+            ->assertOk()
+            ->assertSee('🟢 Đã duyệt')
+            ->assertSee('🟡 Chưa duyệt hồ sơ')
+            ->assertSee('⚠️ Giảng viên chưa được duyệt');
+
+        // Test filter by approved instructor
+        $this->actingAs($admin)
+            ->get(route('admin.course-reviews.index', ['instructor_status' => 'approved']))
+            ->assertOk()
+            ->assertSee($approvedCourse->title)
+            ->assertDontSee($pendingCourse->title);
+
+        // Test filter by pending instructor
+        $this->actingAs($admin)
+            ->get(route('admin.course-reviews.index', ['instructor_status' => 'pending']))
+            ->assertOk()
+            ->assertSee($pendingCourse->title)
+            ->assertDontSee($approvedCourse->title);
+    }
+
+    public function test_admin_course_review_page_displays_instructor_info_block_and_profile_link(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+        $pendingInstructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'email_verified_at' => now(),
+        ]);
+        $course = $this->makeSubmittableCourse($pendingInstructor);
+        $course->update(['status' => CourseStatus::PendingReview->value, 'submitted_at' => now()]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.courses.review', $course))
+            ->assertOk()
+            ->assertSee('🟡 Chưa duyệt hồ sơ')
+            ->assertSee('⚠️ Giảng viên chưa được duyệt')
+            ->assertSee('Xem hồ sơ giảng viên')
+            ->assertSee(route('admin.instructors.applications.show', $pendingInstructor));
+    }
 }

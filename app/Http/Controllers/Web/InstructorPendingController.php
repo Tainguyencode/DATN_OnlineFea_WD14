@@ -322,6 +322,7 @@ class InstructorPendingController extends Controller
             'phone' => $validated['phone'],
             'bio' => $validated['bio'],
             'instructor_status' => 'pending',
+            'needs_admin_review' => true,
             'submitted_for_review_at' => now(),
             'rejected_reason' => null,
         ]);
