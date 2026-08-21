@@ -59,6 +59,27 @@ class LessonNote extends Model
             ?? $lesson?->chapter?->course;
     }
 
+    protected $appends = [
+        'timestamp_label',
+        'update_url',
+        'delete_url',
+    ];
+
+    public function getTimestampLabelAttribute(): ?string
+    {
+        return $this->timestampLabel();
+    }
+
+    public function getUpdateUrlAttribute(): string
+    {
+        return route('lesson-notes.update', $this);
+    }
+
+    public function getDeleteUrlAttribute(): string
+    {
+        return route('lesson-notes.destroy', $this);
+    }
+
     public function sectionTitle(): ?string
     {
         return $this->lesson?->section?->title

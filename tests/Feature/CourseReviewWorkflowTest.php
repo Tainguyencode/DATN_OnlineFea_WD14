@@ -347,8 +347,8 @@ class CourseReviewWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.course-reviews.index'))
             ->assertOk()
-            ->assertSee('🟢 Đã duyệt')
-            ->assertSee('🟡 Chưa duyệt hồ sơ')
+            ->assertSee('Đã duyệt')
+            ->assertSee('Chưa duyệt hồ sơ')
             ->assertSee('⚠️ Giảng viên chưa được duyệt');
 
         // Test filter by approved instructor
@@ -381,7 +381,7 @@ class CourseReviewWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.courses.review', $course))
             ->assertOk()
-            ->assertSee('🟡 Chưa duyệt hồ sơ')
+            ->assertSee('Chưa duyệt hồ sơ')
             ->assertSee('⚠️ Giảng viên chưa được duyệt')
             ->assertSee('Xem hồ sơ giảng viên')
             ->assertSee(route('admin.instructors.applications.show', $pendingInstructor));
