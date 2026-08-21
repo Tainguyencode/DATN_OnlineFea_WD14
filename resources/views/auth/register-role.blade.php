@@ -197,26 +197,6 @@
                         @enderror
                     </div>
 
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <x-auth.input
-                            label="LinkedIn"
-                            name="linkedin_url"
-                            :value="old('linkedin_url')"
-                            placeholder="https://linkedin.com/in/..."
-                        />
-                        <x-auth.input
-                            label="GitHub"
-                            name="github_url"
-                            :value="old('github_url')"
-                            placeholder="https://github.com/..."
-                        />
-                        <x-auth.input
-                            label="Website"
-                            name="website_url"
-                            :value="old('website_url')"
-                            placeholder="https://yourwebsite.com"
-                        />
-                    </div>
 
                     <div>
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">

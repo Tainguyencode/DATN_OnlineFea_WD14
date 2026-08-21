@@ -17,12 +17,32 @@ class InstructorCertificate extends Model
         'mime_type',
         'file_size',
         'title',
+        'document_type',
         'status',
         'rejection_reason',
         'uploaded_at',
         'reviewed_at',
         'reviewed_by',
     ];
+
+    public static function documentTypeLabels(): array
+    {
+        return [
+            'certificate' => 'Chứng chỉ',
+            'degree' => 'Bằng cấp',
+            'employment_contract' => 'Hợp đồng lao động',
+            'transcript' => 'Bảng điểm',
+            'employment_confirmation' => 'Giấy xác nhận công tác',
+            'other' => 'Tài liệu minh chứng khác',
+        ];
+    }
+
+    public function documentTypeLabel(): string
+    {
+        $types = static::documentTypeLabels();
+
+        return $types[$this->document_type] ?? 'Chứng chỉ';
+    }
 
     protected function casts(): array
     {

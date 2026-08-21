@@ -75,6 +75,14 @@
                                     {!! $item['icon'] !!}
                                 </span>
                                 <span class="min-w-0 flex-1 truncate">{{ $item['label'] }}</span>
+                                @php
+                                    $totalChildrenBadge = collect($children)->sum(fn($c) => (int)($c['badge'] ?? 0));
+                                @endphp
+                                @if($totalChildrenBadge > 0)
+                                    <span x-show="!open" class="inline-flex items-center justify-center rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-black text-white leading-none shadow-sm mr-1.5">
+                                        {{ $totalChildrenBadge }}
+                                    </span>
+                                @endif
                                 <svg class="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ease-out motion-reduce:transition-none" :class="open ? 'rotate-90 text-white' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                                 </svg>
@@ -93,6 +101,11 @@
                                             {!! $child['icon'] !!}
                                         </span>
                                         <span class="min-w-0 truncate">{{ $child['label'] }}</span>
+                                        @if(!empty($child['badge']))
+                                            <span class="ml-auto inline-flex items-center justify-center rounded-full {{ $child['badge_color'] ?? 'bg-amber-500' }} px-2 py-0.5 text-[11px] font-black text-white leading-none shadow-sm">
+                                                {{ $child['badge'] }}
+                                            </span>
+                                        @endif
                                     </a>
                                 @endforeach
                             </div>
@@ -105,6 +118,11 @@
                                 {!! $item['icon'] !!}
                             </span>
                             <span class="truncate">{{ $item['label'] }}</span>
+                            @if(!empty($item['badge']))
+                                <span class="ml-auto inline-flex items-center justify-center rounded-full {{ $item['badge_color'] ?? 'bg-amber-500' }} px-2 py-0.5 text-[11px] font-black text-white leading-none shadow-sm">
+                                    {{ $item['badge'] }}
+                                </span>
+                            @endif
                         </a>
                     @endif
                 @endforeach

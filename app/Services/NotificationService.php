@@ -53,6 +53,13 @@ class NotificationService
         return count($rows);
     }
 
+    public function notifyAdmins(string $title, string $message, string $type, ?string $url = null): int
+    {
+        $admins = User::query()->where('role', 'admin')->where('is_active', true)->get();
+
+        return $this->sendToMany($admins, $title, $message, $type, $url);
+    }
+
     public function sendByAudience(string $audience, string $title, string $message, ?string $url = null, ?int $courseId = null): int
     {
         $users = match ($audience) {

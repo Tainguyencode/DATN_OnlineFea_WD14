@@ -133,6 +133,87 @@
         </div>
     </section>
 
+    {{-- ========================================================================= --}}
+    {{-- THÔNG TIN GIẢNG VIÊN TẠO KHÓA HỌC                                        --}}
+    {{-- ========================================================================= --}}
+    @php
+        $instructor = $course->instructor;
+        $certsCount = $instructor?->instructorCertificates?->count() ?? 0;
+    @endphp
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 {{ $instructor?->instructor_status !== 'approved' ? 'border-amber-300 bg-amber-50/20 dark:border-amber-700/50 dark:bg-amber-950/10' : '' }}">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex items-start gap-4">
+                <img src="{{ $instructor?->avatarUrl() ?? 'https://ui-avatars.com/api/?name='.urlencode($instructor?->name ?? 'Instructor') }}"
+                     alt="{{ $instructor?->name }}"
+                     class="h-16 w-16 rounded-2xl object-cover border-2 border-slate-200 shadow-sm shrink-0">
+                <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-lg font-black text-slate-950 dark:text-white">{{ $instructor?->name ?? 'Chưa xác định' }}</h3>
+                        <span class="text-xs text-slate-400 font-medium">({{ '@' . ($instructor?->username ?? 'user') }})</span>
+
+                        {{-- Trạng thái hồ sơ giảng viên --}}
+                        @if($instructor?->isLocked())
+                            <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-bold text-slate-800 border border-slate-400">
+                                 Đang bị khóa
+                            </span>
+                        @elseif($instructor?->instructor_status === 'approved')
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-300">
+                                 Đã duyệt
+                            </span>
+                        @elseif($instructor?->instructor_status === 'rejected')
+                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800 border border-rose-300">
+                                 Bị từ chối
+                            </span>
+                        @else
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                                 Chưa duyệt hồ sơ
+                            </span>
+                        @endif
+
+                        @if($instructor?->instructor_status !== 'approved')
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-xs font-black text-amber-700 dark:text-amber-300">
+                                ⚠️ Giảng viên chưa được duyệt
+                            </span>
+                        @endif
+                    </div>
+
+                    <p class="text-xs text-slate-500">
+                        Email: <strong class="text-slate-800 dark:text-slate-200">{{ $instructor?->email }}</strong>
+                        @if($instructor?->instructorProfile?->phone ?? $instructor?->phone)
+                            · SĐT: <strong class="text-slate-800 dark:text-slate-200">{{ $instructor->instructorProfile?->phone ?? $instructor->phone }}</strong>
+                        @endif
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-4 pt-1 text-xs text-slate-600 dark:text-slate-400">
+                        <div>
+                            <span>Trạng thái tài khoản:</span>
+                            <strong class="text-slate-900 dark:text-white">{{ $instructor?->account_status === 'locked' ? 'Bị khóa' : 'Hoạt động' }}</strong>
+                        </div>
+                        <div>
+                            <span>Chứng chỉ / Tài liệu:</span>
+                            <strong class="text-slate-900 dark:text-white">{{ $certsCount }} tài liệu</strong>
+                        </div>
+                        <div>
+                            <span>Khóa học chờ duyệt:</span>
+                            <strong class="text-amber-600 dark:text-amber-400">{{ $instructorPendingCoursesCount ?? 1 }} khóa học</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if($instructor)
+                <div class="flex items-center gap-3 shrink-0">
+                    <a href="{{ route('admin.instructors.applications.show', $instructor) }}"
+                       target="_blank"
+                       class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+                        <span>Xem hồ sơ giảng viên</span>
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                    </a>
+                </div>
+            @endif
+        </div>
+    </section>
+
     <div class="grid gap-6 xl:grid-cols-2">
         <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <h3 class="text-lg font-bold text-slate-950">Mô tả chi tiết</h3>

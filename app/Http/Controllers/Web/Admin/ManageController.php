@@ -160,10 +160,19 @@ class ManageController extends Controller
     public function review(Course $course): View|RedirectResponse
     {
         $course->load([
-            'instructor:id,name,email,avatar,bio',
+            'instructor:id,name,username,email,avatar,bio,role,instructor_status,account_status,locked_at,locked_reason',
+            'instructor.instructorCertificates',
+            'instructor.instructorProfile',
+            'instructor.instructorApplication',
             'category:id,parent_id,name',
             'category.parent:id,name',
         ]);
+
+        $instructorPendingCoursesCount = Course::where('instructor_id', $course->instructor_id)
+            ->whereIn('status', [\App\Enums\CourseStatus::PendingReview->value, \App\Enums\CourseStatus::PendingUpdate->value])
+            ->count();
+
+        $instructorTotalCoursesCount = Course::where('instructor_id', $course->instructor_id)->count();
 
         $curriculumSections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
 
@@ -227,6 +236,8 @@ class ManageController extends Controller
             'videoLessons' => $videoLessons,
             'checklistKeys' => CourseReviewItem::ADMIN_CHECKLIST_KEYS,
             'checklistLabels' => CourseReviewItem::ITEM_LABELS,
+            'instructorPendingCoursesCount' => $instructorPendingCoursesCount,
+            'instructorTotalCoursesCount' => $instructorTotalCoursesCount,
         ]);
     }
 

@@ -25,15 +25,13 @@ class EnsureApprovedInstructor
             return redirect()->route('verification.notice');
         }
 
-        if ($user->isInstructorDeadlineExpired()) {
-            $user->demoteToStudentDueToExpiry();
+        if ($user->isLocked()) {
+            if ($request->routeIs('instructor.profile*') || $request->routeIs('instructor.pending*') || $request->routeIs('instructor.certificates.*')) {
+                return $next($request);
+            }
 
-            return redirect()->route('student.dashboard')
-                ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ kể từ khi xác thực email. Tài khoản của bạn đã được chuyển về Học viên.');
-        }
-
-        if ($user->instructor_status !== 'approved') {
-            return redirect()->route('instructor.pending');
+            return redirect()->route('instructor.profile')
+                ->with('error', 'Tài khoản giảng viên của bạn đang bị tạm khóa. Vui lòng kiểm tra mục Hồ sơ & Chứng chỉ.');
         }
 
         return $next($request);

@@ -72,6 +72,7 @@ class AuthService
             'avatar' => null,
             'bio' => $validated['bio'] ?? null,
             'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
+            'needs_admin_review' => $validated['role'] === 'instructor',
             'is_active' => true,
             'password_changed_at' => now(),
         ]);
@@ -128,6 +129,17 @@ class AuthService
                 'certificate_path' => $certificatePath,
                 'status' => 'pending',
             ]);
+
+            try {
+                app(\App\Services\NotificationService::class)->notifyAdmins(
+                    'Đăng ký Giảng viên mới',
+                    "Giảng viên {$user->name} ({$user->email}) vừa đăng ký tài khoản và đang chờ xét duyệt.",
+                    'instructor_registered',
+                    route('admin.instructors.applications.show', $user)
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Gửi thông báo đăng ký giảng viên cho admin thất bại: ' . $e->getMessage());
+            }
         }
 
         ActivityLogService::log($user->id, 'register', User::class, $user->id, [

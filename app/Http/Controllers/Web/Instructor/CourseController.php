@@ -216,6 +216,14 @@ class CourseController extends Controller
     public function submit(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
         $this->ensureOwned($course);
+
+        // Nếu khóa học đã được gửi duyệt thành công trước đó (pending_review / pending_update), chuyển hướng êm đẹp về danh sách
+        if (in_array($course->status, [Course::STATUS_PENDING, Course::STATUS_PENDING_UPDATE, 'under_review'], true)) {
+            return redirect()
+                ->route('instructor.courses.index')
+                ->with('success', 'Khóa học đã được gửi và đang trong quá trình chờ Admin duyệt.');
+        }
+
         abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
         if (! $course->copyright_agreed) {
@@ -240,6 +248,12 @@ class CourseController extends Controller
     public function submitPage(Course $course): RedirectResponse
     {
         $this->ensureOwned($course);
+
+        if (in_array($course->status, [Course::STATUS_PENDING, Course::STATUS_PENDING_UPDATE, 'under_review'], true)) {
+            return redirect()
+                ->route('instructor.courses.index')
+                ->with('success', 'Khóa học đã được gửi và đang trong quá trình chờ Admin duyệt.');
+        }
 
         if ($course->isEditable()) {
             return redirect()->route('instructor.courses.edit', $course);
