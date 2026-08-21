@@ -22,9 +22,9 @@ class StoreDiscussionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => ['required', 'string', 'max:255'],
-            'content' => ['required', 'string'],
-            'attachment' => ['nullable', 'file', 'max:51200'], // Max 50MB
+            'title' => ['nullable', 'string', 'max:255'],
+            'content' => ['nullable', 'string', 'required_without:attachment'],
+            'attachment' => ['nullable', 'file', 'max:51200', 'required_without:content'], // Max 50MB
         ];
     }
 
@@ -34,11 +34,11 @@ class StoreDiscussionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'title.required' => 'Tiêu đề câu hỏi không được để trống.',
             'title.string' => 'Tiêu đề câu hỏi phải là chuỗi ký tự.',
             'title.max' => 'Tiêu đề câu hỏi không được vượt quá :max ký tự.',
-            'content.required' => 'Nội dung chi tiết câu hỏi không được để trống.',
+            'content.required_without' => 'Vui lòng nhập nội dung câu hỏi hoặc đính kèm tệp tin.',
             'content.string' => 'Nội dung chi tiết phải là chuỗi ký tự.',
+            'attachment.required_without' => 'Vui lòng đính kèm tệp tin hoặc nhập nội dung câu hỏi.',
             'attachment.file' => 'Tệp đính kèm không hợp lệ.',
             'attachment.max' => 'Dung lượng tệp đính kèm không được vượt quá 50MB.',
         ];

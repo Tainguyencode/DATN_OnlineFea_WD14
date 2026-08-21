@@ -22,8 +22,9 @@ class StoreDiscussionReplyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => ['required', 'string'],
-            'attachment' => ['nullable', 'file', 'max:51200'], // Max 50MB
+            'content' => ['nullable', 'string', 'required_without:attachment'],
+            'reply_to_message_id' => ['nullable', 'integer'],
+            'attachment' => ['nullable', 'file', 'max:51200', 'required_without:content'], // Max 50MB
         ];
     }
 
@@ -33,7 +34,10 @@ class StoreDiscussionReplyRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'content.required' => 'Nội dung phản hồi không được để trống.',
+            'content.required_without' => 'Vui lòng nhập nội dung phản hồi hoặc đính kèm tệp.',
+            'content.string' => 'Nội dung phản hồi phải là chuỗi văn bản.',
+            'attachment.required_without' => 'Vui lòng đính kèm tệp hoặc nhập nội dung phản hồi.',
+            'attachment.file' => 'Tệp đính kèm không hợp lệ.',
             'attachment.max' => 'Tệp đính kèm không được vượt quá 50MB.',
         ];
     }
@@ -50,12 +54,15 @@ class StoreDiscussionReplyRequest extends FormRequest
     {
         $discussion = $this->route('discussion');
 
-        $redirectUrl = route('courses.lessons.show', [
-            'course' => $discussion->lesson->course,
-            'lesson' => $discussion->lesson,
-            'discussion_id' => $discussion->id,
-            'tab' => 'qa',
-        ]);
+        $redirectUrl = url()->previous();
+        if (! $redirectUrl && $discussion?->lesson) {
+            $redirectUrl = route('courses.lessons.show', [
+                'course' => $discussion->lesson->course,
+                'lesson' => $discussion->lesson,
+                'discussion_id' => $discussion->id,
+                'tab' => 'qa',
+            ]);
+        }
 
         throw (new \Illuminate\Validation\ValidationException($validator))
             ->errorBag($this->errorBag)

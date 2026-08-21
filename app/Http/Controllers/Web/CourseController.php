@@ -278,7 +278,7 @@ class CourseController extends Controller
             } elseif ($user->isStudent()) {
                 $discussions = Discussion::where('lesson_id', $lesson->id)
                     ->where('user_id', $user->id)
-                    ->with(['user', 'replies.user'])
+                    ->with(['user', 'replies.user', 'replies.replyTo.user'])
                     ->latest()
                     ->get();
             }
@@ -289,7 +289,7 @@ class CourseController extends Controller
         if ($discussionId > 0 && $discussions->isNotEmpty()) {
             $activeDiscussion = $discussions->firstWhere('id', $discussionId);
             if ($activeDiscussion) {
-                $activeDiscussion->load(['user', 'replies.user']);
+                $activeDiscussion->load(['user', 'replies.user', 'replies.replyTo.user']);
             }
         }
 

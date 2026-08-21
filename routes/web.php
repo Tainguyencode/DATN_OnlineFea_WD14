@@ -115,7 +115,11 @@ Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssi
 
 Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
+    Route::post('/discussions/{discussion}/recall', [DiscussionController::class, 'recallDiscussion'])->name('discussions.recall');
+    Route::delete('/discussions/{discussion}', [DiscussionController::class, 'destroyDiscussion'])->name('discussions.destroy');
     Route::post('/discussions/{discussion}/replies', [DiscussionController::class, 'storeReply'])->name('discussions.replies.store');
+    Route::post('/discussion-replies/{reply}/recall', [DiscussionController::class, 'recallReply'])->name('discussions.replies.recall');
+    Route::delete('/discussion-replies/{reply}', [DiscussionController::class, 'destroyReply'])->name('discussions.replies.destroy');
     Route::post('/discussion-replies/{reply}/toggle-helpful', [DiscussionController::class, 'toggleHelpful'])->name('discussions.replies.toggle-helpful');
     Route::post('/lessons/{lesson}/comments', [\App\Http\Controllers\Web\LessonCommentController::class, 'store'])->name('lessons.comments.store');
     Route::put('/comments/{comment}', [\App\Http\Controllers\Web\LessonCommentController::class, 'update'])->name('comments.update');
