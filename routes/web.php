@@ -242,10 +242,16 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::delete('/recently-viewed-courses/{recentlyViewedCourse}', [RecentlyViewedCourseController::class, 'destroy'])->name('recently-viewed.destroy');
     Route::get('/cart', [CartController::class, 'index'])->name('cart');
     Route::post('/cart/add/{course}', [CartController::class, 'add'])->name('cart.add');
+    Route::post('/cart/buy-now/{course}', [CartController::class, 'buyNow'])->name('cart.buy_now');
     Route::delete('/cart/remove/{courseId}', [CartController::class, 'remove'])->name('cart.remove');
+    Route::delete('/cart/remove-ajax/{courseId}', [CartController::class, 'removeAjax'])->name('cart.remove_ajax');
+    Route::post('/cart/move-to-wishlist/{courseId}', [CartController::class, 'moveToWishlist'])->name('cart.move_to_wishlist');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
     Route::post('/cart/coupon/apply', [CartController::class, 'applyCoupon'])->name('cart.coupon.apply');
     Route::get('/checkout/{order_code}/pay', [CartController::class, 'showPaymentPage'])->name('checkout.pay');
+    Route::get('/checkout/{order_code}/status', [CartController::class, 'checkStatus'])->name('checkout.status');
+    Route::post('/checkout/{order_code}/apply-coupon', [CartController::class, 'applyCouponToOrder'])->name('checkout.apply_coupon');
+    Route::delete('/checkout/{order_code}/remove-coupon', [CartController::class, 'removeCouponFromOrder'])->name('checkout.remove_coupon');
     Route::post('/checkout/{order_code}/pay', [CartController::class, 'processPayment'])->name('checkout.process_payment');
     Route::get('/checkout/mock-gateway/{order_code}', [CartController::class, 'mockGateway'])->name('checkout.mock_gateway');
     Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->name('checkout.simulate');
@@ -422,7 +428,6 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/commissions/instructors/{user}', [CommissionController::class, 'updateInstructorRate'])->name('commissions.update-instructor');
     Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals.index');
     Route::post('/withdrawals/{withdrawal}/approve', [AdminWithdrawalController::class, 'approve'])->name('withdrawals.approve');
-    Route::post('/withdrawals/{withdrawal}/auto-payout', [AdminWithdrawalController::class, 'autoPayout'])->name('withdrawals.auto-payout');
     Route::post('/withdrawals/{withdrawal}/reject', [AdminWithdrawalController::class, 'reject'])->name('withdrawals.reject');
     Route::get('/activity-logs', [ManageController::class, 'activityLogs'])->name('activity-logs');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');

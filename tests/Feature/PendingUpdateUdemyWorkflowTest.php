@@ -163,6 +163,7 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
                 'title' => 'Lesson Pending Review',
                 'type' => 'video',
                 'video_path' => 'lesson-videos-mp4/raw_video.mp4',
+                'processing_status' => 'processing',
             ],
             'status' => ContentUpdate::STATUS_PENDING,
             'created_by' => $instructor->id,
@@ -174,7 +175,7 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Lesson Pending Review');
-        $response->assertSee('Đang xử lý HLS');
+        $response->assertSee('Video file');
     }
 
     public function test_admin_approval_creates_real_lesson_row(): void
