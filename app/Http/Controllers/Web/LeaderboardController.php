@@ -4,125 +4,104 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\UserPoint;
-use App\Models\Course;
 use App\Models\Enrollment;
-use App\Models\QuizAttempt;
+use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
 class LeaderboardController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, PointService $pointService)
     {
-        $period = $request->query('period', 'all');
-        $courseId = $request->query('course_id');
-        $search = $request->query('search');
-
-        // Date constraints
-        $dateConstraint = null;
-        if ($period === 'week') {
-            $dateConstraint = now()->startOfWeek();
-        } elseif ($period === 'month') {
-            $dateConstraint = now()->startOfMonth();
-        } elseif ($period === 'year') {
-            $dateConstraint = now()->startOfYear();
+        // 1. Period filter: default to 'week', option for 'month'
+        $period = $request->query('period', 'week');
+        if (!in_array($period, ['week', 'month'])) {
+            $period = 'week';
         }
 
-        // 1. Build subquery to aggregate points per student user
+        $search = $request->query('search');
+
+        // Date range constraints
+        if ($period === 'month') {
+            $startDate = now()->startOfMonth();
+            $endDate = now()->endOfMonth();
+            $countdownTarget = $endDate;
+        } else {
+            $period = 'week';
+            $startDate = now()->startOfWeek();
+            $endDate = now()->endOfWeek();
+            $countdownTarget = $endDate;
+        }
+
+        // 2. Aggregate points subquery for the current period
         $pointsSubquery = DB::table('user_points')
-            ->select('user_id', DB::raw('SUM(points) as total_points'))
-            ->when($dateConstraint, fn($q) => $q->where('created_at', '>=', $dateConstraint))
-            ->when($courseId, fn($q) => $q->where('course_id', $courseId))
+            ->select('user_id', DB::raw('SUM(points) as period_xp'))
+            ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('user_id');
 
-        // 2. Query student users who have points
+        // 3. Query student users with points in period
         $leaderboardQuery = User::query()
             ->where('role', 'student')
             ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
-            ->select('users.*', 'points_table.total_points')
+            ->select('users.*', 'points_table.period_xp')
             ->when($search, fn($q) => $q->where('users.name', 'like', "%{$search}%"))
-            ->orderByDesc('points_table.total_points')
+            ->orderByDesc('points_table.period_xp')
             ->orderBy('users.id');
 
-        // Limit the leaderboard to top 100 students (in total) but paginated
-        $leaderboard = $leaderboardQuery->paginate(20);
+        $leaderboard = $leaderboardQuery->paginate(20)->withQueryString();
 
-        // Fetch additional metrics for each user on the current page
-        foreach ($leaderboard->items() as $user) {
-            // Rank of the student (number of students with higher points + 1)
-            $user->rank = DB::table('user_points')
-                ->select('user_id', DB::raw('SUM(points) as total_points'))
-                ->when($dateConstraint, fn($q) => $q->where('created_at', '>=', $dateConstraint))
-                ->when($courseId, fn($q) => $q->where('course_id', $courseId))
-                ->groupBy('user_id')
-                ->having('total_points', '>', $user->total_points)
-                ->get()
-                ->count() + 1;
-
+        // Attach rank and extra metrics to page items
+        foreach ($leaderboard->items() as $index => $user) {
+            $user->period_xp = (int) $user->period_xp;
+            $user->total_xp = $pointService->getUserTotalPoints($user->id);
             $user->completed_courses_count = Enrollment::where('user_id', $user->id)
                 ->where('status', Enrollment::STATUS_COMPLETED)
                 ->count();
-
-            $user->avg_quiz_score = QuizAttempt::where('user_id', $user->id)
-                ->whereNotNull('completed_at')
-                ->groupBy('quiz_id')
-                ->select(DB::raw('MAX(percent) as max_percent'))
-                ->get()
-                ->avg('max_percent') ?? 0;
+            $user->streak_days = $pointService->getUserStreakDays($user->id);
         }
 
-        // 3. Persistent stats for logged in student user
+        // Top 1, Top 2, Top 3 for podium display (if on page 1)
+        $top3 = [];
+        if ($leaderboard->currentPage() === 1 && !$search) {
+            $top3 = $leaderboard->items();
+            $top3 = array_slice($top3, 0, 3);
+        }
+
+        // 4. Current user personal achievement stats
         $currentUserData = null;
         $currentUser = auth()->user();
         if ($currentUser && $currentUser->role === 'student') {
-            $currentUserPoints = (int) DB::table('user_points')
-                ->where('user_id', $currentUser->id)
-                ->when($dateConstraint, fn($q) => $q->where('created_at', '>=', $dateConstraint))
-                ->when($courseId, fn($q) => $q->where('course_id', $courseId))
-                ->sum('points');
-
-            $currentUserRank = DB::table('user_points')
-                ->select('user_id', DB::raw('SUM(points) as total_points'))
-                ->when($dateConstraint, fn($q) => $q->where('created_at', '>=', $dateConstraint))
-                ->when($courseId, fn($q) => $q->where('course_id', $courseId))
-                ->groupBy('user_id')
-                ->having('total_points', '>', $currentUserPoints)
-                ->get()
-                ->count() + 1;
-
-            $currentUserCompletedCourses = Enrollment::where('user_id', $currentUser->id)
+            $weeklyXp = $pointService->getUserWeeklyPoints($currentUser->id);
+            $monthlyXp = $pointService->getUserMonthlyPoints($currentUser->id);
+            $totalXp = $pointService->getUserTotalPoints($currentUser->id);
+            $weeklyRank = $pointService->getUserRank($currentUser->id, 'week');
+            $monthlyRank = $pointService->getUserRank($currentUser->id, 'month');
+            $streakDays = $pointService->getUserStreakDays($currentUser->id);
+            $completedCourses = Enrollment::where('user_id', $currentUser->id)
                 ->where('status', Enrollment::STATUS_COMPLETED)
                 ->count();
 
-            $currentUserAvgQuizScore = QuizAttempt::where('user_id', $currentUser->id)
-                ->whereNotNull('completed_at')
-                ->groupBy('quiz_id')
-                ->select(DB::raw('MAX(percent) as max_percent'))
-                ->get()
-                ->avg('max_percent') ?? 0;
-
             $currentUserData = [
                 'user' => $currentUser,
-                'total_points' => $currentUserPoints,
-                'rank' => $currentUserRank,
-                'completed_courses_count' => $currentUserCompletedCourses,
-                'avg_quiz_score' => $currentUserAvgQuizScore,
-                'badges' => $currentUser->badges
+                'weekly_xp' => $weeklyXp,
+                'monthly_xp' => $monthlyXp,
+                'total_xp' => $totalXp,
+                'weekly_rank' => $weeklyRank,
+                'monthly_rank' => $monthlyRank,
+                'streak_days' => $streakDays,
+                'completed_courses' => $completedCourses,
+                'badges' => $currentUser->badges,
             ];
         }
 
-        // Fetch courses for the dropdown filter
-        $courses = Course::where('status', 'published')->get();
-
         return view('leaderboard.index', compact(
             'leaderboard',
+            'top3',
             'currentUserData',
-            'courses',
             'period',
-            'courseId',
-            'search'
+            'search',
+            'countdownTarget'
         ));
     }
 }
