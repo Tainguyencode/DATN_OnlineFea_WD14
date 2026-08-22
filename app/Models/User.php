@@ -23,10 +23,13 @@ use Illuminate\Support\Facades\Storage;
     'name', 'username', 'email', 'password', 'role', 'avatar', 'bio', 'phone',
     'google_id', 'facebook_id', 'github_id', 'microsoft_id',
     'two_factor_enabled', 'two_factor_secret', 'is_active',
+    'account_status', 'locked_at', 'locked_reason',
+    'reactivation_requested_at', 'reactivation_status', 'reactivation_reason', 'profile_deadline_at',
     'last_login_at', 'last_login_ip', 'password_changed_at',
     'last_learning_at', 'engagement_email_stage', 'last_engagement_sent_at',
     'commission_rate', 'bank_code', 'bank_name', 'bank_account_number', 'bank_account_name',
-    'instructor_status', 'approved_at', 'approved_by', 'rejected_reason',
+    'instructor_status', 'submitted_for_review_at', 'approved_at', 'approved_by', 'rejected_reason',
+    'needs_admin_review', 'admin_last_reviewed_at',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -206,6 +209,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SocialAccount::class);
     }
 
+    public function lessonComments(): HasMany
+    {
+        return $this->hasMany(LessonComment::class);
+    }
+
+    public function instructorCertificates(): HasMany
+    {
+        return $this->hasMany(InstructorCertificate::class)->orderByDesc('uploaded_at');
+    }
+
     public function instructorProfile(): HasOne
     {
         return $this->hasOne(InstructorProfile::class);
@@ -225,7 +238,11 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'submitted_for_review_at' => 'datetime',
             'approved_at' => 'datetime',
+            'locked_at' => 'datetime',
+            'reactivation_requested_at' => 'datetime',
+            'profile_deadline_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_enabled' => 'boolean',
             'is_active' => 'boolean',
@@ -235,7 +252,131 @@ class User extends Authenticatable implements MustVerifyEmail
             'last_engagement_sent_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'commission_rate' => 'decimal:2',
+            'needs_admin_review' => 'boolean',
+            'admin_last_reviewed_at' => 'datetime',
         ];
+    }
+
+    public function scopeNeedsAdminReview($query)
+    {
+        return $query->where('needs_admin_review', true);
+    }
+
+    public function markNeedsAdminReview(): bool
+    {
+        return $this->update([
+            'needs_admin_review' => true,
+        ]);
+    }
+
+    public function markAdminReviewed(): bool
+    {
+        return $this->update([
+            'needs_admin_review' => false,
+            'admin_last_reviewed_at' => now(),
+        ]);
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->account_status === 'locked' || $this->account_status === 'suspended';
+    }
+
+    public function getInstructorDeadlineAtAttribute(): ?\Carbon\Carbon
+    {
+        if ($this->profile_deadline_at) {
+            return $this->profile_deadline_at;
+        }
+
+        if (! $this->email_verified_at) {
+            return null;
+        }
+
+        return $this->email_verified_at->copy()->addDays(7);
+    }
+
+    public function getInstructorDeadlineDaysRemainingAttribute(): int
+    {
+        $deadline = $this->instructor_deadline_at;
+        if (! $deadline) {
+            return 7;
+        }
+
+        if (now()->greaterThanOrEqualTo($deadline)) {
+            return 0;
+        }
+
+        return (int) ceil(now()->floatDiffInDays($deadline, false));
+    }
+
+    public function isInstructorDeadlineExpired(): bool
+    {
+        if ($this->role !== 'instructor' || $this->instructor_status === 'approved' || $this->isLocked()) {
+            return false;
+        }
+
+        $deadline = $this->instructor_deadline_at;
+        if (! $deadline) {
+            return false;
+        }
+
+        return $this->submitted_for_review_at === null && now()->greaterThan($deadline);
+    }
+
+    public function lockDueToProfileDeadline(string $reason = 'Bạn chưa hoàn thiện hồ sơ chứng chỉ trong thời hạn 7 ngày.'): void
+    {
+        $this->update([
+            'account_status' => 'locked',
+            'locked_at' => now(),
+            'locked_reason' => $reason,
+            'reactivation_status' => 'none',
+        ]);
+    }
+
+    public function canRequestReactivation(): bool
+    {
+        if (! $this->isLocked() || ! $this->locked_at) {
+            return false;
+        }
+
+        if ($this->reactivation_status === 'pending') {
+            return false;
+        }
+
+        $cooldownEndsAt = $this->locked_at->copy()->addDays(14);
+
+        return now()->greaterThanOrEqualTo($cooldownEndsAt);
+    }
+
+    public function reactivationCooldownDaysRemaining(): int
+    {
+        if (! $this->locked_at) {
+            return 0;
+        }
+
+        $cooldownEndsAt = $this->locked_at->copy()->addDays(14);
+        if (now()->greaterThanOrEqualTo($cooldownEndsAt)) {
+            return 0;
+        }
+
+        return (int) ceil(now()->floatDiffInDays($cooldownEndsAt, false));
+    }
+
+    public function unlockAccount(string $status = 'active', string $instructorStatus = 'pending'): void
+    {
+        $this->update([
+            'account_status' => 'active',
+            'locked_at' => null,
+            'locked_reason' => null,
+            'reactivation_status' => 'approved',
+            'instructor_status' => $instructorStatus,
+            'profile_deadline_at' => now()->addDays(7),
+        ]);
+    }
+
+    public function demoteToStudentDueToExpiry(): void
+    {
+        $this->lockDueToProfileDeadline();
     }
 
     public function isAdmin(): bool
@@ -269,8 +410,8 @@ class User extends Authenticatable implements MustVerifyEmail
     public function dashboardUrl(): string
     {
         if ($this->role === 'instructor') {
-            if ($this->instructor_status !== 'approved') {
-                return route('instructor.pending');
+            if ($this->isLocked()) {
+                return route('instructor.profile');
             }
 
             return route('instructor.dashboard');

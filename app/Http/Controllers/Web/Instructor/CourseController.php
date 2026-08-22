@@ -216,6 +216,14 @@ class CourseController extends Controller
     public function submit(Request $request, Course $course, CourseReviewService $reviewService): RedirectResponse
     {
         $this->ensureOwned($course);
+
+        // Nếu khóa học đã được gửi duyệt thành công trước đó (pending_review / pending_update), chuyển hướng êm đẹp về danh sách
+        if (in_array($course->status, [Course::STATUS_PENDING, Course::STATUS_PENDING_UPDATE, 'under_review'], true)) {
+            return redirect()
+                ->route('instructor.courses.index')
+                ->with('success', 'Khóa học đã được gửi và đang trong quá trình chờ Admin duyệt.');
+        }
+
         abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
         if (! $course->copyright_agreed) {
@@ -240,6 +248,12 @@ class CourseController extends Controller
     public function submitPage(Course $course): RedirectResponse
     {
         $this->ensureOwned($course);
+
+        if (in_array($course->status, [Course::STATUS_PENDING, Course::STATUS_PENDING_UPDATE, 'under_review'], true)) {
+            return redirect()
+                ->route('instructor.courses.index')
+                ->with('success', 'Khóa học đã được gửi và đang trong quá trình chờ Admin duyệt.');
+        }
 
         if ($course->isEditable()) {
             return redirect()->route('instructor.courses.edit', $course);
@@ -304,19 +318,54 @@ class CourseController extends Controller
     {
         $this->ensureOwned($course);
 
-        $enrollments = Enrollment::where('course_id', $course->id)
-            ->with('user:id,name,email,avatar')
-            ->orderByDesc('created_at')
-            ->paginate(20);
+        $isEnrolled = Enrollment::where('course_id', $course->id)
+            ->where('user_id', $student->id)
+            ->exists();
 
-        return view('instructor.courses.students', compact('course', 'enrollments'));
+        if (! $isEnrolled) {
+            return response()->json(['success' => false, 'message' => 'Học viên này chưa đăng ký khóa học.'], 422);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'message' => 'required|string|max:1000',
+        ]);
+
+        $notificationService->send(
+            $student,
+            trim($validated['title']),
+            trim($validated['message']),
+            'instructor_announcement',
+            route('courses.show', $course->slug)
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã gửi thông báo thành công cho học viên ' . $student->name . '.',
+        ]);
     }
 
     public function revenue(Request $request): View
     {
         $user = auth()->user();
-        $courseIds = Course::where('instructor_id', $user->id)->pluck('id')->toArray();
-        $query = Order::where('status', 'paid');
+        $instructorCourses = Course::where('instructor_id', $user->id)->get()->keyBy('id');
+        $courseIds = $instructorCourses->keys()->toArray();
+
+        if (empty($courseIds)) {
+            return view('instructor.revenue', [
+                'totalGross' => 0,
+                'totalCommission' => 0,
+                'totalRevenue' => 0,
+                'courseSales' => [],
+                'studentPurchases' => [],
+                'recentOrders' => collect(),
+            ]);
+        }
+
+        $query = Order::where('status', 'paid')
+            ->whereHas('items', function ($q) use ($courseIds) {
+                $q->whereIn('course_id', $courseIds);
+            });
 
         if ($request->filled('start_date')) {
             $query->whereDate('created_at', '>=', $request->input('start_date'));
@@ -331,7 +380,9 @@ class CourseController extends Controller
             $query->whereYear('created_at', $request->input('year'));
         }
 
-        $orders = $query->with('user:id,name,email,avatar')->get();
+        $orders = $query->with(['items' => function ($q) use ($courseIds) {
+            $q->whereIn('course_id', $courseIds);
+        }, 'user:id,name,email,avatar'])->get();
 
         $totalGross = 0;
         $totalCommission = 0;
@@ -367,7 +418,7 @@ class CourseController extends Controller
                         'commission' => 0,
                         'total' => 0, // Net earning
                         'sales' => 0,
-                        'course' => Course::find($cid),
+                        'course' => $instructorCourses->get($cid),
                     ];
                 }
 
@@ -531,17 +582,7 @@ class CourseController extends Controller
 
     public function toggleFeatured(Course $course): RedirectResponse
     {
-        $this->ensureOwned($course);
-
-        $course->update([
-            'is_featured' => ! $course->is_featured,
-        ]);
-
-        $message = $course->is_featured
-            ? 'Đã bật nổi bật khóa học thành công.'
-            : 'Đã bỏ nổi bật khóa học thành công.';
-
-        return back()->with('success', $message);
+        abort(403, 'Chỉ Quản trị viên (Admin) mới có quyền thiết lập khóa học nổi bật.');
     }
 
     private function uniqueSlug(string $title): string

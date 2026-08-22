@@ -14,7 +14,10 @@ class UserPoint extends Model
         'source',
         'description',
         'course_id',
+        'reference_id',
         'reason',
+        'created_at',
+        'updated_at',
     ];
 
     protected function casts(): array
@@ -23,6 +26,7 @@ class UserPoint extends Model
             'points' => 'integer',
             'user_id' => 'integer',
             'course_id' => 'integer',
+            'reference_id' => 'integer',
         ];
     }
 

@@ -190,7 +190,9 @@ class ContentUpdateService
                 'content_version' => 1,
             ], array_intersect_key($payload, array_flip([
                 'section_id', 'chapter_id', 'title', 'type', 'video_url',
-                'video_path', 'video_original_name', 'video_mime', 'video_size',
+                'video_path', 'original_video_key', 'hls_manifest_key',
+                'upload_status', 'processing_status',
+                'video_original_name', 'video_mime', 'video_size',
                 'content', 'document_file', 'duration', 'duration_seconds',
                 'is_preview', 'is_required', 'sort_order', 'status', 'attachments',
             ]))));
@@ -203,17 +205,36 @@ class ContentUpdateService
                 }
                 \Illuminate\Support\Facades\Storage::disk('local')->move($oldHlsDir, $newHlsDir);
                 $lesson->update(['video_path' => $newHlsDir . '/playlist.m3u8']);
-            } elseif ($lesson->type === 'video' && $lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')) {
+            } elseif ($lesson->type === 'video' && ($lesson->original_video_key || ($lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))) {
                 \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+            }
+
+            if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                \App\Models\VideoModeration::updateOrCreate(
+                    ['lesson_id' => $lesson->id],
+                    $payload['ai_moderation']
+                );
+            }
+
+            // Gửi thông báo cho toàn bộ học viên đang ghi danh nếu khóa học đã xuất bản
+            $course = Course::find($update->course_id);
+            if ($course && ($course->is_published || $course->status === Course::STATUS_PUBLISHED || $course->status === Course::STATUS_PENDING_UPDATE)) {
+                $isHlsVideo = $lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path);
+                $isHlsReady = ! $isHlsVideo || $lesson->processing_status === 'completed' || $lesson->isHlsReady();
+                if ($isHlsReady) {
+                    app(\App\Services\NotificationService::class)->notifyCourseLessonCreated($course, $lesson);
+                }
             }
         } elseif ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
             $lesson = Lesson::find($update->entity_id);
             if ($lesson) {
-                $hasMediaChange = isset($payload['video_path']) || isset($payload['video_url']) || isset($payload['document_file']);
+                $hasMediaChange = isset($payload['video_path']) || isset($payload['original_video_key']) || isset($payload['video_url']) || isset($payload['document_file']);
                 
                 $updateData = array_intersect_key($payload, array_flip([
                     'section_id', 'chapter_id', 'title', 'type', 'video_url',
-                    'video_path', 'video_original_name', 'video_mime', 'video_size',
+                    'video_path', 'original_video_key', 'hls_manifest_key',
+                    'upload_status', 'processing_status',
+                    'video_original_name', 'video_mime', 'video_size',
                     'content', 'document_file', 'duration', 'duration_seconds',
                     'is_preview', 'is_required', 'sort_order', 'status', 'attachments',
                 ]));
@@ -224,6 +245,15 @@ class ContentUpdateService
 
                 $lesson->update($updateData);
 
+                if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                    \App\Models\VideoModeration::updateOrCreate(
+                        ['lesson_id' => $lesson->id],
+                        $payload['ai_moderation']
+                    );
+                } elseif ($hasMediaChange) {
+                    $lesson->videoModeration()?->delete();
+                }
+
                 $oldHlsDir = 'lesson-hls/update_' . $update->id;
                 $newHlsDir = 'lesson-hls/' . $lesson->id;
                 if (\Illuminate\Support\Facades\Storage::disk('local')->exists($oldHlsDir)) {
@@ -232,8 +262,19 @@ class ContentUpdateService
                     }
                     \Illuminate\Support\Facades\Storage::disk('local')->move($oldHlsDir, $newHlsDir);
                     $lesson->update(['video_path' => $newHlsDir . '/playlist.m3u8']);
-                } elseif ($lesson->type === 'video' && $lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')) {
+                } elseif ($lesson->type === 'video' && ($lesson->original_video_key || ($lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))) {
                     \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+                }
+
+                // Gửi thông báo cho toàn bộ học viên đang ghi danh nếu khóa học đã xuất bản
+                $course = Course::find($update->course_id);
+                if ($course && ($course->is_published || $course->status === Course::STATUS_PUBLISHED || $course->status === Course::STATUS_PENDING_UPDATE)) {
+                    $isVideoChange = isset($payload['video_path']) || isset($payload['original_video_key']) || isset($payload['video_url']);
+                    $isHlsVideo = $lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path);
+                    $isHlsReady = ! $isHlsVideo || $lesson->processing_status === 'completed' || $lesson->isHlsReady();
+                    if ($isHlsReady) {
+                        app(\App\Services\NotificationService::class)->notifyCourseLessonUpdated($course, $lesson, $isVideoChange);
+                    }
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
@@ -306,6 +347,10 @@ class ContentUpdateService
                     'type' => $payload['type'] ?? 'video',
                     'video_url' => $payload['video_url'] ?? null,
                     'video_path' => $payload['video_path'] ?? null,
+                    'original_video_key' => $payload['original_video_key'] ?? null,
+                    'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
+                    'upload_status' => $payload['upload_status'] ?? 'pending',
+                    'processing_status' => $payload['processing_status'] ?? 'pending',
                     'video_original_name' => $payload['video_original_name'] ?? null,
                     'video_mime' => $payload['video_mime'] ?? null,
                     'video_size' => $payload['video_size'] ?? null,
@@ -324,6 +369,8 @@ class ContentUpdateService
 
                 if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
                     $draftLesson->setRelation('videoModeration', new \App\Models\VideoModeration($payload['ai_moderation']));
+                } else {
+                    $draftLesson->setRelation('videoModeration', null);
                 }
 
                 // Attach to matching section
@@ -346,7 +393,13 @@ class ContentUpdateService
                     $existingLesson = $section->lessons->first(fn ($l) => (string) $l->id === (string) $lUpdate->entity_id);
                     if ($existingLesson) {
                         foreach ($payload as $key => $val) {
-                            if (in_array($key, ['title', 'type', 'video_url', 'video_path', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order', 'status'], true)) {
+                            if (in_array($key, [
+                                'title', 'type', 'video_url', 'video_path', 'original_video_key',
+                                'hls_manifest_key', 'upload_status', 'processing_status',
+                                'video_original_name', 'video_mime', 'video_size',
+                                'content', 'document_file', 'duration', 'duration_seconds',
+                                'is_preview', 'sort_order', 'status',
+                            ], true)) {
                                 $existingLesson->{$key} = $val;
                             }
                         }
@@ -356,6 +409,8 @@ class ContentUpdateService
 
                         if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
                             $existingLesson->setRelation('videoModeration', new \App\Models\VideoModeration($payload['ai_moderation']));
+                        } else {
+                            $existingLesson->setRelation('videoModeration', null);
                         }
                         break;
                     }

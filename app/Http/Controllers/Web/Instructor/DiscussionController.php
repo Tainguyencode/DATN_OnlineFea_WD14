@@ -21,41 +21,71 @@ class DiscussionController extends Controller
         $courses = Course::where('instructor_id', $user->id)->get();
         $courseIds = $courses->pluck('id')->all();
 
-        // Get discussions in these courses
-        $query = Discussion::whereHas('lesson', function ($q) use ($courseIds) {
+        // Base query for discussions in these courses
+        $baseQuery = Discussion::whereHas('lesson', function ($q) use ($courseIds) {
             $q->whereIn('course_id', $courseIds);
-        })->with(['user', 'lesson.course', 'replies']);
+        });
 
         // Filter by course
         if ($request->filled('course_id')) {
-            $query->whereHas('lesson', function ($q) {
+            $baseQuery->whereHas('lesson', function ($q) {
                 $q->where('course_id', request()->integer('course_id'));
             });
         }
 
-        // Filter by status
-        if ($request->filled('status')) {
-            $status = $request->string('status')->toString();
-            if ($status === 'answered') {
-                $query->whereHas('replies', function ($q) {
-                    $q->where('is_instructor_answer', true);
-                });
-            } elseif ($status === 'pending') {
-                $query->whereDoesntHave('replies', function ($q) {
-                    $q->where('is_instructor_answer', true);
-                });
-            }
+        // Search by student name, title, or content
+        if ($request->filled('search')) {
+            $search = '%' . trim($request->string('search')->toString()) . '%';
+            $baseQuery->where(function ($q) use ($search) {
+                $q->where('title', 'like', $search)
+                  ->orWhere('content', 'like', $search)
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', $search)->orWhere('email', 'like', $search);
+                  });
+            });
         }
 
-        $discussions = $query->latest()->paginate(10)->withQueryString();
+        // Load relations
+        $allDiscussions = (clone $baseQuery)->with(['user', 'lesson.course', 'replies.user'])->latest()->get();
+
+        // Compute counts
+        $totalCount = $allDiscussions->count();
+        $pendingCount = $allDiscussions->filter(fn (Discussion $d) => $d->needsReply())->count();
+        $answeredCount = $allDiscussions->filter(fn (Discussion $d) => $d->isAnswered())->count();
+
+        // Filter by status in memory / collection or query
+        $status = $request->string('status')->toString();
+        $filteredCollection = $allDiscussions;
+        if ($status === 'pending') {
+            $filteredCollection = $allDiscussions->filter(fn (Discussion $d) => $d->needsReply());
+        } elseif ($status === 'answered') {
+            $filteredCollection = $allDiscussions->filter(fn (Discussion $d) => $d->isAnswered());
+        }
+
+        // Manual pagination from filtered collection
+        $page = request()->integer('page', 1);
+        $perPage = 15;
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $filteredCollection->forPage($page, $perPage)->values(),
+            $filteredCollection->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return view('instructor.discussions.index', [
-            'discussions' => $discussions,
+            'discussions' => $paginated,
             'courses' => $courses,
+            'counts' => [
+                'total' => $totalCount,
+                'pending' => $pendingCount,
+                'answered' => $answeredCount,
+            ],
             'filters' => [
                 'course_id' => $request->integer('course_id'),
-                'status' => $request->string('status')->toString(),
-            ]
+                'status' => $status,
+                'search' => $request->string('search')->toString(),
+            ],
         ]);
     }
 
@@ -69,7 +99,7 @@ class DiscussionController extends Controller
         // Check if instructor owns the course
         abort_unless((int) $discussion->lesson->course->instructor_id === (int) $user->id, 403);
 
-        $discussion->load(['user', 'lesson.course', 'replies.user']);
+        $discussion->load(['user', 'lesson.course', 'replies.user', 'replies.replyTo.user']);
 
         return view('instructor.discussions.show', [
             'discussion' => $discussion,

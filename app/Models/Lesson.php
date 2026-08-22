@@ -11,7 +11,9 @@ class Lesson extends Model
 {
     protected $fillable = [
         'course_id', 'section_id', 'chapter_id', 'title', 'type',
-        'video_url', 'video_path', 'video_original_name', 'video_mime',
+        'video_url', 'video_path', 'original_video_key', 'hls_manifest_key',
+        'upload_status', 'processing_status',
+        'video_original_name', 'video_mime',
         'video_size', 'content', 'document_file', 'duration',
         'duration_seconds', 'is_preview', 'is_required', 'sort_order', 'status',
         'attachments', 'subtitles', 'ai_summary', 'content_version',
@@ -59,6 +61,11 @@ class Lesson extends Model
         return $this->hasMany(Discussion::class);
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(LessonComment::class);
+    }
+
     public function videoNotes(): HasMany
     {
         return $this->hasMany(VideoNote::class);
@@ -97,5 +104,52 @@ class Lesson extends Model
     public function aiChatMessages(): HasMany
     {
         return $this->hasMany(AiChatMessage::class);
+    }
+
+    /**
+     * Kiểm tra video đã sẵn sàng phát HLS hay chưa (S3 hoặc local)
+     */
+    public function isHlsReady(): bool
+    {
+        if ($this->processing_status === 'completed' && filled($this->hls_manifest_key)) {
+            return true;
+        }
+
+        if (filled($this->hls_manifest_key)) {
+            return true;
+        }
+
+        if (filled($this->video_path) && str_ends_with($this->video_path, '.m3u8')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Kiểm tra video có đang trong quá trình chuyển đổi HLS hay không
+     */
+    public function isProcessing(): bool
+    {
+        if ($this->isHlsReady()) {
+            return false;
+        }
+
+        if (in_array($this->processing_status, ['processing', 'pending'], true)) {
+            return true;
+        }
+
+        return (filled($this->original_video_key) || filled($this->video_path))
+            && $this->type === 'video'
+            && empty($this->video_url)
+            && $this->processing_status !== 'failed';
+    }
+
+    /**
+     * Kiểm tra quá trình xử lý video có bị thất bại hay không
+     */
+    public function hasFailedProcessing(): bool
+    {
+        return $this->processing_status === 'failed' && ! $this->isHlsReady();
     }
 }

@@ -124,6 +124,9 @@ Route::middleware(['web'])->get('/session/check', function (Illuminate\Http\Requ
 // HLS Streaming API (No auth:sanctum required, protected by ?token=)
 // Rate limit: 300 requests per minute to allow downloading many .ts segments
 Route::middleware('throttle:300,1')->group(function () {
+    Route::get('/video/hls/{lesson}/master.m3u8', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'playlist'])
+        ->name('video.hls.master');
+
     Route::get('/video/hls/{lesson}/playlist.m3u8', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'playlist'])
         ->name('video.hls.playlist');
 

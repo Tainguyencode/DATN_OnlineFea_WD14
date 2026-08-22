@@ -143,12 +143,20 @@
                                     <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
                                     <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Bài học không preview sẽ mở sau khi bạn đăng ký.</p>
                                 @else
-                                    <form method="POST" action="{{ route('student.cart.add', $course) }}">
-                                        @csrf
-                                        <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-indigo-600 text-sm font-extrabold text-white transition hover:bg-indigo-700 cursor-pointer">
-                                            Thêm vào giỏ hàng
-                                        </button>
-                                    </form>
+                                    <div class="space-y-2.5">
+                                        <form method="POST" action="{{ route('student.cart.buy_now', $course) }}">
+                                            @csrf
+                                            <button type="submit" class="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer shadow-md">
+                                                ⚡ Mua ngay
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                                            @csrf
+                                            <button type="submit" class="flex h-11 w-full items-center justify-center rounded-xl border-2 border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300 font-extrabold text-sm hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition cursor-pointer">
+                                                + Thêm vào giỏ hàng
+                                            </button>
+                                        </form>
+                                    </div>
                                     <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" class="mt-3" />
                                     <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Thanh toán trong giỏ hàng để mở toàn bộ khóa học.</p>
                                 @endif
@@ -341,10 +349,16 @@
                                     <p class="text-center text-xs text-emerald-600 dark:text-emerald-400">Bạn đã sở hữu khóa học này</p>
                                 @endif
                             @else
+                                <form method="POST" action="{{ route('student.cart.buy_now', $course) }}">
+                                    @csrf
+                                    <button type="submit" class="flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white transition hover:bg-emerald-700 cursor-pointer shadow-md mb-2">
+                                        ⚡ Mua ngay
+                                    </button>
+                                </form>
                                 <form method="POST" action="{{ route('student.cart.add', $course) }}">
                                     @csrf
                                     <button type="submit" class="ui-button-primary w-full">
-                                        Thêm vào giỏ hàng
+                                        + Thêm vào giỏ hàng
                                     </button>
                                 </form>
                             @endif

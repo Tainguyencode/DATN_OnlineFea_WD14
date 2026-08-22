@@ -155,6 +155,7 @@ class VideoProtectionTest extends TestCase
             'type' => 'video',
             'sort_order' => 1,
             'status' => 'published',
+            'processing_status' => 'completed',
         ]);
     }
 }

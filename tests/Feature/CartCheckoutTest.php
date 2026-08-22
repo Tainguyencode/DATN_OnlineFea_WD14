@@ -567,4 +567,169 @@ class CartCheckoutTest extends TestCase
         $responseCheckout->assertRedirect();
         $responseCheckout->assertSessionHas('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
     }
+
+    /**
+     * Test học viên có thể mua ngay một khóa học (Buy Now) tạo đơn hàng pending và chuyển sang trang thanh toán.
+     */
+    public function test_student_can_buy_now_course(): void
+    {
+        $response = $this->actingAs($this->student)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('student.cart.buy_now', $this->course->id));
+
+        $order = Order::where('user_id', $this->student->id)->latest()->first();
+        $this->assertNotNull($order);
+        $this->assertEquals('pending', $order->status);
+        $this->assertEquals(100000, $order->total_amount);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+    }
+
+    /**
+     * Test học viên có thể xóa sản phẩm khỏi giỏ hàng qua AJAX.
+     */
+    public function test_student_can_remove_course_via_ajax(): void
+    {
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach($this->course->id);
+
+        $response = $this->actingAs($this->student)
+            ->delete(route('student.cart.remove_ajax', $this->course->id));
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'cart_count' => 0,
+        ]);
+
+        $cart->refresh();
+        $this->assertFalse($cart->courses->contains($this->course->id));
+    }
+
+    /**
+     * Test học viên có thể chuyển khóa học từ giỏ hàng sang danh sách yêu thích.
+     */
+    public function test_student_can_move_course_from_cart_to_wishlist(): void
+    {
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach($this->course->id);
+
+        $response = $this->actingAs($this->student)
+            ->post(route('student.cart.move_to_wishlist', $this->course->id), [], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'message' => 'Đã chuyển khóa học sang danh sách yêu thích.',
+        ]);
+
+        $cart->refresh();
+        $this->assertFalse($cart->courses->contains($this->course->id));
+        $this->assertDatabaseHas('wishlists', [
+            'user_id' => $this->student->id,
+            'course_id' => $this->course->id,
+        ]);
+    }
+
+    /**
+     * Test học viên có thể kiểm tra trạng thái đơn hàng qua endpoint JSON.
+     */
+    public function test_student_can_check_order_status(): void
+    {
+        $order = Order::create([
+            'order_code' => 'ORD-STATUS-TEST',
+            'user_id' => $this->student->id,
+            'subtotal' => 100000,
+            'discount_amount' => 0,
+            'total_amount' => 100000,
+            'status' => 'pending',
+            'payment_method' => 'bank_transfer',
+            'items' => [],
+        ]);
+
+        $response = $this->actingAs($this->student)
+            ->get(route('student.checkout.status', $order->order_code));
+
+        $response->assertOk();
+        $response->assertJson([
+            'status' => 'pending',
+            'order_code' => 'ORD-STATUS-TEST',
+        ]);
+    }
+
+    /**
+     * Test học viên có thể áp dụng mã giảm giá trực tiếp trên trang thanh toán / đơn hàng Buy Now pending.
+     */
+    public function test_student_can_apply_coupon_to_pending_order_or_buy_now(): void
+    {
+        $coupon = Coupon::create([
+            'code' => 'BUYNOW20',
+            'type' => 'percent',
+            'value' => 20,
+            'min_order_amount' => 50000,
+            'is_active' => true,
+        ]);
+
+        // Mua ngay khóa học
+        $this->actingAs($this->student)
+            ->post(route('student.cart.buy_now', $this->course->id));
+
+        $order = Order::where('user_id', $this->student->id)->latest()->first();
+
+        // Áp dụng coupon trực tiếp tại trang thanh toán
+        $response = $this->actingAs($this->student)
+            ->post(route('student.checkout.apply_coupon', $order->order_code), [
+                'coupon_code' => 'BUYNOW20',
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'discount_amount' => 20000,
+            'new_total' => 80000,
+        ]);
+
+        $order->refresh();
+        $this->assertEquals(20000, $order->discount_amount);
+        $this->assertEquals(80000, $order->total_amount);
+        $this->assertEquals($coupon->id, $order->coupon_id);
+    }
+
+    /**
+     * Test học viên có thể gỡ mã giảm giá khỏi đơn hàng pending.
+     */
+    public function test_student_can_remove_coupon_from_pending_order(): void
+    {
+        $coupon = Coupon::create([
+            'code' => 'REMOVEME',
+            'type' => 'fixed',
+            'value' => 10000,
+            'min_order_amount' => 0,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->student)
+            ->post(route('student.cart.buy_now', $this->course->id));
+
+        $order = Order::where('user_id', $this->student->id)->latest()->first();
+
+        $this->actingAs($this->student)
+            ->post(route('student.checkout.apply_coupon', $order->order_code), ['coupon_code' => 'REMOVEME']);
+
+        $response = $this->actingAs($this->student)
+            ->delete(route('student.checkout.remove_coupon', $order->order_code));
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'new_total' => 100000,
+        ]);
+
+        $order->refresh();
+        $this->assertNull($order->coupon_id);
+        $this->assertEquals(0, $order->discount_amount);
+        $this->assertEquals(100000, $order->total_amount);
+    }
 }
+
+
