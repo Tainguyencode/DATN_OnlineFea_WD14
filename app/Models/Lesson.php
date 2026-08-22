@@ -152,4 +152,9 @@ class Lesson extends Model
     {
         return $this->processing_status === 'failed' && ! $this->isHlsReady();
     }
+
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
 }

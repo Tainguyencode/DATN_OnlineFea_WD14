@@ -236,6 +236,9 @@ class CourseController extends Controller
         $aiExplainUrl = $canUseLessonAi
             ? route('courses.lessons.ai-explain', [$course, $lesson])
             : null;
+        $aiChatUrl = $canUseLessonAi
+            ? route('courses.lessons.ai-chat', [$course, $lesson])
+            : null;
 
         $canUseLessonNotes = (bool) $user && $user->isStudent() && $player['isEnrolled'];
         $lessonNotes = $canUseLessonNotes
@@ -349,6 +352,7 @@ class CourseController extends Controller
             'canUseLessonNotes' => $canUseLessonNotes,
             'aiSummaryUrl' => $aiSummaryUrl,
             'aiExplainUrl' => $aiExplainUrl,
+            'aiChatUrl' => $aiChatUrl,
             'lessonNotes' => $lessonNotes,
             'lessonNotesIndexUrl' => $lessonNotesIndexUrl,
             'lessonNotesStoreUrl' => $lessonNotesStoreUrl,
