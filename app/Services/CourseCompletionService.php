@@ -107,14 +107,8 @@ class CourseCompletionService
                     'status' => Enrollment::STATUS_COMPLETED,
                 ]);
 
-                // Cộng +100 điểm hoàn thành khóa học
-                app(\App\Services\PointService::class)->awardPoints(
-                    $userId,
-                    100,
-                    'course_completed',
-                    "Hoàn thành khóa học: {$course->title} (course_id:{$course->id})",
-                    $course->id
-                );
+                // Cộng +50 XP hoàn thành khóa học (1 lần duy nhất)
+                app(\App\Services\PointService::class)->awardCourseCompletionPoints($userId, $course->id);
 
                 $certificate = $this->issueCertificate($userId, $course);
 
