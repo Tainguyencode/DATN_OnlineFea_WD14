@@ -37,6 +37,7 @@
             @if($isEnrolled && $progressUrl)
                 data-lesson-progress-video
                 data-progress-url="{{ $progressUrl }}"
+                data-lesson-id="{{ $lesson->id }}"
                 data-initial-watched="{{ $watchedSeconds }}"
                 data-initial-last-position="{{ $lastPositionSeconds }}"
                 data-initial-furthest-position="{{ $furthestPositionSeconds }}"
@@ -264,7 +265,18 @@
                 $youtubeId = $matches[1] ?? null;
             @endphp
             @if($youtubeId)
-                <iframe src="https://www.youtube.com/embed/{{ $youtubeId }}" class="aspect-video max-h-[calc(100vh-14rem)] w-full max-w-full bg-black border-0" allowfullscreen></iframe>
+                <iframe
+                    id="youtube-player-{{ $lesson->id }}"
+                    src="https://www.youtube.com/embed/{{ $youtubeId }}?enablejsapi=1"
+                    class="aspect-video max-h-[calc(100vh-14rem)] w-full max-w-full bg-black border-0"
+                    allowfullscreen
+                    @if($isEnrolled && $progressUrl)
+                        data-lesson-progress-youtube
+                        data-progress-url="{{ $progressUrl }}"
+                        data-lesson-id="{{ $lesson->id }}"
+                        data-initial-completed="{{ $lessonCompleted ? '1' : '0' }}"
+                    @endif
+                ></iframe>
             @else
                 <div class="px-6 py-12 text-center text-sm text-white">
                     <p class="font-semibold text-lg">Liên kết video bài học</p>

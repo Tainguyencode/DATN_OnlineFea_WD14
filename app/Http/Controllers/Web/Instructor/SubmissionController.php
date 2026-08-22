@@ -119,7 +119,7 @@ class SubmissionController extends Controller
         $validated = $request->validate([
             'score' => [
                 'required',
-                'integer',
+                'numeric',
                 'min:0',
                 'max:' . ($submission->assignment->max_score ?? 100),
             ],
@@ -127,7 +127,7 @@ class SubmissionController extends Controller
             'status' => 'required|string|in:graded,returned',
         ], [
             'score.required' => 'Vui lòng nhập điểm số.',
-            'score.integer' => 'Điểm số phải là số nguyên.',
+            'score.numeric' => 'Điểm số phải là một số.',
             'score.min' => 'Điểm số không được nhỏ hơn 0.',
             'score.max' => 'Điểm số không được vượt quá điểm tối đa của bài tập.',
             'status.required' => 'Vui lòng chọn trạng thái chấm điểm.',
@@ -141,7 +141,7 @@ class SubmissionController extends Controller
         // 3. Ghi vết lịch sử chấm điểm (phục vụ xem lại các lần chấm lại)
         $history = $submission->grading_history ?? [];
         $history[] = [
-            'score' => (int) $validated['score'],
+            'score' => (float) $validated['score'],
             'feedback' => $validated['feedback'],
             'status' => $statusValue,
             'graded_by' => $request->user()->name,
@@ -160,7 +160,7 @@ class SubmissionController extends Controller
 
         // 4.1 Cập nhật trạng thái hoàn thành bài giảng theo kết quả chấm điểm (Đạt >= passing_score)
         $passingScore = $submission->assignment->passing_score ?? 70;
-        $isPassed = $statusValue === 'graded' && ((int) $validated['score']) >= $passingScore;
+        $isPassed = $statusValue === 'graded' && ((float) $validated['score']) >= $passingScore;
         
         app(\App\Services\LearningProgressService::class)->recordLessonProgress(
             $submission->user_id,
