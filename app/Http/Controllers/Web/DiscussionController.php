@@ -62,13 +62,11 @@ class DiscussionController extends Controller
             'is_resolved' => false,
         ]);
 
-        // Cộng +10 điểm cho học viên đặt câu hỏi
-        app(\App\Services\PointService::class)->awardPoints(
+        // Cộng +2 XP cho học viên tạo thảo luận (tối đa 10 XP/ngày)
+        app(\App\Services\PointService::class)->awardDiscussionPoints(
             auth()->id(),
-            10,
-            'ask_question',
-            "Đặt câu hỏi: {$discussion->title} (discussion_id:{$discussion->id})",
-            $course->id
+            $course->id,
+            $discussion->id
         );
 
         // Gửi thông báo cho Giảng viên sở hữu khóa học
