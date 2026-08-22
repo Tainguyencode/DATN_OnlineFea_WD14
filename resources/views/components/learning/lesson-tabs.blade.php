@@ -218,7 +218,7 @@
 
                         <div class="border-t border-[#d1d7dc] pt-5">
                             <h2 class="text-base font-bold text-[#1c1d1f]">AI giải thích</h2>
-                            <p class="mt-1 text-xs text-[#6a6f73]">Chỉ trả lời theo nội dung bài hiện tại. Không tiết lộ đáp án quiz.</p>
+                            <p class="mt-1 text-xs text-[#6a6f73]">Ưu tiên nội dung bài học, đồng thời có thể giải thích thêm bằng kiến thức học tập liên quan. Không tiết lộ đáp án quiz.</p>
 
                             <form data-ai-ask-form class="mt-3 space-y-3">
                                 <label class="block text-sm font-semibold text-[#1c1d1f]" for="lesson-ai-question">Bạn chưa hiểu phần nào?</label>

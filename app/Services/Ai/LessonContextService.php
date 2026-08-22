@@ -3,6 +3,7 @@
 namespace App\Services\Ai;
 
 use App\Models\Lesson;
+use App\Models\Course;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -12,9 +13,23 @@ class LessonContextService
      * Build plain-text lesson context for AI.
      * Never includes quiz questions or correct answers.
      */
-    public function build(Lesson $lesson): string
+    public function build(Lesson $lesson, ?Course $course = null, bool $includeAiSummary = false): string
     {
         $parts = [];
+
+        $course ??= $lesson->course;
+
+        if ($course) {
+            $courseTitle = trim((string) $course->title);
+            if ($courseTitle !== '') {
+                $parts[] = 'Khóa học: '.$courseTitle;
+            }
+
+            $courseDescription = trim(strip_tags((string) ($course->description ?: $course->short_description)));
+            if ($courseDescription !== '') {
+                $parts[] = "Mô tả khóa học:\n".$courseDescription;
+            }
+        }
 
         $title = trim((string) $lesson->title);
         if ($title !== '') {
@@ -31,6 +46,14 @@ class LessonContextService
             $parts[] = "Transcript / phụ đề:\n".$subtitleText;
         }
 
+        if ($includeAiSummary) {
+            $lesson->loadMissing('lessonAiSummary');
+            $summary = trim(strip_tags((string) ($lesson->lessonAiSummary?->summary ?? $lesson->ai_summary ?? '')));
+            if ($summary !== '') {
+                $parts[] = "AI summary đã lưu:\n".$summary;
+            }
+        }
+
         return Str::limit(implode("\n\n", $parts), 12000, '');
     }
 
@@ -45,7 +68,7 @@ class LessonContextService
 
     public function sourceHash(Lesson $lesson): string
     {
-        return hash('sha256', $this->build($lesson));
+        return hash('sha256', $this->build($lesson, includeAiSummary: false));
     }
 
     private function subtitlePlainText(Lesson $lesson): string

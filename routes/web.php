@@ -144,6 +144,12 @@ Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(functi
     Route::post('/courses/{course}/lessons/{lesson}/ai-explain', [LessonAiController::class, 'explain'])
         ->middleware('throttle:10,1')
         ->name('courses.lessons.ai-explain');
+    Route::post('/courses/{course}/lessons/{lesson}/ai-chat', [LessonAiController::class, 'chat'])
+        ->middleware('throttle:20,1')
+        ->name('courses.lessons.ai-chat');
+    Route::get('/courses/{course}/lessons/{lesson}/ai-chat', [LessonAiController::class, 'history'])
+        ->middleware('throttle:30,1')
+        ->name('courses.lessons.ai-chat.history');
 });
 
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
