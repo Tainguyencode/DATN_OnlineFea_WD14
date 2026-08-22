@@ -99,3 +99,6 @@
 ### Commit 33: feat: nang cap giao dien quan tri kiem duyet khoa hoc (2026-08-18 14:00:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 34: feat: nang cap he thong tro ly AI ho tro giai dap bai hoc (2026-08-22 09:30:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
