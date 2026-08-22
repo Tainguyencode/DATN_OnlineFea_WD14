@@ -36,12 +36,21 @@ class AuthenticationTest extends TestCase
 
         $this->get(route('register.role', 'student'))
             ->assertOk()
+            ->assertSee('data-student-terms-checkbox', false)
+            ->assertSee('data-student-terms-trigger', false)
+            ->assertSee('data-student-terms-modal', false)
+            ->assertSee('data-student-terms-pdf', false)
+            ->assertSee('data-student-terms-open-pdf', false)
+            ->assertSee(route('legal.registration-terms'), false)
+            ->assertSee('Chi tiết điều khoản đăng ký')
+            ->assertSee('Mở PDF trong tab mới')
             ->assertDontSee('name="avatar"', false)
             ->assertDontSee('Avatar preview', false)
             ->assertDontSee('PNG, JPG', false);
 
         $this->get(route('register.role', 'instructor'))
             ->assertOk()
+            ->assertDontSee('data-student-terms-modal', false)
             ->assertDontSee('name="avatar"', false)
             ->assertDontSee('Avatar preview', false)
             ->assertDontSee('PNG, JPG', false);
@@ -93,6 +102,24 @@ class AuthenticationTest extends TestCase
         $this->assertSame('student', $user->role);
         $this->assertTrue($user->is_active);
         $this->assertTrue($this->userHasPrimaryRolePivot($user, 'student'));
+    }
+
+    public function test_student_registration_requires_terms_acceptance(): void
+    {
+        $captcha = $this->registerCaptcha();
+        $payload = $this->registerPayload('student', [
+            'email' => 'missing-terms@example.com',
+        ]);
+        unset($payload['terms']);
+
+        $this->post(route('register.role', 'student'), [
+            ...$payload,
+            'captcha_token' => $captcha['token'],
+            'captcha_answer' => $captcha['answer'],
+        ])->assertSessionHasErrors('terms');
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'missing-terms@example.com']);
     }
 
     public function test_instructor_registration_succeeds(): void

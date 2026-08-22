@@ -18,6 +18,7 @@ use App\Http\Controllers\Web\SupportTicketController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\InstructorController;
+use App\Http\Controllers\Web\LegalDocumentController;
 use App\Http\Controllers\Web\DiscussionController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponController;
@@ -75,6 +76,8 @@ if (app()->environment('local')) {
 }
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
+Route::get('/dieu-khoan-dang-ky', [LegalDocumentController::class, 'registrationTerms'])
+    ->name('legal.registration-terms');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
 
 // ─── GIẢNG VIÊN (PUBLIC) ───
