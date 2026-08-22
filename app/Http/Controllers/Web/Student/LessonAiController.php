@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web\Student;
 
 use App\Exceptions\LessonAiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Learning\ChatLessonRequest;
 use App\Http\Requests\Learning\ExplainLessonRequest;
 use App\Models\Course;
 use App\Models\Lesson;
@@ -61,6 +62,47 @@ class LessonAiController extends Controller
                 'question' => $payload['question'],
                 'answer' => $payload['answer'],
                 'message' => 'Đã nhận giải thích từ AI.',
+            ]);
+        } catch (LessonAiException $exception) {
+            return $this->errorResponse($exception);
+        }
+    }
+
+    public function chat(ChatLessonRequest $request, Course $course, Lesson $lesson): JsonResponse
+    {
+        try {
+            $this->lessonAi->assertCanUseAi($request->user(), $course, $lesson);
+
+            $payload = $this->lessonAi->chat(
+                $request->user(),
+                $course,
+                $lesson,
+                (string) $request->validated('message'),
+                $request->validated('conversation_id') ? (int) $request->validated('conversation_id') : null
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => $payload['message'],
+                'answer' => $payload['message'],
+                'conversation_id' => $payload['conversation_id'],
+            ]);
+        } catch (LessonAiException $exception) {
+            return $this->errorResponse($exception);
+        }
+    }
+
+    public function history(Request $request, Course $course, Lesson $lesson): JsonResponse
+    {
+        try {
+            $this->lessonAi->assertCanUseAi($request->user(), $course, $lesson);
+
+            $payload = $this->lessonAi->history($request->user(), $course, $lesson);
+
+            return response()->json([
+                'success' => true,
+                'conversation_id' => $payload['conversation_id'],
+                'messages' => $payload['messages'],
             ]);
         } catch (LessonAiException $exception) {
             return $this->errorResponse($exception);

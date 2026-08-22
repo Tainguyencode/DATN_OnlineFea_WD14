@@ -204,6 +204,13 @@
                     :lesson-notes-index-url="$lessonNotesIndexUrl"
                     :lesson-notes-store-url="$lessonNotesStoreUrl"
                 />
+
+                <x-learning.ai-study-assistant
+                    :lesson="$lesson"
+                    :course="$course"
+                    :can-use-lesson-ai="$canUseLessonAi"
+                    :ai-chat-url="$aiChatUrl"
+                />
             @endif
         </main>
 

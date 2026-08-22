@@ -98,4 +98,9 @@ class Lesson extends Model
     {
         return $this->hasMany(AiChatMessage::class);
     }
+
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
 }

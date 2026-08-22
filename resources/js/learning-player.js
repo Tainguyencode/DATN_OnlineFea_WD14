@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initLessonNotes();
     initStudyNotesPage();
     initLessonAi();
+    initAiStudyAssistant();
 });
 
 function getCsrfToken() {
@@ -647,6 +648,80 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function renderSafeMarkdown(value) {
+    const text = escapeHtml(value || '').replace(/\r\n/g, '\n');
+    const codeBlocks = [];
+    const withPlaceholders = text.replace(/```([\s\S]*?)```/g, (_, code) => {
+        const index = codeBlocks.length;
+        codeBlocks.push(`<pre class="my-2 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs leading-5 text-slate-50"><code>${code.trim()}</code></pre>`);
+
+        return `\n@@CODE_BLOCK_${index}@@\n`;
+    });
+
+    const inlineCode = (line) => line.replace(/`([^`]+)`/g, '<code class="rounded bg-slate-100 px-1 py-0.5 text-[0.85em] font-semibold text-slate-900">$1</code>');
+    const lines = withPlaceholders.split('\n');
+    const html = [];
+    let listType = null;
+
+    const closeList = () => {
+        if (!listType) return;
+        html.push(listType === 'ol' ? '</ol>' : '</ul>');
+        listType = null;
+    };
+
+    lines.forEach((rawLine) => {
+        const line = rawLine.trim();
+
+        if (!line) {
+            closeList();
+            return;
+        }
+
+        const codeMatch = line.match(/^@@CODE_BLOCK_(\d+)@@$/);
+        if (codeMatch) {
+            closeList();
+            html.push(codeBlocks[Number(codeMatch[1])] || '');
+            return;
+        }
+
+        const heading = line.match(/^(#{1,3})\s+(.+)$/);
+        if (heading) {
+            closeList();
+            html.push(`<h3 class="mt-3 text-sm font-bold text-slate-950">${inlineCode(heading[2])}</h3>`);
+            return;
+        }
+
+        const unordered = line.match(/^[-*]\s+(.+)$/);
+        if (unordered) {
+            if (listType !== 'ul') {
+                closeList();
+                html.push('<ul class="my-2 list-disc space-y-1 pl-5">');
+                listType = 'ul';
+            }
+            html.push(`<li>${inlineCode(unordered[1])}</li>`);
+            return;
+        }
+
+        const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+        if (ordered) {
+            if (listType !== 'ol') {
+                closeList();
+                html.push('<ol class="my-2 list-decimal space-y-1 pl-5">');
+                listType = 'ol';
+            }
+            html.push(`<li>${inlineCode(ordered[1])}</li>`);
+            return;
+        }
+
+        closeList();
+        html.push(`<p class="my-2">${inlineCode(line)}</p>`);
+    });
+
+    closeList();
+
+    return html.join('');
 }
 
 function initCertificateDropdown() {
@@ -1394,4 +1469,266 @@ function initLessonAi() {
     });
 
     loadSummary();
+}
+
+function initAiStudyAssistant() {
+    const root = document.querySelector('[data-ai-study-assistant]');
+    if (!root) return;
+
+    const chatUrl = root.dataset.aiChatUrl;
+    const historyUrl = root.dataset.aiHistoryUrl || chatUrl;
+    const openButton = root.querySelector('[data-ai-assistant-open]');
+    const panel = root.querySelector('[data-ai-assistant-panel]');
+    const minimizeButton = root.querySelector('[data-ai-assistant-minimize]');
+    const closeButton = root.querySelector('[data-ai-assistant-close]');
+    const form = root.querySelector('[data-ai-assistant-form]');
+    const input = root.querySelector('[data-ai-assistant-input]');
+    const submitButton = root.querySelector('[data-ai-assistant-submit]');
+    const status = root.querySelector('[data-ai-assistant-status]');
+    const messages = root.querySelector('[data-ai-assistant-messages]');
+    const quickActions = root.querySelector('[data-ai-assistant-quick-actions]');
+    const quickActionButtons = root.querySelectorAll('[data-ai-assistant-quick-action]');
+    const count = root.querySelector('[data-ai-assistant-count]');
+
+    if (!chatUrl || !openButton || !panel || !form || !input || !messages) return;
+
+    let inFlight = false;
+    let historyLoaded = false;
+    let conversationId = null;
+
+    const parseJsonSafe = async (response) => {
+        const raw = await response.text();
+        if (!raw) return {};
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            return {
+                success: false,
+                code: response.status === 429 ? 'too_many_requests' : 'invalid_response',
+                message: response.status === 429
+                    ? 'Bạn đang gửi câu hỏi quá nhanh. Vui lòng thử lại sau.'
+                    : 'Máy chủ trả về phản hồi không hợp lệ.',
+            };
+        }
+    };
+
+    const aiErrorMessage = (response, data) => {
+        if (response?.status === 401 || response?.status === 419) {
+            return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        }
+
+        if (response?.status === 429) {
+            return 'Bạn đang gửi câu hỏi quá nhanh. Vui lòng thử lại sau.';
+        }
+
+        if (data?.message) return data.message;
+
+        const codeMessages = {
+            timeout: 'AI đang phản hồi chậm. Vui lòng thử lại.',
+            ai_unavailable: 'Trợ lý AI hiện chưa khả dụng.',
+            missing_api_key: 'Trợ lý AI hiện chưa khả dụng.',
+            invalid_api_key: 'Trợ lý AI hiện chưa khả dụng.',
+            invalid_model: 'Trợ lý AI hiện chưa khả dụng.',
+            ssl_error: 'Trợ lý AI hiện chưa khả dụng.',
+            connection_error: 'Trợ lý AI hiện chưa khả dụng.',
+            quota_exceeded: 'Bạn đang gửi câu hỏi quá nhanh. Vui lòng thử lại sau.',
+            forbidden: 'Bạn không có quyền dùng AI hỗ trợ bài học.',
+            conversation_mismatch: 'Cuộc hội thoại không thuộc bài học hiện tại.',
+            lesson_mismatch: 'Bài học không thuộc khóa học này.',
+            validation: 'Câu hỏi chưa hợp lệ.',
+            content_blocked: 'Nội dung này chưa thể được AI xử lý. Vui lòng thử câu hỏi khác.',
+            response_truncated: 'Phản hồi AI bị cắt vì quá dài. Hãy hỏi ngắn hơn.',
+            empty_response: 'AI không trả về nội dung. Vui lòng thử lại.',
+            invalid_response: 'Phản hồi AI không hợp lệ. Vui lòng thử lại.',
+        };
+
+        return codeMessages[data?.code] || 'Trợ lý AI hiện chưa khả dụng.';
+    };
+
+    const setOpen = (open) => {
+        panel.classList.toggle('hidden', !open);
+        openButton.classList.toggle('hidden', open);
+        if (open) {
+            loadHistory();
+            window.setTimeout(() => input.focus(), 80);
+        }
+    };
+
+    const setBusy = (busy) => {
+        inFlight = busy;
+        input.disabled = busy;
+        if (submitButton) submitButton.disabled = busy;
+        quickActionButtons.forEach((button) => {
+            button.disabled = busy;
+        });
+    };
+
+    const syncCount = () => {
+        if (count) count.textContent = `${input.value.length}/2000`;
+    };
+
+    const scrollToBottom = () => {
+        messages.scrollTop = messages.scrollHeight;
+    };
+
+    const syncQuickActions = () => {
+        if (!quickActions) return;
+        quickActions.classList.toggle('hidden', messages.querySelector('[data-ai-message]') !== null);
+    };
+
+    const appendMessage = (role, text, loading = false) => {
+        const row = document.createElement('div');
+        row.dataset.aiMessage = role;
+        row.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+
+        const bubble = document.createElement('div');
+        bubble.className = role === 'user'
+            ? 'max-w-[86%] rounded-2xl rounded-br-md bg-[#0056D2] px-3 py-2 text-sm leading-6 text-white'
+            : 'max-w-[86%] rounded-2xl rounded-bl-md bg-slate-100 px-3 py-2 text-sm leading-6 text-slate-800';
+
+        if (loading) {
+            bubble.innerHTML = '<span class="inline-flex items-center gap-1"><span>AI đang suy nghĩ</span><span class="animate-pulse">...</span></span>';
+        } else if (role === 'assistant') {
+            bubble.innerHTML = renderSafeMarkdown(text);
+        } else {
+            bubble.textContent = text;
+        }
+
+        row.appendChild(bubble);
+        messages.appendChild(row);
+        syncQuickActions();
+        scrollToBottom();
+
+        return row;
+    };
+
+    const removeMessage = (row) => {
+        if (row && row.parentNode) {
+            row.parentNode.removeChild(row);
+        }
+    };
+
+    const loadHistory = async () => {
+        if (historyLoaded || inFlight) return;
+
+        historyLoaded = true;
+        setBusy(true);
+        if (status) status.textContent = 'Đang tải lịch sử chat...';
+
+        try {
+            const response = await fetch(historyUrl, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const data = await parseJsonSafe(response);
+
+            if (!response.ok || !data.success) {
+                if (status) status.textContent = aiErrorMessage(response, data);
+                return;
+            }
+
+            conversationId = data.conversation_id || conversationId;
+            messages.innerHTML = '';
+
+            (data.messages || []).forEach((message) => {
+                appendMessage(message.role === 'assistant' ? 'assistant' : 'user', message.content || '');
+            });
+
+            if (status) {
+                status.textContent = data.messages?.length
+                    ? 'Đã tải lịch sử chat của bài học này.'
+                    : 'Sẵn sàng hỗ trợ bạn học bài.';
+            }
+            syncQuickActions();
+        } catch (error) {
+            if (status) status.textContent = 'Không tải được lịch sử chat.';
+        } finally {
+            setBusy(false);
+            input.focus();
+        }
+    };
+
+    const sendMessage = async (rawMessage) => {
+        const message = rawMessage.trim();
+        if (!message || inFlight) return;
+
+        if (message.length > 2000) {
+            if (status) status.textContent = 'Câu hỏi quá dài. Vui lòng rút gọn nội dung.';
+            return;
+        }
+
+        appendMessage('user', message);
+        input.value = '';
+        syncCount();
+        setBusy(true);
+        if (status) status.textContent = 'AI đang suy nghĩ...';
+        const loadingRow = appendMessage('assistant', '', true);
+
+        try {
+            const body = { message };
+            if (conversationId) {
+                body.conversation_id = conversationId;
+            }
+
+            const response = await fetch(chatUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(body),
+            });
+            const data = await parseJsonSafe(response);
+            removeMessage(loadingRow);
+
+            if (!response.ok || !data.success) {
+                const messageText = aiErrorMessage(response, data);
+                appendMessage('assistant', messageText);
+                if (status) status.textContent = messageText;
+                return;
+            }
+
+            conversationId = data.conversation_id || conversationId;
+            appendMessage('assistant', data.message || data.answer || '');
+            if (status) status.textContent = 'Sẵn sàng hỗ trợ bạn học bài.';
+        } catch (error) {
+            removeMessage(loadingRow);
+            appendMessage('assistant', 'Trợ lý AI hiện chưa khả dụng.');
+            if (status) status.textContent = 'Trợ lý AI hiện chưa khả dụng.';
+        } finally {
+            setBusy(false);
+            input.focus();
+            scrollToBottom();
+        }
+    };
+
+    openButton.addEventListener('click', () => setOpen(true));
+    minimizeButton?.addEventListener('click', () => setOpen(false));
+    closeButton?.addEventListener('click', () => setOpen(false));
+
+    input.addEventListener('input', syncCount);
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            form.requestSubmit();
+        }
+    });
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        sendMessage(input.value);
+    });
+
+    quickActionButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            sendMessage(button.dataset.prompt || button.textContent || '');
+        });
+    });
+
+    syncCount();
+    syncQuickActions();
 }
