@@ -4,10 +4,32 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-[70vh]">
     
     <!-- Tiêu đề giỏ hàng -->
-    <div class="mb-8">
-        <h1 class="text-3xl font-black text-slate-900 dark:text-white">Giỏ hàng của bạn</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1.5">Quản lý các khóa học đang chọn mua và tiến hành thanh toán an toàn</p>
+    <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-slate-900 dark:text-white">Giỏ hàng của bạn</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý các khóa học đang chọn mua và tiến hành thanh toán an toàn</p>
+        </div>
     </div>
+
+    <!-- BANNER KHÔI PHỤC ĐƠN HÀNG CHỜ THANH TOÁN (PENDING ORDER RESUME) -->
+    @if(isset($pendingOrder) && $pendingOrder)
+        <div class="mb-8 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div>
+                    <h4 class="text-sm font-bold text-amber-900 dark:text-amber-200">Bạn có 1 đơn hàng chưa hoàn tất thanh toán</h4>
+                    <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Mã đơn: <span class="font-mono font-bold">#{{ $pendingOrder->order_code }}</span> ({{ number_format($pendingOrder->total_amount, 0, ',', '.') }}đ)</p>
+                </div>
+            </div>
+            <a href="{{ route('student.checkout.pay', $pendingOrder->order_code) }}" 
+               class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition shadow-sm inline-flex items-center justify-center gap-1.5 shrink-0">
+                <span>Tiếp tục quét mã QR</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </a>
+        </div>
+    @endif
 
     @if($cart->courses->isEmpty())
         <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-16 text-center shadow-sm">
@@ -19,15 +41,19 @@
         <div x-data="{
             courses: {{ json_encode($cart->courses->map(fn($c) => [
                 'id' => $c->id,
+                'title' => $c->title,
+                'instructor' => $c->instructor?->name ?? 'Giảng viên',
                 'price' => (float)($c->discount_price ?? $c->sale_price ?? $c->price)
             ])) }},
             checkedIds: {{ json_encode($cart->courses->pluck('id')) }},
             selectAll: true,
-            paymentMethod: 'payos',
+            paymentMethod: 'bank_transfer',
             couponCode: '',
             appliedCoupon: null,
             couponError: '',
             couponSuccess: '',
+            actionMessage: '',
+            actionType: 'success',
             isApplying: false,
             availableCoupons: {{ json_encode($activeCoupons->map(fn($cp) => [
                 'id' => $cp->id,
@@ -122,40 +148,152 @@
                 this.couponCode = '';
                 this.couponSuccess = '';
                 this.couponError = '';
+            },
+            async removeItem(courseId) {
+                try {
+                    let response = await fetch('/student/cart/remove-ajax/' + courseId, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRF-TOKEN': this.csrfToken,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    let data = await response.json();
+                    if (data.success) {
+                        this.courses = this.courses.filter(c => Number(c.id) !== Number(courseId));
+                        this.checkedIds = this.checkedIds.filter(id => Number(id) !== Number(courseId));
+                        this.updateSelectAll();
+                        this.showNotification('Đã xóa khóa học khỏi giỏ hàng.', 'success');
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            },
+            async moveToWishlist(courseId) {
+                try {
+                    let response = await fetch('/student/cart/move-to-wishlist/' + courseId, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': this.csrfToken,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    let data = await response.json();
+                    if (data.success) {
+                        this.courses = this.courses.filter(c => Number(c.id) !== Number(courseId));
+                        this.checkedIds = this.checkedIds.filter(id => Number(id) !== Number(courseId));
+                        this.updateSelectAll();
+                        this.showNotification(data.message, 'success');
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            },
+            showNotification(msg, type = 'success') {
+                this.actionMessage = msg;
+                this.actionType = type;
+                setTimeout(() => { this.actionMessage = ''; }, 3500);
             }
         }" class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             
+            <!-- THÔNG BÁO TOAST NỔI -->
+            <div x-show="actionMessage" 
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="opacity-0 translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl border flex items-center gap-3 bg-slate-900 text-white border-slate-800 text-sm font-semibold">
+                <span class="text-emerald-400 font-bold">✓</span>
+                <span x-text="actionMessage"></span>
+            </div>
+
             <!-- Danh sách khóa học trong giỏ hàng -->
             <div class="lg:col-span-2 space-y-4">
                 <!-- Chọn tất cả -->
-                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-3 shadow-sm select-none">
-                    <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()" class="w-4 h-4 text-[#0056D2] border-slate-300 rounded focus:ring-[#0056D2] cursor-pointer">
-                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Chọn tất cả khóa học (<span x-text="checkedIds.length"></span>/<span x-text="courses.length"></span>)</span>
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between shadow-sm select-none">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()" class="w-4 h-4 text-[#0056D2] border-slate-300 rounded focus:ring-[#0056D2] cursor-pointer">
+                        <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Chọn tất cả khóa học (<span x-text="checkedIds.length"></span>/<span x-text="courses.length"></span>)</span>
+                    </div>
                 </div>
 
-                @foreach($cart->courses as $course)
-                    @php 
-                        $price = $course->discount_price ?? $course->sale_price ?? $course->price; 
-                    @endphp
-                    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex items-center gap-4 shadow-sm select-none">
-                        <input type="checkbox" :value="{{ $course->id }}" x-model="checkedIds" @change="updateSelectAll()" class="w-4 h-4 text-[#0056D2] border-slate-300 rounded focus:ring-[#0056D2] cursor-pointer shrink-0">
-                        <div class="w-16 h-16 bg-blue-50 dark:bg-blue-950/40 text-[#0056D2] dark:text-blue-300 rounded-xl flex items-center justify-center font-extrabold shrink-0 text-xl">
-                            {{ strtoupper(substr($course->title, 0, 1)) }}
+                <!-- Danh sách items -->
+                <template x-if="courses.length === 0">
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center">
+                        <p class="text-slate-500 dark:text-slate-400">Bạn đã xóa hết khóa học khỏi giỏ.</p>
+                        <a href="{{ route('home') }}#courses" class="inline-block mt-3 text-xs font-bold text-[#0056D2] dark:text-blue-400 hover:underline">Khám phá thêm khóa học</a>
+                    </div>
+                </template>
+
+                <template x-for="course in courses" :key="course.id">
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm select-none transition hover:border-slate-300 dark:hover:border-slate-700">
+                        <div class="flex items-center gap-3 shrink-0">
+                            <input type="checkbox" :value="course.id" x-model="checkedIds" @change="updateSelectAll()" class="w-4 h-4 text-[#0056D2] border-slate-300 rounded focus:ring-[#0056D2] cursor-pointer shrink-0">
+                            <div class="w-14 h-14 bg-blue-50 dark:bg-blue-950/40 text-[#0056D2] dark:text-blue-300 rounded-xl flex items-center justify-center font-extrabold shrink-0 text-xl">
+                                <span x-text="course.title.charAt(0).toUpperCase()"></span>
+                            </div>
                         </div>
+
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-900 dark:text-white truncate text-base">{{ $course->title }}</h3>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ $course->instructor?->name }}</p>
+                            <h3 class="font-bold text-slate-900 dark:text-white truncate text-base" x-text="course.title"></h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="course.instructor"></p>
                         </div>
-                        <div class="text-right shrink-0">
-                            <div class="font-extrabold text-lg text-[#0056D2] dark:text-blue-300">{{ number_format($price, 0, ',', '.') }}đ</div>
-                            <form method="POST" action="{{ route('student.cart.remove', $course->id) }}" class="mt-1.5">
-                                @csrf 
-                                @method('DELETE')
-                                <button type="submit" class="text-xs font-semibold text-red-500 hover:text-red-600 transition hover:underline">Xóa khỏi giỏ</button>
-                            </form>
+
+                        <div class="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-800">
+                            <div class="font-extrabold text-lg text-[#0056D2] dark:text-blue-300" x-text="formatMoney(course.price)"></div>
+                            <div class="flex items-center gap-3 text-xs font-semibold">
+                                <button type="button" 
+                                        @click="moveToWishlist(course.id)" 
+                                        class="text-slate-500 hover:text-[#0056D2] dark:hover:text-blue-400 transition flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                                    <span>Yêu thích</span>
+                                </button>
+                                <span class="text-slate-300 dark:text-slate-700">|</span>
+                                <button type="button" 
+                                        @click="removeItem(course.id)" 
+                                        class="text-rose-500 hover:text-rose-600 transition">
+                                    Xóa
+                                </button>
+                            </div>
                         </div>
                     </div>
-                @endforeach
+                </template>
+
+                <!-- KHỐI GỢI Ý KHÓA HỌC MUA KÈM (FREQUENTLY BOUGHT TOGETHER) -->
+                @if(isset($suggestedCourses) && $suggestedCourses->isNotEmpty())
+                    <div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <span>💡 Có thể bạn cũng thích</span>
+                            <span class="text-xs font-medium text-slate-400">(Khóa học phổ biến)</span>
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            @foreach($suggestedCourses as $suggested)
+                                @php $sPrice = $suggested->discount_price ?? $suggested->sale_price ?? $suggested->price; @endphp
+                                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col justify-between shadow-sm">
+                                    <div>
+                                        <div class="w-full h-24 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl mb-3 flex items-center justify-center font-black text-blue-600 text-2xl">
+                                            {{ strtoupper(substr($suggested->title, 0, 1)) }}
+                                        </div>
+                                        <h4 class="font-bold text-xs text-slate-900 dark:text-white line-clamp-2">{{ $suggested->title }}</h4>
+                                        <p class="text-[11px] text-slate-400 mt-1">{{ $suggested->instructor?->name }}</p>
+                                    </div>
+                                    <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                        <span class="font-extrabold text-sm text-[#0056D2] dark:text-blue-400">{{ number_format($sPrice, 0, ',', '.') }}đ</span>
+                                        <form method="POST" action="{{ route('student.cart.add', $suggested->id) }}">
+                                            @csrf
+                                            <button type="submit" class="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 text-[#0056D2] dark:text-blue-300 hover:bg-blue-100 rounded-lg text-[11px] font-bold transition">
+                                                + Thêm vào giỏ
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
 
             <!-- Hộp thông tin thanh toán & chọn cổng -->
@@ -167,6 +305,7 @@
                         <span>Tạm tính</span>
                         <span class="font-semibold text-slate-800 dark:text-white" x-text="formatMoney(total)"></span>
                     </div>
+                    
                     <!-- Dòng hiển thị giảm giá nếu có -->
                     <div class="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium" x-show="discount > 0">
                         <span class="flex items-center gap-1">
@@ -175,12 +314,15 @@
                         </span>
                         <span x-text="'-' + formatMoney(discount)"></span>
                     </div>
-                    <!-- Cảnh báo nếu coupon không đủ điều kiện đơn hàng tối thiểu -->
+                    
+                    <!-- Nhắc nhở thiếu tiền để đạt điều kiện coupon -->
                     <template x-if="appliedCoupon && !isCouponConditionMet">
-                        <div class="text-xs text-rose-500 font-semibold bg-rose-50 dark:bg-rose-950/20 p-2.5 rounded-lg">
-                            Mã <span class="font-bold" x-text="appliedCoupon?.code"></span> yêu cầu đơn hàng từ <span x-text="formatMoney(appliedCoupon?.min_order_amount || 0)"></span>. Hãy chọn thêm khóa học để áp dụng.
+                        <div class="text-xs text-rose-500 font-semibold bg-rose-50 dark:bg-rose-950/20 p-2.5 rounded-lg space-y-1">
+                            <div>Mã <span class="font-bold" x-text="appliedCoupon?.code"></span> yêu cầu đơn hàng tối thiểu <span x-text="formatMoney(appliedCoupon?.min_order_amount || 0)"></span>.</div>
+                            <div class="text-rose-600 font-bold">💡 Mua thêm <span x-text="formatMoney(appliedCoupon.min_order_amount - total)"></span> để được giảm giá!</div>
                         </div>
                     </template>
+
                     <div class="flex justify-between text-slate-900 dark:text-white font-extrabold text-lg pt-1 border-t border-slate-50 dark:border-slate-800/40">
                         <span>Tổng cộng</span>
                         <span class="text-[#0056D2] dark:text-blue-300" x-text="formatMoney(grandTotal)"></span>
@@ -250,38 +392,6 @@
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Phương thức thanh toán</label>
                         
                         <div class="grid grid-cols-1 gap-2.5">
-                            <!-- PayOS Option -->
-                            <div @click="paymentMethod = 'payos'" 
-                                 :class="paymentMethod === 'payos' ? 'border-[#0056D2] bg-blue-50/20 dark:border-blue-500' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
-                                 class="flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition select-none">
-                                <div class="flex items-center gap-3">
-                                    <div class="h-6 w-10 flex items-center justify-center shrink-0 bg-blue-600 rounded font-extrabold text-white text-xs">
-                                        PayOS
-                                    </div>
-                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Cổng thanh toán VietQR (PayOS)</span>
-                                </div>
-                                <div class="h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                                     :class="paymentMethod === 'payos' ? 'border-[#0056D2] bg-[#0056D2]' : 'border-slate-300'">
-                                    <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'payos'"></div>
-                                </div>
-                            </div>
-
-                            <!-- MoMo Option -->
-                            <div @click="paymentMethod = 'momo'" 
-                                 :class="paymentMethod === 'momo' ? 'border-[#d82d8b] bg-pink-50/10 dark:border-pink-500' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
-                                 class="flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition select-none">
-                                <div class="flex items-center gap-3">
-                                    <div class="h-6 w-6 flex items-center justify-center shrink-0">
-                                        <img src="{{ asset('images/momo-logo.jpg') }}" alt="MoMo" class="h-full w-auto object-contain rounded">
-                                    </div>
-                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Ví điện tử MoMo</span>
-                                </div>
-                                <div class="h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                                     :class="paymentMethod === 'momo' ? 'border-[#d82d8b] bg-[#d82d8b]' : 'border-slate-300'">
-                                    <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'momo'"></div>
-                                </div>
-                            </div>
-
                             <!-- Bank Transfer / PayOS Option -->
                             <div @click="paymentMethod = 'bank_transfer'" 
                                  :class="paymentMethod === 'bank_transfer' ? 'border-emerald-600 bg-emerald-50/20 dark:border-emerald-500' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"

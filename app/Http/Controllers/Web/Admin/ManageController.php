@@ -619,29 +619,32 @@ class ManageController extends Controller
             $query->whereYear('created_at', $request->input('year'));
         }
 
-        $totalGross = $query->sum('total_amount');
+        $totalGross = (float) $query->sum('total_amount');
         $totalOrders = $query->count();
 
-        // Tính tổng phần chi trả cho giáo viên và hoa hồng nền tảng từ order_items
-        $totalCommission = (float) DB::table('order_items')
-            ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->whereIn('orders.id', $query->pluck('id'))
-            ->sum('order_items.commission_amount');
-            
-        $totalInstructorEarning = (float) DB::table('order_items')
-            ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->whereIn('orders.id', $query->pluck('id'))
-            ->sum('order_items.instructor_earning');
+        $orderIds = (clone $query)->pluck('id');
 
-        // Fallback tạm tính 20% / 80% cho các đơn hàng cũ chưa có thông tin hoa hồng
-        if ($totalCommission <= 0 && $totalGross > 0) {
+        $hasItems = DB::table('order_items')
+            ->whereIn('order_id', $orderIds)
+            ->exists();
+
+        if ($hasItems) {
+            $totalCommission = (float) DB::table('order_items')
+                ->whereIn('order_id', $orderIds)
+                ->sum('commission_amount');
+
+            $totalInstructorEarning = (float) DB::table('order_items')
+                ->whereIn('order_id', $orderIds)
+                ->sum('instructor_earning');
+        } else {
+            // Fallback tạm tính 20% / 80% cho các đơn hàng cũ chưa có thông tin order_items
             $totalCommission = $totalGross * 0.2;
             $totalInstructorEarning = $totalGross * 0.8;
         }
 
         $monthExpr = DB::connection()->getDriverName() === 'sqlite'
-            ? "strftime('%Y-%m', created_at)"
-            : "DATE_FORMAT(created_at, '%Y-%m')";
+            ? "strftime('%Y-%m', orders.created_at)"
+            : "DATE_FORMAT(orders.created_at, '%Y-%m')";
 
         $monthlyQuery = Order::where('status', 'paid');
         if ($request->filled('start_date')) {
@@ -664,27 +667,44 @@ class ManageController extends Controller
             ->limit(12)
             ->get();
 
-        // Tính toán chi tiết hoa hồng / thực thu giáo viên từng tháng
+        // Single query aggregation for monthly financials
+        $monthlyFinancials = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->where('orders.status', 'paid')
+            ->selectRaw("{$monthExpr} as month, SUM(order_items.commission_amount) as commission, SUM(order_items.instructor_earning) as instructor_earning")
+            ->groupBy('month')
+            ->get()
+            ->keyBy('month');
+
         foreach ($monthly as $row) {
-            $monthOrdersQuery = Order::where('status', 'paid')
-                ->whereRaw("{$monthExpr} = ?", [$row->month]);
-                
-            $row->commission = (float) DB::table('order_items')
-                ->join('orders', 'orders.id', '=', 'order_items.order_id')
-                ->whereIn('orders.id', $monthOrdersQuery->pluck('id'))
-                ->sum('order_items.commission_amount');
-                
-            $row->instructor_earning = (float) DB::table('order_items')
-                ->join('orders', 'orders.id', '=', 'order_items.order_id')
-                ->whereIn('orders.id', $monthOrdersQuery->pluck('id'))
-                ->sum('order_items.instructor_earning');
-                
-            // Fallback dữ liệu cũ
-            if ($row->commission <= 0 && $row->total > 0) {
+            $monthData = $monthlyFinancials->get($row->month);
+            if ($monthData) {
+                $row->commission = (float) $monthData->commission;
+                $row->instructor_earning = (float) $monthData->instructor_earning;
+            } else {
+                // Fallback dữ liệu cũ
                 $row->commission = $row->total * 0.2;
                 $row->instructor_earning = $row->total * 0.8;
             }
         }
+
+        $courseRevenue = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->join('courses', 'courses.id', '=', 'order_items.course_id')
+            ->leftJoin('users as instructors', 'instructors.id', '=', 'courses.instructor_id')
+            ->whereIn('orders.id', $orderIds)
+            ->select(
+                'courses.id as course_id',
+                'courses.title as course_title',
+                'instructors.name as instructor_name',
+                DB::raw('COUNT(DISTINCT order_items.order_id) as sales_count'),
+                DB::raw('SUM(order_items.price) as gross_amount'),
+                DB::raw('SUM(order_items.commission_amount) as commission_amount'),
+                DB::raw('SUM(order_items.instructor_earning) as instructor_earning')
+            )
+            ->groupBy('courses.id', 'courses.title', 'instructors.name')
+            ->orderByDesc('gross_amount')
+            ->get();
 
         $filters = [
             'start_date' => $request->input('start_date'),
@@ -693,7 +713,7 @@ class ManageController extends Controller
             'year' => $request->input('year'),
         ];
 
-        return view('admin.revenue', compact('totalGross', 'totalCommission', 'totalInstructorEarning', 'totalOrders', 'monthly', 'filters'));
+        return view('admin.revenue', compact('totalGross', 'totalCommission', 'totalInstructorEarning', 'totalOrders', 'monthly', 'courseRevenue', 'filters'));
     }
 
     public function activityLogs(): View
