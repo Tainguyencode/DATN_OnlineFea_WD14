@@ -57,6 +57,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Cart::class);
     }
 
+    public function studyGroupInvitations(): HasMany
+    {
+        return $this->hasMany(StudyGroupInvitation::class, 'invited_user_id');
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
@@ -438,6 +443,11 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
+    }
+
+    public function getAvatarUrlAttribute(): string
+    {
+        return $this->avatarUrl();
     }
 
     public function getCommissionRate(): float

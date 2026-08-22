@@ -50,7 +50,32 @@ class StudyGroup extends Model
 
     public function isFull(): bool
     {
+        if ($this->max_members === null) {
+            return false;
+        }
+
         return $this->members()->count() >= $this->max_members;
+    }
+
+    public function canManage(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        if ((int) $this->creator_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($user->role === 'instructor' && $this->course && (int) $this->course->instructor_id === (int) $user->id) {
+            return true;
+        }
+
+        return false;
     }
 
     public function hasMember(int $userId): bool
@@ -61,5 +86,15 @@ class StudyGroup extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(StudyGroupMessage::class);
+    }
+
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(StudyGroupInvitation::class);
+    }
+
+    public function pendingInvitations(): HasMany
+    {
+        return $this->hasMany(StudyGroupInvitation::class)->where('status', StudyGroupInvitation::STATUS_PENDING);
     }
 }
