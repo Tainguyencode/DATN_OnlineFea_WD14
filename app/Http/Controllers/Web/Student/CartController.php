@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
+use App\Models\Wishlist;
+
 class CartController extends Controller
 {
     /**
@@ -61,6 +63,10 @@ class CartController extends Controller
     private function createOrderItemsAndEnrollments(Order $order, $courses, ?Coupon $coupon, float $discount, float $eligibleSubtotal, bool $shouldEnroll = false): void
     {
         foreach ($courses as $course) {
+            if ($course instanceof Course) {
+                $course->loadMissing('instructor');
+            }
+
             $price = $this->getEffectivePrice($course);
             $isEligible = $coupon ? $coupon->isEligibleForCourse($course) : false;
             $itemDiscount = ($isEligible && $eligibleSubtotal > 0) ? ($price / $eligibleSubtotal) * $discount : 0;
@@ -122,6 +128,12 @@ class CartController extends Controller
         $cart = $this->getCart()->load(['courses.instructor:id,name']);
         $total = $cart->courses->sum(fn ($c) => $this->getEffectivePrice($c));
 
+        // Lấy đơn hàng pending nếu có để cảnh báo khôi phục
+        $pendingOrder = Order::where('user_id', auth()->id())
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
         // Lấy danh sách mã giảm giá khả dụng để hiển thị trên UI
         $activeCoupons = Coupon::where('is_active', true)
             ->where(function ($q) {
@@ -135,7 +147,20 @@ class CartController extends Controller
             })
             ->get();
 
-        return view('student.cart.index', compact('cart', 'total', 'activeCoupons'));
+        // Khóa học gợi ý mua kèm (bỏ các khóa đã có trong giỏ hoặc đã đăng ký)
+        $cartCourseIds = $cart->courses->pluck('id')->toArray();
+        $enrolledCourseIds = Enrollment::where('user_id', auth()->id())->pluck('course_id')->toArray();
+        $excludeIds = array_merge($cartCourseIds, $enrolledCourseIds);
+
+        $suggestedCourses = Course::where('status', Course::STATUS_PUBLISHED)
+            ->where('is_published', true)
+            ->whereNotIn('id', $excludeIds)
+            ->with('instructor:id,name,avatar')
+            ->inRandomOrder()
+            ->limit(3)
+            ->get();
+
+        return view('student.cart.index', compact('cart', 'total', 'activeCoupons', 'pendingOrder', 'suggestedCourses'));
     }
 
     /**
@@ -426,9 +451,141 @@ class CartController extends Controller
             return redirect()->route('student.orders')->with('error', 'Đơn hàng này không ở trạng thái chờ thanh toán.');
         }
 
-        $order->load('items.course');
+        $order->load(['items.course', 'coupon']);
 
-        return view('student.cart.pay', compact('order'));
+        $activeCoupons = Coupon::where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses');
+            })
+            ->get();
+
+        return view('student.cart.pay', compact('order', 'activeCoupons'));
+    }
+
+    /**
+     * Áp dụng mã giảm giá trực tiếp vào đơn hàng chờ thanh toán.
+     */
+    public function applyCouponToOrder(Request $request, string $orderCode): JsonResponse
+    {
+        $validated = $request->validate([
+            'coupon_code' => 'required|string',
+        ]);
+
+        $order = Order::where('order_code', $orderCode)
+            ->where('user_id', auth()->id())
+            ->where('status', 'pending')
+            ->firstOrFail();
+
+        $couponCode = $validated['coupon_code'];
+        $coupon = Coupon::where('code', $couponCode)->first();
+
+        if (! $coupon || ! $coupon->isValid()) {
+            return response()->json(['success' => false, 'message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.']);
+        }
+
+        if ($coupon->isUsedByUser(auth()->id())) {
+            return response()->json(['success' => false, 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.']);
+        }
+
+        $orderItems = $order->items()->with('course')->get();
+        $courses = $orderItems->pluck('course');
+
+        $eligibleCourses = $courses->filter(fn ($c) => $coupon->isEligibleForCourse($c));
+        if ($eligibleCourses->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Mã giảm giá này không áp dụng cho các khóa học trong đơn hàng.']);
+        }
+
+        $subtotal = $order->subtotal > 0 ? (float) $order->subtotal : $courses->sum(fn ($c) => $this->getEffectivePrice($c));
+        $eligibleSubtotal = $eligibleCourses->sum(fn ($c) => $this->getEffectivePrice($c));
+
+        if ($eligibleSubtotal < $coupon->min_order_amount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Đơn hàng chưa đạt giá trị tối thiểu '.number_format($coupon->min_order_amount, 0, ',', '.').'đ để áp dụng mã này.',
+            ]);
+        }
+
+        $discount = $coupon->calculateDiscount($eligibleSubtotal);
+        $total = max(0, $subtotal - $discount);
+
+        DB::transaction(function () use ($order, $coupon, $discount, $total, $orderItems, $eligibleSubtotal) {
+            $order->update([
+                'coupon_id' => $coupon->id,
+                'discount_amount' => $discount,
+                'total_amount' => $total,
+            ]);
+
+            if ($order->payment) {
+                $order->payment->update(['amount' => $total]);
+            }
+
+            foreach ($orderItems as $item) {
+                $isEligible = $coupon->isEligibleForCourse($item->course);
+                $itemDiscount = ($isEligible && $eligibleSubtotal > 0) ? ($item->price / $eligibleSubtotal) * $discount : 0;
+                $itemNetPrice = max(0, $item->price - $itemDiscount);
+                $financials = $this->calculateItemFinancials($item->course, $itemNetPrice, $coupon);
+
+                $item->update([
+                    'commission_rate' => $financials['commission_rate'],
+                    'commission_amount' => $financials['commission_amount'],
+                    'instructor_earning' => $financials['instructor_earning'],
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Áp dụng mã giảm giá thành công!',
+            'discount_amount' => (float) $discount,
+            'new_total' => (float) $total,
+            'coupon_code' => $coupon->code,
+        ]);
+    }
+
+    /**
+     * Gỡ mã giảm giá khỏi đơn hàng chờ thanh toán.
+     */
+    public function removeCouponFromOrder(string $orderCode): JsonResponse
+    {
+        $order = Order::where('order_code', $orderCode)
+            ->where('user_id', auth()->id())
+            ->where('status', 'pending')
+            ->firstOrFail();
+
+        $subtotal = (float) $order->subtotal;
+
+        DB::transaction(function () use ($order, $subtotal) {
+            $order->update([
+                'coupon_id' => null,
+                'discount_amount' => 0,
+                'total_amount' => $subtotal,
+            ]);
+
+            if ($order->payment) {
+                $order->payment->update(['amount' => $subtotal]);
+            }
+
+            foreach ($order->items()->with('course')->get() as $item) {
+                $financials = $this->calculateItemFinancials($item->course, $item->price, null);
+                $item->update([
+                    'commission_rate' => $financials['commission_rate'],
+                    'commission_amount' => $financials['commission_amount'],
+                    'instructor_earning' => $financials['instructor_earning'],
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã gỡ mã giảm giá.',
+            'new_total' => $subtotal,
+        ]);
     }
 
     /**
@@ -574,5 +731,118 @@ class CartController extends Controller
 
         return view('student.cart.failed', compact('order', 'orderItems'));
     }
+
+    /**
+     * Mua ngay một khóa học (bỏ qua giỏ hàng và chuyển hướng đến trang thanh toán).
+     */
+    public function buyNow(Course $course, PaymentGatewayService $paymentService): RedirectResponse
+    {
+        if (! $course->isPublished()) {
+            return back()->with('error', 'Khóa học chưa được xuất bản hoặc không khả dụng.');
+        }
+
+        if (Enrollment::where('user_id', auth()->id())
+            ->where('course_id', $course->id)
+            ->withLearningAccess()
+            ->exists()) {
+            return back()->with('error', 'Bạn đã sở hữu và đăng ký khóa học này rồi.');
+        }
+
+        $price = $this->getEffectivePrice($course);
+        $orderCode = 'ORD-'.strtoupper(Str::random(8));
+
+        $order = DB::transaction(function () use ($course, $price, $orderCode) {
+            $order = Order::create([
+                'order_code' => $orderCode,
+                'user_id' => auth()->id(),
+                'coupon_id' => null,
+                'subtotal' => $price,
+                'discount_amount' => 0,
+                'total_amount' => $price,
+                'status' => 'pending',
+                'payment_method' => 'bank_transfer',
+            ]);
+
+            Payment::create([
+                'order_id' => $order->id,
+                'gateway' => 'bank_transfer',
+                'amount' => $price,
+                'status' => 'pending',
+            ]);
+
+            $this->createOrderItemsAndEnrollments($order, collect([$course]), null, 0, $price, false);
+
+            return $order;
+        });
+
+        return redirect()->route('student.checkout.pay', $order->order_code);
+    }
+
+    /**
+     * Xóa khóa học khỏi giỏ hàng qua AJAX.
+     */
+    public function removeAjax(int $courseId): JsonResponse
+    {
+        $cart = $this->getCart();
+        $cart->courses()->detach($courseId);
+
+        $remainingCourses = $cart->courses()->get();
+        $newSubtotal = $remainingCourses->sum(fn ($c) => $this->getEffectivePrice($c));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã xóa khóa học khỏi giỏ hàng.',
+            'cart_count' => $remainingCourses->count(),
+            'subtotal' => $newSubtotal,
+        ]);
+    }
+
+    /**
+     * Chuyển khóa học từ giỏ hàng sang danh sách yêu thích (Wishlist).
+     */
+    public function moveToWishlist(Request $request, int $courseId): JsonResponse|RedirectResponse
+    {
+        $cart = $this->getCart();
+        $cart->courses()->detach($courseId);
+
+        Wishlist::firstOrCreate([
+            'user_id' => auth()->id(),
+            'course_id' => $courseId,
+        ]);
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã chuyển khóa học sang danh sách yêu thích.',
+            ]);
+        }
+
+        return back()->with('success', 'Đã chuyển khóa học sang danh sách yêu thích.');
+    }
+
+    /**
+     * Endpoint Polling kiểm tra trạng thái đơn hàng real-time.
+     */
+    public function checkStatus(string $orderCode, PaymentGatewayService $paymentService): JsonResponse
+    {
+        $order = Order::where('order_code', $orderCode)
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (! $order) {
+            return response()->json(['status' => 'not_found'], 404);
+        }
+
+        if ($order->status !== 'paid') {
+            $paymentService->checkAndUpdatePayOSStatus($order);
+            $order->refresh();
+        }
+
+        return response()->json([
+            'status' => $order->status,
+            'order_code' => $order->order_code,
+        ]);
+    }
 }
+
 

@@ -46,25 +46,45 @@ class DiscussionController extends Controller
             }
         }
 
+        $content = $request->validated('content');
+        $discussionTitle = $request->validated('title') 
+            ?: ($content ? Str::limit(strip_tags((string) $content), 80) : ($attachmentName ? "Đính kèm: {$attachmentName}" : "Tệp đính kèm"));
+
         $discussion = Discussion::create([
+            'course_id' => $course->id,
             'lesson_id' => $lesson->id,
             'user_id' => auth()->id(),
-            'title' => $request->validated('title'),
-            'content' => $request->validated('content'),
+            'title' => $discussionTitle,
+            'content' => $content,
             'attachment_path' => $attachmentPath,
             'attachment_name' => $attachmentName,
             'attachment_type' => $attachmentType,
             'is_resolved' => false,
         ]);
 
-        // Cộng +10 điểm cho học viên đặt câu hỏi
-        app(\App\Services\PointService::class)->awardPoints(
+        // Cộng +2 XP cho học viên tạo thảo luận (tối đa 10 XP/ngày)
+        app(\App\Services\PointService::class)->awardDiscussionPoints(
             auth()->id(),
-            10,
-            'ask_question',
-            "Đặt câu hỏi: {$discussion->title} (discussion_id:{$discussion->id})",
-            $course->id
+            $course->id,
+            $discussion->id
         );
+
+        // Gửi thông báo cho Giảng viên sở hữu khóa học
+        $instructor = $course->instructor;
+        if ($instructor && (int) $instructor->id !== (int) auth()->id()) {
+            $title = 'Học viên gửi câu hỏi mới';
+            $previewText = $discussion->content ? Str::limit($discussion->content, 60) : ($discussion->attachment_name ? "[Đính kèm: {$discussion->attachment_name}]" : '[Tệp đính kèm]');
+            $message = auth()->user()->name . ' vừa hỏi trong khóa học "' . $course->title . '": "' . $previewText . '"';
+            $url = route('instructor.discussions.show', $discussion);
+
+            $this->notificationService->send(
+                $instructor,
+                $title,
+                $message,
+                'student_question',
+                $url
+            );
+        }
 
         return redirect()->route('courses.lessons.show', [
             'course' => $course,
@@ -99,10 +119,23 @@ class DiscussionController extends Controller
             }
         }
 
+        $replyToMessageId = $request->validated('reply_to_message_id');
+        $replyToReply = null;
+        if ($replyToMessageId) {
+            $replyToReply = DiscussionReply::where('id', $replyToMessageId)
+                ->where('discussion_id', $discussion->id)
+                ->first();
+
+            if (! $replyToReply) {
+                return back()->withErrors(['reply_to_message_id' => 'Tin nhắn được chọn không thuộc cuộc trao đổi này.']);
+            }
+        }
+
         $isInstructor = (int) $discussion->lesson->course->instructor_id === (int) auth()->id();
 
         $reply = DiscussionReply::create([
             'discussion_id' => $discussion->id,
+            'reply_to_message_id' => $replyToReply?->id,
             'user_id' => auth()->id(),
             'content' => $request->validated('content'),
             'is_instructor_answer' => $isInstructor,
@@ -111,23 +144,47 @@ class DiscussionController extends Controller
             'attachment_type' => $attachmentType,
         ]);
 
+        $course = $discussion->lesson->course;
+        $instructor = $course->instructor;
+
         // If lecturer replies, send push notification to student
         if ($isInstructor && $discussion->user) {
-            $course = $discussion->lesson->course;
-            $lesson = $discussion->lesson;
             $title = 'Giảng viên đã trả lời câu hỏi của bạn';
-            $message = auth()->user()->name . ' đã trả lời câu hỏi: "' . Str::limit($discussion->title, 40) . '"';
+            if ($replyToReply && (int) $replyToReply->user_id === (int) $discussion->user_id) {
+                $quotedText = $replyToReply->content ? Str::limit($replyToReply->content, 40) : '[Tệp đính kèm]';
+                $message = auth()->user()->name . ' đã trả lời tin nhắn của bạn: "' . $quotedText . '"';
+            } else {
+                $message = auth()->user()->name . ' đã trả lời câu hỏi: "' . Str::limit($discussion->title, 40) . '"';
+            }
             $url = route('courses.lessons.show', [
                 'course' => $course,
-                'lesson' => $lesson,
+                'lesson' => $discussion->lesson,
                 'discussion_id' => $discussion->id
-            ]) . '#qa-tab';
+            ]) . '?tab=qa';
 
             $this->notificationService->send(
                 $discussion->user,
                 $title,
                 $message,
                 'discussion_reply',
+                $url
+            );
+        } elseif (! $isInstructor && $instructor && (int) $instructor->id !== (int) auth()->id()) {
+            // Học viên gửi phản hồi -> thông báo cho Giảng viên
+            $title = 'Học viên gửi phản hồi mới';
+            if ($replyToReply && (int) $replyToReply->user_id === (int) $instructor->id) {
+                $quotedText = $replyToReply->content ? Str::limit($replyToReply->content, 40) : '[Tệp đính kèm]';
+                $message = auth()->user()->name . ' đã trả lời tin nhắn của bạn: "' . $quotedText . '"';
+            } else {
+                $message = auth()->user()->name . ' vừa phản hồi trong câu hỏi: "' . Str::limit($discussion->title, 40) . '"';
+            }
+            $url = route('instructor.discussions.show', $discussion);
+
+            $this->notificationService->send(
+                $instructor,
+                $title,
+                $message,
+                'student_question',
                 $url
             );
         }
@@ -173,5 +230,106 @@ class DiscussionController extends Controller
         }
         
         return redirect()->back()->with('success', 'Cập nhật trạng thái câu trả lời thành công.');
+    }
+
+    /**
+     * Thu hồi tin nhắn phản hồi.
+     */
+    public function recallReply(DiscussionReply $reply): RedirectResponse
+    {
+        $user = auth()->user();
+        $isOwner = (int) $reply->user_id === (int) $user->id;
+        $isAdmin = $user->role === 'admin';
+        abort_unless($isOwner || $isAdmin, 403, 'Bạn không có quyền thu hồi tin nhắn này.');
+
+        if ($reply->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($reply->attachment_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($reply->attachment_path);
+        }
+
+        $reply->update([
+            'is_recalled' => true,
+            'content' => 'Tin nhắn đã được thu hồi',
+            'attachment_path' => null,
+            'attachment_name' => null,
+            'attachment_type' => null,
+        ]);
+
+        return back()->with('success', 'Đã thu hồi tin nhắn thành công.');
+    }
+
+    /**
+     * Xóa tin nhắn phản hồi.
+     */
+    public function destroyReply(DiscussionReply $reply): RedirectResponse
+    {
+        $user = auth()->user();
+        $course = $reply->discussion->lesson->course;
+        $isOwner = (int) $reply->user_id === (int) $user->id;
+        $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
+        abort_unless($isOwner || $isInstructor, 403, 'Bạn không có quyền xóa tin nhắn này.');
+
+        if ($reply->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($reply->attachment_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($reply->attachment_path);
+        }
+
+        $reply->delete();
+
+        return back()->with('success', 'Đã xóa tin nhắn thành công.');
+    }
+
+    /**
+     * Thu hồi câu hỏi gốc.
+     */
+    public function recallDiscussion(Discussion $discussion): RedirectResponse
+    {
+        $user = auth()->user();
+        $isOwner = (int) $discussion->user_id === (int) $user->id;
+        $isAdmin = $user->role === 'admin';
+        abort_unless($isOwner || $isAdmin, 403, 'Bạn không có quyền thu hồi tin nhắn này.');
+
+        if ($discussion->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($discussion->attachment_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($discussion->attachment_path);
+        }
+
+        $discussion->update([
+            'is_recalled' => true,
+            'content' => 'Tin nhắn đã được thu hồi',
+            'attachment_path' => null,
+            'attachment_name' => null,
+            'attachment_type' => null,
+        ]);
+
+        return back()->with('success', 'Đã thu hồi tin nhắn thành công.');
+    }
+
+    /**
+     * Xóa toàn bộ cuộc trao đổi.
+     */
+    public function destroyDiscussion(Discussion $discussion): RedirectResponse
+    {
+        $user = auth()->user();
+        $course = $discussion->lesson->course;
+        $isOwner = (int) $discussion->user_id === (int) $user->id;
+        $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
+        abort_unless($isOwner || $isInstructor, 403, 'Bạn không có quyền xóa cuộc trao đổi này.');
+
+        if ($discussion->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($discussion->attachment_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($discussion->attachment_path);
+        }
+
+        foreach ($discussion->replies as $r) {
+            if ($r->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($r->attachment_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($r->attachment_path);
+            }
+        }
+
+        $lesson = $discussion->lesson;
+        $discussion->delete();
+
+        if ($user->role === 'instructor' || $user->role === 'admin') {
+            return redirect()->route('instructor.discussions.index')->with('success', 'Đã xóa cuộc trao đổi thành công.');
+        }
+
+        return redirect()->route('courses.lessons.show', ['course' => $course, 'lesson' => $lesson, 'tab' => 'qa'])->with('success', 'Đã xóa cuộc trao đổi thành công.');
     }
 }

@@ -15,6 +15,7 @@ class Discussion extends Model
         'title',
         'content',
         'is_resolved',
+        'is_recalled',
         'attachment_path',
         'attachment_name',
         'attachment_type',
@@ -24,6 +25,7 @@ class Discussion extends Model
     {
         return [
             'is_resolved' => 'boolean',
+            'is_recalled' => 'boolean',
         ];
     }
 
@@ -57,5 +59,36 @@ class Discussion extends Model
         }
 
         return null;
+    }
+
+    public function instructor(): ?User
+    {
+        return $this->lesson?->course?->instructor;
+    }
+
+    public function needsReply(): bool
+    {
+        $replies = $this->relationLoaded('replies') ? $this->replies : $this->replies()->get();
+
+        if ($replies->isEmpty()) {
+            return true;
+        }
+
+        $lastInstructorReply = $replies->where('is_instructor_answer', true)->sortByDesc('created_at')->first();
+        if (! $lastInstructorReply) {
+            return true;
+        }
+
+        $lastStudentReply = $replies->where('is_instructor_answer', false)->sortByDesc('created_at')->first();
+        if ($lastStudentReply && $lastStudentReply->created_at > $lastInstructorReply->created_at) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function isAnswered(): bool
+    {
+        return ! $this->needsReply();
     }
 }

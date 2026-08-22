@@ -85,4 +85,39 @@
     </div>
 </div>
 
+<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mt-8">
+    <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="font-bold text-slate-900">Chi tiết doanh thu theo khóa học</h2>
+        <span class="text-xs font-semibold text-slate-500">Tổng {{ count($courseRevenue) }} khóa học</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 border-b border-slate-100">
+                <tr>
+                    <th class="text-left px-6 py-3 font-semibold text-slate-600">Tên khóa học</th>
+                    <th class="text-left px-6 py-3 font-semibold text-slate-600">Giảng viên</th>
+                    <th class="text-center px-6 py-3 font-semibold text-slate-600">Đã bán</th>
+                    <th class="text-right px-6 py-3 font-semibold text-slate-600">Doanh thu gộp</th>
+                    <th class="text-right px-6 py-3 font-semibold text-slate-600">Lợi nhuận nền tảng</th>
+                    <th class="text-right px-6 py-3 font-semibold text-slate-600">Chi trả giáo viên</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse($courseRevenue as $cRow)
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-6 py-4 font-bold text-slate-900">{{ $cRow->course_title }}</td>
+                        <td class="px-6 py-4 text-slate-600 text-xs font-semibold">{{ $cRow->instructor_name ?? 'N/A' }}</td>
+                        <td class="px-6 py-4 text-center font-semibold text-slate-700">{{ number_format($cRow->sales_count) }}</td>
+                        <td class="px-6 py-4 text-right font-medium text-slate-700">{{ number_format($cRow->gross_amount, 0, ',', '.') }}đ</td>
+                        <td class="px-6 py-4 text-right font-semibold text-emerald-600">{{ number_format($cRow->commission_amount, 0, ',', '.') }}đ</td>
+                        <td class="px-6 py-4 text-right font-semibold text-amber-600">{{ number_format($cRow->instructor_earning, 0, ',', '.') }}đ</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Chưa có dữ liệu khóa học.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
 </x-admin-layout>

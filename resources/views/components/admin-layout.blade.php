@@ -5,6 +5,9 @@
 ])
 
 @php
+    $pendingInstructorsCount = \App\Models\User::where('role', 'instructor')->where('instructor_status', 'pending')->count();
+    $pendingCoursesCount = \App\Models\Course::where('status', 'under_review')->count();
+
     $menu = [
         [
             'route' => 'admin.dashboard',
@@ -26,6 +29,8 @@
                     'route' => 'admin.instructors.applications.index',
                     'active' => ['admin.instructors.applications.*'],
                     'label' => 'Quản lý giảng viên',
+                    'badge' => $pendingInstructorsCount > 0 ? (string) $pendingInstructorsCount : null,
+                    'badge_color' => 'bg-amber-500',
                     'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0l-3 3m3-3l3 3M9 7h6"/></svg>',
                 ],
                 [
@@ -57,6 +62,8 @@
                     'route' => 'admin.courses.pending',
                     'active' => ['admin.courses.pending', 'admin.courses.review', 'admin.course-reviews.*'],
                     'label' => 'Duyệt khóa học',
+                    'badge' => $pendingCoursesCount > 0 ? (string) $pendingCoursesCount : null,
+                    'badge_color' => 'bg-amber-500',
                     'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
                 ],
                 [

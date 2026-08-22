@@ -10,10 +10,12 @@ class DiscussionReply extends Model
 {
     protected $fillable = [
         'discussion_id',
+        'reply_to_message_id',
         'user_id',
         'content',
         'is_instructor_answer',
         'is_helpful',
+        'is_recalled',
         'attachment_path',
         'attachment_name',
         'attachment_type',
@@ -24,6 +26,7 @@ class DiscussionReply extends Model
         return [
             'is_instructor_answer' => 'boolean',
             'is_helpful' => 'boolean',
+            'is_recalled' => 'boolean',
         ];
     }
 
@@ -35,6 +38,16 @@ class DiscussionReply extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(DiscussionReply::class, 'reply_to_message_id');
+    }
+
+    public function childReplies()
+    {
+        return $this->hasMany(DiscussionReply::class, 'reply_to_message_id');
     }
 
     public function attachmentUrl(): ?string

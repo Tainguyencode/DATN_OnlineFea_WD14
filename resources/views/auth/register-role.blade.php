@@ -197,26 +197,6 @@
                         @enderror
                     </div>
 
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <x-auth.input
-                            label="LinkedIn"
-                            name="linkedin_url"
-                            :value="old('linkedin_url')"
-                            placeholder="https://linkedin.com/in/..."
-                        />
-                        <x-auth.input
-                            label="GitHub"
-                            name="github_url"
-                            :value="old('github_url')"
-                            placeholder="https://github.com/..."
-                        />
-                        <x-auth.input
-                            label="Website"
-                            name="website_url"
-                            :value="old('website_url')"
-                            placeholder="https://yourwebsite.com"
-                        />
-                    </div>
 
                     <div>
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
@@ -235,15 +215,15 @@
 
                     <div>
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                            Upload Chứng chỉ / Bằng cấp (PDF, JPG, PNG - Tối đa 5MB) *
+                            Upload Chứng chỉ / Bằng cấp (Tùy chọn - PDF, JPG, PNG tối đa 5MB)
                         </label>
                         <input
                             type="file"
                             name="certificate"
                             accept=".pdf,.jpg,.jpeg,.png"
-                            required
                             class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-violet-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 @error('certificate') border-red-500 @enderror"
                         >
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Bạn có thể tải lên chứng chỉ sau tại trang hoàn thiện hồ sơ.</p>
                         @error('certificate')
                             <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
@@ -254,14 +234,146 @@
             <x-auth.captcha :question="$captcha['question']" />
 
             @if($isStudent)
-                <div>
-                    <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                        <input type="checkbox" name="terms" value="1" @checked(old('terms')) class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700">
-                        <span>Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.</span>
-                    </label>
-                    @error('terms')
-                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
-                    @enderror
+                <div class="space-y-4" x-data="{ showTermsModal: false }">
+                    {{-- Compact Card Điều khoản dành cho Học viên --}}
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-center dark:border-slate-700 dark:bg-slate-800/60">
+                        <div class="mb-1.5 flex items-center justify-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
+                            <span>Điều khoản dành cho Học viên</span>
+                        </div>
+                        <p class="mb-3 text-xs text-slate-600 dark:text-slate-300">
+                            Vui lòng đọc và đồng ý với các điều khoản trước khi đăng ký học viên.
+                        </p>
+                        <button
+                            type="button"
+                            @click="showTermsModal = true"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-100 px-4 py-2 text-xs font-bold text-blue-700 transition duration-200 hover:bg-blue-200 hover:text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 dark:hover:bg-blue-900 cursor-pointer"
+                        >
+                            Xem điều khoản đầy đủ
+                        </button>
+                    </div>
+
+                    <div>
+                        <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-600 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                            <input type="checkbox" name="terms" value="1" @checked(old('terms')) class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700">
+                            <span>Tôi đã đọc và đồng ý với Điều khoản dành cho Học viên.</span>
+                        </label>
+                        @error('terms')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Modal Popup Điều khoản dành cho Học viên --}}
+                    <template x-teleport="body">
+                        <div
+                            x-show="showTermsModal"
+                            x-cloak
+                            style="display: none;"
+                            class="fixed inset-0 z-[9999] overflow-y-auto"
+                            x-init="$watch('showTermsModal', value => document.body.classList.toggle('overflow-hidden', value))"
+                            @keydown.escape.window="showTermsModal = false"
+                        >
+                            {{-- Modal Overlay / Backdrop --}}
+                            <div
+                                x-show="showTermsModal"
+                                x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0"
+                                x-transition:enter-end="opacity-100"
+                                x-transition:leave="transition ease-in duration-150"
+                                x-transition:leave-start="opacity-100"
+                                x-transition:leave-end="opacity-0"
+                                class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm"
+                                @click="showTermsModal = false"
+                            ></div>
+
+                            {{-- Centered Flex Wrapper --}}
+                            <div class="flex min-h-full items-center justify-center p-3 sm:p-6 text-center">
+                                {{-- Solid White Popup Box --}}
+                                <div
+                                    x-show="showTermsModal"
+                                    x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 scale-95 translate-y-2 sm:translate-y-0"
+                                    x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                    x-transition:leave="transition ease-in duration-150"
+                                    x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                                    x-transition:leave-end="opacity-0 scale-95 translate-y-2 sm:translate-y-0"
+                                    class="relative z-10 w-full max-w-[600px] rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-slate-950/40 border border-slate-200 dark:border-slate-800 text-left overflow-hidden flex flex-col my-auto"
+                                    style="background-color: #ffffff;"
+                                    @click.stop
+                                >
+                                    {{-- Header --}}
+                                    <div class="flex shrink-0 items-center justify-between border-b border-slate-100 bg-white px-5 sm:px-6 py-4.5 dark:border-slate-800 dark:bg-slate-900" style="background-color: #ffffff;">
+                                        <h3 class="flex items-center gap-2.5 text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                                            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253"/></svg>
+                                            <span>Điều khoản dành cho Học viên</span>
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            @click="showTermsModal = false"
+                                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                                            aria-label="Đóng"
+                                        >
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    </div>
+
+                                    {{-- Body --}}
+                                    <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-slate-700 dark:text-slate-200 custom-modal-scrollbar max-h-[55vh] bg-white dark:bg-slate-900" style="background-color: #ffffff;">
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">1. Điều kiện sử dụng tài khoản</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Học viên phải cung cấp thông tin cá nhân chính xác, đầy đủ khi đăng ký và có trách nhiệm cập nhật khi có thay đổi.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">2. Trách nhiệm bảo mật tài khoản</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Học viên tự chịu trách nhiệm bảo mật mật khẩu và tài khoản của mình. Mọi hành vi thực hiện qua tài khoản sẽ được tính cho chủ tài khoản.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">3. Quyền sử dụng khóa học</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Khi đăng ký khóa học, học viên được cấp quyền truy cập học tập cá nhân không độc quyền theo chính sách của từng khóa học.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">4. Quy định về video và tài liệu</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Toàn bộ video bài giảng và tài liệu học tập chỉ được sử dụng cho mục đích học tập cá nhân trên nền tảng.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">5. Không chia sẻ tài khoản</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nghiêm cấm chia sẻ, cho mượn, bán lại tài khoản hoặc sử dụng chung tài khoản với người khác dưới mọi hình thức.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">6. Không sao chép hoặc phát tán nội dung</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nghiêm cấm tải về trái phép, ghi màn hình, sao chép, chia sẻ hoặc thương mại hóa nội dung bài học, tài liệu của giảng viên và nền tảng.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">7. Quy định về học tập và bài kiểm tra</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Học viên phải tự hoàn thành bài tập, trắc nghiệm và đánh giá một cách trung thực, không gian lận hoặc nhờ người khác làm hộ.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">8. Quy tắc ứng xử trong cộng đồng</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Tôn trọng giảng viên và các học viên khác trong phần bình luận, thảo luận. Không phát ngôn xúc phạm, quấy rối, spam hoặc đăng nội dung không phù hợp.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">9. Xử lý vi phạm</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nền tảng có quyền cảnh cáo, tạm dừng hoặc khóa vĩnh viễn tài khoản vi phạm điều khoản mà không hoàn lại học phí.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">10. Cập nhật điều khoản</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nền tảng có thể cập nhật các điều khoản này khi cần thiết và sẽ thông báo trên hệ thống.</p>
+                                        </div>
+                                    </div>
+
+                                    {{-- Footer --}}
+                                    <div class="flex shrink-0 items-center justify-end border-t border-slate-100 bg-slate-50 px-5 sm:px-6 py-4 dark:border-slate-800 dark:bg-slate-900" style="background-color: #f8fafc;">
+                                        <button
+                                            type="button"
+                                            @click="showTermsModal = false"
+                                            class="inline-flex h-10 items-center justify-center rounded-[10px] bg-[#0056D2] px-6 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#00419e] active:bg-[#003380] cursor-pointer"
+                                        >
+                                            Đóng
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             @else
                 <div class="space-y-4" x-data="{ showTermsModal: false }">

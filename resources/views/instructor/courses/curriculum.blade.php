@@ -1,5 +1,7 @@
 <x-instructor-layout :title="'Nội dung - '.$course->title" page-title="Quản lý nội dung khóa học" :breadcrumb="$course->title">
 
+<script src="{{ asset('js/s3-multipart-uploader.js') }}"></script>
+
 @php
     $typeStyles = [
         'video' => 'bg-indigo-50 text-indigo-700 border-indigo-200',
@@ -235,7 +237,7 @@
                                         @endif
                                         @if($lesson->type === 'video')
                                             @php
-                                                $hasVideoContent = filled($lesson->video_path) || filled($lesson->video_url);
+                                                $hasVideoContent = filled($lesson->original_video_key) || filled($lesson->hls_manifest_key) || filled($lesson->video_path) || filled($lesson->video_url);
                                             @endphp
                                             <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $hasVideoContent ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
                                                 {{ $hasVideoContent ? 'Đã có video' : 'Chưa có video' }}
@@ -246,12 +248,14 @@
                                     <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
                                         <span>Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
                                         <span>Bài {{ $lesson->sort_order }}</span>
-                                        @if($lesson->type === 'video' && $lesson->video_path)
+                                        @if($lesson->type === 'video' && ($lesson->original_video_key || $lesson->hls_manifest_key || $lesson->video_path))
                                             <span class="font-semibold text-emerald-600">
-                                                @if(\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4'))
-                                                    Video file ({{ $lesson->status === 'processing' ? 'Đang xử lý' : 'Chưa xử lý HLS' }})
+                                                @if($lesson->processing_status === 'completed' || $lesson->hls_manifest_key || (!empty($lesson->video_path) && !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))
+                                                    Video S3 HLS (Đã bảo mật)
+                                                @elseif($lesson->processing_status === 'failed')
+                                                    Video S3 (Lỗi xử lý HLS)
                                                 @else
-                                                    Video file (Đã bảo mật)
+                                                    Video S3 (Đang chờ xử lý HLS)
                                                 @endif
                                             </span>
                                         @elseif($lesson->type === 'video' && $lesson->video_url)
@@ -359,6 +363,7 @@
                                         </summary>
                                         <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:w-[620px]">
                                             @include('instructor.courses.partials.lesson-form', [
+                                                'course' => $course,
                                                 'action' => $updateActionUrl,
                                                 'method' => 'PUT',
                                                 'lesson' => $lesson,
@@ -390,6 +395,7 @@
                     </summary>
                     <div class="border-t border-slate-100 bg-slate-50 p-5">
                         @include('instructor.courses.partials.lesson-form', [
+                            'course' => $course,
                             'action' => route('instructor.courses.sections.lessons.store', [$course, $section]),
                             'method' => 'POST',
                             'lesson' => null,
@@ -416,6 +422,7 @@
     </div>
 </div>
 
+<script src="{{ asset('js/s3-multipart-uploader.js') }}"></script>
 <script>
     document.addEventListener('change', function (e) {
         var target = e.target;

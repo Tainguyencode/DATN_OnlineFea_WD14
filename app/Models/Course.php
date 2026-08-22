@@ -252,6 +252,17 @@ class Course extends Model
     }
 
     /**
+     * Scope lấy các khóa học đang được hiển thị công khai (bao gồm cả khóa học đang cập nhật bản mới).
+     */
+    public function scopePublished($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_published', true)
+              ->orWhereIn('status', [self::STATUS_PUBLISHED, self::STATUS_PENDING_UPDATE, self::STATUS_REJECTED_UPDATE]);
+        });
+    }
+
+    /**
      * Kiểm tra xem giảng viên có thể chỉnh sửa khóa học hay không.
      */
     public function isEditable(): bool
@@ -413,5 +424,18 @@ class Course extends Model
         return $lesson
             ? route('courses.lessons.show', [$this, $lesson])
             : null;
+    }
+
+    public function totalLessonsCount(): int
+    {
+        if ($this->relationLoaded('courseSections') && $this->courseSections->isNotEmpty()) {
+            return $this->courseSections->flatMap(fn ($s) => $s->lessons ?? collect())->count();
+        }
+
+        if ($this->relationLoaded('chapters') && $this->chapters->isNotEmpty()) {
+            return $this->chapters->flatMap(fn ($c) => $c->lessons ?? collect())->count();
+        }
+
+        return \App\Models\Lesson::where('course_id', $this->id)->count();
     }
 }

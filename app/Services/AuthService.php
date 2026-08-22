@@ -72,6 +72,7 @@ class AuthService
             'avatar' => null,
             'bio' => $validated['bio'] ?? null,
             'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
+            'needs_admin_review' => $validated['role'] === 'instructor',
             'is_active' => true,
             'password_changed_at' => now(),
         ]);
@@ -84,7 +85,25 @@ class AuthService
 
             $certificatePath = null;
             if ($request->hasFile('certificate')) {
-                $certificatePath = $request->file('certificate')->store('instructor-applications/certificates', 'local');
+                $file = $request->file('certificate');
+                $extension = $file->getClientOriginalExtension() ?: 'pdf';
+                $storedPath = $file->storeAs(
+                    "instructor-certificates/{$user->id}",
+                    \Illuminate\Support\Str::uuid() . '.' . $extension,
+                    'local'
+                );
+                $certificatePath = $storedPath;
+
+                \App\Models\InstructorCertificate::create([
+                    'user_id' => $user->id,
+                    'file_path' => $storedPath,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                    'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
+                    'status' => 'pending',
+                    'uploaded_at' => now(),
+                ]);
             }
 
             \App\Models\InstructorProfile::create([
@@ -110,6 +129,17 @@ class AuthService
                 'certificate_path' => $certificatePath,
                 'status' => 'pending',
             ]);
+
+            try {
+                app(\App\Services\NotificationService::class)->notifyAdmins(
+                    'Đăng ký Giảng viên mới',
+                    "Giảng viên {$user->name} ({$user->email}) vừa đăng ký tài khoản và đang chờ xét duyệt.",
+                    'instructor_registered',
+                    route('admin.instructors.applications.show', $user)
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Gửi thông báo đăng ký giảng viên cho admin thất bại: ' . $e->getMessage());
+            }
         }
 
         ActivityLogService::log($user->id, 'register', User::class, $user->id, [

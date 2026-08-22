@@ -9,38 +9,51 @@ use App\Models\Enrollment;
 use App\Models\LessonProgress;
 use App\Models\QuizAttempt;
 use App\Models\Lesson;
+use App\Models\Course;
+use App\Models\PushNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
 class PointService
 {
     /**
-     * Award points to a user.
+     * Award points to a user with anti-duplicate support and timestamp preservation.
      */
-    public function awardPoints(int $userId, int $points, string $source, ?string $description = null, ?int $courseId = null): void
-    {
+    public function awardPoints(
+        int $userId,
+        int $points,
+        string $source,
+        ?string $description = null,
+        ?int $courseId = null,
+        ?int $referenceId = null,
+        mixed $createdAt = null
+    ): void {
         if ($points <= 0) {
             return;
         }
 
-        DB::transaction(function () use ($userId, $points, $source, $description, $courseId) {
-            // Create user point record
-            UserPoint::create([
+        $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
+
+        DB::transaction(function () use ($userId, $points, $source, $description, $courseId, $referenceId, $timestamp) {
+            $userPoint = new UserPoint([
                 'user_id' => $userId,
                 'points' => $points,
                 'type' => 'earn',
                 'source' => $source,
                 'description' => $description,
                 'course_id' => $courseId,
+                'reference_id' => $referenceId,
             ]);
+            $userPoint->created_at = $timestamp;
+            $userPoint->updated_at = $timestamp;
+            $userPoint->save();
 
-            // Check and award badges
             $this->checkAndAwardBadges($userId);
         });
     }
 
     /**
-     * Check if user earned badges and unlock them.
+     * Check if user earned badges and unlock them (with notification deduplication).
      */
     public function checkAndAwardBadges(int $userId): void
     {
@@ -48,11 +61,9 @@ class PointService
         if (!$user) {
             return;
         }
-        
-        // Sum total points of the user
-        $totalPoints = UserPoint::where('user_id', $userId)->sum('points');
 
-        // Get badges user doesn't have yet, but qualifies for
+        $totalPoints = $this->getUserTotalPoints($userId);
+
         $earnedBadgeIds = DB::table('user_badges')
             ->where('user_id', $userId)
             ->pluck('badge_id')
@@ -71,97 +82,33 @@ class PointService
                 'updated_at' => now(),
             ]);
 
-            // Create push notification for earning badge
-            try {
-                \App\Models\PushNotification::create([
-                    'user_id' => $userId,
-                    'title' => 'Nhận huy hiệu mới',
-                    'message' => "Chúc mừng! Bạn đã đạt huy hiệu \"{$badge->name}\" nhờ tích lũy được {$badge->points_required} điểm.",
-                    'type' => 'badge_earned',
-                    'url' => route('leaderboard'),
-                    'is_read' => false,
-                ]);
-            } catch (\Throwable $e) {
-                // If route leaderboard is not defined yet, ignore or catch error
-            }
-        }
-    }
-
-    /**
-     * Check daily login and award points.
-     */
-    public function awardDailyLoginPoints(int $userId): void
-    {
-        $today = Carbon::today();
-
-        // Check if already awarded daily login today
-        $alreadyAwarded = UserPoint::where('user_id', $userId)
-            ->where('source', 'daily_login')
-            ->whereDate('created_at', $today)
-            ->exists();
-
-        if (!$alreadyAwarded) {
-            $this->awardPoints(
-                $userId,
-                5,
-                'daily_login',
-                'Đăng nhập mỗi ngày'
-            );
-
-            // Also check for 7-day learning streak
-            $this->checkAndAwardStreak($userId);
-        }
-    }
-
-    /**
-     * Check and award 7-day learning streak bonus (+50 points).
-     */
-    public function checkAndAwardStreak(int $userId): void
-    {
-        // Check if streak was already awarded in the last 6 days
-        $recentlyAwarded = UserPoint::where('user_id', $userId)
-            ->where('source', 'learning_streak_7_days')
-            ->where('created_at', '>=', now()->subDays(6)->startOfDay())
-            ->exists();
-
-        if ($recentlyAwarded) {
-            return;
-        }
-
-        // We check the last 7 calendar days (including today)
-        $studyDays = collect();
-        for ($i = 0; $i < 7; $i++) {
-            $date = Carbon::today()->subDays($i);
-            
-            // Check if there was any progress update or completed lesson on this date
-            $hasProgress = LessonProgress::where('user_id', $userId)
-                ->where(function($q) use ($date) {
-                    $q->whereDate('last_watched_at', $date)
-                      ->orWhereDate('completed_at', $date)
-                      ->orWhereDate('updated_at', $date);
-                })
+            // Deduplicate notifications so user gets 1 notification per badge earned
+            $hasNotified = PushNotification::where('user_id', $userId)
+                ->where('type', 'badge_earned')
+                ->where('message', 'like', "%\"{$badge->name}\"%")
                 ->exists();
 
-            if ($hasProgress) {
-                $studyDays->push($date->toDateString());
+            if (!$hasNotified) {
+                try {
+                    PushNotification::create([
+                        'user_id' => $userId,
+                        'title' => 'Nhận huy hiệu mới',
+                        'message' => "Chúc mừng! Bạn đã đạt huy hiệu \"{$badge->name}\" nhờ tích lũy được {$badge->points_required} điểm.",
+                        'type' => 'badge_earned',
+                        'url' => route('leaderboard'),
+                        'is_read' => false,
+                    ]);
+                } catch (\Throwable $e) {
+                    // Ignore route resolution exception
+                }
             }
-        }
-
-        // If the user has studied on 7 unique consecutive days
-        if ($studyDays->unique()->count() === 7) {
-            $this->awardPoints(
-                $userId,
-                50,
-                'learning_streak_7_days',
-                'Học tập liên tục 7 ngày'
-            );
         }
     }
 
     /**
-     * Award points for lesson completion.
+     * Award points for completing 1 lesson (+10 XP, max once per lesson).
      */
-    public function awardLessonCompletionPoints(int $userId, int $lessonId): void
+    public function awardLessonCompletionPoints(int $userId, int $lessonId, mixed $createdAt = null): void
     {
         $lesson = Lesson::find($lessonId);
         if (!$lesson) {
@@ -170,104 +117,372 @@ class PointService
 
         $lessonTag = "lesson_id:{$lesson->id}";
 
-        // Check if already awarded points for this lesson
         $alreadyAwarded = UserPoint::where('user_id', $userId)
             ->where('source', 'lesson_completed')
-            ->where('description', 'like', "%{$lessonTag}%")
+            ->where(function ($q) use ($lessonId, $lessonTag) {
+                $q->where('reference_id', $lessonId)
+                  ->orWhere('description', 'like', "%{$lessonTag}%");
+            })
             ->exists();
 
         if ($alreadyAwarded) {
             return;
         }
 
-        DB::transaction(function () use ($userId, $lesson, $lessonTag) {
-            // Award +10 points for lesson completion
-            $this->awardPoints(
-                $userId,
-                10,
-                'lesson_completed',
-                "Hoàn thành bài giảng: {$lesson->title} ({$lessonTag})",
-                $lesson->course_id
-            );
+        $this->awardPoints(
+            $userId,
+            10,
+            'lesson_completed',
+            "Hoàn thành bài học: {$lesson->title} ({$lessonTag})",
+            $lesson->course_id,
+            $lessonId,
+            $createdAt
+        );
 
-            // Check if all lessons in the same chapter are completed
-            if ($lesson->chapter_id) {
-                $chapter = $lesson->chapter;
-                if ($chapter) {
-                    $totalLessons = $chapter->lessons()->where('is_required', true)->count();
-                    if ($totalLessons > 0) {
-                        $completedLessons = LessonProgress::where('user_id', $userId)
-                            ->whereIn('lesson_id', $chapter->lessons()->pluck('id'))
-                            ->where('is_completed', true)
-                            ->count();
-
-                        if ($completedLessons === $totalLessons) {
-                            $chapterTag = "chapter_id:{$chapter->id}";
-                            $chapterAlreadyAwarded = UserPoint::where('user_id', $userId)
-                                ->where('source', 'chapter_completed')
-                                ->where('description', 'like', "%{$chapterTag}%")
-                                ->exists();
-
-                            if (!$chapterAlreadyAwarded) {
-                                $this->awardPoints(
-                                    $userId,
-                                    30,
-                                    'chapter_completed',
-                                    "Hoàn thành chương học: {$chapter->title} ({$chapterTag})",
-                                    $lesson->course_id
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Check and award streak
-            $this->checkAndAwardStreak($userId);
-        });
+        $this->checkAndAwardStreak($userId);
     }
 
     /**
-     * Award points for quiz performance.
+     * Award points for quiz completion and quiz score bonuses.
      */
-    public function awardQuizPoints(int $userId, \App\Models\Quiz $quiz, float $percent, int $courseId): void
+    public function awardQuizPoints(int $userId, \App\Models\Quiz $quiz, float $percent, int $courseId, mixed $createdAt = null): void
     {
         $quizTag = "quiz_id:{$quiz->id}";
-        
-        $hasPerfect = UserPoint::where('user_id', $userId)
-            ->where('source', 'quiz_passed_perfect')
-            ->where('description', 'like', "%{$quizTag}%")
+
+        // 1. Completion XP (+10 XP)
+        $hasCompleted = UserPoint::where('user_id', $userId)
+            ->where('source', 'quiz_completed')
+            ->where(function ($q) use ($quiz, $quizTag) {
+                $q->where('reference_id', $quiz->id)
+                  ->orWhere('description', 'like', "%{$quizTag}%");
+            })
             ->exists();
 
-        $hasHigh = UserPoint::where('user_id', $userId)
-            ->where('source', 'quiz_passed_high')
-            ->where('description', 'like', "%{$quizTag}%")
+        if (!$hasCompleted) {
+            $this->awardPoints(
+                $userId,
+                10,
+                'quiz_completed',
+                "Hoàn thành quiz: {$quiz->title} ({$quizTag})",
+                $courseId,
+                $quiz->id,
+                $createdAt
+            );
+        }
+
+        // 2. Score Bonus XP
+        $has90Bonus = UserPoint::where('user_id', $userId)
+            ->whereIn('source', ['quiz_score_bonus_90', 'quiz_passed_perfect'])
+            ->where(function ($q) use ($quiz, $quizTag) {
+                $q->where('reference_id', $quiz->id)
+                  ->orWhere('description', 'like', "%{$quizTag}%");
+            })
             ->exists();
 
-        if ($percent == 100.0) {
-            if (!$hasPerfect) {
-                $pointsToAward = $hasHigh ? 20 : 40;
+        $has80Bonus = UserPoint::where('user_id', $userId)
+            ->whereIn('source', ['quiz_score_bonus_80', 'quiz_passed_high'])
+            ->where(function ($q) use ($quiz, $quizTag) {
+                $q->where('reference_id', $quiz->id)
+                  ->orWhere('description', 'like', "%{$quizTag}%");
+            })
+            ->exists();
+
+        if ($percent >= 90.0) {
+            if (!$has90Bonus) {
+                $bonusToAward = $has80Bonus ? 10 : 20;
                 $this->awardPoints(
-                    $userId, 
-                    $pointsToAward, 
-                    'quiz_passed_perfect', 
-                    "Đạt điểm tối đa Quiz: {$quiz->title} ({$quizTag})", 
-                    $courseId
+                    $userId,
+                    $bonusToAward,
+                    'quiz_score_bonus_90',
+                    "Thưởng quiz đạt từ 90%: {$quiz->title} ({$quizTag})",
+                    $courseId,
+                    $quiz->id,
+                    $createdAt
                 );
             }
         } elseif ($percent >= 80.0) {
-            if (!$hasHigh && !$hasPerfect) {
+            if (!$has80Bonus && !$has90Bonus) {
                 $this->awardPoints(
-                    $userId, 
-                    20, 
-                    'quiz_passed_high', 
-                    "Vượt qua Quiz với điểm cao: {$quiz->title} ({$quizTag})", 
-                    $courseId
+                    $userId,
+                    10,
+                    'quiz_score_bonus_80',
+                    "Thưởng quiz đạt từ 80%: {$quiz->title} ({$quizTag})",
+                    $courseId,
+                    $quiz->id,
+                    $createdAt
                 );
             }
         }
 
-        // Check and award streak
         $this->checkAndAwardStreak($userId);
+    }
+
+    /**
+     * Award points for completing a course (+50 XP, max once per course).
+     */
+    public function awardCourseCompletionPoints(int $userId, int $courseId, mixed $createdAt = null): void
+    {
+        $course = Course::find($courseId);
+        if (!$course) {
+            return;
+        }
+
+        $courseTag = "course_id:{$course->id}";
+
+        $alreadyAwarded = UserPoint::where('user_id', $userId)
+            ->where('source', 'course_completed')
+            ->where(function ($q) use ($courseId, $courseTag) {
+                $q->where('reference_id', $courseId)
+                  ->orWhere('course_id', $courseId)
+                  ->orWhere('description', 'like', "%{$courseTag}%");
+            })
+            ->exists();
+
+        if ($alreadyAwarded) {
+            return;
+        }
+
+        $this->awardPoints(
+            $userId,
+            50,
+            'course_completed',
+            "Hoàn thành khóa học: {$course->title} ({$courseTag})",
+            $courseId,
+            $courseId,
+            $createdAt
+        );
+
+        $this->checkAndAwardStreak($userId);
+    }
+
+    /**
+     * Award points for course review (+5 XP, max once per course per user).
+     */
+    public function awardReviewPoints(int $userId, int $courseId, ?int $reviewId = null, mixed $createdAt = null): void
+    {
+        $course = Course::find($courseId);
+        $courseTitle = $course ? $course->title : "Khóa học #{$courseId}";
+
+        $alreadyAwarded = UserPoint::where('user_id', $userId)
+            ->where('source', 'review_created')
+            ->where('course_id', $courseId)
+            ->exists();
+
+        if ($alreadyAwarded) {
+            return;
+        }
+
+        $this->awardPoints(
+            $userId,
+            5,
+            'review_created',
+            "Đánh giá khóa học: {$courseTitle} (course_id:{$courseId})",
+            $courseId,
+            $reviewId,
+            $createdAt
+        );
+    }
+
+    /**
+     * Award points for discussion (+2 XP, capped at max 10 XP daily from discussion).
+     */
+    public function awardDiscussionPoints(int $userId, int $courseId, int $discussionId, mixed $createdAt = null): void
+    {
+        $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
+
+        $alreadyAwarded = UserPoint::where('user_id', $userId)
+            ->where('source', 'discussion_created')
+            ->where('reference_id', $discussionId)
+            ->exists();
+
+        if ($alreadyAwarded) {
+            return;
+        }
+
+        $todayEarned = UserPoint::where('user_id', $userId)
+            ->where('source', 'discussion_created')
+            ->whereDate('created_at', $timestamp->toDateString())
+            ->sum('points');
+
+        if ($todayEarned >= 10) {
+            return;
+        }
+
+        $this->awardPoints(
+            $userId,
+            2,
+            'discussion_created',
+            "Thảo luận bài học (discussion_id:{$discussionId})",
+            $courseId,
+            $discussionId,
+            $timestamp
+        );
+    }
+
+    /**
+     * Award daily login.
+     */
+    public function awardDailyLoginPoints(int $userId): void
+    {
+        $this->checkAndAwardStreak($userId);
+    }
+
+    /**
+     * Calculate user learning streak and award milestone bonuses.
+     */
+    public function checkAndAwardStreak(int $userId): void
+    {
+        $streakDays = $this->getUserStreakDays($userId);
+
+        if ($streakDays >= 3) {
+            $this->awardStreakMilestone($userId, 3, 20, 'streak_bonus_3', 'Streak 3 ngày liên tiếp');
+        }
+        if ($streakDays >= 7) {
+            $this->awardStreakMilestone($userId, 7, 50, 'streak_bonus_7', 'Streak 7 ngày liên tiếp');
+        }
+        if ($streakDays >= 30) {
+            $this->awardStreakMilestone($userId, 30, 150, 'streak_bonus_30', 'Streak 30 ngày liên tiếp');
+        }
+    }
+
+    protected function awardStreakMilestone(int $userId, int $daysMilestone, int $points, string $source, string $desc): void
+    {
+        $recentlyAwarded = UserPoint::where('user_id', $userId)
+            ->where('source', $source)
+            ->where('created_at', '>=', now()->subDays($daysMilestone - 1)->startOfDay())
+            ->exists();
+
+        if (!$recentlyAwarded) {
+            $this->awardPoints(
+                $userId,
+                $points,
+                $source,
+                "Đạt mốc {$desc}",
+                null,
+                $daysMilestone
+            );
+        }
+    }
+
+    /**
+     * Calculate continuous learning streak in days for a user across all activity sources.
+     */
+    public function getUserStreakDays(int $userId): int
+    {
+        $lessonDates = DB::table('lesson_progress')
+            ->where('user_id', $userId)
+            ->whereNotNull('updated_at')
+            ->selectRaw('DATE(updated_at) as activity_date')
+            ->pluck('activity_date');
+
+        $lessonCompletedDates = DB::table('lesson_progress')
+            ->where('user_id', $userId)
+            ->whereNotNull('completed_at')
+            ->selectRaw('DATE(completed_at) as activity_date')
+            ->pluck('activity_date');
+
+        $quizDates = DB::table('quiz_attempts')
+            ->where('user_id', $userId)
+            ->whereNotNull('created_at')
+            ->selectRaw('DATE(created_at) as activity_date')
+            ->pluck('activity_date');
+
+        $userPointsDates = DB::table('user_points')
+            ->where('user_id', $userId)
+            ->whereNotNull('created_at')
+            ->selectRaw('DATE(created_at) as activity_date')
+            ->pluck('activity_date');
+
+        $dates = $lessonDates
+            ->concat($lessonCompletedDates)
+            ->concat($quizDates)
+            ->concat($userPointsDates)
+            ->filter()
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->unique()
+            ->sortDesc()
+            ->values();
+
+        if ($dates->isEmpty()) {
+            return 0;
+        }
+
+        $today = Carbon::today()->toDateString();
+        $yesterday = Carbon::yesterday()->toDateString();
+
+        $firstDate = $dates->first();
+        if ($firstDate !== $today && $firstDate !== $yesterday) {
+            return 0;
+        }
+
+        $streak = 0;
+        $checkDate = Carbon::parse($firstDate);
+
+        foreach ($dates as $dateStr) {
+            if ($dateStr === $checkDate->toDateString()) {
+                $streak++;
+                $checkDate->subDay();
+            } else {
+                break;
+            }
+        }
+
+        return $streak;
+    }
+
+    /**
+     * Get Total XP for a user (all-time, never reset).
+     */
+    public function getUserTotalPoints(int $userId): int
+    {
+        return (int) UserPoint::where('user_id', $userId)->sum('points');
+    }
+
+    /**
+     * Get Weekly XP for a user (Mon 00:00:00 to Sun 23:59:59).
+     */
+    public function getUserWeeklyPoints(int $userId): int
+    {
+        return (int) UserPoint::where('user_id', $userId)
+            ->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
+            ->sum('points');
+    }
+
+    /**
+     * Get Monthly XP for a user (1st to last day of current month).
+     */
+    public function getUserMonthlyPoints(int $userId): int
+    {
+        return (int) UserPoint::where('user_id', $userId)
+            ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+            ->sum('points');
+    }
+
+    /**
+     * Get user rank for a given period ('week', 'month', 'all').
+     */
+    public function getUserRank(int $userId, string $period = 'week'): int
+    {
+        $userPoints = match ($period) {
+            'week' => $this->getUserWeeklyPoints($userId),
+            'month' => $this->getUserMonthlyPoints($userId),
+            default => $this->getUserTotalPoints($userId),
+        };
+
+        $dateConstraint = match ($period) {
+            'week' => now()->startOfWeek(),
+            'month' => now()->startOfMonth(),
+            default => null,
+        };
+
+        $higherUsersCount = DB::table('user_points')
+            ->select('user_id', DB::raw('SUM(points) as period_points'))
+            ->when($dateConstraint, fn($q) => $q->where('created_at', '>=', $dateConstraint))
+            ->groupBy('user_id')
+            ->having('period_points', '>', $userPoints)
+            ->get()
+            ->count();
+
+        return $higherUsersCount + 1;
     }
 }

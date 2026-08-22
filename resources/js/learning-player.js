@@ -634,10 +634,10 @@ function formatTime(totalSeconds) {
     const seconds = safeSeconds % 60;
 
     if (hours > 0) {
-        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function escapeHtml(value) {
@@ -754,14 +754,24 @@ function initLessonNotes() {
             }
         };
 
-        const setTimestampFromVideo = () => {
-            if (!isVideo || !video || !timestampInput) return;
-
-            video.pause();
+        const syncTimestampFromVideo = () => {
+            if (!isVideo || !video) return;
             const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint;
-            timestampInput.value = clampVideoTime(video.currentTime || 0, duration);
-            updateTimestampLabel();
+            const currentSec = clampVideoTime(video.currentTime || 0, duration);
+            if (timestampInput) {
+                timestampInput.value = currentSec;
+            }
+            if (timestampLabel) {
+                timestampLabel.textContent = formatTime(currentSec);
+            }
         };
+
+        if (isVideo && video) {
+            video.addEventListener('pause', syncTimestampFromVideo);
+            video.addEventListener('seeked', syncTimestampFromVideo);
+            video.addEventListener('loadedmetadata', syncTimestampFromVideo, { once: true });
+            syncTimestampFromVideo();
+        }
 
         const seekVideoTo = async (seconds, shouldPlay = true) => {
             if (!video) return;
@@ -799,6 +809,13 @@ function initLessonNotes() {
             if (!errorEl) return;
             errorEl.textContent = message;
             errorEl.classList.toggle('hidden', !message);
+            if (message) {
+                textarea?.classList.add('border-rose-500', 'focus:ring-rose-500');
+                textarea?.classList.remove('border-[#d1d7dc]', 'focus:ring-[#0056D2]');
+            } else {
+                textarea?.classList.remove('border-rose-500', 'focus:ring-rose-500');
+                textarea?.classList.add('border-[#d1d7dc]', 'focus:ring-[#0056D2]');
+            }
         };
 
         const sortNotes = () => {
@@ -875,11 +892,17 @@ function initLessonNotes() {
 
             const editTextarea = document.createElement('textarea');
             editTextarea.name = 'content';
-            editTextarea.required = true;
             editTextarea.maxLength = 2000;
             editTextarea.rows = 4;
             editTextarea.className = 'w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-[#0056D2]';
             editTextarea.value = note.content;
+            editTextarea.placeholder = 'Nhập ghi chú của bạn...';
+            editTextarea.addEventListener('input', () => {
+                if (editTextarea.value.trim()) {
+                    editStatus.textContent = '';
+                    editTextarea.classList.remove('border-rose-500', 'focus:ring-rose-500');
+                }
+            });
             editForm.appendChild(editTextarea);
 
             let editTimestamp = null;
@@ -930,14 +953,25 @@ function initLessonNotes() {
 
             editForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
+                const contentVal = editTextarea.value.trim();
+                if (!contentVal) {
+                    editStatus.textContent = 'Vui lòng nhập nội dung ghi chú.';
+                    editStatus.className = 'text-xs font-semibold text-rose-600';
+                    editTextarea.classList.add('border-rose-500', 'focus:ring-rose-500');
+                    editTextarea.focus();
+                    return;
+                }
+
                 if (save.disabled) return;
                 save.disabled = true;
+                editStatus.className = 'text-xs text-[#6a6f73]';
                 editStatus.textContent = 'Đang lưu...';
 
                 try {
-                    const payload = { content: editTextarea.value.trim() };
+                    const payload = { content: contentVal };
                     if (isVideo) payload.timestamp_seconds = editTimestamp?.value === '' ? null : Number(editTimestamp?.value || 0);
-                    const response = await fetch(note.update_url, {
+                    const updateUrl = note.update_url || `/lesson-notes/${note.id}`;
+                    const response = await fetch(updateUrl, {
                         method: 'PATCH',
                         credentials: 'same-origin',
                         headers: {
@@ -956,6 +990,7 @@ function initLessonNotes() {
                     showToast('Đã cập nhật ghi chú.');
                     render();
                 } catch (error) {
+                    editStatus.className = 'text-xs font-semibold text-rose-600';
                     editStatus.textContent = error.message || 'Không thể cập nhật ghi chú.';
                     save.disabled = false;
                 }
@@ -966,7 +1001,8 @@ function initLessonNotes() {
             if (!window.confirm('Xóa ghi chú này?')) return;
 
             try {
-                const response = await fetch(note.delete_url, {
+                const deleteUrl = note.delete_url || `/lesson-notes/${note.id}`;
+                const response = await fetch(deleteUrl, {
                     method: 'DELETE',
                     credentials: 'same-origin',
                     headers: {
@@ -988,19 +1024,17 @@ function initLessonNotes() {
         };
 
         textarea?.addEventListener('focus', () => {
-            if (!capturedCurrentTime) {
-                capturedCurrentTime = true;
-                setTimestampFromVideo();
+            if (isVideo && video && !video.paused) {
+                video.pause();
             }
+            syncTimestampFromVideo();
         });
         textarea?.addEventListener('input', () => {
-            if (!capturedCurrentTime) {
-                capturedCurrentTime = true;
-                setTimestampFromVideo();
+            if (textarea.value.trim()) {
+                setError('');
             }
             updateCharCount();
         });
-        timestampInput?.addEventListener('input', updateTimestampLabel);
 
         form?.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -1009,7 +1043,20 @@ function initLessonNotes() {
             const content = textarea.value.trim();
             if (!content) {
                 setError('Vui lòng nhập nội dung ghi chú.');
+                textarea.focus();
                 return;
+            }
+
+            let finalTimestamp = null;
+            if (isVideo) {
+                if (video) {
+                    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint;
+                    finalTimestamp = clampVideoTime(video.currentTime || 0, duration);
+                } else {
+                    finalTimestamp = timestampInput?.value === '' ? null : Number(timestampInput?.value || 0);
+                }
+                if (timestampInput) timestampInput.value = finalTimestamp;
+                if (timestampLabel) timestampLabel.textContent = formatTime(finalTimestamp);
             }
 
             createInFlight = true;
@@ -1020,7 +1067,7 @@ function initLessonNotes() {
             try {
                 const payload = { content };
                 if (isVideo) {
-                    payload.timestamp_seconds = timestampInput?.value === '' ? null : Number(timestampInput?.value || 0);
+                    payload.timestamp_seconds = finalTimestamp;
                 }
 
                 const response = await fetch(storeUrl, {
@@ -1041,11 +1088,11 @@ function initLessonNotes() {
 
                 notes.push(data.note);
                 textarea.value = '';
-                capturedCurrentTime = false;
                 updateCharCount();
                 statusEl.textContent = 'Đã lưu thành công.';
                 showToast('Đã lưu ghi chú.');
                 render();
+                syncTimestampFromVideo();
             } catch (error) {
                 statusEl.textContent = '';
                 setError(error.message || 'Không thể lưu ghi chú.');

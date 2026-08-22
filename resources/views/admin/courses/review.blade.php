@@ -133,6 +133,87 @@
         </div>
     </section>
 
+    {{-- ========================================================================= --}}
+    {{-- THÔNG TIN GIẢNG VIÊN TẠO KHÓA HỌC                                        --}}
+    {{-- ========================================================================= --}}
+    @php
+        $instructor = $course->instructor;
+        $certsCount = $instructor?->instructorCertificates?->count() ?? 0;
+    @endphp
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 {{ $instructor?->instructor_status !== 'approved' ? 'border-amber-300 bg-amber-50/20 dark:border-amber-700/50 dark:bg-amber-950/10' : '' }}">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex items-start gap-4">
+                <img src="{{ $instructor?->avatarUrl() ?? 'https://ui-avatars.com/api/?name='.urlencode($instructor?->name ?? 'Instructor') }}"
+                     alt="{{ $instructor?->name }}"
+                     class="h-16 w-16 rounded-2xl object-cover border-2 border-slate-200 shadow-sm shrink-0">
+                <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-lg font-black text-slate-950 dark:text-white">{{ $instructor?->name ?? 'Chưa xác định' }}</h3>
+                        <span class="text-xs text-slate-400 font-medium">({{ '@' . ($instructor?->username ?? 'user') }})</span>
+
+                        {{-- Trạng thái hồ sơ giảng viên --}}
+                        @if($instructor?->isLocked())
+                            <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-bold text-slate-800 border border-slate-400">
+                                 Đang bị khóa
+                            </span>
+                        @elseif($instructor?->instructor_status === 'approved')
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-300">
+                                 Đã duyệt
+                            </span>
+                        @elseif($instructor?->instructor_status === 'rejected')
+                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800 border border-rose-300">
+                                 Bị từ chối
+                            </span>
+                        @else
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                                 Chưa duyệt hồ sơ
+                            </span>
+                        @endif
+
+                        @if($instructor?->instructor_status !== 'approved')
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-xs font-black text-amber-700 dark:text-amber-300">
+                                ⚠️ Giảng viên chưa được duyệt
+                            </span>
+                        @endif
+                    </div>
+
+                    <p class="text-xs text-slate-500">
+                        Email: <strong class="text-slate-800 dark:text-slate-200">{{ $instructor?->email }}</strong>
+                        @if($instructor?->instructorProfile?->phone ?? $instructor?->phone)
+                            · SĐT: <strong class="text-slate-800 dark:text-slate-200">{{ $instructor->instructorProfile?->phone ?? $instructor->phone }}</strong>
+                        @endif
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-4 pt-1 text-xs text-slate-600 dark:text-slate-400">
+                        <div>
+                            <span>Trạng thái tài khoản:</span>
+                            <strong class="text-slate-900 dark:text-white">{{ $instructor?->account_status === 'locked' ? 'Bị khóa' : 'Hoạt động' }}</strong>
+                        </div>
+                        <div>
+                            <span>Chứng chỉ / Tài liệu:</span>
+                            <strong class="text-slate-900 dark:text-white">{{ $certsCount }} tài liệu</strong>
+                        </div>
+                        <div>
+                            <span>Khóa học chờ duyệt:</span>
+                            <strong class="text-amber-600 dark:text-amber-400">{{ $instructorPendingCoursesCount ?? 1 }} khóa học</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if($instructor)
+                <div class="flex items-center gap-3 shrink-0">
+                    <a href="{{ route('admin.instructors.applications.show', $instructor) }}"
+                       target="_blank"
+                       class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+                        <span>Xem hồ sơ giảng viên</span>
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                    </a>
+                </div>
+            @endif
+        </div>
+    </section>
+
     <div class="grid gap-6 xl:grid-cols-2">
         <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <h3 class="text-lg font-bold text-slate-950">Mô tả chi tiết</h3>
@@ -215,8 +296,24 @@
                     <div class="divide-y divide-slate-100">
                         @forelse($section->lessons as $lesson)
                             @php
-                                $hasVideo = filled($lesson->video_path) || filled($lesson->video_url);
-                                $lessonDuration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+                                $hasDraftUpdate = isset($lesson->draft_update);
+                                $payload = $hasDraftUpdate ? ($lesson->draft_update->payload ?? []) : [];
+
+                                $effectiveOriginalKey = $hasDraftUpdate ? ($payload['original_video_key'] ?? null) : $lesson->original_video_key;
+                                $effectiveHlsKey = $hasDraftUpdate ? ($payload['hls_manifest_key'] ?? null) : $lesson->hls_manifest_key;
+                                $effectiveVideoPath = $hasDraftUpdate ? ($payload['video_path'] ?? null) : $lesson->video_path;
+                                $effectiveVideoUrl = $hasDraftUpdate ? ($payload['video_url'] ?? null) : $lesson->video_url;
+
+                                $hasVideo = filled($effectiveOriginalKey) || filled($effectiveHlsKey) || filled($effectiveVideoPath) || filled($effectiveVideoUrl);
+                                $lessonDuration = (int) ($hasDraftUpdate ? ($payload['duration_seconds'] ?? ($payload['duration'] ?? 0)) : ($lesson->duration_seconds ?: $lesson->duration ?: 0));
+
+                                $videoLessonKey = $hasDraftUpdate
+                                    ? ('update_les_' . $lesson->draft_update->id)
+                                    : $lesson->id;
+
+                                $effectiveModeration = $hasDraftUpdate
+                                    ? (!empty($payload['ai_moderation']) ? (is_array($payload['ai_moderation']) ? new \App\Models\VideoModeration($payload['ai_moderation']) : $payload['ai_moderation']) : null)
+                                    : $lesson->videoModeration;
                             @endphp
                             <div class="p-4">
                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -253,33 +350,18 @@
                                             <p class="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-6 text-slate-600">{{ $lesson->content }}</p>
                                         @endif
 
-                                        @if($lesson->type === 'video' && $lesson->video_path)
-                                            @php
-                                                $isHls = !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4');
-                                                $videoLessonKey = (isset($lesson->draft_update) && $lesson->draft_update->action === 'create')
-                                                    ? ('update_les_' . $lesson->draft_update->id)
-                                                    : $lesson->id;
-                                            @endphp
-                                            @if(! $isHls)
-                                                <div class="mt-4 flex h-36 max-w-xl items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
-                                                    <div>
-                                                        <span class="text-xl">⏳</span>
-                                                        <p class="mt-1 text-sm font-bold text-amber-800">Đang xử lý HLS</p>
-                                                        <p class="mt-0.5 text-xs text-amber-600">Video gốc đang được chuyển đổi HLS. Không thể phát trực tiếp video MP4 gốc.</p>
-                                                    </div>
-                                                </div>
-                                            @else
-                                                <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-                                                    <video
-                                                        id="admin-video-{{ $videoLessonKey }}"
-                                                        data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $videoLessonKey]) }}"
-                                                        controls
-                                                        preload="metadata"
-                                                        class="h-full w-full"
-                                                        data-admin-review-video
-                                                    ></video>
-                                                </div>
-                                            @endif
+                                        @if($lesson->type === 'video' && $hasVideo && !$effectiveVideoUrl)
+                                            <div class="mt-4 aspect-video max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+                                                <video
+                                                    id="admin-video-{{ $videoLessonKey }}"
+                                                    data-hls-src="{{ route('admin.ai-moderation.hls.playlist', ['lesson' => $videoLessonKey]) }}"
+                                                    controls
+                                                    preload="metadata"
+                                                    class="h-full w-full"
+                                                    data-admin-review-video
+                                                ></video>
+                                            </div>
+                                        @endif
                                             
                                             {{-- Nút và khu vực hiển thị quét AI --}}
                                             <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $videoLessonKey }}">
@@ -294,9 +376,9 @@
                                                     </div>
                                                 </div>
 
-                                                <div class="ai-result-area mt-4 {{ $lesson->videoModeration ? '' : 'hidden' }}">
-                                                    @if($lesson->videoModeration)
-                                                        @php $mod = $lesson->videoModeration; @endphp
+                                                <div class="ai-result-area mt-4 {{ $effectiveModeration ? '' : 'hidden' }}">
+                                                    @if($effectiveModeration)
+                                                        @php $mod = $effectiveModeration; @endphp
                                                         @php
                                                             $hasHard = $mod->violence || $mod->adult || $mod->weapon;
                                                             $hasSigns = $mod->hasDetectedSigns();
@@ -480,7 +562,6 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        @endif
                                     </div>
                                     <div class="flex shrink-0 flex-wrap gap-2">
                                         @if($lesson->video_url)
@@ -1215,6 +1296,65 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+
+    // ─── Khởi tạo HLS Player cho các video kiểm duyệt của Admin (Tối ưu tải siêu tốc) ───
+    function initAdminReviewPlayers() {
+        var videoElements = document.querySelectorAll('video[data-admin-review-video]');
+        if (videoElements.length === 0) return;
+
+        function attachHlsToVideo(v) {
+            if (v.dataset.hlsInit) return;
+            var hlsUrl = v.getAttribute('data-hls-src');
+            if (!hlsUrl) return;
+
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                v.dataset.hlsInit = 'true';
+                var hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    startFragPrefetch: true,
+                    maxBufferLength: 10,
+                    maxMaxBufferLength: 30,
+                    maxBufferSize: 30 * 1000 * 1000,
+                    maxBufferHole: 0.5,
+                    highBufferWatchdogPeriod: 2,
+                    startLevel: -1,
+                });
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(v);
+
+                hls.on(Hls.Events.ERROR, function (_, data) {
+                    if (data.fatal) {
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            hls.startLoad();
+                        } else {
+                            hls.destroy();
+                        }
+                    }
+                });
+            } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+                v.dataset.hlsInit = 'true';
+                v.src = hlsUrl;
+            }
+        }
+
+        function initAll() {
+            videoElements.forEach(function (v) {
+                attachHlsToVideo(v);
+            });
+        }
+
+        if (typeof Hls !== 'undefined') {
+            initAll();
+        } else {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
+            s.onload = function () { initAll(); };
+            document.head.appendChild(s);
+        }
+    }
+
+    initAdminReviewPlayers();
 });
 </script>
 </div>

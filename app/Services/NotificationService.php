@@ -53,6 +53,13 @@ class NotificationService
         return count($rows);
     }
 
+    public function notifyAdmins(string $title, string $message, string $type, ?string $url = null): int
+    {
+        $admins = User::query()->where('role', 'admin')->where('is_active', true)->get();
+
+        return $this->sendToMany($admins, $title, $message, $type, $url);
+    }
+
     public function sendByAudience(string $audience, string $title, string $message, ?string $url = null, ?int $courseId = null): int
     {
         $users = match ($audience) {
@@ -86,6 +93,58 @@ class NotificationService
                 'is_read' => true,
                 'read_at' => now(),
             ]);
+    }
+
+    /**
+     * Gửi thông báo đến toàn bộ học viên đang ghi danh (active) trong khóa học.
+     * Không gửi cho Giảng viên hoặc Admin.
+     */
+    public function notifyEnrolledStudents(Course $course, string $title, string $message, string $type, ?string $url = null): int
+    {
+        $studentIds = Enrollment::query()
+            ->where('course_id', $course->id)
+            ->where('status', 'active')
+            ->pluck('user_id');
+
+        if ($studentIds->isEmpty()) {
+            return 0;
+        }
+
+        $students = User::query()
+            ->whereIn('id', $studentIds)
+            ->where('role', 'student')
+            ->where('id', '!=', $course->instructor_id)
+            ->where('is_active', true)
+            ->get();
+
+        return $this->sendToMany($students, $title, $message, $type, $url);
+    }
+
+    /**
+     * Bắn thông báo khi khóa học có bài học / video mới được phê duyệt.
+     */
+    public function notifyCourseLessonCreated(Course $course, \App\Models\Lesson $lesson): int
+    {
+        $title = 'Khóa học có bài học mới';
+        $message = "Khóa học {$course->title} vừa có bài học mới: {$lesson->title}.";
+        $url = route('courses.lessons.show', ['course' => $course, 'lesson' => $lesson]);
+
+        return $this->notifyEnrolledStudents($course, $title, $message, 'course_lesson_created', $url);
+    }
+
+    /**
+     * Bắn thông báo khi bài học / video được cập nhật nội dung và được phê duyệt.
+     */
+    public function notifyCourseLessonUpdated(Course $course, \App\Models\Lesson $lesson, bool $isVideoUpdated = false): int
+    {
+        $title = 'Bài học vừa được cập nhật';
+        $message = $isVideoUpdated
+            ? "Video bài học {$lesson->title} trong khóa học {$course->title} vừa được cập nhật."
+            : "Bài học {$lesson->title} trong khóa học {$course->title} vừa được cập nhật.";
+        $type = $isVideoUpdated ? 'course_video_updated' : 'course_lesson_updated';
+        $url = route('courses.lessons.show', ['course' => $course, 'lesson' => $lesson]);
+
+        return $this->notifyEnrolledStudents($course, $title, $message, $type, $url);
     }
 
     /**

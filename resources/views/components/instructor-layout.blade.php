@@ -5,6 +5,19 @@
 ])
 
 @php
+    $currentUser = auth()->user();
+    $instructorDiscussionsPendingCount = 0;
+    if ($currentUser && $currentUser->isInstructor()) {
+        $instructorCourseIds = \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
+        if ($instructorCourseIds->isNotEmpty()) {
+            $discussions = \App\Models\Discussion::whereHas('lesson', function ($q) use ($instructorCourseIds) {
+                $q->whereIn('course_id', $instructorCourseIds);
+            })->with('replies')->get();
+
+            $instructorDiscussionsPendingCount = $discussions->filter(fn ($d) => $d->needsReply())->count();
+        }
+    }
+
     $menu = [
         [
             'route' => 'instructor.dashboard',
@@ -65,7 +78,15 @@
                     'route' => 'instructor.discussions.index',
                     'active' => ['instructor.discussions.*'],
                     'label' => 'Trao đổi với học viên',
+                    'badge' => $instructorDiscussionsPendingCount > 0 ? $instructorDiscussionsPendingCount : null,
+                    'badge_color' => 'bg-amber-500',
                     'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                ],
+                [
+                    'route' => 'instructor.comments.index',
+                    'active' => ['instructor.comments.*'],
+                    'label' => 'Bình luận bài học',
+                    'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>',
                 ],
                 [
                     'route' => 'study-groups.index',
@@ -110,10 +131,13 @@
         ],
         [
             'route' => 'instructor.profile',
-            'label' => 'Hồ sơ',
-            'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>'
+            'active' => ['instructor.profile', 'instructor.profile.*', 'instructor.pending'],
+            'label' => 'Hồ sơ & Chứng chỉ',
+            'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
         ],
     ];
+
+    $currentUser = auth()->user();
 @endphp
 
 <x-layouts.dashboard
@@ -140,6 +164,57 @@
                 </form>
             </div>
         </div>
+    @endif
+
+    {{-- Banner cảnh báo trạng thái Hồ sơ Giảng viên trên Dashboard/Toàn trang --}}
+    @if($currentUser && $currentUser->role === 'instructor' && ! request()->routeIs('instructor.profile*'))
+        @if($currentUser->isLocked())
+            <div class="mb-6 rounded-2xl border-2 border-rose-500/40 bg-gradient-to-r from-rose-900 to-slate-900 p-5 text-white shadow-md">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        </div>
+                        <div>
+                            <p class="font-bold text-sm">🔒 Tài khoản giảng viên của bạn đang bị tạm khóa.</p>
+                            <p class="mt-0.5 text-xs text-rose-200">{{ $currentUser->locked_reason ?: 'Bạn chưa hoàn thiện hồ sơ chứng chỉ trong thời hạn 7 ngày.' }}</p>
+                        </div>
+                    </div>
+                    <a href="{{ route('instructor.profile') }}" class="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-xs font-bold text-rose-900 transition hover:bg-rose-50 shrink-0">
+                        Kiểm tra Hồ sơ & Cấp lại
+                    </a>
+                </div>
+            </div>
+        @elseif($currentUser->instructor_status === 'pending')
+            <div class="mb-6 rounded-2xl border border-amber-300 bg-amber-50/90 p-4 text-amber-900 shadow-sm dark:border-amber-900/50 dark:bg-slate-900 dark:text-amber-100">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        </div>
+                        <div>
+                            <p class="font-bold text-xs sm:text-sm">⚠️ Hồ sơ giảng viên đang chờ xét duyệt.</p>
+                            <p class="mt-0.5 text-xs text-amber-800 dark:text-amber-300">Bạn vẫn có thể sử dụng các chức năng giảng viên bình thường. Vui lòng hoàn thiện và cập nhật hồ sơ để duy trì trạng thái giảng viên.</p>
+                        </div>
+                    </div>
+                    <a href="{{ route('instructor.profile') }}" class="inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-700 shrink-0">
+                        Cập nhật hồ sơ
+                    </a>
+                </div>
+            </div>
+        @elseif($currentUser->instructor_status === 'rejected')
+            <div class="mb-6 rounded-2xl border border-rose-300 bg-rose-50/90 p-4 text-rose-900 shadow-sm dark:border-rose-900/50 dark:bg-slate-900 dark:text-rose-100">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="font-bold text-xs sm:text-sm text-rose-800 dark:text-rose-300">⚠️ Hồ sơ giảng viên cần bổ sung thông tin.</p>
+                        <p class="mt-0.5 text-xs text-rose-700 dark:text-rose-400"><span class="font-bold">Lý do:</span> {{ $currentUser->rejected_reason ?: 'Vui lòng bổ sung hồ sơ chứng chỉ.' }}</p>
+                    </div>
+                    <a href="{{ route('instructor.profile') }}" class="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 shrink-0">
+                        Cập nhật hồ sơ
+                    </a>
+                </div>
+            </div>
+        @endif
     @endif
 
     {{ $slot }}

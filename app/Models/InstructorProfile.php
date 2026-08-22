@@ -13,6 +13,9 @@ class InstructorProfile extends Model
     protected $fillable = [
         'user_id',
         'phone',
+        'organization',
+        'position',
+        'teaching_field',
         'specialty',
         'experience',
         'bio',
