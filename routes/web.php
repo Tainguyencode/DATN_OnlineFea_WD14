@@ -103,8 +103,16 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('study-groups.leave');
     Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('study-groups.members');
     Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('study-groups.messages.store');
+    Route::post('/study-groups/{studyGroup}/messages/{message}/recall', [StudyGroupController::class, 'recallMessage'])->name('study-groups.messages.recall');
     Route::get('/study-groups/{studyGroup}/messages/{message}/file', [StudyGroupController::class, 'downloadFile'])->name('study-groups.messages.download');
     Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('study-groups.members.remove');
+
+    // Study Group Invitations
+    Route::get('/study-groups/{studyGroup}/search-users', [StudyGroupController::class, 'searchUsers'])->name('study-groups.search-users');
+    Route::post('/study-groups/{studyGroup}/invite', [StudyGroupController::class, 'invite'])->name('study-groups.invite');
+    Route::post('/study-groups/{studyGroup}/invitations/{invitation}/cancel', [StudyGroupController::class, 'cancelInvitation'])->name('study-groups.invitations.cancel');
+    Route::post('/study-groups/invitations/{invitation}/accept', [StudyGroupController::class, 'acceptInvitation'])->name('study-groups.invitations.accept');
+    Route::post('/study-groups/invitations/{invitation}/reject', [StudyGroupController::class, 'rejectInvitation'])->name('study-groups.invitations.reject');
 });
 Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');

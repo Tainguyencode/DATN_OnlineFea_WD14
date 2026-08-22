@@ -77,14 +77,14 @@
                                             </p>
                                             <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                                                 <span>Người tạo: <strong>{{ $group->creator->name }}</strong></span>
-                                                <span>Thành viên: <strong>{{ $group->members_count }} / {{ $group->max_members }}</strong></span>
+                                                <span>Thành viên: <strong>{{ $group->members_count }}{{ $group->max_members ? ' / ' . $group->max_members : ' (Không giới hạn)' }}</strong></span>
                                             </div>
                                         </div>
 
                                         <div class="flex items-center gap-2 shrink-0">
-                                            @if($group->creator_id === Auth::id() || Auth::user()->role === 'admin')
+                                            @if($group->canManage(Auth::user()))
                                                 {{-- Edit Trigger --}}
-                                                <button onclick="toggleEditModal({{ $group->id }}, '{{ addslashes($group->name) }}', '{{ addslashes($group->description) }}', {{ $group->max_members }})" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer" title="Chỉnh sửa">
+                                                <button onclick="toggleEditModal({{ $group->id }}, '{{ addslashes($group->name) }}', '{{ addslashes($group->description ?? '') }}', '{{ $group->max_members ?? '' }}', {{ $group->members_count }})" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer" title="Chỉnh sửa">
                                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-2.036a5 5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                                 </button>
                                                 {{-- Delete Form --}}
@@ -112,7 +112,7 @@
                                                     </form>
                                                 @endif
                                             @else
-                                                @if($group->members_count < $group->max_members)
+                                                @if(!$group->isFull())
                                                     {{-- Join Form --}}
                                                     <form action="{{ route('study-groups.join', $group) }}" method="POST" class="inline">
                                                         @csrf
@@ -153,24 +153,36 @@
                                 <select name="course_id" id="course_id" required class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
                                     <option value="">-- Chọn khóa học --</option>
                                     @foreach($availableCourses as $course)
-                                        <option value="{{ $course->id }}">{{ $course->title }}</option>
+                                        <option value="{{ $course->id }}" {{ old('course_id') == $course->id ? 'selected' : '' }}>{{ $course->title }}</option>
                                     @endforeach
                                 </select>
                             </div>
 
                             <div>
                                 <label for="name" class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Tên nhóm học tập</label>
-                                <input type="text" name="name" id="name" required placeholder="Ví dụ: Nhóm tự học Laravel" class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                                <input type="text" name="name" id="name" required value="{{ old('name') }}" placeholder="Ví dụ: Nhóm tự học Laravel" class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
                             </div>
 
                             <div>
                                 <label for="description" class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Mô tả nhóm</label>
-                                <textarea name="description" id="description" rows="3" placeholder="Mục tiêu của nhóm, lịch sinh hoạt..." class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"></textarea>
+                                <textarea name="description" id="description" rows="3" placeholder="Mục tiêu của nhóm, lịch sinh hoạt..." class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">{{ old('description') }}</textarea>
                             </div>
 
                             <div>
-                                <label for="max_members" class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Số lượng thành viên tối đa</label>
-                                <input type="number" name="max_members" id="max_members" required min="2" max="100" value="10" class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Giới hạn thành viên</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                                        <input type="radio" name="max_members_type" value="unlimited" onchange="toggleLimitInput('create', false)" class="text-[#0056D2] focus:ring-[#0056D2]">
+                                        <span>Không giới hạn</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                                        <input type="radio" name="max_members_type" value="custom" checked onchange="toggleLimitInput('create', true)" class="text-[#0056D2] focus:ring-[#0056D2]">
+                                        <span>Giới hạn số lượng</span>
+                                    </label>
+                                </div>
+                                <div id="create_max_members_wrapper" class="mt-2">
+                                    <input type="number" name="max_members" id="max_members" min="1" value="{{ old('max_members', 20) }}" placeholder="Số thành viên tối đa (VD: 10, 20, 50...)" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                                </div>
                             </div>
 
                             <button type="submit" class="w-full inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-[#0056D2] dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200 cursor-pointer">
@@ -209,8 +221,21 @@
             </div>
 
             <div>
-                <label for="edit_max_members" class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Thành viên tối đa</label>
-                <input type="number" name="max_members" id="edit_max_members" required min="2" class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Giới hạn thành viên</label>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                        <input type="radio" name="max_members_type" id="edit_type_unlimited" value="unlimited" onchange="toggleLimitInput('edit', false)" class="text-[#0056D2] focus:ring-[#0056D2]">
+                        <span>Không giới hạn</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                        <input type="radio" name="max_members_type" id="edit_type_custom" value="custom" onchange="toggleLimitInput('edit', true)" class="text-[#0056D2] focus:ring-[#0056D2]">
+                        <span>Giới hạn số lượng</span>
+                    </label>
+                </div>
+                <div id="edit_max_members_wrapper" class="mt-2">
+                    <input type="number" name="max_members" id="edit_max_members" min="1" placeholder="Số thành viên tối đa" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                    <p id="edit_min_members_hint" class="text-[11px] text-slate-400 mt-1"></p>
+                </div>
             </div>
 
             <div class="flex justify-end gap-3 pt-2">
@@ -226,14 +251,56 @@
 </div>
 
 <script>
-    function toggleEditModal(id, name, description, maxMembers) {
+    function toggleLimitInput(prefix, isCustom) {
+        const wrapper = document.getElementById(`${prefix}_max_members_wrapper`);
+        const input = document.getElementById(`${prefix}_max_members`);
+        if (wrapper && input) {
+            if (isCustom) {
+                wrapper.classList.remove('hidden');
+                input.required = true;
+                if (!input.value || parseInt(input.value) <= 0) {
+                    input.value = 20;
+                }
+            } else {
+                wrapper.classList.add('hidden');
+                input.required = false;
+                input.value = '';
+            }
+        }
+    }
+
+    function toggleEditModal(id, name, description, maxMembers, currentMemberCount) {
         const modal = document.getElementById('editModal');
         const form = document.getElementById('editForm');
         
         form.action = `/study-groups/${id}`;
         document.getElementById('edit_name').value = name;
         document.getElementById('edit_description').value = description;
-        document.getElementById('edit_max_members').value = maxMembers;
+
+        const unlimitedRadio = document.getElementById('edit_type_unlimited');
+        const customRadio = document.getElementById('edit_type_custom');
+        const maxInput = document.getElementById('edit_max_members');
+        const hintEl = document.getElementById('edit_min_members_hint');
+
+        if (currentMemberCount) {
+            maxInput.min = currentMemberCount;
+            hintEl.textContent = `Số thành viên hiện tại: ${currentMemberCount}. Không thể đặt giới hạn thấp hơn số này.`;
+        } else {
+            maxInput.min = 1;
+            hintEl.textContent = '';
+        }
+
+        if (maxMembers && maxMembers !== '' && maxMembers !== 'null') {
+            customRadio.checked = true;
+            unlimitedRadio.checked = false;
+            maxInput.value = maxMembers;
+            toggleLimitInput('edit', true);
+        } else {
+            unlimitedRadio.checked = true;
+            customRadio.checked = false;
+            maxInput.value = '';
+            toggleLimitInput('edit', false);
+        }
         
         modal.classList.remove('hidden');
     }
