@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     initLearningSidebar();
     initVideoProgressV2();
+    initYouTubeProgress();
     initQuizPlayer();
     initMarkComplete();
     initCertificateDropdown();
@@ -184,6 +185,7 @@ function initVideoProgressV2() {
     let completed = video.dataset.initialCompleted === '1';
     let requestInFlight = false;
     let pendingSave = false;
+    let completedSent = completed;
 
     const durationSeconds = () => Math.floor(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint);
     const currentPosition = () => clampVideoTime(video.currentTime || 0, durationSeconds());
@@ -350,6 +352,17 @@ function initVideoProgressV2() {
     video.addEventListener('timeupdate', () => {
         notePlayedSegment();
         sendProgress(false, { silent: true });
+
+        // Auto complete at 95%
+        const duration = durationSeconds();
+        if (duration > 0) {
+            const progress = (video.currentTime / duration) * 100;
+            if (progress >= 95 && !completedSent) {
+                completedSent = true;
+                completed = true;
+                sendCompletionAJAX(progressUrl, Number(video.dataset.lessonId || 0));
+            }
+        }
     });
     video.addEventListener('seeking', () => {
         lastPlayhead = null;
@@ -1778,4 +1791,124 @@ function initAiStudyAssistant() {
 
     syncCount();
     syncQuickActions();
+}
+
+function initYouTubeProgress() {
+    const iframe = document.querySelector('iframe[data-lesson-progress-youtube]');
+    if (!iframe) return;
+
+    const progressUrl = iframe.dataset.progressUrl;
+    const lessonId = Number(iframe.dataset.lessonId || 0);
+    let completedSent = iframe.dataset.initialCompleted === '1';
+
+    if (completedSent) return;
+
+    // Load YouTube API if not already present
+    if (!window.YT) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+
+    let ytPollInterval = null;
+
+    const initPlayer = () => {
+        const player = new YT.Player(iframe.id, {
+            events: {
+                'onStateChange': (event) => {
+                    if (event.data === YT.PlayerState.PLAYING) {
+                        if (!ytPollInterval) {
+                            ytPollInterval = setInterval(() => {
+                                const duration = player.getDuration();
+                                const currentTime = player.getCurrentTime();
+                                if (duration > 0) {
+                                    const progress = (currentTime / duration) * 100;
+                                    if (progress >= 95 && !completedSent) {
+                                        completedSent = true;
+                                        clearInterval(ytPollInterval);
+                                        ytPollInterval = null;
+                                        sendCompletionAJAX(progressUrl, lessonId);
+                                    }
+                                }
+                            }, 500);
+                        }
+                    } else {
+                        if (ytPollInterval) {
+                            clearInterval(ytPollInterval);
+                            ytPollInterval = null;
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    const checkAndInit = () => {
+        if (window.YT && window.YT.Player) {
+            initPlayer();
+        } else {
+            setTimeout(checkAndInit, 100);
+        }
+    };
+
+    checkAndInit();
+}
+
+async function sendCompletionAJAX(progressUrl, lessonId) {
+    if (!progressUrl) return;
+
+    try {
+        const response = await fetch(progressUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify({
+                lesson_id: lessonId,
+                progress_percent: 100,
+                completed: true
+            }),
+        });
+
+        if (!response.ok) throw new Error('completion_failed');
+
+        const data = await response.json();
+        
+        // 1. Sidebar đổi icon bài học thành dấu ✓ màu xanh.
+        const currentItem = document.querySelector('[data-current-lesson-item]');
+        if (currentItem) {
+            const iconSpan = currentItem.querySelector('span');
+            if (iconSpan) {
+                iconSpan.innerHTML = '<svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+            }
+            const percentEl = currentItem.querySelector('[data-lesson-progress-percent]');
+            const statusEl = currentItem.querySelector('[data-lesson-progress-status]');
+            if (percentEl) percentEl.textContent = '100%';
+            if (statusEl) statusEl.textContent = 'Hoàn thành';
+        }
+
+        // Cập nhật text tỉ lệ X/Y bài hoàn thành trong sidebar
+        const sidebarProgressText = document.querySelector('[data-learning-sidebar] p.text-xs');
+        if (sidebarProgressText && typeof data.completed_lessons === 'number' && typeof data.total_lessons === 'number') {
+            const percent = typeof data.course_progress === 'number' ? data.course_progress : (data.progress_percent || 0);
+            sidebarProgressText.textContent = `${data.completed_lessons}/${data.total_lessons} bài · ${Math.round(percent)}%`;
+        }
+
+        // 2. Thanh tiến độ trên header cập nhật ngay.
+        if (typeof data.course_progress === 'number') {
+            updateHeaderProgress(data.course_progress);
+        } else if (typeof data.progress_percent === 'number') {
+            updateHeaderProgress(data.progress_percent);
+        }
+
+        // 3. Hiển thị Toast: ✅ Bạn đã hoàn thành bài học!
+        showToast('✅ Bạn đã hoàn thành bài học!', 'success');
+
+    } catch (error) {
+        console.error('Error auto completing lesson:', error);
+    }
 }

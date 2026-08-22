@@ -4,7 +4,7 @@
 
 @section('content')
     <section class="bg-white dark:bg-slate-950">
-        <div class="relative overflow-hidden shadow-md" id="banner-slider">
+        <div class="relative overflow-hidden shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
             <style>
                 .banner-img-custom {
                     width: 100%;
@@ -21,50 +21,70 @@
             </style>
             {{-- Slides --}}
             <div class="banner-track flex transition-transform duration-700 ease-in-out" id="banner-track">
-                <div class="banner-slide w-full shrink-0">
-                    <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block banner-img-custom">
+                <div class="banner-slide relative w-full shrink-0">
+                    <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1 - Học mọi lúc mọi nơi cùng nền tảng trực tuyến" class="block banner-img-custom">
+                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                        <h2 class="sr-only">Nền tảng học trực tuyến FEA Learning - Học mọi lúc mọi nơi</h2>
+                        <p class="sr-only">Học tập chuyên nghiệp với đa dạng khóa học chất lượng.</p>
+                        <a href="#courses" class="inline-flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-5 py-2 sm:px-7 sm:py-2.5 transition duration-200 shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+                            Khám phá khóa học
+                        </a>
+                    </div>
                 </div>
-                <div class="banner-slide w-full shrink-0">
-                    <img src="{{ asset('images/banner3.png') }}" alt="FEA Learning Banner 2"
-                        class="block banner-img-custom">
+                <div class="banner-slide relative w-full shrink-0">
+                    <img src="{{ asset('images/banner3.png') }}" alt="FEA Learning Banner 2 - Lộ trình học tập chuyên biệt tối ưu sự nghiệp" class="block banner-img-custom">
+                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                        <h2 class="sr-only">Lộ trình học tập chuyên biệt định hướng công việc</h2>
+                        <a href="#paths" class="ui-button-primary px-5 py-2 sm:px-7 sm:py-2.5 rounded-xl font-bold shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2">
+                            Xem lộ trình học
+                        </a>
+                    </div>
                 </div>
-                <div class="banner-slide w-full shrink-0">
-                    <img src="{{ asset('images/banner2.png') }}" alt="FEA Learning Banner 2"
-                        class="block banner-img-custom">
+                <div class="banner-slide relative w-full shrink-0">
+                    <img src="{{ asset('images/banner2.png') }}" alt="FEA Learning Banner 3 - Hệ thống vinh danh, điểm số và bảng xếp hạng tuần" class="block banner-img-custom">
+                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                        <h2 class="sr-only">Hệ thống vinh danh, tích lũy điểm thưởng và bảng xếp hạng tuần</h2>
+                        <a href="#instructors" class="inline-flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-5 py-2 sm:px-7 sm:py-2.5 transition duration-200 shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+                            Xem bảng xếp hạng
+                        </a>
+                    </div>
                 </div>
                 {{-- Clone slide 1 để loop vô tận không giật --}}
-                <div class="banner-slide w-full shrink-0" aria-hidden="true">
-                    <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1"
-                        class="block banner-img-custom">
+                <div class="banner-slide relative w-full shrink-0" aria-hidden="true">
+                    <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block banner-img-custom">
+                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                        <a href="#courses" class="inline-flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-5 py-2 sm:px-7 sm:py-2.5 transition duration-200 shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+                            Khám phá khóa học
+                        </a>
+                    </div>
                 </div>
             </div>
 
             <button id="prev-banner"
-                class="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:h-12 md:w-12"
-                aria-label="Previous">
+                class="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:h-12 md:w-12 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                aria-label="Previous slide">
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
             </button>
             <button id="next-banner"
-                class="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:h-12 md:w-12"
-                aria-label="Next">
+                class="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:h-12 md:w-12 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                aria-label="Next slide">
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
             </button>
         </div>
     </section>
-
-    <section class="bg-white py-12 dark:bg-slate-950">
+<section class="bg-white py-10 sm:py-12 lg:py-16 dark:bg-slate-950">
         <div class="ui-container">
             <p class="mb-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">Được thiết kế cho sinh
                 viên, giảng viên và đội ngũ đào tạo hiện đại</p>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <div
-                    class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
                     <div
-                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400">
+                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -72,13 +92,13 @@
                     </div>
                     <div>
                         <h3 class="font-bold text-slate-900 dark:text-white">FEA Academy</h3>
-                        <p class="text-xs text-slate-500">Chương trình đào tạo chuyên sâu</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Chương trình đào tạo chuyên sâu</p>
                     </div>
                 </div>
                 <div
-                    class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
                     <div
-                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400">
+                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -86,13 +106,13 @@
                     </div>
                     <div>
                         <h3 class="font-bold text-slate-900 dark:text-white">Innovation Lab</h3>
-                        <p class="text-xs text-slate-500">Thực hành dự án công nghệ mới</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Thực hành dự án công nghệ mới</p>
                     </div>
                 </div>
                 <div
-                    class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
                     <div
-                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400">
+                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -100,13 +120,13 @@
                     </div>
                     <div>
                         <h3 class="font-bold text-slate-900 dark:text-white">Career Accelerator</h3>
-                        <p class="text-xs text-slate-500">Định hướng và kết nối việc làm</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Định hướng và kết nối việc làm</p>
                     </div>
                 </div>
                 <div
-                    class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    class="flex items-start gap-4 p-2 transition duration-300 hover:-translate-y-1">
                     <div
-                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400">
+                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] dark:bg-blue-900/20 dark:text-blue-400 shadow-sm">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -114,16 +134,17 @@
                     </div>
                     <div>
                         <h3 class="font-bold text-slate-900 dark:text-white">Corporate Training</h3>
-                        <p class="text-xs text-slate-500">Giải pháp đào tạo doanh nghiệp</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Giải pháp đào tạo doanh nghiệp</p>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="border-b border-slate-200 bg-white py-12 dark:border-slate-800 dark:bg-slate-950">
+
+    <section class="border-y border-slate-200/60 bg-slate-50 py-10 sm:py-12 dark:border-slate-800/60 dark:bg-slate-900/40">
         <div class="ui-container">
-            <div class="grid grid-cols-2 divide-x divide-slate-200 sm:grid-cols-4 dark:divide-slate-800">
+            <div class="grid grid-cols-2 divide-x divide-slate-200/60 sm:grid-cols-4 dark:divide-slate-800/60">
                 <div class="flex flex-col items-center justify-center gap-3 px-4 text-center">
                     <div class="text-[#0056D2]">
                         <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,60 +225,104 @@
         </section>
     @endif
 
-    <section id="categories" class="bg-slate-100 py-16 dark:bg-slate-900">
+    <section id="categories" class="bg-slate-50/50 py-16 sm:py-20 dark:bg-slate-950/30 border-t border-b border-slate-200/60 dark:border-slate-800/50">
         <div class="ui-container">
-            <div class="mb-10 text-center">
-                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Danh mục môn học</h2>
-                <p class="mt-2 text-slate-500 dark:text-slate-400">Khám phá các môn học giúp bạn phát triển kỹ năng chuyên
-                    môn.</p>
+            <div class="mb-12 text-center sm:text-left relative">
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl inline-block relative">
+                    Danh mục môn học
+                    <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 h-1 w-12 bg-gradient-to-r from-[#0056D2] to-blue-400 rounded-full"></span>
+                </h2>
+                <p class="mt-4 text-slate-500 dark:text-slate-400">Khám phá các môn học giúp bạn phát triển kỹ năng chuyên môn.</p>
             </div>
 
-            <div class="relative">
-                <!-- Nút điều hướng ngoài container -->
-                <button id="prev-category" style="position: absolute; left: -15px; top: 50%; transform: translateY(-50%);"
-                    class="z-10 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-md transition hover:bg-slate-50 hover:text-[#0056D2] md:h-12 md:w-12"
-                    aria-label="Previous category">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <button id="next-category"
-                    style="position: absolute; right: -15px; top: 50%; transform: translateY(-50%);"
-                    class="z-10 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-md transition hover:bg-slate-50 hover:text-[#0056D2] md:h-12 md:w-12"
-                    aria-label="Next category">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
+            @if($categories->isNotEmpty())
+                @php
+                    $bentoCategories = $categories->take(4);
+                    $categoryStyles = [
+                        0 => [ // Lập trình & Phát triển
+                            'iconBg' => 'bg-blue-50/80 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white',
+                            'badge' => 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400',
+                            'textHover' => 'group-hover:text-blue-600 dark:group-hover:text-blue-400',
+                            'borderHover' => 'hover:border-blue-300 dark:hover:border-blue-800',
+                            'glow' => 'from-blue-500/5 to-transparent',
+                            'cta' => 'text-blue-600 dark:text-blue-400 group-hover:text-blue-700'
+                        ],
+                        1 => [ // Kinh doanh
+                            'iconBg' => 'bg-purple-50/80 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 group-hover:bg-purple-600 group-hover:text-white',
+                            'badge' => 'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400',
+                            'textHover' => 'group-hover:text-purple-600 dark:group-hover:text-purple-400',
+                            'borderHover' => 'hover:border-purple-300 dark:hover:border-purple-800',
+                            'glow' => 'from-purple-500/5 to-transparent',
+                            'cta' => 'text-purple-600 dark:text-purple-400 group-hover:text-purple-700'
+                        ],
+                        2 => [ // Tài chính & Kế toán
+                            'iconBg' => 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white',
+                            'badge' => 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400',
+                            'textHover' => 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400',
+                            'borderHover' => 'hover:border-emerald-300 dark:hover:border-emerald-800',
+                            'glow' => 'from-emerald-500/5 to-transparent',
+                            'cta' => 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700'
+                        ],
+                        3 => [ // Công nghệ thông tin & Phần mềm
+                            'iconBg' => 'bg-orange-50/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 group-hover:bg-orange-600 group-hover:text-white',
+                            'badge' => 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400',
+                            'textHover' => 'group-hover:text-orange-600 dark:group-hover:text-orange-400',
+                            'borderHover' => 'hover:border-orange-300 dark:hover:border-orange-800',
+                            'glow' => 'from-orange-500/5 to-transparent',
+                            'cta' => 'text-orange-600 dark:text-orange-400 group-hover:text-orange-700'
+                        ]
+                    ];
+                @endphp
 
-                <div class="overflow-hidden px-2 py-4" id="categories-wrapper">
-                    <div class="flex transition-transform duration-300 ease-in-out" id="categories-track">
-                        @foreach ($categories as $category)
-                            <div class="w-full shrink-0 px-2 sm:w-1/2 lg:w-1/4">
-                                <a href="{{ route('courses.category', $category->slug) }}"
-                                    class="group block h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:border-blue-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-950 dark:hover:border-blue-700">
-                                    <div class="mb-3 flex items-center gap-4">
-                                        <div
-                                            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0056D2] dark:bg-blue-900/50 dark:text-blue-300">
-                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"
-                                                viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                            </svg>
-                                        </div>
-                                        <h3
-                                            class="font-bold text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">
-                                            {{ $category->name }}</h3>
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    @foreach ($bentoCategories as $index => $category)
+                        @php
+                            $style = $categoryStyles[$index] ?? $categoryStyles[0];
+                        @endphp
+                        
+                        <a href="{{ route('courses.category', $category->slug) }}"
+                            class="group block relative overflow-hidden rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 dark:border-slate-800 dark:bg-slate-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] {{ $style['borderHover'] }}">
+                            
+                            <!-- Ambient Glow Corner Effect -->
+                            <div class="absolute -right-12 -bottom-12 h-32 w-32 rounded-full bg-gradient-to-tr {{ $style['glow'] }} blur-2xl pointer-events-none transition-all duration-500 group-hover:scale-125"></div>
+
+                            <div class="flex flex-col justify-between h-full min-h-[220px] relative z-10">
+                                <div>
+                                    <!-- Icon Box -->
+                                    <div class="flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-300 mb-5 shadow-sm {{ $style['iconBg'] }}">
+                                        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                        </svg>
                                     </div>
-                                    <p class="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                                    
+                                    <!-- Title & Description -->
+                                    <h3 class="text-lg font-bold text-slate-900 transition-colors duration-300 dark:text-white {{ $style['textHover'] }}">
+                                        {{ $category->name }}
+                                    </h3>
+                                    <p class="text-sm text-slate-500 line-clamp-2 dark:text-slate-400 mt-2 leading-relaxed">
                                         {{ $category->description ?? 'Khóa học chất lượng do đội ngũ giảng viên biên soạn.' }}
                                     </p>
-                                </a>
+                                </div>
+
+                                <!-- Course Count Badge & CTA -->
+                                <div class="flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-4 mt-5">
+                                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full transition-colors duration-300 {{ $style['badge'] }}">
+                                        {{ $category->children->sum('courses_count') }} khóa học
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 text-sm font-bold transition-colors duration-200 {{ $style['cta'] }}">
+                                        Khám phá
+                                        <svg class="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </span>
+                                </div>
                             </div>
-                        @endforeach
-                    </div>
+
+                        </a>
+                    @endforeach
                 </div>
-            </div>
+            @endif
         </div>
     </section>
 
@@ -271,7 +336,7 @@
             </div>
 
             <form method="GET" action="{{ route('home') }}#courses"
-                class="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                class="mb-8 rounded-2xl bg-slate-50 p-6 dark:bg-slate-900/60">
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <div class="lg:col-span-1">
                         <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tìm kiếm</label>
@@ -284,7 +349,7 @@
                             <option value="">Tất cả</option>
                             @foreach ($categories as $parent)
                                 <option value="{{ $parent->slug }}" @selected($selectedCategory?->id === $parent->id)>Tất cả
-                                    {{ $parent->name }}</option>
+                                     {{ $parent->name }}</option>
                                 @if ($parent->children->isNotEmpty())
                                     <optgroup label="{{ $parent->name }}">
                                         @foreach ($parent->children as $cat)
@@ -318,12 +383,12 @@
                     </div>
                 </div>
 
-                <div class="mt-4 flex items-center justify-end gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+                <div class="mt-5 flex items-center justify-between gap-3 border-t border-slate-200/60 pt-4 dark:border-slate-800/60">
                     <a href="{{ route('home') }}#courses"
-                        class="text-sm font-medium text-slate-500 transition duration-200 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                        class="text-sm font-semibold text-slate-500 transition duration-200 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
                         Xóa bộ lọc
                     </a>
-                    <button type="submit" class="ui-button-primary">
+                    <button type="submit" class="ui-button-primary shadow-sm hover:shadow-md">
                         Áp dụng lọc
                     </button>
                 </div>
@@ -551,133 +616,270 @@
         </section>
     @endguest
 
+
+
+    
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // --- Hero Slider ---
+            const slider = document.getElementById('banner-slider');
             const track = document.getElementById('banner-track');
             const prevBtn = document.getElementById('prev-banner');
             const nextBtn = document.getElementById('next-banner');
 
-            if (!track) return;
+            if (track) {
+                const slides = track.querySelectorAll('.banner-slide');
+                const totalSlides = slides.length - 1; // 2 slides + 1 clone
+                let currentIndex = 0;
+                let isAnimating = false;
+                let autoPlayTimer = null;
+                let isUserInteracting = false;
 
-            const slides = track.querySelectorAll('.banner-slide');
-            const totalSlides = slides.length - 1; // 2 slides + 1 clone
-            let currentIndex = 0;
-            let isAnimating = false;
-            let autoPlayTimer = null;
-
-            function updateSlider(instant = false) {
-                if (instant) {
-                    track.style.transition = 'none';
-                } else {
-                    track.style.transition = 'transform 700ms ease-in-out';
+                function updateSlider(instant = false) {
+                    if (instant) {
+                        track.style.transition = 'none';
+                    } else {
+                        track.style.transition = 'transform 700ms ease-in-out';
+                    }
+                    track.style.transform = `translateX(-${currentIndex * 100}%)`;
                 }
-                track.style.transform = `translateX(-${currentIndex * 100}%)`;
-            }
 
-            function nextSlide() {
-                if (isAnimating) return;
-                isAnimating = true;
-                currentIndex++;
-                updateSlider();
+                function nextSlide() {
+                    if (isAnimating) return;
+                    isAnimating = true;
+                    currentIndex++;
+                    updateSlider();
 
-                if (currentIndex === totalSlides) {
-                    setTimeout(() => {
-                        currentIndex = 0;
+                    if (currentIndex === totalSlides) {
+                        setTimeout(() => {
+                            currentIndex = 0;
+                            updateSlider(true);
+                            isAnimating = false;
+                        }, 700); // match transition duration
+                    } else {
+                        setTimeout(() => {
+                            isAnimating = false;
+                        }, 700);
+                    }
+                    if (!isUserInteracting) resetAutoPlay();
+                }
+
+                function prevSlide() {
+                    if (isAnimating) return;
+                    isAnimating = true;
+
+                    if (currentIndex === 0) {
+                        currentIndex = totalSlides;
                         updateSlider(true);
-                        isAnimating = false;
-                    }, 700); // match transition duration
-                } else {
+                        // force reflow
+                        track.offsetHeight;
+                    }
+
+                    currentIndex--;
+                    updateSlider();
+
                     setTimeout(() => {
                         isAnimating = false;
                     }, 700);
-                }
-                resetAutoPlay();
-            }
-
-            function prevSlide() {
-                if (isAnimating) return;
-                isAnimating = true;
-
-                if (currentIndex === 0) {
-                    currentIndex = totalSlides;
-                    updateSlider(true);
-                    // force reflow
-                    track.offsetHeight;
+                    if (!isUserInteracting) resetAutoPlay();
                 }
 
-                currentIndex--;
-                updateSlider();
+                function startAutoPlay() {
+                    clearInterval(autoPlayTimer);
+                    autoPlayTimer = setInterval(nextSlide, 4000);
+                }
 
-                setTimeout(() => {
-                    isAnimating = false;
-                }, 700);
-                resetAutoPlay();
+                function stopAutoPlay() {
+                    clearInterval(autoPlayTimer);
+                }
+
+                function resetAutoPlay() {
+                    stopAutoPlay();
+                    startAutoPlay();
+                }
+
+                if (nextBtn) nextBtn.addEventListener('click', function() {
+                    isUserInteracting = true;
+                    stopAutoPlay();
+                    nextSlide();
+                });
+
+                if (prevBtn) prevBtn.addEventListener('click', function() {
+                    isUserInteracting = true;
+                    stopAutoPlay();
+                    prevSlide();
+                });
+
+                // Keyboard support for Hero Slider
+                if (slider) {
+                    slider.addEventListener('keydown', function(e) {
+                        if (e.key === 'ArrowLeft') {
+                            e.preventDefault();
+                            isUserInteracting = true;
+                            stopAutoPlay();
+                            prevSlide();
+                        } else if (e.key === 'ArrowRight') {
+                            e.preventDefault();
+                            isUserInteracting = true;
+                            stopAutoPlay();
+                            nextSlide();
+                        }
+                    });
+
+                    // Pause on focus/hover, resume on blur/leave
+                    slider.addEventListener('mouseenter', function() {
+                        isUserInteracting = true;
+                        stopAutoPlay();
+                    });
+                    slider.addEventListener('mouseleave', function() {
+                        isUserInteracting = false;
+                        startAutoPlay();
+                    });
+                    slider.addEventListener('focusin', function() {
+                        isUserInteracting = true;
+                        stopAutoPlay();
+                    });
+                    slider.addEventListener('focusout', function() {
+                        isUserInteracting = false;
+                        startAutoPlay();
+                    });
+                }
+
+                startAutoPlay();
             }
+            // --- AJAX Course Filtering & Pagination ---
+            const coursesSection = document.getElementById('courses');
+            const filterForm = coursesSection ? coursesSection.querySelector('form') : null;
 
-            function resetAutoPlay() {
-                clearInterval(autoPlayTimer);
-                autoPlayTimer = setInterval(nextSlide, 4000); // Tự động chạy mỗi 4s
-            }
+            if (coursesSection && filterForm) {
+                let currentQueryString = window.location.search;
 
-            if (nextBtn) nextBtn.addEventListener('click', nextSlide);
-            if (prevBtn) prevBtn.addEventListener('click', prevSlide);
+                function loadCoursesContent(url, updateHistory = true) {
+                    // Visual transition indicators
+                    coursesSection.classList.add('transition-opacity', 'duration-300');
+                    coursesSection.style.opacity = '0.4';
+                    coursesSection.style.pointerEvents = 'none';
 
-            resetAutoPlay();
+                    fetch(url, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => {
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        return response.text();
+                    })
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newCoursesContent = doc.getElementById('courses');
 
-            // --- Categories Slider ---
-            const catTrack = document.getElementById('categories-track');
-            const prevCat = document.getElementById('prev-category');
-            const nextCat = document.getElementById('next-category');
-            const catWrapper = document.getElementById('categories-wrapper');
+                        if (newCoursesContent) {
+                            coursesSection.innerHTML = newCoursesContent.innerHTML;
+                            rebindFormListeners();
+                            
+                            // Smoothly scroll back to the top of the course catalog section
+                            coursesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            if (catTrack && prevCat && nextCat && catWrapper) {
-                let catIndex = 0;
-                const catItems = catTrack.children;
+                            // Update track state
+                            currentQueryString = new URL(url, window.location.origin).search;
 
-                const getVisibleItems = () => window.innerWidth >= 1024 ? 4 : (window.innerWidth >= 640 ? 2 : 1);
+                            // Maintain URL state in browser history
+                            if (updateHistory) {
+                                history.pushState(null, '', url);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading filtered courses via AJAX:', error);
+                    })
+                    .finally(() => {
+                        coursesSection.style.opacity = '1';
+                        coursesSection.style.pointerEvents = 'auto';
+                    });
+                }
 
-                const setItemWidths = () => {
-                    const wrapperWidth = catWrapper.clientWidth;
-                    const visible = getVisibleItems();
-                    const itemWidth = wrapperWidth / visible;
+                function rebindFormListeners() {
+                    const currentForm = coursesSection.querySelector('form');
+                    if (currentForm) {
+                        currentForm.addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            const formData = new FormData(currentForm);
+                            const params = new URLSearchParams();
+                            
+                            // Only append non-empty form elements
+                            for (const [key, value] of formData.entries()) {
+                                if (value !== '') {
+                                    params.set(key, value);
+                                }
+                            }
+                            
+                            const action = currentForm.getAttribute('action') || window.location.pathname;
+                            const actionUrl = new URL(action, window.location.origin);
+                            
+                            params.forEach((value, key) => {
+                                actionUrl.searchParams.set(key, value);
+                            });
+                            actionUrl.hash = 'courses';
 
-                    for (let i = 0; i < catItems.length; i++) {
-                        catItems[i].style.width = `${itemWidth}px`;
-                        catItems[i].style.flex = `0 0 ${itemWidth}px`;
+                            loadCoursesContent(actionUrl.toString());
+                        });
                     }
-                    return itemWidth;
-                };
+                }
 
-                const updateCatSlider = () => {
-                    if (catItems.length > 0) {
-                        const itemWidth = setItemWidths();
-                        catTrack.style.transform = `translateX(-${catIndex * itemWidth}px)`;
-                    }
-                };
+                rebindFormListeners();
 
-                nextCat.addEventListener('click', () => {
-                    const maxIndex = catItems.length - getVisibleItems();
-                    if (catIndex < maxIndex) {
-                        catIndex++;
-                        updateCatSlider();
+                // Handle pagination & filter reset link clicks
+                coursesSection.addEventListener('click', function(e) {
+                    const link = e.target.closest('a');
+                    if (link && link.getAttribute('href')) {
+                        const href = link.getAttribute('href');
+                        if (href.includes('page=') || href.includes('search=') || href.includes('category=') || href.includes('level=') || href.includes('sort=') || href.endsWith('#courses') || href.includes('/home#courses')) {
+                              const url = new URL(href, window.location.origin);
+                            if (url.origin === window.location.origin) {
+                                e.preventDefault();
+                                url.hash = 'courses';
+                                loadCoursesContent(url.toString());
+                            }
+                        }
                     }
                 });
 
-                prevCat.addEventListener('click', () => {
-                    if (catIndex > 0) {
-                        catIndex--;
-                        updateCatSlider();
+                // Listen for browser back/forward buttons
+                window.addEventListener('popstate', function() {
+                    const newUrl = new URL(window.location.href);
+                    // Do not load courses if the user only navigated to an anchor section
+                    if (newUrl.hash === '#paths' || newUrl.hash === '#instructors' || newUrl.hash === '#business' || newUrl.hash === '#faq' || newUrl.hash === '#categories') {
+                        return;
+                    }
+                    if (newUrl.search !== currentQueryString) {
+                        loadCoursesContent(window.location.href, false);
                     }
                 });
 
-                window.addEventListener('resize', () => {
-                    const maxIndex = Math.max(0, catItems.length - getVisibleItems());
-                    if (catIndex > maxIndex) catIndex = maxIndex;
-                    updateCatSlider();
+                // Smooth scroll for page section anchors (preserving search parameters)
+                document.addEventListener('click', function(e) {
+                    const anchor = e.target.closest('a');
+                    if (anchor && anchor.getAttribute('href')) {
+                        const href = anchor.getAttribute('href');
+                        if (href.startsWith('#') || href.includes('#paths') || href.includes('#instructors') || href.includes('#business') || href.includes('#faq') || href.includes('#categories')) {
+                            const hashIndex = href.indexOf('#');
+                            if (hashIndex !== -1) {
+                                const targetId = href.substring(hashIndex + 1);
+                                if (targetId !== 'courses') {
+                                    const targetElement = document.getElementById(targetId);
+                                    if (targetElement) {
+                                        e.preventDefault();
+                                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        const newUrl = window.location.pathname + window.location.search + '#' + targetId;
+                                        history.pushState(null, '', newUrl);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 });
-
-                // Initial setup
-                setTimeout(updateCatSlider, 100);
             }
         });
     </script>

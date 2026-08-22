@@ -268,7 +268,7 @@ class LearningPlayerService
                 $progress = $progressMap[$sectionLesson->id] ?? null;
                 $quizStatus = $quizStatusMap[$sectionLesson->id] ?? null;
                 $state = $this->lessonState($sectionLesson, $progress, $quizStatus, $canAccess);
-                $progressPercent = $progress ? (float) ($progress['progress_percent'] ?? 0) : 0.0;
+                $progressPercent = $state === 'completed' ? 100.0 : ($progress ? (float) ($progress['progress_percent'] ?? 0) : 0.0);
 
                 if ($state === 'completed') {
                     $sectionCompleted++;
