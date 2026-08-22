@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\AiChatMessage;
+use App\Models\AiConversation;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
@@ -318,6 +320,369 @@ class LessonAiTest extends TestCase
         $this->actingAs($student)
             ->getJson(route('courses.lessons.ai-summary', [$course, $lesson]))
             ->assertStatus(403);
+    }
+
+    public function test_guest_cannot_call_ai_chat(): void
+    {
+        [$course, $lesson] = $this->publishedCourseWithLesson();
+
+        $this->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+            'message' => 'MVC là gì?',
+        ])->assertUnauthorized();
+    }
+
+    public function test_unenrolled_student_cannot_call_ai_chat(): void
+    {
+        $student = User::factory()->create([
+            'role' => 'student',
+            'email_verified_at' => now(),
+        ]);
+        [$course, $lesson] = $this->publishedCourseWithLesson();
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'MVC là gì?',
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'forbidden');
+    }
+
+    public function test_enrolled_student_can_chat_with_ai(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+        $this->mockGeminiText('MVC là mô hình Model, View và Controller.');
+
+        $response = $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'MVC là gì?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'MVC là mô hình Model, View và Controller.')
+            ->assertJsonStructure(['conversation_id', 'answer']);
+
+        $conversationId = $response->json('conversation_id');
+
+        $this->assertDatabaseHas('ai_conversations', [
+            'id' => $conversationId,
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+        ]);
+        $this->assertDatabaseHas('ai_chat_messages', [
+            'conversation_id' => $conversationId,
+            'role' => 'user',
+            'content' => 'MVC là gì?',
+        ]);
+        $this->assertDatabaseHas('ai_chat_messages', [
+            'conversation_id' => $conversationId,
+            'role' => 'assistant',
+            'content' => 'MVC là mô hình Model, View và Controller.',
+        ]);
+    }
+
+    public function test_enrolled_student_can_load_saved_ai_chat_history(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $conversation = AiConversation::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+        ]);
+        AiChatMessage::query()->create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $student->id,
+            'lesson_id' => $lesson->id,
+            'role' => 'user',
+            'content' => 'MVC là gì?',
+        ]);
+        AiChatMessage::query()->create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $student->id,
+            'lesson_id' => $lesson->id,
+            'role' => 'assistant',
+            'content' => 'MVC gồm Model, View và Controller.',
+        ]);
+
+        $this->actingAs($student)
+            ->getJson(route('courses.lessons.ai-chat.history', [$course, $lesson]))
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('conversation_id', $conversation->id)
+            ->assertJsonPath('messages.0.role', 'user')
+            ->assertJsonPath('messages.0.content', 'MVC là gì?')
+            ->assertJsonPath('messages.1.role', 'assistant')
+            ->assertJsonPath('messages.1.content', 'MVC gồm Model, View và Controller.');
+    }
+
+    public function test_ai_chat_history_is_scoped_to_current_user_and_lesson(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+        $otherStudent = User::factory()->create([
+            'role' => 'student',
+            'email_verified_at' => now(),
+        ]);
+        $lessonB = Lesson::query()->create([
+            'course_id' => $course->id,
+            'section_id' => $lesson->section_id,
+            'title' => 'Lesson B',
+            'type' => 'video',
+            'video_url' => 'https://example.com/b.mp4',
+            'duration_seconds' => 120,
+            'content' => 'Nội dung bài B đủ dài để kiểm tra lịch sử riêng.',
+            'sort_order' => 2,
+            'is_required' => true,
+            'status' => 'published',
+        ]);
+
+        $ownConversation = AiConversation::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+        ]);
+        AiChatMessage::query()->create([
+            'conversation_id' => $ownConversation->id,
+            'user_id' => $student->id,
+            'lesson_id' => $lesson->id,
+            'role' => 'user',
+            'content' => 'Tin nhắn của tôi.',
+        ]);
+
+        $otherConversation = AiConversation::query()->create([
+            'user_id' => $otherStudent->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+        ]);
+        AiChatMessage::query()->create([
+            'conversation_id' => $otherConversation->id,
+            'user_id' => $otherStudent->id,
+            'lesson_id' => $lesson->id,
+            'role' => 'user',
+            'content' => 'Tin nhắn của người khác.',
+        ]);
+
+        $lessonBConversation = AiConversation::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lessonB->id,
+        ]);
+        AiChatMessage::query()->create([
+            'conversation_id' => $lessonBConversation->id,
+            'user_id' => $student->id,
+            'lesson_id' => $lessonB->id,
+            'role' => 'user',
+            'content' => 'Tin nhắn lesson B.',
+        ]);
+
+        $response = $this->actingAs($student)
+            ->getJson(route('courses.lessons.ai-chat.history', [$course, $lesson]))
+            ->assertOk()
+            ->assertJsonPath('conversation_id', $ownConversation->id);
+
+        $contents = collect($response->json('messages'))->pluck('content')->all();
+
+        $this->assertContains('Tin nhắn của tôi.', $contents);
+        $this->assertNotContains('Tin nhắn của người khác.', $contents);
+        $this->assertNotContains('Tin nhắn lesson B.', $contents);
+    }
+
+    public function test_ai_chat_rejects_empty_or_too_long_message(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), ['message' => '   '])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation');
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => str_repeat('a', 2001),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation');
+    }
+
+    public function test_student_cannot_use_another_users_ai_conversation(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+        $otherStudent = User::factory()->create([
+            'role' => 'student',
+            'email_verified_at' => now(),
+        ]);
+
+        $otherConversation = AiConversation::query()->create([
+            'user_id' => $otherStudent->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+        ]);
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'Cho mình ví dụ.',
+                'conversation_id' => $otherConversation->id,
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'forbidden');
+    }
+
+    public function test_ai_chat_conversation_cannot_be_reused_for_another_lesson(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+        $lessonB = Lesson::query()->create([
+            'course_id' => $course->id,
+            'section_id' => $lesson->section_id,
+            'title' => 'Lesson B',
+            'type' => 'video',
+            'video_url' => 'https://example.com/b.mp4',
+            'duration_seconds' => 120,
+            'content' => 'Nội dung bài B đủ dài để kiểm tra hội thoại riêng.',
+            'sort_order' => 2,
+            'is_required' => true,
+            'status' => 'published',
+        ]);
+
+        $conversation = AiConversation::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+        ]);
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lessonB]), [
+                'message' => 'Tiếp tục giải thích.',
+                'conversation_id' => $conversation->id,
+            ])
+            ->assertNotFound()
+            ->assertJsonPath('code', 'conversation_mismatch');
+    }
+
+    public function test_ai_chat_context_contains_course_lesson_and_saved_summary(): void
+    {
+        [, $course, $lesson] = $this->enrolledLessonSetup('Nội dung bài học Laravel về middleware đủ dài.');
+
+        LessonAiSummary::query()->create([
+            'lesson_id' => $lesson->id,
+            'summary' => 'Middleware lọc request trước khi vào controller.',
+            'key_points' => ['main_points' => ['Middleware']],
+            'source_hash' => app(LessonContextService::class)->sourceHash($lesson),
+            'model' => 'mock',
+            'generated_at' => now(),
+        ]);
+
+        $context = app(LessonAiService::class)->buildContext($lesson->fresh(), $course, includeAiSummary: true);
+
+        $this->assertStringContainsString('Khóa học: Course AI', $context);
+        $this->assertStringContainsString('Mô tả khóa học:', $context);
+        $this->assertStringContainsString('Tiêu đề bài học: Lesson AI', $context);
+        $this->assertStringContainsString('Nội dung bài học Laravel về middleware', $context);
+        $this->assertStringContainsString('Middleware lọc request trước khi vào controller.', $context);
+    }
+
+    public function test_ai_chat_allows_general_learning_question_without_lesson_source(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup('abc');
+        $this->mockGeminiText('Java và PHP khác nhau ở hệ sinh thái, runtime và cách triển khai.');
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'Java khác PHP ở đâu?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Java và PHP khác nhau ở hệ sinh thái, runtime và cách triển khai.');
+    }
+
+    public function test_ai_chat_passes_recent_conversation_history_to_provider(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->withArgs(fn (string $prompt, array $options): bool => str_contains($prompt, 'Học viên: Dependency Injection là gì?'))
+            ->andReturn(['text' => 'DI là cách đưa phụ thuộc từ bên ngoài vào đối tượng.', 'model' => 'mock-gemini']);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->withArgs(fn (string $prompt, array $options): bool => str_contains($prompt, 'AI: DI là cách đưa phụ thuộc từ bên ngoài vào đối tượng.')
+                && str_contains($prompt, 'Học viên: Giải thích dễ hơn.'))
+            ->andReturn(['text' => 'Hiểu đơn giản, class không tự tạo thứ nó cần mà được truyền vào.', 'model' => 'mock-gemini']);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $first = $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'Dependency Injection là gì?',
+            ])
+            ->assertOk();
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'Giải thích dễ hơn.',
+                'conversation_id' => $first->json('conversation_id'),
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Hiểu đơn giản, class không tự tạo thứ nó cần mà được truyền vào.');
+    }
+
+    public function test_ai_chat_timeout_returns_friendly_error(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->andReturn(['error' => 'provider timeout detail', 'code' => 'timeout']);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'Tóm tắt bài.',
+            ])
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'timeout')
+            ->assertJsonPath('message', 'AI đang phản hồi chậm. Vui lòng thử lại.');
+    }
+
+    public function test_ai_chat_provider_error_does_not_return_unexpected_500(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->andReturn(['error' => 'Provider unavailable', 'code' => 'ai_error']);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'Cho mình ví dụ.',
+            ])
+            ->assertStatus(503)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'ai_error');
+    }
+
+    public function test_ai_chat_response_does_not_leak_provider_secret(): void
+    {
+        [$student, $course, $lesson] = $this->enrolledLessonSetup();
+
+        $gemini = Mockery::mock(GeminiService::class);
+        $gemini->shouldReceive('generateText')
+            ->once()
+            ->andReturn([
+                'error' => 'Invalid key sk-test-secret-value',
+                'code' => 'invalid_api_key',
+            ]);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        $response = $this->actingAs($student)
+            ->postJson(route('courses.lessons.ai-chat', [$course, $lesson]), [
+                'message' => 'AI có hoạt động không?',
+            ])
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'invalid_api_key');
+
+        $this->assertStringNotContainsString('sk-test-secret-value', $response->getContent());
     }
 
     /**

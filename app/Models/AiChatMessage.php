@@ -8,11 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AiChatMessage extends Model
 {
     protected $fillable = [
+        'conversation_id',
         'user_id',
         'lesson_id',
         'role',
         'content',
     ];
+
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(AiConversation::class, 'conversation_id');
+    }
 
     public function user(): BelongsTo
     {
