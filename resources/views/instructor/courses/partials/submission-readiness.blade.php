@@ -56,8 +56,8 @@
 
     @if ($canSubmit && $isReady)
         @if ($course->copyright_agreed)
-            <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5"
-                  onsubmit="return confirm('Gửi khóa học này cho admin duyệt?')">
+            <form id="readinessSubmitForm" method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5"
+                  onsubmit="return handleReadinessSubmit(event)">
                 @csrf
                 <input type="hidden" name="copyright_agreed" value="1">
                 <button type="submit"

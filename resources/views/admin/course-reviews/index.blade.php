@@ -130,9 +130,20 @@
                                              Mới chờ duyệt
                                         </span>
                                     @elseif($course->status === 'approved' || $course->status === 'published')
-                                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-300 dark:bg-emerald-950/50 dark:border-emerald-700 dark:text-emerald-300">
-                                             Đã duyệt
-                                        </span>
+                                        @if($course->instructor?->instructor_status === 'approved' && ! $course->instructor?->isLocked())
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-300 dark:bg-emerald-950/50 dark:border-emerald-700 dark:text-emerald-300">
+                                                 Đã duyệt & Xuất bản
+                                            </span>
+                                        @else
+                                            <span class="inline-flex flex-col gap-0.5">
+                                                <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 border border-amber-300 dark:bg-amber-950/50 dark:border-amber-700 dark:text-amber-300">
+                                                     Đã duyệt nội dung
+                                                </span>
+                                                <span class="text-[10px] text-amber-700 dark:text-amber-400 font-semibold pl-1">
+                                                    (Chờ duyệt GV để public)
+                                                </span>
+                                            </span>
+                                        @endif
                                     @elseif($course->status === 'rejected')
                                         <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 border border-rose-300 dark:bg-rose-950/50 dark:border-rose-700 dark:text-rose-300">
                                              Từ chối

@@ -105,12 +105,14 @@
                                     </h4>
                                     <span class="text-slate-400 text-xs">&bull;</span>
                                     <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 truncate">
-                                        {{ $disc->lesson->course->title }}
+                                        {{ $disc->course?->title ?? $disc->lesson?->course?->title }}
                                     </span>
-                                    <span class="text-slate-400 text-xs">&bull;</span>
-                                    <span class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                        Bài: {{ $disc->lesson->title }}
-                                    </span>
+                                    @if($disc->lesson)
+                                        <span class="text-slate-400 text-xs">&bull;</span>
+                                        <span class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                            Bài: {{ $disc->lesson->title }}
+                                        </span>
+                                    @endif
                                 </div>
 
                                 <h3 class="mt-1 text-sm font-bold text-slate-950 dark:text-white group-hover:text-emerald-600 transition truncate">

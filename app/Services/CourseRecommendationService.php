@@ -612,11 +612,8 @@ class CourseRecommendationService
 
     private function baseCandidateQuery(?User $viewer, array $excludeIds): Builder
     {
-        $query = Course::query()
+        $query = Course::published()
             ->select($this->candidateCourseColumns())
-            ->where('courses.status', Course::STATUS_PUBLISHED)
-            ->where('courses.is_published', true)
-            ->whereHas('instructor', fn (Builder $instructor) => $instructor->where('is_active', true))
             ->when($excludeIds !== [], fn (Builder $query) => $query->whereNotIn('courses.id', $excludeIds))
             ->with([
                 'instructor:id,name,avatar,is_active',

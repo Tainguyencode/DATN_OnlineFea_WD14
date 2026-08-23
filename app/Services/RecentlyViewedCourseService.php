@@ -88,9 +88,7 @@ class RecentlyViewedCourseService
 
     private function publishedCourseConstraint(Builder $query): Builder
     {
-        return $query
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true);
+        return $query->published();
     }
 
     private function pruneForUser(int $userId): void

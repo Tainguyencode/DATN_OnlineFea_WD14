@@ -276,7 +276,53 @@
     </div>
 </div>
 
+<!-- HLS Warning Modal -->
+<div id="hlsWarningModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="hls-modal-title" role="dialog" aria-modal="true">
+    <!-- Backdrop -->
+    <div class="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="closeHlsWarningModal()"></div>
+
+        <!-- Trick to center the modal contents -->
+        <span class="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+
+        <!-- Modal panel -->
+        <div class="relative inline-block transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+            <div class="bg-white px-6 pt-6 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-base font-bold leading-6 text-slate-900" id="hls-modal-title">Video chưa xử lý HLS hoàn tất.</h3>
+                        
+                        <div class="mt-3 text-sm leading-relaxed text-slate-600 space-y-2">
+                            <p>Khóa học vẫn có thể được gửi duyệt, tuy nhiên Admin có thể chưa xem được các video chưa xử lý xong.</p>
+                            <p class="font-medium text-slate-700">Bạn có muốn tiếp tục gửi duyệt không?</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-slate-50 px-6 py-4 sm:flex sm:flex-row-reverse sm:px-6 gap-2">
+                <button type="button" id="proceedHlsSubmitBtn" onclick="proceedHlsSubmission()"
+                        class="inline-flex w-full min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:w-auto cursor-pointer">
+                    Vẫn gửi duyệt
+                </button>
+                <button type="button" onclick="closeHlsWarningModal()"
+                        class="mt-3 inline-flex w-full min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 sm:mt-0 sm:w-auto cursor-pointer">
+                    Hủy
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+    const hasIncompleteHls = {{ $course->hasIncompleteHlsVideos() ? 'true' : 'false' }};
+    let pendingSubmitFormId = null;
+
     function openCopyrightModal() {
         const modal = document.getElementById('copyrightModal');
         modal.classList.remove('hidden');
@@ -287,29 +333,59 @@
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
             closeCopyrightModal();
+            closeHlsWarningModal();
         }
     });
 
     function closeCopyrightModal() {
         const modal = document.getElementById('copyrightModal');
-        modal.classList.add('hidden');
-        document.body.style.overflow = '';
-        
-        // Reset form
-        document.getElementById('agreeCheckbox').checked = false;
-        document.getElementById('confirmSubmitBtn').disabled = true;
+        if (modal) {
+            modal.classList.add('hidden');
+            const hlsModal = document.getElementById('hlsWarningModal');
+            if (!hlsModal || hlsModal.classList.contains('hidden')) {
+                document.body.style.overflow = '';
+            }
+            
+            // Reset form
+            const cb = document.getElementById('agreeCheckbox');
+            if (cb) cb.checked = false;
+            const btn = document.getElementById('confirmSubmitBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Xác nhận gửi duyệt';
+            }
+        }
     }
 
     function toggleSubmitButton() {
         const checkbox = document.getElementById('agreeCheckbox');
         const btn = document.getElementById('confirmSubmitBtn');
-        btn.disabled = !checkbox.checked;
+        if (btn && checkbox) {
+            btn.disabled = !checkbox.checked;
+        }
     }
 
-    function submitCopyrightForm() {
-        const checkbox = document.getElementById('agreeCheckbox');
-        const btn = document.getElementById('confirmSubmitBtn');
-        if (checkbox.checked) {
+    function openHlsWarningModal(formId) {
+        pendingSubmitFormId = formId;
+        const modal = document.getElementById('hlsWarningModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeHlsWarningModal() {
+        const modal = document.getElementById('hlsWarningModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        pendingSubmitFormId = null;
+    }
+
+    function proceedHlsSubmission() {
+        const btn = document.getElementById('proceedHlsSubmitBtn');
+        if (btn) {
             btn.disabled = true;
             btn.innerHTML = `
                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -318,8 +394,45 @@
                 </svg>
                 Đang gửi duyệt...
             `;
-            document.getElementById('copyrightSubmitForm').submit();
         }
+        const formId = pendingSubmitFormId || 'copyrightSubmitForm';
+        const form = document.getElementById(formId);
+        if (form) {
+            form.submit();
+        }
+    }
+
+    function submitCopyrightForm() {
+        const checkbox = document.getElementById('agreeCheckbox');
+        if (!checkbox || !checkbox.checked) return;
+
+        if (hasIncompleteHls) {
+            closeCopyrightModal();
+            openHlsWarningModal('copyrightSubmitForm');
+            return;
+        }
+
+        const btn = document.getElementById('confirmSubmitBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                </svg>
+                Đang gửi duyệt...
+            `;
+        }
+        document.getElementById('copyrightSubmitForm').submit();
+    }
+
+    function handleReadinessSubmit(event) {
+        if (hasIncompleteHls) {
+            event.preventDefault();
+            openHlsWarningModal('readinessSubmitForm');
+            return false;
+        }
+        return confirm('Gửi khóa học này cho admin duyệt?');
     }
 </script>
 
