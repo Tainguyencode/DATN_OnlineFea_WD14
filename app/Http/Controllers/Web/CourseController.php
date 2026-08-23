@@ -50,13 +50,26 @@ class CourseController extends Controller
     ): View
     {
         $course = Course::query()
-            ->where('slug', $slug)
+            ->where(function ($q) use ($slug) {
+                $q->where('slug', $slug);
+                if (is_numeric($slug)) {
+                    $q->orWhere('id', (int) $slug);
+                }
+            })
             ->firstOrFail();
 
         $canBypassCourseVisibility = $this->canBypassCourseVisibility($course);
-        abort_unless($this->isPublished($course) || $canBypassCourseVisibility || $this->isEnrolled($course), 404);
-
         $isEnrolled = $this->isEnrolled($course);
+        $isPublished = $this->isPublished($course);
+
+        if (! $isPublished && ! $canBypassCourseVisibility && ! $isEnrolled) {
+            if ($course->isContentApproved() && $course->instructor?->instructor_status !== 'approved') {
+                return view('errors.course-pending-instructor');
+            }
+
+            abort(404);
+        }
+
         $canManageCourse = auth()->check()
             && auth()->user()->isInstructor()
             && $course->isOwnedBy(auth()->user());
@@ -266,35 +279,64 @@ class CourseController extends Controller
             app(\App\Services\EngagementService::class)->recordLearningActivity($user);
         }
 
+        $courseDiscussion = null;
         $discussions = collect();
         if ($user) {
-            if ($user->isInstructor() && (int) $course->instructor_id === (int) $user->id) {
-                $discussions = Discussion::where('lesson_id', $lesson->id)
+            if ($user->isStudent()) {
+                $courseDiscussion = Discussion::where('course_id', $course->id)
+                    ->where('user_id', $user->id)
+                    ->with([
+                        'user',
+                        'lesson',
+                        'replies' => function ($q) {
+                            $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
+                        },
+                    ])
+                    ->first();
+
+                if ($courseDiscussion) {
+                    $discussions = collect([$courseDiscussion]);
+                }
+            } elseif ($user->isInstructor() && (int) $course->instructor_id === (int) $user->id) {
+                $discussionId = request()->integer('discussion_id');
+                if ($discussionId > 0) {
+                    $courseDiscussion = Discussion::where('id', $discussionId)
+                        ->where('course_id', $course->id)
+                        ->with([
+                            'user',
+                            'lesson',
+                            'replies' => function ($q) {
+                                $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
+                            },
+                        ])
+                        ->first();
+                }
+                $discussions = Discussion::where('course_id', $course->id)
                     ->with(['user', 'replies.user'])
                     ->latest()
                     ->get();
             } elseif ($user->isAdmin()) {
-                $discussions = Discussion::where('lesson_id', $lesson->id)
+                $discussionId = request()->integer('discussion_id');
+                if ($discussionId > 0) {
+                    $courseDiscussion = Discussion::where('id', $discussionId)
+                        ->where('course_id', $course->id)
+                        ->with([
+                            'user',
+                            'lesson',
+                            'replies' => function ($q) {
+                                $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
+                            },
+                        ])
+                        ->first();
+                }
+                $discussions = Discussion::where('course_id', $course->id)
                     ->with(['user', 'replies.user'])
-                    ->latest()
-                    ->get();
-            } elseif ($user->isStudent()) {
-                $discussions = Discussion::where('lesson_id', $lesson->id)
-                    ->where('user_id', $user->id)
-                    ->with(['user', 'replies.user', 'replies.replyTo.user'])
                     ->latest()
                     ->get();
             }
         }
 
-        $activeDiscussion = null;
-        $discussionId = request()->integer('discussion_id');
-        if ($discussionId > 0 && $discussions->isNotEmpty()) {
-            $activeDiscussion = $discussions->firstWhere('id', $discussionId);
-            if ($activeDiscussion) {
-                $activeDiscussion->load(['user', 'replies.user', 'replies.replyTo.user']);
-            }
-        }
+        $activeDiscussion = $courseDiscussion;
 
         $submission = null;
         if (auth()->check() && $lesson->type === 'assignment' && $lesson->assignment) {
@@ -370,6 +412,7 @@ class CourseController extends Controller
             'completedLessons' => $player['completedLessons'],
             'discussions' => $discussions,
             'activeDiscussion' => $activeDiscussion,
+            'courseDiscussion' => $courseDiscussion,
             'lessonComments' => $lessonComments,
         ]);
     }

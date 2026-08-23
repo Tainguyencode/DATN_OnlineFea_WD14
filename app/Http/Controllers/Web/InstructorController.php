@@ -25,23 +25,23 @@ class InstructorController extends Controller
         $studentsOrderSub = Enrollment::selectRaw('COUNT(DISTINCT enrollments.user_id)')
             ->join('courses', 'courses.id', '=', 'enrollments.course_id')
             ->whereColumn('courses.instructor_id', 'users.id')
-            ->where('courses.status', Course::STATUS_PUBLISHED)
-            ->where('courses.is_published', true);
+            ->where(function ($q) {
+                $q->where('courses.is_published', true)
+                  ->orWhereIn('courses.status', [Course::STATUS_PUBLISHED, Course::STATUS_PENDING_UPDATE]);
+            });
 
         // ── Query chính (KHÔNG dùng addSelect correlated subquery để tránh
         //    phá COUNT query của paginate) ─────────────────────────────────────
         $query = User::query()
             ->where('role', 'instructor')
+            ->where('instructor_status', 'approved')
             ->where('is_active', true)
+            ->where(fn ($q) => $q->whereNull('account_status')->orWhereNotIn('account_status', ['locked', 'suspended']))
             ->withCount([
-                'courses as courses_count' => fn ($q) => $q
-                    ->where('status', Course::STATUS_PUBLISHED)
-                    ->where('is_published', true),
+                'courses as courses_count' => fn ($q) => $q->published(),
             ])
             ->with([
-                'courses' => fn ($q) => $q
-                    ->where('status', Course::STATUS_PUBLISHED)
-                    ->where('is_published', true)
+                'courses' => fn ($q) => $q->published()
                     ->with('category:id,name,slug,parent_id')
                     ->select(['id', 'instructor_id', 'category_id', 'rating_avg', 'rating_count']),
             ]);
@@ -56,9 +56,7 @@ class InstructorController extends Controller
 
         // ── Lọc theo chuyên môn (category) ───────────────────────────────────
         if (!empty($specialty)) {
-            $query->whereHas('courses', fn ($q) => $q
-                ->where('status', Course::STATUS_PUBLISHED)
-                ->where('is_published', true)
+            $query->whereHas('courses', fn ($q) => $q->published()
                 ->where('category_id', $specialty)
             );
         }
@@ -70,8 +68,10 @@ class InstructorController extends Controller
             'rating'   => $query->orderByDesc(
                 Course::selectRaw('AVG(rating_avg)')
                     ->whereColumn('instructor_id', 'users.id')
-                    ->where('status', Course::STATUS_PUBLISHED)
-                    ->where('is_published', true)
+                    ->where(function ($q) {
+                        $q->where('is_published', true)
+                          ->orWhereIn('status', [Course::STATUS_PUBLISHED, Course::STATUS_PENDING_UPDATE]);
+                    })
                     ->limit(1)
             ),
             'name'     => $query->orderBy('name'),
@@ -85,8 +85,10 @@ class InstructorController extends Controller
             // Số học viên
             $instructor->students_count = Enrollment::join('courses', 'courses.id', '=', 'enrollments.course_id')
                 ->where('courses.instructor_id', $instructor->id)
-                ->where('courses.status', Course::STATUS_PUBLISHED)
-                ->where('courses.is_published', true)
+                ->where(function ($q) {
+                    $q->where('courses.is_published', true)
+                      ->orWhereIn('courses.status', [Course::STATUS_PUBLISHED, Course::STATUS_PENDING_UPDATE]);
+                })
                 ->distinct('enrollments.user_id')
                 ->count('enrollments.user_id');
 
@@ -111,13 +113,18 @@ class InstructorController extends Controller
      */
     public function show(Request $request, User $user): View
     {
-        // Chỉ cho xem profile instructor còn active
-        abort_unless($user->role === 'instructor' && $user->is_active, 404);
+        // Chỉ cho xem profile instructor đã duyệt và còn active, không bị khóa
+        abort_unless(
+            $user->role === 'instructor'
+            && $user->instructor_status === 'approved'
+            && $user->is_active
+            && ! $user->isLocked(),
+            404
+        );
 
         // ── Load courses của instructor ───────────────────────────────────────
-        $coursesQuery = Course::where('instructor_id', $user->id)
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true)
+        $coursesQuery = Course::published()
+            ->where('instructor_id', $user->id)
             ->with(['category:id,name,slug,parent_id', 'category.parent:id,name,slug'])
             ->withCount('lessons')
             ->orderByDesc('published_at');
@@ -125,22 +132,18 @@ class InstructorController extends Controller
         $courses = $coursesQuery->paginate(8)->withQueryString();
 
         // ── Thống kê tổng hợp ────────────────────────────────────────────────
-        $totalCourses  = Course::where('instructor_id', $user->id)
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true)
+        $totalCourses  = Course::published()
+            ->where('instructor_id', $user->id)
             ->count();
 
-        $totalStudents = Enrollment::whereHas('course', fn ($q) => $q
+        $totalStudents = Enrollment::whereHas('course', fn ($q) => $q->published()
             ->where('instructor_id', $user->id)
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true)
         )
             ->distinct('user_id')
             ->count('user_id');
 
-        $avgRatingData = Course::where('instructor_id', $user->id)
-            ->where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true)
+        $avgRatingData = Course::published()
+            ->where('instructor_id', $user->id)
             ->whereNotNull('rating_avg')
             ->selectRaw('AVG(rating_avg) as avg_rating, SUM(rating_count) as total_reviews')
             ->first();

@@ -402,6 +402,15 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
     });
+
+    // Quản lý cấu hình yêu cầu hồ sơ theo ngành
+    Route::prefix('instructors/requirements')->name('instructors.requirements.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'store'])->name('store');
+        Route::put('/{requirement}', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'update'])->name('update');
+        Route::post('/{requirement}/toggle-status', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'toggleStatus'])->name('toggle-status');
+        Route::delete('/{requirement}', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'destroy'])->name('destroy');
+    });
     Route::get('/categories', [AdminCategoryController::class, 'index'])->name('categories.index');
     Route::get('/categories/create', [AdminCategoryController::class, 'create'])->name('categories.create');
     Route::post('/categories', [AdminCategoryController::class, 'store'])->name('categories.store');
@@ -458,6 +467,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
 // ─── STREAMING VIDEO KIỂM DUYỆT (Admin & Giảng viên) ───

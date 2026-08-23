@@ -106,8 +106,16 @@ class AuthService
                 ]);
             }
 
+            $categoryId = !empty($validated['category_id']) ? (int) $validated['category_id'] : null;
+            $teachingField = $validated['teaching_field'] ?? null;
+            if ($categoryId && ! $teachingField) {
+                $teachingField = \App\Models\Category::find($categoryId)?->name;
+            }
+
             \App\Models\InstructorProfile::create([
                 'user_id' => $user->id,
+                'category_id' => $categoryId,
+                'teaching_field' => $teachingField,
                 'phone' => $validated['phone'],
                 'specialty' => $validated['specialty'],
                 'experience' => $validated['experience'],

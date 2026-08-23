@@ -40,6 +40,8 @@ class Course extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    public const STATUS_SUSPENDED = 'suspended';
+
     public const STATUS_ARCHIVED = 'archived';
 
     public const STATUS_PENDING_UPDATE = 'pending_update';
@@ -179,6 +181,12 @@ class Course extends Model
         return $this->hasMany(Review::class);
     }
 
+    /** Danh sách các cuộc trao đổi trong khóa học */
+    public function discussions(): HasMany
+    {
+        return $this->hasMany(Discussion::class);
+    }
+
     /** Danh sách đánh giá công khai đã được hiển thị */
     public function approvedReviews(): HasMany
     {
@@ -244,21 +252,79 @@ class Course extends Model
     }
 
     /**
-     * Kiểm tra xem khóa học đã xuất bản công khai hay chưa.
+     * Kiểm tra xem khóa học đã được Admin duyệt nội dung hay chưa (độc lập với hồ sơ giảng viên).
      */
-    public function isPublished(): bool
+    public function isContentApproved(): bool
     {
-        return (bool) $this->is_published || in_array($this->status, [self::STATUS_PUBLISHED, self::STATUS_PENDING_UPDATE, self::STATUS_REJECTED_UPDATE], true);
+        return in_array($this->status, [
+            self::STATUS_APPROVED,
+            self::STATUS_PUBLISHED,
+            self::STATUS_PENDING_UPDATE,
+            self::STATUS_REJECTED_UPDATE,
+        ], true) || (bool) $this->is_published || $this->approved_at !== null;
     }
 
     /**
-     * Scope lấy các khóa học đang được hiển thị công khai (bao gồm cả khóa học đang cập nhật bản mới).
+     * Kiểm tra xem khóa học có đủ điều kiện hiển thị công khai cho học viên hay không:
+     * 1. Khóa học đã được Admin duyệt nội dung (và không ở trạng thái nháp, từ chối, tạm dừng, lưu trữ).
+     * 2. Giảng viên sở hữu đã được Admin duyệt hồ sơ (instructor_status === 'approved').
+     * 3. Giảng viên sở hữu không bị khóa tài khoản và đang hoạt động.
+     */
+    public function isPublished(): bool
+    {
+        $hasApprovedContent = in_array($this->status, [
+            self::STATUS_APPROVED,
+            self::STATUS_PUBLISHED,
+            self::STATUS_PENDING_UPDATE,
+            self::STATUS_REJECTED_UPDATE,
+        ], true) || (bool) $this->is_published;
+
+        if (! $hasApprovedContent) {
+            return false;
+        }
+
+        if (in_array($this->status, [self::STATUS_DRAFT, self::STATUS_PENDING, self::STATUS_REJECTED, self::STATUS_SUSPENDED ?? 'suspended', self::STATUS_ARCHIVED], true) && ! (bool) $this->is_published) {
+            return false;
+        }
+
+        $instructor = $this->relationLoaded('instructor') ? $this->instructor : $this->instructor()->first();
+        if (! $instructor) {
+            return false;
+        }
+
+        $isInstructorApproved = $instructor->instructor_status === 'approved';
+        $isInstructorActive = (bool) $instructor->is_active && ! $instructor->isLocked();
+
+        return $isInstructorApproved && $isInstructorActive;
+    }
+
+    /**
+     * Scope lấy các khóa học đang được hiển thị công khai cho học viên.
+     * Áp dụng điều kiện Course approved + Instructor approved + Account active.
      */
     public function scopePublished($query)
     {
         return $query->where(function ($q) {
-            $q->where('is_published', true)
-              ->orWhereIn('status', [self::STATUS_PUBLISHED, self::STATUS_PENDING_UPDATE, self::STATUS_REJECTED_UPDATE]);
+            $q->where('courses.is_published', true)
+              ->orWhereIn('courses.status', [
+                  self::STATUS_PUBLISHED,
+                  self::STATUS_APPROVED,
+                  self::STATUS_PENDING_UPDATE,
+                  self::STATUS_REJECTED_UPDATE,
+              ]);
+        })->whereNotIn('courses.status', [
+            self::STATUS_DRAFT,
+            self::STATUS_SUBMITTED,
+            self::STATUS_REJECTED,
+            'suspended',
+            self::STATUS_ARCHIVED,
+        ])->whereHas('instructor', function ($iq) {
+            $iq->where('instructor_status', 'approved')
+               ->where('is_active', true)
+               ->where(function ($aq) {
+                   $aq->whereNull('account_status')
+                      ->orWhereNotIn('account_status', ['locked', 'suspended']);
+               });
         });
     }
 
@@ -267,7 +333,7 @@ class Course extends Model
      */
     public function isEditable(): bool
     {
-        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED, self::STATUS_PUBLISHED, self::STATUS_REJECTED_UPDATE], true);
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REJECTED, self::STATUS_APPROVED, self::STATUS_PUBLISHED, self::STATUS_REJECTED_UPDATE], true);
     }
 
     public function statusEnum(): CourseStatus
@@ -298,6 +364,14 @@ class Course extends Model
     /** Tên tiếng Việt hiển thị của trạng thái */
     public function statusLabel(): string
     {
+        if ($this->status === self::STATUS_APPROVED) {
+            $instructor = $this->relationLoaded('instructor') ? $this->instructor : $this->instructor()->first();
+            if ($instructor && $instructor->instructor_status !== 'approved') {
+                return 'Đã duyệt nội dung (Chờ duyệt GV)';
+            }
+            return 'Đã duyệt';
+        }
+
         return self::STATUS_LABELS[$this->status] ?? $this->status;
     }
 
@@ -372,6 +446,42 @@ class Course extends Model
     public function isReadyForSubmission(): bool
     {
         return $this->submissionCheck()->passes();
+    }
+
+    /**
+     * Kiểm tra xem khóa học có bài học video nào chưa xử lý HLS hoàn tất hay không.
+     */
+    public function hasIncompleteHlsVideos(): bool
+    {
+        $sections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+        $checkedLessonIds = [];
+
+        foreach ($sections as $section) {
+            foreach ($section->lessons as $lesson) {
+                if (!empty($lesson->is_pending_deletion)) {
+                    continue;
+                }
+                if ($lesson->id) {
+                    $checkedLessonIds[] = $lesson->id;
+                }
+                if ($lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path || $lesson->hls_manifest_key)) {
+                    if (! $lesson->isHlsReady()) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        $directLessons = $this->lessons()->whereNotIn('id', $checkedLessonIds)->get();
+        foreach ($directLessons as $lesson) {
+            if ($lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path || $lesson->hls_manifest_key)) {
+                if (! $lesson->isHlsReady()) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public function requiredVideoPercent(): int

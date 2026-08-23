@@ -220,6 +220,10 @@
             :course-progress="$courseProgress"
             :completed-lessons="$completedLessons"
             :total-lessons="$totalLessons"
+            :course="$course"
+            :lesson="$lesson"
+            :is-enrolled="$isEnrolled"
+            :course-discussion="$courseDiscussion ?? $activeDiscussion"
         />
     </div>
 </div>

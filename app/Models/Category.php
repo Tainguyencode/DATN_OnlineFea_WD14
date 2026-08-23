@@ -55,6 +55,21 @@ class Category extends Model
         return $this->hasMany(Course::class);
     }
 
+    public function instructorDocumentRequirements(): HasMany
+    {
+        return $this->hasMany(InstructorDocumentRequirement::class, 'category_id')->orderBy('sort_order');
+    }
+
+    public function instructorProfiles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(
+            InstructorProfile::class,
+            'instructor_profile_teaching_fields',
+            'category_id',
+            'instructor_profile_id'
+        )->withPivot('is_primary')->withTimestamps();
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', true);
