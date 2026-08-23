@@ -28,6 +28,8 @@ use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizControll
 use App\Http\Controllers\Web\Instructor\S3MultipartUploadController;
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
 use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
+use App\Http\Controllers\Web\LearningPathController;
+use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathController;
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
@@ -82,6 +84,10 @@ Route::get('/instructors', [InstructorController::class, 'index'])->name('instru
 Route::get('/instructors/{user}', [InstructorController::class, 'show'])->name('instructors.show');
 Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
 Route::get('/leaderboard', [\App\Http\Controllers\Web\LeaderboardController::class, 'index'])->name('leaderboard');
+
+// ─── LỘ TRÌNH HỌC TẬP (PUBLIC) ───
+Route::get('/learning-paths', [LearningPathController::class, 'index'])->name('learning-paths.index');
+Route::get('/learning-paths/{slug}', [LearningPathController::class, 'show'])->name('learning-paths.show');
 
 // ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───
 Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertificate'])->name('certificates.public');
@@ -393,6 +399,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
     Route::resource('coupons', AdminCouponController::class)->except(['show']);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+    Route::resource('learning-paths', AdminLearningPathController::class);
     Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/course-reviews', [CourseReviewController::class, 'index'])->name('course-reviews.index');
     Route::get('/course-reviews/{course}', [CourseReviewController::class, 'show'])->name('course-reviews.show');
@@ -457,13 +464,14 @@ if (app()->environment('local')) {
     })->name('dev.login-as-admin');
 
     Route::get('/dev/login-as-student', function () {
-        $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
-            ?? User::where('role', 'student')->firstOrFail();
+        $user = User::where('role', 'student')->first()
+            ?? User::firstOrFail();
 
         auth()->login($user);
 
         return redirect()->route('dashboard');
     })->name('dev.login-as-student');
+
 }
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───

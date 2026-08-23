@@ -10,6 +10,7 @@ class AiChatMessage extends Model
     protected $fillable = [
         'user_id',
         'lesson_id',
+        'learning_path_id',
         'role',
         'content',
     ];
@@ -22,5 +23,10 @@ class AiChatMessage extends Model
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
+    }
+
+    public function learningPath(): BelongsTo
+    {
+        return $this->belongsTo(LearningPath::class);
     }
 }

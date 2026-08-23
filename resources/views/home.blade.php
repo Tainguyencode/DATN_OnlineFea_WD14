@@ -356,10 +356,18 @@
     @if ($learningPaths->isNotEmpty())
         <section id="paths" class="border-t border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
             <div class="ui-container">
-                <div class="mb-10 max-w-2xl">
-                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Lộ trình học tập chuyên biệt</h2>
-                    <p class="mt-2 text-slate-500 dark:text-slate-400">Học theo trình tự bài bản, giúp tiết kiệm thời gian
-                        và định hướng rõ ràng mục tiêu công việc hoặc đồ án.</p>
+                <div class="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+                    <div class="max-w-2xl">
+                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Lộ trình học tập chuyên biệt</h2>
+                        <p class="mt-2 text-slate-500 dark:text-slate-400">Học theo trình tự bài bản, giúp tiết kiệm thời gian
+                            và định hướng rõ ràng mục tiêu công việc hoặc đồ án.</p>
+                    </div>
+                    <a href="{{ route('learning-paths.index') }}" class="inline-flex items-center gap-1 text-sm font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">
+                        Xem tất cả lộ trình
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m17 8 4 4m0 0-4 4m4-4H3"></path>
+                        </svg>
+                    </a>
                 </div>
                 <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
                     @foreach ($learningPaths as $path)
@@ -367,14 +375,14 @@
                             class="flex flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
                             <div class="mb-4">
                                 <span class="ui-badge-primary">
-                                    {{ is_array($path->course_ids) ? count($path->course_ids) : 0 }} khóa học
+                                    {{ $path->courses()->count() }} khóa học
                                 </span>
                             </div>
                             <h3 class="mb-2 text-lg font-bold text-slate-900 dark:text-white">{{ $path->title }}</h3>
                             <p class="flex-grow text-sm leading-6 text-slate-500 dark:text-slate-400">
                                 {{ $path->description ?? 'Lộ trình bài bản giúp sinh viên củng cố kiến thức từ nền tảng đến chuyên sâu.' }}
                             </p>
-                            <a href="#"
+                            <a href="{{ route('learning-paths.show', $path->slug) }}"
                                 class="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300 dark:hover:text-blue-200">
                                 Xem chi tiết lộ trình
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -388,6 +396,7 @@
             </div>
         </section>
     @endif
+
 
     <section id="instructors" class="ui-section border-t border-slate-200 dark:border-slate-800">
         <div class="ui-container">

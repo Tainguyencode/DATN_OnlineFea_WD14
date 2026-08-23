@@ -224,7 +224,7 @@
                                         @if($app->instructor_status !== 'approved')
                                             <form method="POST" action="{{ route('admin.instructors.applications.approve', $app) }}" class="inline">
                                                 @csrf
-                                                <button type="submit" onclick="return confirm('Bạn chắc chắn muốn duyệt giảng viên này?')" class="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700">
+                                                <button type="submit" onclick="return confirm('Bạn chắc chắn muốn duyệt giảng viên này?')" class="cursor-pointer rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95">
                                                     Duyệt
                                                 </button>
                                             </form>
