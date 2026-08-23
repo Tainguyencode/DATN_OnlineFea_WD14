@@ -159,8 +159,31 @@
                         Hồ sơ Giảng viên
                     </h3>
 
+                    @if(!empty($categories) && $categories->isNotEmpty())
+                        <div>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                Ngành / Lĩnh vực giảng dạy *
+                            </label>
+                            <select name="category_id" required class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                                <option value="">-- Chọn ngành / lĩnh vực giảng dạy --</option>
+                                @foreach($categories as $cat)
+                                    <option value="{{ $cat->id }}" @selected(old('category_id') == $cat->id)>
+                                        {{ $cat->name }}
+                                    </option>
+                                    @if($cat->children->isNotEmpty())
+                                        @foreach($cat->children as $child)
+                                            <option value="{{ $child->id }}" @selected(old('category_id') == $child->id)>
+                                                &nbsp;&nbsp;↳ {{ $child->name }}
+                                            </option>
+                                        @endforeach
+                                    @endif
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+
                     <x-auth.input
-                        label="Lĩnh vực chuyên môn *"
+                        label="Lĩnh vực chuyên môn chi tiết *"
                         name="specialty"
                         :value="old('specialty')"
                         placeholder="Ví dụ: Lập trình Web Fullstack, Data Science, AI..."
@@ -235,39 +258,174 @@
             <x-auth.captcha :question="$captcha['question']" />
 
             @if($isStudent)
-
-                <div>
-                    <div class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400 @error('terms') border-red-400 dark:border-red-500 @enderror">
-                        <input
-                            id="student-terms"
-                            type="checkbox"
-                            name="terms"
-                            value="1"
-                            required
-                            data-student-terms-checkbox
-                            @checked(old('terms'))
-                            class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700"
-                        >
-                        <div class="min-w-0 leading-5">
-                            <label for="student-terms" class="cursor-pointer">
-                                Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.
-                            </label>
-                            <button
-                                type="button"
-                                data-student-terms-trigger
-                                x-on:click="termsModalOpen = true; $nextTick(() => $refs.termsCloseButton.focus())"
-                                class="mt-2 inline-flex items-center gap-1 font-semibold text-[#0056D2] underline decoration-blue-300 underline-offset-2 transition hover:text-[#0046B8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 dark:text-blue-300 dark:hover:text-blue-200"
-                                aria-haspopup="dialog"
-                                aria-controls="student-terms-modal"
-                            >
-                                Xem chi tiết điều khoản đăng ký
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/></svg>
-                            </button>
+                <div class="space-y-4" x-data="{ showStudentTermsModal: false }">
+                    {{-- Compact Card Điều khoản dành cho Học viên --}}
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-center dark:border-slate-700 dark:bg-slate-800/60">
+                        <div class="mb-1.5 flex items-center justify-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
+                            <span>Điều khoản dành cho Học viên</span>
                         </div>
+                        <p class="mb-3 text-xs text-slate-600 dark:text-slate-300">
+                            Vui lòng đọc và đồng ý với điều khoản sử dụng và quy định trước khi đăng ký tài khoản học viên.
+                        </p>
+                        <button
+                            type="button"
+                            data-student-terms-trigger
+                            @click="showStudentTermsModal = true"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-100 px-4 py-2 text-xs font-bold text-[#0056D2] transition duration-200 hover:bg-blue-200 hover:text-[#0046B8] dark:bg-blue-950/80 dark:text-blue-300 dark:hover:bg-blue-900 cursor-pointer"
+                        >
+                            Xem điều khoản đầy đủ
+                        </button>
                     </div>
-                    @error('terms')
-                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
-                    @enderror
+
+                    <div>
+                        <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-600 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                            <input
+                                id="student-terms"
+                                type="checkbox"
+                                name="terms"
+                                value="1"
+                                required
+                                data-student-terms-checkbox
+                                @checked(old('terms'))
+                                class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700"
+                            >
+                            <span class="leading-5">
+                                Tôi đồng ý với điều khoản sử dụng, chính sách bảo mật và quy định cộng đồng của Website học online FEA.
+                            </span>
+                        </label>
+                        @error('terms')
+                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Modal Popup Điều khoản dành cho Học viên --}}
+                    <template x-teleport="body">
+                        <div
+                            id="student-terms-modal"
+                            data-student-terms-modal
+                            x-show="showStudentTermsModal"
+                            x-cloak
+                            style="display: none;"
+                            class="fixed inset-0 z-[9999] overflow-y-auto"
+                            x-init="$watch('showStudentTermsModal', value => document.body.classList.toggle('overflow-hidden', value))"
+                            @keydown.escape.window="showStudentTermsModal = false"
+                        >
+                            {{-- Modal Overlay / Backdrop --}}
+                            <div
+                                x-show="showStudentTermsModal"
+                                x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0"
+                                x-transition:enter-end="opacity-100"
+                                x-transition:leave="transition ease-in duration-150"
+                                x-transition:leave-start="opacity-100"
+                                x-transition:leave-end="opacity-0"
+                                class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm"
+                                @click="showStudentTermsModal = false"
+                            ></div>
+
+                            {{-- Centered Flex Wrapper --}}
+                            <div class="flex min-h-full items-center justify-center p-3 sm:p-6 text-center">
+                                {{-- Solid White Popup Box --}}
+                                <div
+                                    x-show="showStudentTermsModal"
+                                    x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 scale-95 translate-y-2 sm:translate-y-0"
+                                    x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                    x-transition:leave="transition ease-in duration-150"
+                                    x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                                    x-transition:leave-end="opacity-0 scale-95 translate-y-2 sm:translate-y-0"
+                                    class="relative z-10 w-full max-w-[600px] rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-slate-950/40 border border-slate-200 dark:border-slate-800 text-left overflow-hidden flex flex-col my-auto"
+                                    style="background-color: #ffffff;"
+                                    @click.stop
+                                >
+                                    {{-- Header (Fixed, Solid Background) --}}
+                                    <div class="flex shrink-0 items-center justify-between border-b border-slate-100 bg-white px-5 sm:px-6 py-4.5 dark:border-slate-800 dark:bg-slate-900" style="background-color: #ffffff;">
+                                        <h3 class="flex items-center gap-2.5 text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                                            <svg class="h-5 w-5 text-[#0056D2] dark:text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            <span>Điều khoản dành cho Học viên</span>
+                                            <span class="sr-only">Chi tiết điều khoản đăng ký</span>
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            @click="showStudentTermsModal = false"
+                                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                                            aria-label="Đóng"
+                                        >
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    </div>
+
+                                    {{-- Body (Scrollable, Solid Background) --}}
+                                    <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-slate-700 dark:text-slate-200 custom-modal-scrollbar max-h-[55vh] bg-white dark:bg-slate-900" style="background-color: #ffffff;">
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">1. Tài khoản và Bảo mật</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Học viên có trách nhiệm bảo mật thông tin đăng nhập cá nhân. Không chia sẻ tài khoản cho người khác cùng sử dụng dưới mọi hình thức.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">2. Quyền sở hữu trí tuệ & Bản quyền</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Toàn bộ video bài giảng, tài liệu, bài tập và mã nguồn thuộc bản quyền độc quyền của FEA và Giảng viên. Nghiêm cấm mọi hành vi quay màn hình, tải lậu, phát tán hoặc kinh doanh lại.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">3. Quy định tham gia học tập & Thảo luận</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Học viên tôn trọng giảng viên và các bạn học khác. Nghiêm cấm ngôn từ xúc phạm, quấy rối, phân biệt đối xử hoặc spam quảng cáo trong khu vực thảo luận và nhóm học tập.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">4. Chính sách học phí & Thanh toán</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Học viên thanh toán đúng quy trình thông qua các cổng thanh toán được tích hợp trên nền tảng để được kích hoạt khóa học tự động.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">5. Đánh giá & Nhận xét khóa học</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Đánh giá khóa học phải mang tính chất xây dựng, trung thực dựa trên trải nghiệm học tập thực tế.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">6. Chứng chỉ hoàn thành khóa học</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Chứng chỉ điện tử được cấp tự động sau khi học viên hoàn thành 100% nội dung video, bài tập và đạt điểm các bài kiểm tra theo yêu cầu.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">7. Xử lý vi phạm</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nền tảng có quyền cảnh cáo, tạm khóa hoặc hủy bỏ vĩnh viễn tài khoản học viên nếu phát hiện hành vi gian lận bài thi hoặc vi phạm bản quyền.</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">8. Cập nhật điều khoản</h4>
+                                            <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Ban quản trị có thể điều chỉnh và cập nhật các điều khoản này khi cần thiết để phù hợp với quy định pháp luật và nâng cao chất lượng dịch vụ.</p>
+                                        </div>
+
+                                        {{-- Khối xem file PDF gốc --}}
+                                        <div class="rounded-xl border border-blue-100 bg-blue-50/70 p-3.5 dark:border-blue-900/40 dark:bg-blue-950/30">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <div class="text-xs text-blue-900 dark:text-blue-200">
+                                                    <span class="font-bold block">Tài liệu pháp lý PDF</span>
+                                                    <span>Xem văn bản PDF chính thức có dấu và điều khoản chi tiết.</span>
+                                                </div>
+                                                <a
+                                                    data-student-terms-pdf
+                                                    data-student-terms-open-pdf
+                                                    href="{{ route('legal.registration-terms') }}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#0056D2] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0046B8]"
+                                                >
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                                    <span>Mở PDF trong tab mới</span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Footer (Fixed, Solid Background) --}}
+                                    <div class="flex shrink-0 items-center justify-end border-t border-slate-100 bg-slate-50 px-5 sm:px-6 py-4 dark:border-slate-800 dark:bg-slate-900" style="background-color: #f8fafc;">
+                                        <button
+                                            type="button"
+                                            @click="showStudentTermsModal = false"
+                                            class="inline-flex h-10 items-center justify-center rounded-[10px] bg-[#0056D2] px-6 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#0046B8] active:bg-[#003c9e] cursor-pointer"
+                                        >
+                                            Đóng
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             @else
                 <div class="space-y-4" x-data="{ showTermsModal: false }">
@@ -395,6 +553,25 @@
                                             <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">8. Cập nhật điều khoản</h4>
                                             <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nền tảng có thể cập nhật điều khoản dành cho giảng viên khi cần thiết.</p>
                                         </div>
+
+                                        {{-- Khối xem file PDF gốc --}}
+                                        <div class="rounded-xl border border-violet-100 bg-violet-50/70 p-3.5 dark:border-violet-900/40 dark:bg-violet-950/30">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <div class="text-xs text-violet-900 dark:text-violet-200">
+                                                    <span class="font-bold block">Tài liệu pháp lý PDF</span>
+                                                    <span>Xem văn bản PDF chính thức có dấu và điều khoản chi tiết.</span>
+                                                </div>
+                                                <a
+                                                    href="{{ route('legal.registration-terms') }}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700"
+                                                >
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                                    <span>Mở PDF trong tab mới</span>
+                                                </a>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {{-- Footer (Fixed, Solid Background) --}}
@@ -418,10 +595,6 @@
                 {{ $submitLabel }}
             </x-auth.button>
         </form>
-
-        @if($isStudent)
-            <x-auth.student-terms-modal />
-        @endif
 
         <x-auth.footer-link
             text="Đã có tài khoản?"

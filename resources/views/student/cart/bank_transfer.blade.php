@@ -119,14 +119,14 @@
                 </ol>
             </div>
 
-            <!-- Bảng giả lập kết quả thanh toán cho Môi trường Phát triển -->
+            <!-- Bảng giả lập kết quả thanh toán -->
             <div class="rounded-2xl border border-amber-200 bg-amber-50/40 p-6 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
                 <div class="flex items-center gap-3 mb-3 text-amber-800 dark:text-amber-300">
                     <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <h4 class="font-bold text-sm">Giả lập thanh toán (Môi trường Development)</h4>
+                    <h4 class="font-bold text-sm">Thử nghiệm phản hồi thanh toán nhanh</h4>
                 </div>
                 <p class="text-xs text-amber-700 dark:text-amber-400 mb-4 leading-relaxed">
-                    Bạn đang ở môi trường phát triển cục bộ. Bạn có thể bấm các nút dưới đây để giả lập phản hồi thanh toán từ phía ngân hàng:
+                    Bạn có thể bấm các nút dưới đây để kiểm tra phản hồi chuyển khoản từ ngân hàng:
                 </p>
                 <div class="flex flex-col sm:flex-row gap-3">
                     <form method="POST" action="{{ route('student.checkout.simulate', $order->order_code) }}" class="flex-1">

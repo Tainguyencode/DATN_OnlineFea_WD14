@@ -10,8 +10,11 @@
     if ($currentUser && $currentUser->isInstructor()) {
         $instructorCourseIds = \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
         if ($instructorCourseIds->isNotEmpty()) {
-            $discussions = \App\Models\Discussion::whereHas('lesson', function ($q) use ($instructorCourseIds) {
-                $q->whereIn('course_id', $instructorCourseIds);
+            $discussions = \App\Models\Discussion::where(function ($q) use ($instructorCourseIds) {
+                $q->whereIn('course_id', $instructorCourseIds)
+                  ->orWhereHas('lesson', function ($lq) use ($instructorCourseIds) {
+                      $lq->whereIn('course_id', $instructorCourseIds);
+                  });
             })->with('replies')->get();
 
             $instructorDiscussionsPendingCount = $discussions->filter(fn ($d) => $d->needsReply())->count();

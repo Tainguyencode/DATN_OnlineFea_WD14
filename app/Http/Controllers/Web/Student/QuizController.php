@@ -362,7 +362,7 @@ class QuizController extends Controller
         $canBypass = $user && ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user)));
         
         if (!$canBypass) {
-            abort_unless($course->status === Course::STATUS_PUBLISHED && (bool) $course->is_published, 404);
+            abort_unless($course->isPublished(), 404);
         }
     }
 

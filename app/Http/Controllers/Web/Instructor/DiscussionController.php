@@ -21,15 +21,22 @@ class DiscussionController extends Controller
         $courses = Course::where('instructor_id', $user->id)->get();
         $courseIds = $courses->pluck('id')->all();
 
-        // Base query for discussions in these courses
-        $baseQuery = Discussion::whereHas('lesson', function ($q) use ($courseIds) {
-            $q->whereIn('course_id', $courseIds);
+        // Base query for discussions in these courses (Course-level)
+        $baseQuery = Discussion::where(function ($q) use ($courseIds) {
+            $q->whereIn('course_id', $courseIds)
+              ->orWhereHas('lesson', function ($lq) use ($courseIds) {
+                  $lq->whereIn('course_id', $courseIds);
+              });
         });
 
         // Filter by course
         if ($request->filled('course_id')) {
-            $baseQuery->whereHas('lesson', function ($q) {
-                $q->where('course_id', request()->integer('course_id'));
+            $courseId = request()->integer('course_id');
+            $baseQuery->where(function ($q) use ($courseId) {
+                $q->where('course_id', $courseId)
+                  ->orWhereHas('lesson', function ($lq) use ($courseId) {
+                      $lq->where('course_id', $courseId);
+                  });
             });
         }
 
@@ -46,7 +53,7 @@ class DiscussionController extends Controller
         }
 
         // Load relations
-        $allDiscussions = (clone $baseQuery)->with(['user', 'lesson.course', 'replies.user'])->latest()->get();
+        $allDiscussions = (clone $baseQuery)->with(['user', 'course', 'lesson', 'replies.user', 'replies.lesson'])->latest()->get();
 
         // Compute counts
         $totalCount = $allDiscussions->count();
@@ -95,11 +102,12 @@ class DiscussionController extends Controller
     public function show(Discussion $discussion): View
     {
         $user = auth()->user();
+        $course = $discussion->course ?: $discussion->lesson?->course;
 
         // Check if instructor owns the course
-        abort_unless((int) $discussion->lesson->course->instructor_id === (int) $user->id, 403);
+        abort_unless($course && (int) $course->instructor_id === (int) $user->id, 403);
 
-        $discussion->load(['user', 'lesson.course', 'replies.user', 'replies.replyTo.user']);
+        $discussion->load(['user', 'course', 'lesson', 'replies.user', 'replies.lesson', 'replies.replyTo.user']);
 
         return view('instructor.discussions.show', [
             'discussion' => $discussion,

@@ -90,8 +90,13 @@ class AuthController extends Controller
     {
         abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
 
+        $categories = $role === 'instructor'
+            ? \App\Models\Category::whereNull('parent_id')->with('children')->orderBy('name')->get()
+            : collect();
+
         return view('auth.register-role', [
             'role' => $role,
+            'categories' => $categories,
             'captcha' => CaptchaService::generate('register'),
         ]);
     }
@@ -370,7 +375,7 @@ class AuthController extends Controller
         }
 
         return redirect()->intended($user->dashboardUrl())
-            ->with('success', 'Email đã được xác thực thành công (Chế độ Dev).');
+            ->with('success', 'Email đã được xác thực thành công.');
     }
 
     public function showTwoFactorChallenge(): View
