@@ -162,13 +162,41 @@
 
                                 {{-- Specialty & Organization --}}
                                 <td class="px-6 py-4">
-                                    <div class="max-w-xs">
-                                        <div class="font-bold text-xs text-slate-900 dark:text-white truncate">
-                                            {{ $app->instructorProfile?->specialty ?? $app->instructorApplication?->expertise ?? 'Chưa khai báo' }}
-                                        </div>
-                                        <div class="text-[11px] text-slate-500 truncate mt-0.5">
-                                            {{ $app->instructorProfile?->organization ?: 'Chưa cập nhật đơn vị' }}
-                                        </div>
+                                    @php
+                                        $categories = $app->getTeachingCategories();
+                                        $primaryCategory = $categories->firstWhere('pivot.is_primary', true) ?? $categories->first();
+                                        $additionalCount = max(0, $categories->count() - 1);
+                                        $specialty = $primaryCategory?->pivot?->specialty ?: ($app->instructorProfile?->specialty ?: ($app->instructorApplication?->expertise ?: null));
+                                        $organization = $primaryCategory?->pivot?->organization ?: ($app->instructorProfile?->organization ?: null);
+                                    @endphp
+                                    <div class="max-w-xs space-y-0.5">
+                                        @if($primaryCategory)
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-bold text-xs text-slate-900 dark:text-white">
+                                                    {{ $primaryCategory->name }}
+                                                </span>
+                                                @if($additionalCount > 0)
+                                                    <span class="inline-flex items-center rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[10px] font-bold text-[#0056D2] dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-300" title="{{ $categories->skip(1)->pluck('name')->join(', ') }}">
+                                                        +{{ $additionalCount }} ngành phụ
+                                                    </span>
+                                                @endif
+                                            </div>
+                                            @if($specialty && $specialty !== $primaryCategory->name)
+                                                <div class="text-[11px] text-slate-600 dark:text-slate-400 truncate" title="{{ $specialty }}">
+                                                    {{ $specialty }}
+                                                </div>
+                                            @endif
+                                            <div class="text-[11px] text-slate-400 truncate">
+                                                {{ $organization ?: 'Chưa cập nhật đơn vị' }}
+                                            </div>
+                                        @else
+                                            <div class="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                                {{ $specialty ?: 'Chưa khai báo ngành' }}
+                                            </div>
+                                            <div class="text-[11px] text-slate-500 truncate">
+                                                {{ $organization ?: 'Chưa cập nhật đơn vị' }}
+                                            </div>
+                                        @endif
                                     </div>
                                 </td>
 
@@ -224,7 +252,7 @@
                                         @if($app->instructor_status !== 'approved')
                                             <form method="POST" action="{{ route('admin.instructors.applications.approve', $app) }}" class="inline">
                                                 @csrf
-                                                <button type="submit" onclick="return confirm('Bạn chắc chắn muốn duyệt giảng viên này?')" class="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700">
+                                                <button type="submit" onclick="return confirm('Bạn chắc chắn muốn duyệt giảng viên này?')" class="cursor-pointer rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95">
                                                     Duyệt
                                                 </button>
                                             </form>

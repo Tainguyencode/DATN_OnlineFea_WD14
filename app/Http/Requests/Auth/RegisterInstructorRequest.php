@@ -24,6 +24,8 @@ class RegisterInstructorRequest extends FormRequest
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/', 'unique:users,phone'],
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'teaching_field' => ['nullable', 'string', 'max:255'],
             'specialty' => ['required', 'string', 'max:255'],
             'experience' => ['required', 'string', 'max:2000'],
             'bio' => ['required', 'string', 'max:2000'],

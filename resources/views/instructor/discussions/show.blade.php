@@ -47,7 +47,10 @@
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">Học viên</span>
                         </div>
                         <p class="text-xs text-slate-300 truncate mt-1">
-                            Khóa: <span class="font-semibold text-emerald-300">{{ $discussion->lesson->course->title }}</span> &bull; Bài: {{ $discussion->lesson->title }}
+                            Khóa: <span class="font-semibold text-emerald-300">{{ $discussion->course?->title ?? $discussion->lesson?->course?->title }}</span>
+                            @if($discussion->lesson)
+                                &bull; Bài bắt đầu: {{ $discussion->lesson->title }}
+                            @endif
                         </p>
                     </div>
                 </div>
@@ -61,12 +64,13 @@
             </div>
 
             <!-- CHAT BODY (DANH SÁCH TIN NHẮN) -->
-            <div id="chat-messages" class="flex-1 p-4 sm:p-6 bg-[#f8fafc                <!-- TIN NHẮN ĐẦU TIÊN TỪ HỌC VIÊN -->
+            <div id="chat-messages" class="flex-1 p-4 sm:p-6 bg-[#f8fafc] dark:bg-slate-950 overflow-y-auto space-y-4 max-h-[500px]">
+                <!-- TIN NHẮN ĐẦU TIÊN TỪ HỌC VIÊN -->
                 @php
                     $isDiscussionStudent = (int) $discussion->user_id !== (int) auth()->id();
                     $timeFirstMsg = $discussion->created_at->isToday() ? $discussion->created_at->format('H:i') : $discussion->created_at->format('d/m/Y H:i');
                     $cleanFirstMsgContent = preg_replace('/\s+/', ' ', $discussion->content);
-                    $canRecallDisc = (int) $discussion->user_id === (int) auth()->id() || auth()->user()->role === 'admin';
+                    $canRecallDisc = ((int) $discussion->user_id === (int) auth()->id() && $discussion->created_at >= now()->subHours(24)) || auth()->user()->role === 'admin';
                     $canDeleteDisc = (int) $discussion->user_id === (int) auth()->id() || auth()->user()->role === 'admin' || auth()->user()->role === 'instructor';
                 @endphp
                 <div id="msg-disc-{{ $discussion->id }}" class="group flex items-end gap-2.5 justify-start transition-all duration-300 rounded-2xl p-1.5 hover:bg-slate-100/60 dark:hover:bg-slate-900/60">
@@ -84,6 +88,9 @@
                         <div class="flex flex-wrap items-center gap-2 px-1 justify-start">
                             <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200">{{ $discussion->user?->name ?? 'Học viên' }}</span>
                             <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">Học viên</span>
+                            @if($discussion->lesson)
+                                <span class="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Bài: {{ Str::limit($discussion->lesson->title, 25) }}</span>
+                            @endif
                             <span class="text-[10px] text-slate-400">{{ $timeFirstMsg }}</span>
 
                             @if(! $discussion->is_recalled)
@@ -150,7 +157,7 @@
                         $isInstructorReply = $reply->is_instructor_answer;
                         $replyTime = $reply->created_at->isToday() ? $reply->created_at->format('H:i') : $reply->created_at->format('d/m/Y H:i');
                         $cleanReplyContent = preg_replace('/\s+/', ' ', $reply->content);
-                        $canRecallReply = $isMe || auth()->user()->role === 'admin';
+                        $canRecallReply = ($isMe && $reply->created_at >= now()->subHours(24)) || auth()->user()->role === 'admin';
                     @endphp
 
                     <div id="msg-reply-{{ $reply->id }}" class="group flex items-end gap-2.5 {{ $isMe ? 'justify-end' : 'justify-start' }} transition-all duration-300 rounded-2xl p-1.5 hover:bg-slate-100/60 dark:hover:bg-slate-900/60">
@@ -175,6 +182,9 @@
                                     <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Giảng viên</span>
                                 @else
                                     <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">Học viên</span>
+                                @endif
+                                @if($reply->lesson)
+                                    <span class="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Bài: {{ Str::limit($reply->lesson->title, 25) }}</span>
                                 @endif
                                 <span class="text-[10px] text-slate-400">{{ $replyTime }}</span>
                                 @if($reply->is_helpful)
