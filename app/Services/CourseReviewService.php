@@ -110,26 +110,96 @@ class CourseReviewService
                 $contentUpdateService->applyApprovedUpdate($pendingUpdate, $admin);
             }
 
-            $courseUpdates['status'] = $publishImmediately ? CourseStatus::Published->value : CourseStatus::Approved->value;
-            $courseUpdates['is_published'] = true;
-            $courseUpdates['approved_at'] = now();
-            $courseUpdates['reject_reason'] = null;
+            $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+            $isInstructorApproved = $instructor && $instructor->instructor_status === 'approved' && ! $instructor->isLocked();
 
-            if ($publishImmediately) {
+            $shouldPublish = $publishImmediately && $isInstructorApproved;
+
+            $courseUpdates = [
+                'status' => $shouldPublish ? CourseStatus::Published->value : CourseStatus::Approved->value,
+                'is_published' => $shouldPublish,
+                'approved_at' => now(),
+                'reject_reason' => null,
+            ];
+
+            if ($shouldPublish) {
                 $courseUpdates['published_at'] = $course->published_at ?? now();
             }
 
             $course->update($courseUpdates);
 
-            $this->notifyInstructor($course, 'course_approved', 'Khóa học đã được duyệt',
-                $publishImmediately
-                    ? "Khóa học \"{$course->title}\" đã được duyệt và xuất bản."
-                    : "Khóa học \"{$course->title}\" đã được duyệt. Chờ xuất bản.");
+            if ($shouldPublish) {
+                $this->notifyInstructor(
+                    $course,
+                    'course_approved',
+                    'Khóa học đã được duyệt & xuất bản',
+                    "Khóa học \"{$course->title}\" đã được duyệt và xuất bản công khai cho học viên."
+                );
+            } else {
+                $this->notifyInstructor(
+                    $course,
+                    'course_approved_content',
+                    'Khóa học đã được duyệt nội dung',
+                    "Khóa học \"{$course->title}\" đã được duyệt nội dung thành công. Khóa học sẽ tự động hiển thị công khai ngay sau khi hồ sơ giảng viên của bạn được phê duyệt."
+                );
+            }
 
             ActivityLogService::log($admin->id, 'approve_course', Course::class, $course->id);
 
             return $review ? $review->fresh() : new CourseReview();
         });
+    }
+
+    /**
+     * Tự động kích hoạt xuất bản (publish) toàn bộ các khóa học đã được duyệt nội dung
+     * của giảng viên khi hồ sơ giảng viên được Admin phê duyệt.
+     *
+     * @return int Số lượng khóa học đã được kích hoạt xuất bản
+     */
+    public function syncInstructorApprovedCourses(User $instructor): int
+    {
+        if ($instructor->instructor_status !== 'approved' || $instructor->isLocked()) {
+            return 0;
+        }
+
+        // Tìm các khóa học của giảng viên đã được duyệt nội dung trước đó nhưng chưa xuất bản
+        $approvedCourses = Course::query()
+            ->where('instructor_id', $instructor->id)
+            ->where(function ($q) {
+                $q->where('status', CourseStatus::Approved->value)
+                  ->orWhere(function ($subQ) {
+                      $subQ->whereNotNull('approved_at')
+                           ->where('is_published', false)
+                           ->whereNotIn('status', [
+                               CourseStatus::Draft->value,
+                               CourseStatus::PendingReview->value,
+                               CourseStatus::Rejected->value,
+                               CourseStatus::Suspended->value,
+                               CourseStatus::Archived->value,
+                           ]);
+                  });
+            })
+            ->get();
+
+        $count = 0;
+        foreach ($approvedCourses as $course) {
+            $course->update([
+                'status' => CourseStatus::Published->value,
+                'is_published' => true,
+                'published_at' => $course->published_at ?? now(),
+            ]);
+
+            $this->notifyInstructor(
+                $course,
+                'course_published',
+                'Khóa học đã sẵn sàng hiển thị cho học viên',
+                "Hồ sơ giảng viên của bạn đã được duyệt. Khóa học \"{$course->title}\" đã được tự động kích hoạt xuất bản và sẵn sàng cho học viên tham gia."
+            );
+
+            $count++;
+        }
+
+        return $count;
     }
 
     public function reject(Course $course, User $admin, string $comment, array $checklist = []): CourseReview

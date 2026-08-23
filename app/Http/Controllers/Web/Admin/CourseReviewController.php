@@ -33,7 +33,11 @@ class CourseReviewController extends Controller
             ])
             ->withCount('courseReviews')
             ->when($status === 'all_pending', fn ($q) => $q->whereIn('status', [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value]))
-            ->when($status && $status !== 'all_pending', fn ($q) => $q->where('status', $status));
+            ->when($status === 'approved_waiting_instructor', function ($q) {
+                $q->where('status', CourseStatus::Approved->value)
+                  ->whereHas('instructor', fn ($iq) => $iq->where('instructor_status', '!=', 'approved')->orWhereIn('account_status', ['locked', 'suspended']));
+            })
+            ->when($status && ! in_array($status, ['all_pending', 'approved_waiting_instructor', 'all'], true), fn ($q) => $q->where('status', $status));
 
         // Filter by Instructor status
         if ($instructorStatus === 'approved') {
@@ -53,6 +57,8 @@ class CourseReviewController extends Controller
 
         $statusOptions = collect([
             'all_pending' => 'Tất cả đang chờ duyệt (Mới & Cập nhật)',
+            'approved_waiting_instructor' => ' Đã duyệt nội dung (Chờ duyệt hồ sơ GV)',
+            'all' => 'Tất cả trạng thái',
         ])->merge(collect(CourseStatus::cases())->mapWithKeys(fn ($s) => [$s->value => $s->label()]));
 
         // Base query for pending courses to calculate filter tab counts

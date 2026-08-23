@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 class Discussion extends Model
 {
     protected $fillable = [
+        'course_id',
         'lesson_id',
         'user_id',
         'title',
@@ -27,6 +28,11 @@ class Discussion extends Model
             'is_resolved' => 'boolean',
             'is_recalled' => 'boolean',
         ];
+    }
+
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
     }
 
     public function lesson(): BelongsTo
@@ -63,7 +69,7 @@ class Discussion extends Model
 
     public function instructor(): ?User
     {
-        return $this->lesson?->course?->instructor;
+        return $this->course?->instructor ?? $this->lesson?->course?->instructor;
     }
 
     public function needsReply(): bool

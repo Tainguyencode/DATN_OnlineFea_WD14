@@ -152,8 +152,7 @@ class CartController extends Controller
         $enrolledCourseIds = Enrollment::where('user_id', auth()->id())->pluck('course_id')->toArray();
         $excludeIds = array_merge($cartCourseIds, $enrolledCourseIds);
 
-        $suggestedCourses = Course::where('status', Course::STATUS_PUBLISHED)
-            ->where('is_published', true)
+        $suggestedCourses = Course::published()
             ->whereNotIn('id', $excludeIds)
             ->with('instructor:id,name,avatar')
             ->inRandomOrder()
