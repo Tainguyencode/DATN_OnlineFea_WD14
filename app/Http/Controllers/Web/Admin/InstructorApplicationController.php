@@ -23,7 +23,7 @@ class InstructorApplicationController extends Controller
         $status = $request->query('status', 'all');
 
         $query = User::where('role', 'instructor')
-            ->with(['instructorProfile', 'instructorApplication', 'instructorCertificates', 'approver']);
+            ->with(['instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
 
         if ($status === 'new_updates') {
             $query->where('needs_admin_review', true);
@@ -66,13 +66,16 @@ class InstructorApplicationController extends Controller
             $user->markAdminReviewed();
         }
 
-        $user->load(['instructorProfile', 'instructorApplication', 'instructorCertificates.reviewer', 'approver']);
+        $user->load(['instructorProfile.category', 'instructorApplication', 'instructorCertificates.reviewer', 'instructorCertificates.requirement', 'approver']);
+
+        $requirementData = app(\App\Services\InstructorRequirementService::class)->getRequirementsForInstructor($user);
 
         return view('admin.instructors.applications.show', [
             'application' => $user,
             'profile' => $user->instructorProfile,
             'certificates' => $user->instructorCertificates,
             'hadNewUpdates' => $hadNewUpdates,
+            'requirementData' => $requirementData,
         ]);
     }
 
@@ -155,6 +158,13 @@ class InstructorApplicationController extends Controller
             return back()->with('error', 'Người dùng không phải giảng viên.');
         }
 
+        // Kiểm tra xem giảng viên đã nộp đầy đủ toàn bộ tài liệu bắt buộc của ngành chưa
+        $completeness = app(\App\Services\InstructorRequirementService::class)->checkCanApproveInstructor($user);
+        if (! $completeness['can_approve']) {
+            $missingList = implode(', ', $completeness['missing_titles']);
+            return back()->with('error', "Không thể duyệt hồ sơ. Giảng viên còn thiếu tài liệu bắt buộc của ngành: {$missingList}.");
+        }
+
         $adminId = $request->user()->id;
 
         $user->update([
@@ -194,10 +204,20 @@ class InstructorApplicationController extends Controller
             Log::error('Gửi email Duyệt giảng viên thất bại: ' . $e->getMessage());
         }
 
-        ActivityLogService::log($adminId, 'approve_instructor', User::class, $user->id, [], $request);
+        // Tự động kích hoạt xuất bản toàn bộ các khóa học đã được Admin duyệt nội dung trước đó của giảng viên
+        $publishedCoursesCount = app(\App\Services\CourseReviewService::class)->syncInstructorApprovedCourses($user);
+
+        ActivityLogService::log($adminId, 'approve_instructor', User::class, $user->id, [
+            'auto_published_courses_count' => $publishedCoursesCount,
+        ], $request);
+
+        $successMessage = 'Đã duyệt hồ sơ Giảng viên "' . $user->name . '" thành công!';
+        if ($publishedCoursesCount > 0) {
+            $successMessage .= " Đồng thời tự động kích hoạt xuất bản {$publishedCoursesCount} khóa học đã được duyệt trước đó.";
+        }
 
         return redirect()->route('admin.instructors.applications.index')
-            ->with('success', 'Đã duyệt hồ sơ Giảng viên "' . $user->name . '" thành công!');
+            ->with('success', $successMessage);
     }
 
     public function reject(Request $request, User $user): RedirectResponse

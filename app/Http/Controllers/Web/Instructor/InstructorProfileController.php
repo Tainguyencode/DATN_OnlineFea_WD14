@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Category;
 use App\Models\InstructorApplication;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorProfile;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\AuthService;
 use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +29,7 @@ class InstructorProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $user->load(['instructorProfile', 'instructorApplication', 'instructorCertificates']);
+        $user->load(['instructorProfile.category', 'instructorApplication', 'instructorCertificates.requirement']);
 
         $profile = $user->instructorProfile ?? new InstructorProfile(['user_id' => $user->id]);
         $certificates = $user->instructorCertificates;
@@ -50,6 +52,43 @@ class InstructorProfileController extends Controller
         $cooldownDaysRemaining = $user->reactivationCooldownDaysRemaining();
         $canRequestReactivation = $user->canRequestReactivation();
 
+        $requirementData = app(\App\Services\InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $categories = \App\Models\Category::query()
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($q) => $q->orderBy('name')])
+            ->orderBy('name')
+            ->get();
+        $teachingFields = $user->instructorProfile
+            ? $user->instructorProfile->teachingCategories()->get()->map(function ($cat) {
+                return [
+                    'category_id' => (int) $cat->id,
+                    'category_name' => $cat->name,
+                    'organization' => $cat->pivot->organization ?? '',
+                    'position' => $cat->pivot->position ?? '',
+                    'specialty' => $cat->pivot->specialty ?? '',
+                    'experience' => $cat->pivot->experience ?? '',
+                    'is_primary' => (bool) $cat->pivot->is_primary,
+                ];
+            })->values()->all()
+            : [];
+
+        if (empty($teachingFields) && $profile) {
+            $catId = $profile->category_id ?: ($categories->first()?->children->first()?->id ?? $categories->first()?->id);
+            if ($catId) {
+                $teachingFields[] = [
+                    'category_id' => (int) $catId,
+                    'category_name' => optional(Category::find($catId))->name ?? '',
+                    'organization' => $profile->organization ?? '',
+                    'position' => $profile->position ?? '',
+                    'specialty' => $profile->specialty ?? '',
+                    'experience' => $profile->experience ?? '',
+                    'is_primary' => true,
+                ];
+            }
+        }
+
+        $selectedCategoryIds = array_column($teachingFields, 'category_id');
+
         return view('instructor.profile', [
             'user' => $user,
             'profile' => $profile,
@@ -62,6 +101,10 @@ class InstructorProfileController extends Controller
             'daysRemaining' => $daysRemaining,
             'cooldownDaysRemaining' => $cooldownDaysRemaining,
             'canRequestReactivation' => $canRequestReactivation,
+            'requirementData' => $requirementData,
+            'categories' => $categories,
+            'selectedCategoryIds' => $selectedCategoryIds,
+            'teachingFields' => $teachingFields,
         ]);
     }
 
@@ -70,17 +113,65 @@ class InstructorProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        // Chuẩn hóa teaching_fields nếu gửi qua dạng form dynamic hoặc legacy
+        if ($request->has('teaching_fields') && is_array($request->input('teaching_fields'))) {
+            $rawFields = $request->input('teaching_fields');
+            $cleanFields = [];
+            $seenCats = [];
+            foreach ($rawFields as $field) {
+                $cId = isset($field['category_id']) ? (int) $field['category_id'] : null;
+                if ($cId && ! in_array($cId, $seenCats, true)) {
+                    $seenCats[] = $cId;
+                    $cleanFields[] = [
+                        'category_id' => $cId,
+                        'organization' => $field['organization'] ?? null,
+                        'position' => $field['position'] ?? null,
+                        'specialty' => $field['specialty'] ?? null,
+                        'experience' => $field['experience'] ?? null,
+                    ];
+                }
+            }
+            $request->merge([
+                'teaching_fields' => $cleanFields,
+                'category_ids' => $seenCats,
+            ]);
+        } elseif ($request->has('category_ids') || $request->filled('category_id')) {
+            $catIds = $request->input('category_ids', [$request->input('category_id')]);
+            $cleanFields = [];
+            $seenCats = [];
+            foreach ((array) $catIds as $cId) {
+                $intId = (int) $cId;
+                if ($intId && ! in_array($intId, $seenCats, true)) {
+                    $seenCats[] = $intId;
+                    $cleanFields[] = [
+                        'category_id' => $intId,
+                        'organization' => $request->input('organization'),
+                        'position' => $request->input('position'),
+                        'specialty' => $request->input('specialty'),
+                        'experience' => $request->input('experience'),
+                    ];
+                }
+            }
+            $request->merge([
+                'teaching_fields' => $cleanFields,
+                'category_ids' => $seenCats,
+            ]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', 'unique:users,username,'.$user->id],
             'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/', 'unique:users,phone,'.$user->id],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'bio' => ['nullable', 'string', 'max:2000'],
-            'organization' => ['nullable', 'string', 'max:255'],
-            'position' => ['nullable', 'string', 'max:255'],
-            'teaching_field' => ['nullable', 'string', 'max:255'],
-            'specialty' => ['nullable', 'string', 'max:255'],
-            'experience' => ['nullable', 'string', 'max:3000'],
+            'category_ids' => ['required', 'array', 'min:1'],
+            'category_ids.*' => ['integer', 'distinct', 'exists:categories,id'],
+            'teaching_fields' => ['required', 'array', 'min:1'],
+            'teaching_fields.*.category_id' => ['required', 'integer', 'exists:categories,id'],
+            'teaching_fields.*.organization' => ['nullable', 'string', 'max:255'],
+            'teaching_fields.*.position' => ['nullable', 'string', 'max:255'],
+            'teaching_fields.*.specialty' => ['nullable', 'string', 'max:255'],
+            'teaching_fields.*.experience' => ['nullable', 'string', 'max:3000'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => ['nullable', 'string', 'max:50'],
             'bank_account_name' => ['nullable', 'string', 'max:100'],
@@ -92,6 +183,11 @@ class InstructorProfileController extends Controller
             'phone.unique' => 'Số điện thoại này đã được sử dụng.',
             'avatar.image' => 'Ảnh đại diện phải là tập tin hình ảnh.',
             'avatar.max' => 'Kích thước ảnh đại diện tối đa là 2MB.',
+            'category_ids.required' => 'Vui lòng chọn ít nhất một ngành / lĩnh vực giảng dạy.',
+            'category_ids.min' => 'Vui lòng chọn ít nhất một ngành / lĩnh vực giảng dạy.',
+            'category_ids.*.exists' => 'Ngành / lĩnh vực giảng dạy đã chọn không hợp lệ.',
+            'teaching_fields.required' => 'Vui lòng cấu hình ít nhất một khối ngành giảng dạy.',
+            'teaching_fields.min' => 'Vui lòng cấu hình ít nhất một khối ngành giảng dạy.',
         ]);
 
         if ($request->hasFile('avatar')) {
@@ -121,16 +217,17 @@ class InstructorProfileController extends Controller
 
         $user->update($userUpdates);
 
-        $profile = $user->instructorProfile ?? new InstructorProfile(['user_id' => $user->id]);
+        $categoryIds = array_map('intval', $validated['category_ids']);
+        app(\App\Services\InstructorRequirementService::class)->handleCategoriesSync($user, $categoryIds);
+
+        $profile = InstructorProfile::where('user_id', $user->id)->first() ?? new InstructorProfile(['user_id' => $user->id]);
         $profile->fill([
             'phone' => $validated['phone'] ?? $profile->phone ?? '',
-            'organization' => $validated['organization'] ?? null,
-            'position' => $validated['position'] ?? null,
-            'teaching_field' => $validated['teaching_field'] ?? null,
-            'specialty' => $validated['specialty'] ?? $profile->specialty ?? '',
-            'experience' => $validated['experience'] ?? $profile->experience ?? '',
             'bio' => $validated['bio'] ?? $profile->bio ?? '',
         ])->save();
+
+        // Đồng bộ các khối ngành giảng dạy chi tiết
+        $profile->syncTeachingFields($validated['teaching_fields']);
 
         ActivityLogService::log($user->id, 'update_instructor_profile', User::class, $user->id, null, $request);
 
@@ -154,14 +251,13 @@ class InstructorProfileController extends Controller
         $user = $request->user();
 
         $request->validate([
-            'document_type' => ['required', 'string', 'in:certificate,degree,employment_contract,transcript,employment_confirmation,other'],
+            'requirement_id' => ['nullable', 'integer'],
+            'document_type' => ['nullable', 'string', 'in:certificate,degree,employment_contract,transcript,employment_confirmation,other'],
             'title' => ['nullable', 'string', 'max:255'],
             'files' => ['nullable', 'array', 'max:10'],
             'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
             'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
         ], [
-            'document_type.required' => 'Vui lòng chọn loại tài liệu.',
-            'document_type.in' => 'Loại tài liệu không hợp lệ.',
             'files.*.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX.',
             'files.*.max' => 'Dung lượng mỗi tài liệu tối đa là 10MB.',
             'file.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX.',
@@ -179,8 +275,20 @@ class InstructorProfileController extends Controller
             return back()->with('error', 'Vui lòng chọn ít nhất một tệp để tải lên.');
         }
 
-        $documentType = $request->input('document_type', 'certificate');
-        $customTitle = $request->input('title');
+        $requirementId = $request->input('requirement_id');
+        $requirement = null;
+
+        if ($requirementId) {
+            $requirement = app(\App\Services\InstructorRequirementService::class)
+                ->validateRequirementForInstructor($user, (int) $requirementId);
+            $documentType = $requirement->document_type;
+            $defaultTitle = $requirement->document_title;
+        } else {
+            $documentType = $request->input('document_type', 'certificate');
+            $defaultTitle = null;
+        }
+
+        $customTitle = $request->input('title') ?: $defaultTitle;
         $uploadedCount = 0;
 
         foreach ($files as $file) {
@@ -201,6 +309,7 @@ class InstructorProfileController extends Controller
 
             InstructorCertificate::create([
                 'user_id' => $user->id,
+                'requirement_id' => $requirement?->id,
                 'file_path' => $storedPath,
                 'original_name' => $originalName,
                 'mime_type' => $mimeType,
@@ -223,21 +332,22 @@ class InstructorProfileController extends Controller
 
         ActivityLogService::log($user->id, 'upload_instructor_document', User::class, $user->id, [
             'document_type' => $documentType,
+            'requirement_id' => $requirement?->id,
             'uploaded_count' => $uploadedCount,
         ], $request);
 
         try {
             app(NotificationService::class)->notifyAdmins(
-                'Giảng viên tải lên tài liệu mới',
+                'Giảng viên nộp tài liệu minh chứng',
                 "Giảng viên {$user->name} ({$user->email}) vừa tải lên {$uploadedCount} tài liệu minh chứng mới.",
-                'instructor_document_uploaded',
+                'instructor_documents_uploaded',
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo tải tài liệu giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo nộp tài liệu giảng viên cho admin thất bại: ' . $e->getMessage());
         }
 
-        return back()->with('success', "Đã tải lên thành công {$uploadedCount} tài liệu minh chứng.");
+        return back()->with('active_tab', 'documents')->with('success', "Đã tải lên {$uploadedCount} tài liệu minh chứng thành công. Hồ sơ đang chờ Ban quản trị kiểm duyệt.");
     }
 
     public function deleteDocument(Request $request, InstructorCertificate $certificate): RedirectResponse
@@ -250,7 +360,7 @@ class InstructorProfileController extends Controller
         }
 
         if ($certificate->status === 'approved') {
-            return back()->with('error', 'Tài liệu đã được phê duyệt, không thể xóa.');
+            return back()->with('active_tab', 'documents')->with('error', 'Tài liệu đã được phê duyệt, không thể xóa.');
         }
 
         if (Storage::disk('local')->exists($certificate->file_path)) {
@@ -265,7 +375,7 @@ class InstructorProfileController extends Controller
             'file_name' => $certificate->original_name,
         ], $request);
 
-        return back()->with('success', 'Đã xóa tài liệu thành công.');
+        return back()->with('active_tab', 'documents')->with('success', 'Đã xóa tài liệu thành công.');
     }
 
     public function viewDocument(Request $request, InstructorCertificate $certificate): BinaryFileResponse
@@ -345,7 +455,7 @@ class InstructorProfileController extends Controller
             Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: ' . $e->getMessage());
         }
 
-        return back()->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
+        return back()->with('active_tab', 'documents')->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
     }
 
     public function requestReactivation(Request $request): RedirectResponse

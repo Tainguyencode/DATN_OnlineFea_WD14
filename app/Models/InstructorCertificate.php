@@ -12,6 +12,7 @@ class InstructorCertificate extends Model
 
     protected $fillable = [
         'user_id',
+        'requirement_id',
         'file_path',
         'original_name',
         'mime_type',
@@ -33,6 +34,7 @@ class InstructorCertificate extends Model
             'employment_contract' => 'Hợp đồng lao động',
             'transcript' => 'Bảng điểm',
             'employment_confirmation' => 'Giấy xác nhận công tác',
+            'portfolio' => 'Hồ sơ năng lực',
             'other' => 'Tài liệu minh chứng khác',
         ];
     }
@@ -56,6 +58,11 @@ class InstructorCertificate extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function requirement(): BelongsTo
+    {
+        return $this->belongsTo(InstructorDocumentRequirement::class, 'requirement_id');
     }
 
     public function reviewer(): BelongsTo

@@ -29,6 +29,10 @@ use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizControll
 use App\Http\Controllers\Web\Instructor\S3MultipartUploadController;
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
 use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
+use App\Http\Controllers\Web\LearningPathController;
+use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathController;
+use App\Http\Controllers\Web\Instructor\LearningPathController as InstructorLearningPathController;
+
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
@@ -85,6 +89,10 @@ Route::get('/instructors', [InstructorController::class, 'index'])->name('instru
 Route::get('/instructors/{user}', [InstructorController::class, 'show'])->name('instructors.show');
 Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
 Route::get('/leaderboard', [\App\Http\Controllers\Web\LeaderboardController::class, 'index'])->name('leaderboard');
+
+// ─── LỘ TRÌNH HỌC TẬP (PUBLIC) ───
+Route::get('/learning-paths', [LearningPathController::class, 'index'])->name('learning-paths.index');
+Route::get('/learning-paths/{slug}', [LearningPathController::class, 'show'])->name('learning-paths.show');
 
 // ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───
 Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertificate'])->name('certificates.public');
@@ -321,6 +329,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
         Route::resource('coupons', InstructorCouponController::class)->except(['show']);
         Route::post('coupons/{coupon}/toggle-status', [InstructorCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+        Route::resource('learning-paths', InstructorLearningPathController::class);
+
         Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
         Route::get('/submissions', [SubmissionController::class, 'index'])->name('submissions.index');
         Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
@@ -402,6 +412,15 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
     });
+
+    // Quản lý cấu hình yêu cầu hồ sơ theo ngành
+    Route::prefix('instructors/requirements')->name('instructors.requirements.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'store'])->name('store');
+        Route::put('/{requirement}', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'update'])->name('update');
+        Route::post('/{requirement}/toggle-status', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'toggleStatus'])->name('toggle-status');
+        Route::delete('/{requirement}', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'destroy'])->name('destroy');
+    });
     Route::get('/categories', [AdminCategoryController::class, 'index'])->name('categories.index');
     Route::get('/categories/create', [AdminCategoryController::class, 'create'])->name('categories.create');
     Route::post('/categories', [AdminCategoryController::class, 'store'])->name('categories.store');
@@ -411,6 +430,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
     Route::resource('coupons', AdminCouponController::class)->except(['show']);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+    Route::resource('learning-paths', AdminLearningPathController::class);
     Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/course-reviews', [CourseReviewController::class, 'index'])->name('course-reviews.index');
     Route::get('/course-reviews/{course}', [CourseReviewController::class, 'show'])->name('course-reviews.show');
@@ -458,6 +478,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
 // ─── STREAMING VIDEO KIỂM DUYỆT (Admin & Giảng viên) ───
@@ -475,13 +496,14 @@ if (app()->environment('local')) {
     })->name('dev.login-as-admin');
 
     Route::get('/dev/login-as-student', function () {
-        $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
-            ?? User::where('role', 'student')->firstOrFail();
+        $user = User::where('role', 'student')->first()
+            ?? User::firstOrFail();
 
         auth()->login($user);
 
         return redirect()->route('dashboard');
     })->name('dev.login-as-student');
+
 }
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───

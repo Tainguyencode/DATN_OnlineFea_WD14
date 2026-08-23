@@ -4,10 +4,13 @@
         data-student-terms-modal
         x-show="termsModalOpen"
         x-cloak
+        style="display: none;"
+        x-init="$watch('termsModalOpen', value => document.body.classList.toggle('overflow-hidden', value))"
         x-on:keydown.escape.window="termsModalOpen = false"
         x-on:click.self="termsModalOpen = false"
         x-transition.opacity.duration.200ms
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto"
+
         role="dialog"
         aria-modal="true"
         aria-labelledby="student-terms-title"

@@ -69,8 +69,16 @@
                         <span class="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Cập nhật chờ duyệt</span>
                     @elseif($course->status === 'published')
                         <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Đã xuất bản</span>
+                    @elseif($course->status === 'approved')
+                        @if($course->instructor?->instructor_status === 'approved' && ! $course->instructor?->isLocked())
+                            <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Đã duyệt & Xuất bản</span>
+                        @else
+                            <span class="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Đã duyệt nội dung (Chờ duyệt GV)</span>
+                        @endif
+                    @elseif($course->status === 'rejected')
+                        <span class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Bị từ chối</span>
                     @else
-                        <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đang chờ duyệt</span>
+                        <span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Đang chờ duyệt</span>
                     @endif
                     <span class="text-xs font-semibold text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }}</span>
                     @if($course->submitted_at)

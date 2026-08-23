@@ -1912,3 +1912,4 @@ async function sendCompletionAJAX(progressUrl, lessonId) {
         console.error('Error auto completing lesson:', error);
     }
 }
+

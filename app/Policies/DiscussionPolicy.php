@@ -18,9 +18,16 @@ class DiscussionPolicy
             return false;
         }
 
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $courseId = $discussion->course_id ?: $discussion->lesson?->course_id;
+        $instructorId = $discussion->course?->instructor_id ?: $discussion->lesson?->course?->instructor_id;
+
         // If instructor, must own the course
         if ($user->isInstructor()) {
-            return (int) $discussion->lesson->course->instructor_id === (int) $user->id;
+            return (int) $instructorId === (int) $user->id;
         }
 
         // If student, must own the discussion and be enrolled in the course
@@ -30,7 +37,7 @@ class DiscussionPolicy
             }
 
             return Enrollment::where('user_id', $user->id)
-                ->where('course_id', $discussion->lesson->course_id)
+                ->where('course_id', $courseId)
                 ->withLearningAccess()
                 ->exists();
         }
@@ -45,6 +52,10 @@ class DiscussionPolicy
     {
         if (! $user->is_active) {
             return false;
+        }
+
+        if ($user->isAdmin()) {
+            return true;
         }
 
         // Only student enrolled in the course can ask a question
@@ -67,9 +78,16 @@ class DiscussionPolicy
             return false;
         }
 
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $courseId = $discussion->course_id ?: $discussion->lesson?->course_id;
+        $instructorId = $discussion->course?->instructor_id ?: $discussion->lesson?->course?->instructor_id;
+
         // If instructor, must own the course
         if ($user->isInstructor()) {
-            return (int) $discussion->lesson->course->instructor_id === (int) $user->id;
+            return (int) $instructorId === (int) $user->id;
         }
 
         // If student, must own the discussion and be enrolled
@@ -79,7 +97,7 @@ class DiscussionPolicy
             }
 
             return Enrollment::where('user_id', $user->id)
-                ->where('course_id', $discussion->lesson->course_id)
+                ->where('course_id', $courseId)
                 ->withLearningAccess()
                 ->exists();
         }
