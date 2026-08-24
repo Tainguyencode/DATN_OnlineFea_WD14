@@ -13,7 +13,7 @@
                     <span>🏆</span> Bảng Xếp Hạng Học Viên
                 </h1>
                 <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    Vinh danh học viên xuất sắc và tích cực nhất trên hệ thống theo {{ $period === 'month' ? 'tháng' : 'tuần' }}.
+                    Vinh danh Top 50 học viên xuất sắc và tích cực nhất trên hệ thống theo {{ $period === 'month' ? 'tháng' : 'tuần' }}.
                 </p>
             </div>
 
@@ -361,7 +361,7 @@
         <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h3 class="font-extrabold text-slate-900 dark:text-white text-base">
-                    Bảng Xếp Hạng {{ $period === 'month' ? 'Tháng này' : 'Tuần này' }}
+                    Bảng Xếp Hạng Top 50 {{ $period === 'month' ? 'Tháng này' : 'Tuần này' }}
                 </h3>
                 <span class="text-xs text-slate-500 font-medium">Cập nhật thời gian thực</span>
             </div>
