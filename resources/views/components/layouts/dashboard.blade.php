@@ -5,6 +5,7 @@
     'menu' => [],
     'title' => 'Dashboard',
     'pageTitle' => 'Dashboard',
+    'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
 ])
 
@@ -152,7 +153,7 @@
             <header class="bg-white/95 backdrop-blur border-b border-slate-200/70 shadow-[0_1px_10px_rgba(15,23,42,0.03)] sticky top-0 z-20">
                 <div class="flex h-16 items-center justify-between px-4 sm:px-6 xl:px-7">
                     <div class="min-w-0">
-                        <h1 class="text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate">{{ $pageTitle }}</h1>
+                        <h1 class="{{ $pageTitleClass }}">{{ $pageTitle }}</h1>
                         @if($breadcrumb)
                             <p class="text-xs text-slate-500 mt-1 truncate">{{ $breadcrumb }}</p>
                         @endif
