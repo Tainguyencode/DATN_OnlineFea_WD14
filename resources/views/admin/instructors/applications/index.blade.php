@@ -114,6 +114,14 @@
                class="rounded-xl px-4 py-2 text-xs sm:text-sm font-bold transition duration-150 {{ $status === 'rejected' ? 'bg-rose-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }}">
                 ✖ Từ chối ({{ $counts['rejected'] }})
             </a>
+
+            <div class="ml-auto">
+                <a href="{{ route('admin.instructors.requirements.index') }}"
+                   class="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs sm:text-sm font-bold text-[#0056D2] shadow-sm transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Cấu hình hồ sơ theo ngành</span>
+                </a>
+            </div>
         </div>
 
         {{-- ========================================================================= --}}
@@ -126,7 +134,7 @@
                         <tr>
                             <th class="px-6 py-4 font-black">Giảng viên</th>
                             <th class="px-6 py-4 font-black">Liên hệ</th>
-                            <th class="px-6 py-4 font-black">Chuyên môn & Đơn vị</th>
+                            <th class="px-6 py-4 font-black">Chuyên môn</th>
                             <th class="px-6 py-4 font-black">Ngày đăng ký</th>
                             <th class="px-6 py-4 font-black">Cập nhật cuối</th>
                             <th class="px-6 py-4 font-black">Trạng thái</th>
@@ -160,42 +168,29 @@
                                     </div>
                                 </td>
 
-                                {{-- Specialty & Organization --}}
+                                {{-- Teaching Category --}}
                                 <td class="px-6 py-4">
                                     @php
                                         $categories = $app->getTeachingCategories();
                                         $primaryCategory = $categories->firstWhere('pivot.is_primary', true) ?? $categories->first();
                                         $additionalCount = max(0, $categories->count() - 1);
-                                        $specialty = $primaryCategory?->pivot?->specialty ?: ($app->instructorProfile?->specialty ?: ($app->instructorApplication?->expertise ?: null));
-                                        $organization = $primaryCategory?->pivot?->organization ?: ($app->instructorProfile?->organization ?: null);
                                     @endphp
-                                    <div class="max-w-xs space-y-0.5">
+                                    <div class="max-w-xs">
                                         @if($primaryCategory)
                                             <div class="flex items-center gap-1.5 flex-wrap">
-                                                <span class="font-bold text-xs text-slate-900 dark:text-white">
+                                                <span class="font-bold text-sm text-slate-900 dark:text-white">
                                                     {{ $primaryCategory->name }}
                                                 </span>
                                                 @if($additionalCount > 0)
-                                                    <span class="inline-flex items-center rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[10px] font-bold text-[#0056D2] dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-300" title="{{ $categories->skip(1)->pluck('name')->join(', ') }}">
-                                                        +{{ $additionalCount }} ngành phụ
+                                                    <span class="inline-flex items-center rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-xs font-bold text-[#0056D2] dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-300" title="Có thêm {{ $additionalCount }} ngành phụ khác">
+                                                        +{{ $additionalCount }} ngành khác
                                                     </span>
                                                 @endif
                                             </div>
-                                            @if($specialty && $specialty !== $primaryCategory->name)
-                                                <div class="text-[11px] text-slate-600 dark:text-slate-400 truncate" title="{{ $specialty }}">
-                                                    {{ $specialty }}
-                                                </div>
-                                            @endif
-                                            <div class="text-[11px] text-slate-400 truncate">
-                                                {{ $organization ?: 'Chưa cập nhật đơn vị' }}
-                                            </div>
                                         @else
-                                            <div class="font-bold text-xs text-slate-900 dark:text-white truncate">
-                                                {{ $specialty ?: 'Chưa khai báo ngành' }}
-                                            </div>
-                                            <div class="text-[11px] text-slate-500 truncate">
-                                                {{ $organization ?: 'Chưa cập nhật đơn vị' }}
-                                            </div>
+                                            <span class="text-xs text-slate-400">
+                                                Chưa chọn ngành
+                                            </span>
                                         @endif
                                     </div>
                                 </td>
