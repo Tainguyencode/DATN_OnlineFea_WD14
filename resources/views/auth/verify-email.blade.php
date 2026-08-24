@@ -112,6 +112,7 @@
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
                     ['href' => route('student.orders'), 'label' => 'Đơn hàng', 'external' => true],
+                    ['href' => route('student.vouchers.index'), 'label' => 'Kho Voucher', 'external' => true],
                     ['href' => route('study-groups.index'), 'label' => 'Nhóm học tập', 'external' => true],
                     ['href' => route('student.profile'), 'label' => 'Hồ sơ', 'external' => true],
                 ] as $item)
