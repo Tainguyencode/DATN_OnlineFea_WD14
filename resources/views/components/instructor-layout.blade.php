@@ -1,6 +1,7 @@
 @props([
     'title' => 'Instructor Dashboard',
     'pageTitle' => 'Instructor Dashboard',
+    'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
 ])
 
@@ -157,6 +158,7 @@
     :menu="$menu"
     :title="$title"
     :pageTitle="$pageTitle"
+    :pageTitleClass="$pageTitleClass"
     :breadcrumb="$breadcrumb"
 >
     @if(config('auth.email_verification_enabled', true) && auth()->check() && ! auth()->user()->hasVerifiedEmail())
