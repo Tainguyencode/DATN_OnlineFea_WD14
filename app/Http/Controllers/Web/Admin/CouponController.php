@@ -170,19 +170,29 @@ class CouponController extends Controller
     {
         $configs = [
             1 => [
-                'type' => SystemSetting::get('leaderboard_reward_top1_type', 'fixed'),
-                'value' => SystemSetting::get('leaderboard_reward_top1_value', 200000),
+                'type' => SystemSetting::get('leaderboard_reward_top1_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top1_value', 40),
                 'expiry_days' => SystemSetting::get('leaderboard_reward_top1_expiry_days', 30),
             ],
             2 => [
-                'type' => SystemSetting::get('leaderboard_reward_top2_type', 'fixed'),
-                'value' => SystemSetting::get('leaderboard_reward_top2_value', 150000),
+                'type' => SystemSetting::get('leaderboard_reward_top2_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top2_value', 30),
                 'expiry_days' => SystemSetting::get('leaderboard_reward_top2_expiry_days', 30),
             ],
             3 => [
-                'type' => SystemSetting::get('leaderboard_reward_top3_type', 'fixed'),
-                'value' => SystemSetting::get('leaderboard_reward_top3_value', 50000),
+                'type' => SystemSetting::get('leaderboard_reward_top3_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top3_value', 20),
                 'expiry_days' => SystemSetting::get('leaderboard_reward_top3_expiry_days', 30),
+            ],
+            '4_9' => [
+                'type' => SystemSetting::get('leaderboard_reward_top4_9_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top4_9_value', 15),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top4_9_expiry_days', 30),
+            ],
+            '10_50' => [
+                'type' => SystemSetting::get('leaderboard_reward_top10_50_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top10_50_value', 10),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top10_50_expiry_days', 30),
             ],
         ];
 
@@ -206,13 +216,25 @@ class CouponController extends Controller
             'top3_type' => 'required|in:fixed,percent',
             'top3_value' => 'required|numeric|min:0.01',
             'top3_expiry_days' => 'required|integer|min:1',
+
+            'top4_9_type' => 'required|in:fixed,percent',
+            'top4_9_value' => 'required|numeric|min:0.01',
+            'top4_9_expiry_days' => 'required|integer|min:1',
+
+            'top10_50_type' => 'required|in:fixed,percent',
+            'top10_50_value' => 'required|numeric|min:0.01',
+            'top10_50_expiry_days' => 'required|integer|min:1',
         ], [
             'top1_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 1.',
             'top2_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 2.',
             'top3_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 3.',
+            'top4_9_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 4 - TOP 9.',
+            'top10_50_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 10 - TOP 50.',
             'top1_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
             'top2_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
             'top3_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top4_9_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top10_50_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
         ]);
 
         SystemSetting::set('leaderboard_reward_top1_type', $validated['top1_type']);
@@ -226,6 +248,14 @@ class CouponController extends Controller
         SystemSetting::set('leaderboard_reward_top3_type', $validated['top3_type']);
         SystemSetting::set('leaderboard_reward_top3_value', $validated['top3_value']);
         SystemSetting::set('leaderboard_reward_top3_expiry_days', $validated['top3_expiry_days']);
+
+        SystemSetting::set('leaderboard_reward_top4_9_type', $validated['top4_9_type']);
+        SystemSetting::set('leaderboard_reward_top4_9_value', $validated['top4_9_value']);
+        SystemSetting::set('leaderboard_reward_top4_9_expiry_days', $validated['top4_9_expiry_days']);
+
+        SystemSetting::set('leaderboard_reward_top10_50_type', $validated['top10_50_type']);
+        SystemSetting::set('leaderboard_reward_top10_50_value', $validated['top10_50_value']);
+        SystemSetting::set('leaderboard_reward_top10_50_expiry_days', $validated['top10_50_expiry_days']);
 
         return redirect()
             ->route('admin.coupons.reward_config')
