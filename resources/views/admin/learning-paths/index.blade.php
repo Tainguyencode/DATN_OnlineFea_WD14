@@ -1,11 +1,5 @@
 <x-admin-layout title="Quản lý Lộ trình học tập" page-title="Quản lý Lộ trình học tập" breadcrumb="Danh sách lộ trình học tập trên hệ thống">
     <div class="space-y-6">
-        @if(session('success'))
-            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-900/20 dark:text-emerald-300 shadow-sm">
-                ✔ {{ session('success') }}
-            </div>
-        @endif
-
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <form method="GET" action="{{ route('admin.learning-paths.index') }}" class="flex items-center gap-2 max-w-md w-full">
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Tìm kiếm lộ trình..." class="ui-input flex-1">

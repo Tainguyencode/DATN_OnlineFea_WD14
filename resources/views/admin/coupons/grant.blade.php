@@ -13,18 +13,6 @@
         </div>
     @endif
 
-    @if (session('error'))
-        <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-800">
-            {{ session('error') }}
-        </div>
-    @endif
-
-    @if (session('success'))
-        <div class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
-            {{ session('success') }}
-        </div>
-    @endif
-
     <form method="POST" action="{{ route('admin.coupons.grant.store') }}" class="space-y-5" novalidate>
         @csrf
 

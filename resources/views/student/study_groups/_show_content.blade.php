@@ -47,19 +47,6 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             </div>
         </div>
 
-        {{-- Alerts --}}
-        @if(session('success'))
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800/30 dark:bg-emerald-950/20 dark:text-emerald-400">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800 dark:border-rose-800/30 dark:bg-rose-950/20 dark:text-rose-400">
-                {{ session('error') }}
-            </div>
-        @endif
-
         @if(isset($pendingInvitation) && $pendingInvitation)
             <div class="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 shadow-sm dark:border-blue-900/40 dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">

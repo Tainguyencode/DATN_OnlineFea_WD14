@@ -1,12 +1,6 @@
 <x-admin-layout title="Lịch sử tặng Voucher" page-title="Lịch sử Admin tặng Voucher" breadcrumb="Danh sách mã giảm giá đã tặng cho học viên">
 
 <div class="space-y-5">
-    @if (session('success'))
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-300">
-            {{ session('success') }}
-        </div>
-    @endif
-
     <!-- Header Action bar -->
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

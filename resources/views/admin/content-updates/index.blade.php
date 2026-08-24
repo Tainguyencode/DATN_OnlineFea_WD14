@@ -19,12 +19,6 @@
         </form>
     </div>
 
-    @if(session('success'))
-        <div class="mb-4 rounded-lg bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 border border-emerald-200">
-            {{ session('success') }}
-        </div>
-    @endif
-
     <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50">
