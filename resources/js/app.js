@@ -7,25 +7,72 @@ window.Chart = Chart;
 
 Alpine.start();
 
-function initializeFlashMessages() {
-    document.querySelectorAll('[data-flash-message="success"]').forEach((flash) => {
-        if (flash.dataset.flashDismissScheduled === 'true') return;
+function initializeToasts() {
+    document.querySelectorAll('[data-toast]').forEach((toast) => {
+        if (toast.dataset.toastInitialized === 'true') return;
 
-        flash.dataset.flashDismissScheduled = 'true';
-        window.setTimeout(() => {
-            flash.classList.add('flash-message--fading');
+        toast.dataset.toastInitialized = 'true';
 
-            window.setTimeout(() => {
-                flash.remove();
-            }, 250);
-        }, 2000);
+        const duration = Number.parseInt(toast.dataset.toastDuration, 10) || 3000;
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let remaining = duration;
+        let startedAt = 0;
+        let timerId = null;
+        let dismissed = false;
+
+        const clearTimer = () => {
+            if (timerId === null) return;
+
+            window.clearTimeout(timerId);
+            timerId = null;
+        };
+
+        const dismissToast = () => {
+            if (dismissed) return;
+
+            dismissed = true;
+            clearTimer();
+            toast.classList.add('app-toast--dismissing');
+            toast.setAttribute('aria-hidden', 'true');
+
+            window.setTimeout(() => toast.remove(), prefersReducedMotion ? 0 : 220);
+        };
+
+        const pauseTimer = () => {
+            if (timerId === null || dismissed) return;
+
+            remaining = Math.max(0, remaining - (performance.now() - startedAt));
+            clearTimer();
+        };
+
+        const startTimer = () => {
+            if (dismissed) return;
+
+            if (remaining <= 0) {
+                dismissToast();
+                return;
+            }
+
+            startedAt = performance.now();
+            timerId = window.setTimeout(dismissToast, remaining);
+        };
+
+        toast.addEventListener('mouseenter', pauseTimer);
+        toast.addEventListener('mouseleave', startTimer);
+        toast.addEventListener('focusin', pauseTimer);
+        toast.addEventListener('focusout', (event) => {
+            if (!toast.contains(event.relatedTarget)) startTimer();
+        });
+        toast.querySelector('[data-toast-dismiss]')?.addEventListener('click', dismissToast);
+
+        startTimer();
     });
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeFlashMessages, { once: true });
+    document.addEventListener('DOMContentLoaded', initializeToasts, { once: true });
 } else {
-    initializeFlashMessages();
+    initializeToasts();
 }
 
 function syncThemeToggleState() {
