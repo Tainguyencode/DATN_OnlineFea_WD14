@@ -123,9 +123,9 @@
                 <div id="course-media-preview"
                      data-existing-image-url="{{ $existingThumbnailUrl }}"
                      data-existing-image-alt="{{ $existingThumbnailAlt }}"
-                     class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                     class="mt-4 h-[220px] w-full max-h-[340px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100 sm:h-[300px] lg:h-[340px]"
                      aria-live="polite">
-                    <div class="aspect-video">
+                    <div class="h-full w-full">
                         @if($existingThumbnailUrl)
                             <img src="{{ $existingThumbnailUrl }}" alt="{{ $existingThumbnailAlt }}" class="h-full w-full object-cover">
                         @else
@@ -308,7 +308,7 @@
 
         function renderPlaceholder() {
             preview.innerHTML = `
-                <div class="aspect-video">
+                <div class="h-full w-full">
                     <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 to-emerald-700 text-sm font-bold text-white">
                         Fea LMS
                     </div>
@@ -323,7 +323,7 @@
             image.className = 'h-full w-full object-cover';
 
             const frame = document.createElement('div');
-            frame.className = 'aspect-video';
+            frame.className = 'h-full w-full';
             frame.appendChild(image);
 
             preview.replaceChildren(frame);
@@ -331,7 +331,7 @@
 
         function renderVideo(videoSource) {
             const frame = document.createElement('div');
-            frame.className = 'aspect-video';
+            frame.className = 'h-full w-full';
 
             if (videoSource.type === 'youtube') {
                 const iframe = document.createElement('iframe');
