@@ -5,9 +5,9 @@
 @section('content')
 <div class="bg-slate-50 dark:bg-slate-950 min-h-screen py-8">
     <div class="ui-container max-w-7xl">
-        
+
         {{-- Header Title & Countdown Banner --}}
-        <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+        <div class="mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                     <span>🏆</span> Bảng Xếp Hạng Học Viên
@@ -17,15 +17,23 @@
                 </p>
             </div>
 
-            {{-- Live Countdown Card --}}
-            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl px-5 py-3 shadow-md flex items-center gap-4 shrink-0">
-                <div class="text-2xl">⏳</div>
-                <div>
-                    <div class="text-xs font-medium text-blue-100 uppercase tracking-wider">
-                        Thời gian còn lại của {{ $period === 'month' ? 'tháng' : 'tuần' }}
-                    </div>
-                    <div id="leaderboard-countdown" class="text-lg font-black tracking-wider text-amber-300 font-mono">
-                        -- ngày --:--:--
+            <div class="flex flex-wrap items-center gap-3 shrink-0">
+                @if($period === 'month')
+                    <a href="#monthly-rewards-section" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold transition">
+                        Cơ cấu giải thưởng
+                    </a>
+                @endif
+
+                {{-- Live Countdown Card --}}
+                <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl px-5 py-3 shadow-md flex items-center gap-4">
+                    <div class="text-2xl">⏳</div>
+                    <div>
+                        <div class="text-xs font-medium text-blue-100 uppercase tracking-wider">
+                            Thời gian còn lại của {{ $period === 'month' ? 'tháng' : 'tuần' }}
+                        </div>
+                        <div id="leaderboard-countdown" class="text-lg font-black tracking-wider text-amber-300 font-mono">
+                            -- ngày --:--:--
+                        </div>
                     </div>
                 </div>
             </div>
@@ -67,6 +75,95 @@
             </form>
         </div>
 
+        {{-- TOP 3 Monthly Rewards Showcase Banner (Only on Month view) --}}
+        @if($period === 'month')
+            <div id="monthly-rewards-section" class="mb-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            Cơ Cấu Giải Thưởng Top 3 Tháng
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Vinh danh và tự động cấp thưởng vào cuối mỗi tháng cho 3 học viên có XP cao nhất</p>
+                    </div>
+                    <span class="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-900/50 self-start sm:self-auto">
+                        Tự động trao thưởng qua hệ thống
+                    </span>
+                </div>
+
+                {{-- Grid 3 Cards --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {{-- TOP 1 Card --}}
+                    <div class="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-5 transition hover:shadow-xs">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-extrabold text-amber-900 dark:text-amber-300 bg-amber-200/80 dark:bg-amber-900/60 px-2.5 py-0.5 rounded-md">
+                                TOP 1
+                            </span>
+                            <span class="text-xs font-bold text-amber-700 dark:text-amber-400">Quán Quân</span>
+                        </div>
+                        <div class="text-base font-extrabold text-slate-900 dark:text-white mb-3">
+                            {{ $monthlyRewards[1]['voucher'] }}
+                        </div>
+                        <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                <span>{{ $monthlyRewards[1]['xp'] }}</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                <span>{{ $monthlyRewards[1]['badge'] }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    {{-- TOP 2 Card --}}
+                    <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl p-5 transition hover:shadow-xs">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 px-2.5 py-0.5 rounded-md">
+                                TOP 2
+                            </span>
+                            <span class="text-xs font-bold text-slate-600 dark:text-slate-400">Á Quân</span>
+                        </div>
+                        <div class="text-base font-extrabold text-slate-900 dark:text-white mb-3">
+                            {{ $monthlyRewards[2]['voucher'] }}
+                        </div>
+                        <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                <span>{{ $monthlyRewards[2]['xp'] }}</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                <span>{{ $monthlyRewards[2]['badge'] }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    {{-- TOP 3 Card --}}
+                    <div class="bg-amber-900/5 dark:bg-amber-950/10 border border-amber-700/20 dark:border-amber-900/30 rounded-xl p-5 transition hover:shadow-xs">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-extrabold text-amber-900 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-md">
+                                TOP 3
+                            </span>
+                            <span class="text-xs font-bold text-amber-800 dark:text-amber-500">Tinh Anh</span>
+                        </div>
+                        <div class="text-base font-extrabold text-slate-900 dark:text-white mb-3">
+                            {{ $monthlyRewards[3]['voucher'] }}
+                        </div>
+                        <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-700"></span>
+                                <span>{{ $monthlyRewards[3]['xp'] }}</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-700"></span>
+                                <span>{{ $monthlyRewards[3]['badge'] }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- TOP 1, 2, 3 Podium Section (Only on page 1 without active search) --}}
         @if(count($top3) >= 1 && $leaderboard->currentPage() === 1 && !$search)
             <div class="mb-10">
@@ -91,6 +188,13 @@
                                 <span>🎓 {{ $st2->completed_courses_count }} khóa</span>
                                 <span>🔥 {{ $st2->streak_days }}d streak</span>
                             </div>
+                            @if($period === 'month')
+                                <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                    <span class="inline-flex items-center text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                                        Thưởng tháng: {{ $monthlyRewards[2]['voucher'] }} + 500 XP
+                                    </span>
+                                </div>
+                            @endif
                         </div>
                     @endif
 
@@ -113,6 +217,13 @@
                                 <span>🎓 {{ $st1->completed_courses_count }} khóa hoàn thành</span>
                                 <span>🔥 {{ $st1->streak_days }}d streak</span>
                             </div>
+                            @if($period === 'month')
+                                <div class="mt-3 pt-3 border-t border-amber-200 dark:border-amber-900/50">
+                                    <span class="inline-flex items-center text-[11px] font-extrabold text-amber-900 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-3 py-1 rounded-full border border-amber-300 dark:border-amber-800">
+                                        Thưởng tháng: {{ $monthlyRewards[1]['voucher'] }} + 1.000 XP
+                                    </span>
+                                </div>
+                            @endif
                         </div>
                     @endif
 
@@ -132,6 +243,13 @@
                                 <span>🎓 {{ $st3->completed_courses_count }} khóa</span>
                                 <span>🔥 {{ $st3->streak_days }}d streak</span>
                             </div>
+                            @if($period === 'month')
+                                <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                    <span class="inline-flex items-center text-[11px] font-semibold text-amber-800 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full border border-amber-200 dark:border-amber-900/50">
+                                        Thưởng tháng: {{ $monthlyRewards[3]['voucher'] }} + 300 XP
+                                    </span>
+                                </div>
+                            @endif
                         </div>
                     @endif
                 </div>

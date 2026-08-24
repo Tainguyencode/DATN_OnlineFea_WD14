@@ -148,7 +148,7 @@
 
                                     <!-- Conditions List -->
                                     <div class="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-400">
-                                        @if($userCoupon->source === 'admin' && $userCoupon->reason)
+                                        @if(($userCoupon->source === 'admin' || $userCoupon->source === 'leaderboard') && $userCoupon->reason)
                                             <div class="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-medium">
                                                 <span>🎁</span>
                                                 <span>Lý do: <strong>{{ $userCoupon->reason }}</strong></span>
