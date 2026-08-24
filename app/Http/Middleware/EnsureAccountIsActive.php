@@ -23,6 +23,10 @@ class EnsureAccountIsActive
                 : redirect()->route('login')->withErrors(['identifier' => 'Tài khoản đã bị khóa.']);
         }
 
+        if ($user && (! $user->last_login_at || ! $user->last_login_at->isToday())) {
+            $user->forceFill(['last_login_at' => now()])->saveQuietly();
+        }
+
         return $next($request);
     }
 }

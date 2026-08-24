@@ -53,6 +53,7 @@ use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
 use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
 use App\Http\Controllers\Web\Student\AssignmentController as StudentAssignmentController;
+use App\Http\Controllers\Web\Student\VoucherController as StudentVoucherController;
 use App\Http\Controllers\Api\StudyGroupController;
 use App\Models\User;
 use App\Services\GeminiService;
@@ -288,6 +289,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
     Route::get('/orders', [StudentMiscController::class, 'orders'])->name('orders');
     Route::get('/orders/{order}', [StudentMiscController::class, 'showOrder'])->name('orders.show');
+    Route::get('/vouchers', [StudentVoucherController::class, 'index'])->name('vouchers.index');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
@@ -428,6 +430,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])->name('categories.update');
     Route::post('/categories/{category}/toggle-status', [AdminCategoryController::class, 'toggleStatus'])->name('categories.toggle-status');
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
+    Route::get('coupons/grant', [AdminCouponController::class, 'grantForm'])->name('coupons.grant');
+    Route::post('coupons/grant', [AdminCouponController::class, 'grantStore'])->name('coupons.grant.store');
+    Route::get('coupons/grant-history', [AdminCouponController::class, 'grantHistory'])->name('coupons.grant_history');
     Route::resource('coupons', AdminCouponController::class)->except(['show']);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
     Route::resource('learning-paths', AdminLearningPathController::class);
