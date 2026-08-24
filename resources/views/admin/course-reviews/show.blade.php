@@ -5,9 +5,6 @@
         <p class="mt-1 text-sm text-slate-500">Giảng viên: {{ $course->instructor?->name }} · {{ $totalLessons }} bài · {{ gmdate('H:i:s', $totalDuration) }}</p>
     </div>
 
-    @if(session('success'))<div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>@endif
-    @if(session('error'))<div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>@endif
-
     <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="space-y-6">
             <div class="rounded-xl border border-slate-200 bg-white p-6">

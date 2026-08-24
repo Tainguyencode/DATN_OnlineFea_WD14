@@ -1,18 +1,6 @@
 @use('App\Models\CourseReviewItem')
 @use('App\Models\Course')
 <x-admin-layout :title="'Duyệt - '.$course->title" page-title="Kiểm duyệt khóa học" :breadcrumb="$course->title">
-    @if(session('success'))
-        <div class="my-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-            {{ session('success') }}
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="my-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
-            {{ session('error') }}
-        </div>
-    @endif
-
 @php
     $formatPrice = fn ($value) => (float) $value <= 0 ? 'Miễn phí' : number_format((float) $value, 0, ',', '.').'đ';
     $price = $course->discount_price ?? $course->sale_price ?? $course->price;
