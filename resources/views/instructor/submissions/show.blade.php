@@ -96,12 +96,6 @@
                 <div>
                     <h3 class="text-base font-extrabold text-slate-950 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 uppercase tracking-wider">Chấm điểm & Nhận xét</h3>
                     
-                    @if(session('success'))
-                        <div class="mt-4 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 mb-4 shadow-sm">
-                            {{ session('success') }}
-                        </div>
-                    @endif
-
                     <!-- Điểm số hiện tại -->
                     @if($submission->score !== null)
                         <div class="mt-4 space-y-4">

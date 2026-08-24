@@ -10,12 +10,6 @@
             </a>
         </div>
 
-        @if(session('success'))
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-bold text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                ✔ {{ session('success') }}
-            </div>
-        @endif
-
         {{-- Filter & Search --}}
         <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
             <form method="GET" action="{{ route('instructor.learning-paths.index') }}" class="flex flex-col sm:flex-row items-center justify-between gap-4">

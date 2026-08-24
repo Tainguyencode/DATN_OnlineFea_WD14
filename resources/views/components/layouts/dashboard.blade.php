@@ -188,15 +188,7 @@
                 </div>
             </header>
 
-            @if(session('success'))
-                <div data-flash-message="success" role="status" aria-live="polite" class="mx-4 sm:mx-6 xl:mx-7 mt-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
-                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    {{ session('success') }}
-                </div>
-            @endif
-            @if(session('error'))
-                <div class="mx-4 sm:mx-6 xl:mx-7 mt-4 bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-xl">{{ session('error') }}</div>
-            @endif
+            <x-toast-container />
 
             <main class="min-h-[calc(100vh-4rem)] p-4 sm:p-6 xl:p-7">
                 {{ $slot }}

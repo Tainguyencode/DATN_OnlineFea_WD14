@@ -19,12 +19,6 @@
             @endif
         </div>
 
-        @if(session('success'))
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300 shadow-xs">
-                {{ session('success') }}
-            </div>
-        @endif
-
         <!-- KHUNG CHAT ROOM -->
         <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col min-h-[560px]">
             <!-- HEADER KHUNG CHAT -->
