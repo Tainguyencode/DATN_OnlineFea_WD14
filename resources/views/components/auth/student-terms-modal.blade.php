@@ -10,7 +10,6 @@
         x-on:click.self="termsModalOpen = false"
         x-transition.opacity.duration.200ms
         class="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto"
-
         role="dialog"
         aria-modal="true"
         aria-labelledby="student-terms-title"

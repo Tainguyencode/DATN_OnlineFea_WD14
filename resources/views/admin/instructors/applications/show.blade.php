@@ -23,7 +23,6 @@
                             ⚠️ Chưa đủ điều kiện duyệt
                         </button>
                     @endif
-
                 @endif
 
                 @if($application->instructor_status !== 'rejected')
