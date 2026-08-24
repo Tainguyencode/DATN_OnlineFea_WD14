@@ -48,114 +48,188 @@
                 </p>
             </div>
 
-            <div class="grid gap-6 md:grid-cols-3">
+            <div class="grid gap-4 grid-cols-1 md:grid-cols-3 lg:grid-cols-5">
                 {{-- TOP 1 --}}
-                <div class="rounded-xl border-2 border-amber-300 bg-amber-50/40 p-5 space-y-4 relative">
-                    <div class="flex items-center justify-between border-b border-amber-200/80 pb-3">
-                        <span class="inline-flex items-center gap-1.5 rounded-md bg-amber-500 text-slate-950 px-3 py-1 text-xs font-black uppercase">
-                            🥇 TOP 1 BÁ VƯƠNG
+                <div class="rounded-xl border-2 border-amber-300 bg-amber-50/40 p-4 space-y-3 relative">
+                    <div class="flex items-center justify-between border-b border-amber-200/80 pb-2.5">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-amber-500 text-slate-950 px-2 py-0.5 text-[10px] font-black uppercase">
+                            🥇 TOP 1
                         </span>
-                        <span class="text-xs font-bold text-amber-800">Quán Quân</span>
+                        <span class="text-[11px] font-bold text-amber-800">Quán Quân</span>
                     </div>
 
                     <div class="space-y-3 text-xs">
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Loại thưởng</label>
-                            <input type="text" readonly value="Voucher Mã Giảm Giá" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600 font-semibold cursor-not-allowed">
+                            <input type="text" readonly value="Voucher Riêng" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-slate-600 font-semibold cursor-not-allowed text-xs">
                         </div>
 
                         <div>
                             <label for="top1_type" class="block font-bold text-slate-700 mb-1">Loại giảm giá <span class="text-rose-500">*</span></label>
-                            <select id="top1_type" name="top1_type" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-900 outline-none focus:border-rose-400">
-                                <option value="fixed" @selected(old('top1_type', $configs[1]['type']) === 'fixed')>Giảm số tiền cố định (VNĐ)</option>
-                                <option value="percent" @selected(old('top1_type', $configs[1]['type']) === 'percent')>Giảm theo phần trăm (%)</option>
+                            <select id="top1_type" name="top1_type" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 outline-none focus:border-rose-400">
+                                <option value="percent" @selected(old('top1_type', $configs[1]['type']) === 'percent')>Giảm phần trăm (%)</option>
+                                <option value="fixed" @selected(old('top1_type', $configs[1]['type']) === 'fixed')>Giảm số tiền (VNĐ)</option>
                             </select>
                         </div>
 
                         <div>
                             <label for="top1_value" class="block font-bold text-slate-700 mb-1">Giá trị giảm <span class="text-rose-500">*</span></label>
                             <input type="number" step="any" id="top1_value" name="top1_value" value="{{ old('top1_value', $configs[1]['value']) }}"
-                                   placeholder="VD: 200000" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold text-slate-900 outline-none focus:border-rose-400">
+                                   placeholder="VD: 40" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-900 outline-none focus:border-rose-400">
                         </div>
 
                         <div>
-                            <label for="top1_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn sử dụng (Số ngày) <span class="text-rose-500">*</span></label>
+                            <label for="top1_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn dùng (Ngày) <span class="text-rose-500">*</span></label>
                             <input type="number" min="1" id="top1_expiry_days" name="top1_expiry_days" value="{{ old('top1_expiry_days', $configs[1]['expiry_days']) }}"
-                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-900 outline-none focus:border-rose-400">
+                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-rose-400">
                         </div>
                     </div>
                 </div>
 
                 {{-- TOP 2 --}}
-                <div class="rounded-xl border border-slate-300 bg-slate-50/60 p-5 space-y-4 relative">
-                    <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-                        <span class="inline-flex items-center gap-1.5 rounded-md bg-slate-300 text-slate-900 px-3 py-1 text-xs font-black uppercase">
-                            🥈 TOP 2 Á QUÂN
+                <div class="rounded-xl border border-slate-300 bg-slate-50/60 p-4 space-y-3 relative">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-slate-300 text-slate-900 px-2 py-0.5 text-[10px] font-black uppercase">
+                            🥈 TOP 2
                         </span>
-                        <span class="text-xs font-bold text-slate-600">Á Quân</span>
+                        <span class="text-[11px] font-bold text-slate-600">Á Quân</span>
                     </div>
 
                     <div class="space-y-3 text-xs">
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Loại thưởng</label>
-                            <input type="text" readonly value="Voucher Mã Giảm Giá" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600 font-semibold cursor-not-allowed">
+                            <input type="text" readonly value="Voucher Riêng" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-slate-600 font-semibold cursor-not-allowed text-xs">
                         </div>
 
                         <div>
                             <label for="top2_type" class="block font-bold text-slate-700 mb-1">Loại giảm giá <span class="text-rose-500">*</span></label>
-                            <select id="top2_type" name="top2_type" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-900 outline-none focus:border-rose-400">
-                                <option value="fixed" @selected(old('top2_type', $configs[2]['type']) === 'fixed')>Giảm số tiền cố định (VNĐ)</option>
-                                <option value="percent" @selected(old('top2_type', $configs[2]['type']) === 'percent')>Giảm theo phần trăm (%)</option>
+                            <select id="top2_type" name="top2_type" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 outline-none focus:border-rose-400">
+                                <option value="percent" @selected(old('top2_type', $configs[2]['type']) === 'percent')>Giảm phần trăm (%)</option>
+                                <option value="fixed" @selected(old('top2_type', $configs[2]['type']) === 'fixed')>Giảm số tiền (VNĐ)</option>
                             </select>
                         </div>
 
                         <div>
                             <label for="top2_value" class="block font-bold text-slate-700 mb-1">Giá trị giảm <span class="text-rose-500">*</span></label>
                             <input type="number" step="any" id="top2_value" name="top2_value" value="{{ old('top2_value', $configs[2]['value']) }}"
-                                   placeholder="VD: 150000" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold text-slate-900 outline-none focus:border-rose-400">
+                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-900 outline-none focus:border-rose-400">
                         </div>
 
                         <div>
-                            <label for="top2_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn sử dụng (Số ngày) <span class="text-rose-500">*</span></label>
+                            <label for="top2_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn dùng (Ngày) <span class="text-rose-500">*</span></label>
                             <input type="number" min="1" id="top2_expiry_days" name="top2_expiry_days" value="{{ old('top2_expiry_days', $configs[2]['expiry_days']) }}"
-                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-900 outline-none focus:border-rose-400">
+                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-rose-400">
                         </div>
                     </div>
                 </div>
 
                 {{-- TOP 3 --}}
-                <div class="rounded-xl border border-amber-700/30 bg-amber-900/5 p-5 space-y-4 relative">
-                    <div class="flex items-center justify-between border-b border-amber-700/20 pb-3">
-                        <span class="inline-flex items-center gap-1.5 rounded-md bg-amber-800 text-white px-3 py-1 text-xs font-black uppercase">
-                            🥉 TOP 3 TINH ANH
+                <div class="rounded-xl border border-amber-700/30 bg-amber-900/5 p-4 space-y-3 relative">
+                    <div class="flex items-center justify-between border-b border-amber-700/20 pb-2.5">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-amber-800 text-white px-2 py-0.5 text-[10px] font-black uppercase">
+                            🥉 TOP 3
                         </span>
-                        <span class="text-xs font-bold text-amber-800">Top 3</span>
+                        <span class="text-[11px] font-bold text-amber-800">Top 3</span>
                     </div>
 
                     <div class="space-y-3 text-xs">
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Loại thưởng</label>
-                            <input type="text" readonly value="Voucher Mã Giảm Giá" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600 font-semibold cursor-not-allowed">
+                            <input type="text" readonly value="Voucher Riêng" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-slate-600 font-semibold cursor-not-allowed text-xs">
                         </div>
 
                         <div>
                             <label for="top3_type" class="block font-bold text-slate-700 mb-1">Loại giảm giá <span class="text-rose-500">*</span></label>
-                            <select id="top3_type" name="top3_type" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-900 outline-none focus:border-rose-400">
-                                <option value="fixed" @selected(old('top3_type', $configs[3]['type']) === 'fixed')>Giảm số tiền cố định (VNĐ)</option>
-                                <option value="percent" @selected(old('top3_type', $configs[3]['type']) === 'percent')>Giảm theo phần trăm (%)</option>
+                            <select id="top3_type" name="top3_type" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 outline-none focus:border-rose-400">
+                                <option value="percent" @selected(old('top3_type', $configs[3]['type']) === 'percent')>Giảm phần trăm (%)</option>
+                                <option value="fixed" @selected(old('top3_type', $configs[3]['type']) === 'fixed')>Giảm số tiền (VNĐ)</option>
                             </select>
                         </div>
 
                         <div>
                             <label for="top3_value" class="block font-bold text-slate-700 mb-1">Giá trị giảm <span class="text-rose-500">*</span></label>
                             <input type="number" step="any" id="top3_value" name="top3_value" value="{{ old('top3_value', $configs[3]['value']) }}"
-                                   placeholder="VD: 50000" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold text-slate-900 outline-none focus:border-rose-400">
+                                   placeholder="VD: 20" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-900 outline-none focus:border-rose-400">
                         </div>
 
                         <div>
-                            <label for="top3_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn sử dụng (Số ngày) <span class="text-rose-500">*</span></label>
+                            <label for="top3_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn dùng (Ngày) <span class="text-rose-500">*</span></label>
                             <input type="number" min="1" id="top3_expiry_days" name="top3_expiry_days" value="{{ old('top3_expiry_days', $configs[3]['expiry_days']) }}"
-                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-900 outline-none focus:border-rose-400">
+                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-rose-400">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- TOP 4 - TOP 9 --}}
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3 relative">
+                    <div class="flex items-center justify-between border-b border-indigo-200 pb-2.5">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-indigo-600 text-white px-2 py-0.5 text-[10px] font-black uppercase">
+                            🎖️ TOP 4 - TOP 9
+                        </span>
+                        <span class="text-[11px] font-bold text-indigo-700">Khuyến Khích</span>
+                    </div>
+
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Loại thưởng</label>
+                            <input type="text" readonly value="Voucher Đồng Hạng" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-slate-600 font-semibold cursor-not-allowed text-xs">
+                        </div>
+
+                        <div>
+                            <label for="top4_9_type" class="block font-bold text-slate-700 mb-1">Loại giảm giá <span class="text-rose-500">*</span></label>
+                            <select id="top4_9_type" name="top4_9_type" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 outline-none focus:border-rose-400">
+                                <option value="percent" @selected(old('top4_9_type', $configs['4_9']['type']) === 'percent')>Giảm phần trăm (%)</option>
+                                <option value="fixed" @selected(old('top4_9_type', $configs['4_9']['type']) === 'fixed')>Giảm số tiền (VNĐ)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="top4_9_value" class="block font-bold text-slate-700 mb-1">Giá trị giảm <span class="text-rose-500">*</span></label>
+                            <input type="number" step="any" id="top4_9_value" name="top4_9_value" value="{{ old('top4_9_value', $configs['4_9']['value']) }}"
+                                   placeholder="VD: 15" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-900 outline-none focus:border-rose-400">
+                        </div>
+
+                        <div>
+                            <label for="top4_9_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn dùng (Ngày) <span class="text-rose-500">*</span></label>
+                            <input type="number" min="1" id="top4_9_expiry_days" name="top4_9_expiry_days" value="{{ old('top4_9_expiry_days', $configs['4_9']['expiry_days']) }}"
+                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-rose-400">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- TOP 10 - TOP 50 --}}
+                <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3 relative">
+                    <div class="flex items-center justify-between border-b border-blue-200 pb-2.5">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-blue-600 text-white px-2 py-0.5 text-[10px] font-black uppercase">
+                            🏅 TOP 10 - TOP 50
+                        </span>
+                        <span class="text-[11px] font-bold text-blue-700">Tích Cực</span>
+                    </div>
+
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Loại thưởng</label>
+                            <input type="text" readonly value="Voucher Đồng Hạng" class="w-full rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-slate-600 font-semibold cursor-not-allowed text-xs">
+                        </div>
+
+                        <div>
+                            <label for="top10_50_type" class="block font-bold text-slate-700 mb-1">Loại giảm giá <span class="text-rose-500">*</span></label>
+                            <select id="top10_50_type" name="top10_50_type" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 outline-none focus:border-rose-400">
+                                <option value="percent" @selected(old('top10_50_type', $configs['10_50']['type']) === 'percent')>Giảm phần trăm (%)</option>
+                                <option value="fixed" @selected(old('top10_50_type', $configs['10_50']['type']) === 'fixed')>Giảm số tiền (VNĐ)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="top10_50_value" class="block font-bold text-slate-700 mb-1">Giá trị giảm <span class="text-rose-500">*</span></label>
+                            <input type="number" step="any" id="top10_50_value" name="top10_50_value" value="{{ old('top10_50_value', $configs['10_50']['value']) }}"
+                                   placeholder="VD: 10" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-900 outline-none focus:border-rose-400">
+                        </div>
+
+                        <div>
+                            <label for="top10_50_expiry_days" class="block font-bold text-slate-700 mb-1">Hạn dùng (Ngày) <span class="text-rose-500">*</span></label>
+                            <input type="number" min="1" id="top10_50_expiry_days" name="top10_50_expiry_days" value="{{ old('top10_50_expiry_days', $configs['10_50']['expiry_days']) }}"
+                                   placeholder="VD: 30" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-rose-400">
                         </div>
                     </div>
                 </div>

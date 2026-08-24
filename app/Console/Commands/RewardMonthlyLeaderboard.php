@@ -77,7 +77,7 @@ class RewardMonthlyLeaderboard extends Command
             ->select('users.*', 'points_table.period_xp')
             ->orderByDesc('points_table.period_xp')
             ->orderBy('users.id')
-            ->take(3)
+            ->take(50)
             ->get();
 
         if ($topStudents->isEmpty()) {
@@ -85,22 +85,32 @@ class RewardMonthlyLeaderboard extends Command
             return 0;
         }
 
-        // 4. Load reward configurations from SystemSetting or use defaults
+        // 4. Load reward configurations from SystemSetting or use defaults (Percent % based)
         $configs = [
             1 => [
-                'type' => SystemSetting::get('leaderboard_reward_top1_type', 'fixed'),
-                'value' => (float) SystemSetting::get('leaderboard_reward_top1_value', 200000),
+                'type' => SystemSetting::get('leaderboard_reward_top1_type', 'percent'),
+                'value' => (float) SystemSetting::get('leaderboard_reward_top1_value', 40),
                 'expiry_days' => (int) SystemSetting::get('leaderboard_reward_top1_expiry_days', 30),
             ],
             2 => [
-                'type' => SystemSetting::get('leaderboard_reward_top2_type', 'fixed'),
-                'value' => (float) SystemSetting::get('leaderboard_reward_top2_value', 150000),
+                'type' => SystemSetting::get('leaderboard_reward_top2_type', 'percent'),
+                'value' => (float) SystemSetting::get('leaderboard_reward_top2_value', 30),
                 'expiry_days' => (int) SystemSetting::get('leaderboard_reward_top2_expiry_days', 30),
             ],
             3 => [
-                'type' => SystemSetting::get('leaderboard_reward_top3_type', 'fixed'),
-                'value' => (float) SystemSetting::get('leaderboard_reward_top3_value', 50000),
+                'type' => SystemSetting::get('leaderboard_reward_top3_type', 'percent'),
+                'value' => (float) SystemSetting::get('leaderboard_reward_top3_value', 20),
                 'expiry_days' => (int) SystemSetting::get('leaderboard_reward_top3_expiry_days', 30),
+            ],
+            '4_9' => [
+                'type' => SystemSetting::get('leaderboard_reward_top4_9_type', 'percent'),
+                'value' => (float) SystemSetting::get('leaderboard_reward_top4_9_value', 15),
+                'expiry_days' => (int) SystemSetting::get('leaderboard_reward_top4_9_expiry_days', 30),
+            ],
+            '10_50' => [
+                'type' => SystemSetting::get('leaderboard_reward_top10_50_type', 'percent'),
+                'value' => (float) SystemSetting::get('leaderboard_reward_top10_50_value', 10),
+                'expiry_days' => (int) SystemSetting::get('leaderboard_reward_top10_50_expiry_days', 30),
             ],
         ];
 
@@ -108,7 +118,17 @@ class RewardMonthlyLeaderboard extends Command
         $grantedCount = 0;
         foreach ($topStudents as $index => $student) {
             $rank = $index + 1;
-            $cfg = $configs[$rank] ?? $configs[3];
+            if ($rank === 1) {
+                $cfg = $configs[1];
+            } elseif ($rank === 2) {
+                $cfg = $configs[2];
+            } elseif ($rank === 3) {
+                $cfg = $configs[3];
+            } elseif ($rank >= 4 && $rank <= 9) {
+                $cfg = $configs['4_9'];
+            } else {
+                $cfg = $configs['10_50'];
+            }
 
             DB::transaction(function () use (
                 $periodKey,

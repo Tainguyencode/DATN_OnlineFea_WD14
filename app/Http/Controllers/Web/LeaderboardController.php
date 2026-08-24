@@ -100,23 +100,37 @@ class LeaderboardController extends Controller
             1 => [
                 'rank' => 'TOP 1',
                 'title' => 'Quán Quân Tháng',
-                'voucher' => 'Voucher 200.000đ',
+                'voucher' => 'Voucher Giảm 40%',
                 'xp' => '+1.000 XP Thưởng',
                 'badge' => 'Huy hiệu Bá Vương Tháng',
             ],
             2 => [
                 'rank' => 'TOP 2',
                 'title' => 'Á Quân Tháng',
-                'voucher' => 'Voucher 150.000đ',
+                'voucher' => 'Voucher Giảm 30%',
                 'xp' => '+500 XP Thưởng',
                 'badge' => 'Huy hiệu Á Quân Tháng',
             ],
             3 => [
                 'rank' => 'TOP 3',
                 'title' => 'Top 3 Tinh Anh',
-                'voucher' => 'Voucher 50.000đ',
+                'voucher' => 'Voucher Giảm 20%',
                 'xp' => '+300 XP Thưởng',
                 'badge' => 'Huy hiệu Top 3 Tháng',
+            ],
+            '4_9' => [
+                'rank' => 'TOP 4 - TOP 9',
+                'title' => 'Khuyến Khích',
+                'voucher' => 'Voucher Giảm 15%',
+                'xp' => '+100 XP Thưởng',
+                'badge' => 'Huy hiệu Top 9 Tháng',
+            ],
+            '10_50' => [
+                'rank' => 'TOP 10 - TOP 50',
+                'title' => 'Tích Cực',
+                'voucher' => 'Voucher Giảm 10%',
+                'xp' => '+50 XP Thưởng',
+                'badge' => 'Huy hiệu Top 50 Tháng',
             ],
         ];
 
