@@ -430,11 +430,16 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])->name('categories.update');
     Route::post('/categories/{category}/toggle-status', [AdminCategoryController::class, 'toggleStatus'])->name('categories.toggle-status');
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
-    Route::get('coupons/grant', [AdminCouponController::class, 'grantForm'])->name('coupons.grant');
-    Route::post('coupons/grant', [AdminCouponController::class, 'grantStore'])->name('coupons.grant.store');
-    Route::get('coupons/grant-history', [AdminCouponController::class, 'grantHistory'])->name('coupons.grant_history');
+    // Cấu hình phần thưởng TOP Tháng & Lịch sử trao thưởng
+    Route::get('coupons/reward-config', [AdminCouponController::class, 'rewardConfigForm'])->name('coupons.reward_config');
+    Route::post('coupons/reward-config', [AdminCouponController::class, 'rewardConfigStore'])->name('coupons.reward_config.store');
+    Route::post('coupons/reward-run-now', [AdminCouponController::class, 'rewardRunNow'])->name('coupons.reward_run_now');
+    Route::get('coupons/reward-history', [AdminCouponController::class, 'rewardHistory'])->name('coupons.reward_history');
+
     Route::resource('coupons', AdminCouponController::class)->except(['show']);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+
+
     Route::resource('learning-paths', AdminLearningPathController::class);
     Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/course-reviews', [CourseReviewController::class, 'index'])->name('course-reviews.index');

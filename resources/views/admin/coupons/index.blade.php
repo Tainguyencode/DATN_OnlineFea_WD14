@@ -44,13 +44,13 @@
         </form>
 
         <div class="flex flex-wrap items-center gap-2">
-            <a href="{{ route('admin.coupons.grant') }}"
+            <a href="{{ route('admin.coupons.reward_config') }}"
                class="inline-flex min-h-11 items-center justify-center rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-rose-700 shadow-sm">
-                Tặng mã giảm giá
+                🏆 Cấu hình thưởng TOP
             </a>
-            <a href="{{ route('admin.coupons.grant_history') }}"
+            <a href="{{ route('admin.coupons.reward_history') }}"
                class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50">
-                Lịch sử tặng
+                📜 Lịch sử thưởng TOP
             </a>
             <a href="{{ route('admin.coupons.create') }}"
                class="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800">

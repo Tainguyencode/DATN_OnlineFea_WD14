@@ -95,13 +95,39 @@ class LeaderboardController extends Controller
             ];
         }
 
+        // Monthly Top 3 Rewards definition
+        $monthlyRewards = [
+            1 => [
+                'rank' => 'TOP 1',
+                'title' => 'Quán Quân Tháng',
+                'voucher' => 'Voucher 200.000đ',
+                'xp' => '+1.000 XP Thưởng',
+                'badge' => 'Huy hiệu Bá Vương Tháng',
+            ],
+            2 => [
+                'rank' => 'TOP 2',
+                'title' => 'Á Quân Tháng',
+                'voucher' => 'Voucher 150.000đ',
+                'xp' => '+500 XP Thưởng',
+                'badge' => 'Huy hiệu Á Quân Tháng',
+            ],
+            3 => [
+                'rank' => 'TOP 3',
+                'title' => 'Top 3 Tinh Anh',
+                'voucher' => 'Voucher 50.000đ',
+                'xp' => '+300 XP Thưởng',
+                'badge' => 'Huy hiệu Top 3 Tháng',
+            ],
+        ];
+
         return view('leaderboard.index', compact(
             'leaderboard',
             'top3',
             'currentUserData',
             'period',
             'search',
-            'countdownTarget'
+            'countdownTarget',
+            'monthlyRewards'
         ));
     }
 }
