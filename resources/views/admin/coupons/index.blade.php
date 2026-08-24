@@ -43,10 +43,20 @@
             </div>
         </form>
 
-        <a href="{{ route('admin.coupons.create') }}"
-           class="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800">
-            Thêm mã giảm giá
-        </a>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{{ route('admin.coupons.grant') }}"
+               class="inline-flex min-h-11 items-center justify-center rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-rose-700 shadow-sm">
+                Tặng mã giảm giá
+            </a>
+            <a href="{{ route('admin.coupons.grant_history') }}"
+               class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50">
+                Lịch sử tặng
+            </a>
+            <a href="{{ route('admin.coupons.create') }}"
+               class="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800">
+                Thêm mã giảm giá
+            </a>
+        </div>
     </div>
 
     <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -69,9 +79,20 @@
                     @forelse($coupons as $coupon)
                         <tr class="transition-colors duration-150 hover:bg-slate-50/80">
                             <td class="px-4 py-3 align-middle font-mono font-bold text-slate-950">
-                                <span class="bg-slate-100 border border-slate-200 text-slate-800 px-2 py-1 rounded text-xs">
-                                    {{ $coupon->code }}
-                                </span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="bg-slate-100 border border-slate-200 text-slate-800 px-2 py-1 rounded text-xs">
+                                        {{ $coupon->code }}
+                                    </span>
+                                    @if($coupon->is_private)
+                                        <span class="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200" title="Voucher riêng tư dành cho học viên">
+                                            🔒 Riêng tư
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 border border-slate-200">
+                                            🌐 Công khai
+                                        </span>
+                                    @endif
+                                </div>
                             </td>
                             <td class="px-4 py-3 align-middle text-xs font-semibold">
                                 @if($coupon->isInstructorCoupon())
