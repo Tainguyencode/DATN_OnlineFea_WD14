@@ -24,7 +24,7 @@
 @endphp
 
 @if ($toasts !== [])
-    <div class="toast-container" aria-label="Thông báo hệ thống">
+    <div class="toast-container" data-toast-container aria-label="Thông báo hệ thống">
         @foreach ($toasts as $toast)
             <div
                 class="app-toast app-toast--{{ $toast['type'] }}"

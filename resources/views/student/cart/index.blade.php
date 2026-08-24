@@ -52,8 +52,6 @@
             appliedCoupon: null,
             couponError: '',
             couponSuccess: '',
-            actionMessage: '',
-            actionType: 'success',
             isApplying: false,
             availableCoupons: {{ json_encode($activeCoupons->map(fn($cp) => [
                 'id' => $cp->id,
@@ -159,14 +157,19 @@
                         }
                     });
                     let data = await response.json();
-                    if (data.success) {
-                        this.courses = this.courses.filter(c => Number(c.id) !== Number(courseId));
-                        this.checkedIds = this.checkedIds.filter(id => Number(id) !== Number(courseId));
-                        this.updateSelectAll();
-                        this.showNotification('Đã xóa khóa học khỏi giỏ hàng.', 'success');
+
+                    if (!response.ok || !data?.success) {
+                        this.showNotification(this.getActionErrorMessage(data), 'error');
+                        return;
                     }
+
+                    this.courses = this.courses.filter(c => Number(c.id) !== Number(courseId));
+                    this.checkedIds = this.checkedIds.filter(id => Number(id) !== Number(courseId));
+                    this.updateSelectAll();
+                    this.showNotification('Đã xóa khóa học khỏi giỏ hàng.', 'success');
                 } catch (e) {
                     console.error(e);
+                    this.showNotification('Không thể thực hiện thao tác. Vui lòng thử lại.', 'error');
                 }
             },
             async moveToWishlist(courseId) {
@@ -179,35 +182,35 @@
                         }
                     });
                     let data = await response.json();
-                    if (data.success) {
-                        this.courses = this.courses.filter(c => Number(c.id) !== Number(courseId));
-                        this.checkedIds = this.checkedIds.filter(id => Number(id) !== Number(courseId));
-                        this.updateSelectAll();
-                        this.showNotification(data.message, 'success');
+
+                    if (!response.ok || !data?.success) {
+                        this.showNotification(this.getActionErrorMessage(data), 'error');
+                        return;
                     }
+
+                    this.courses = this.courses.filter(c => Number(c.id) !== Number(courseId));
+                    this.checkedIds = this.checkedIds.filter(id => Number(id) !== Number(courseId));
+                    this.updateSelectAll();
+                    this.showNotification(data.message, 'success');
                 } catch (e) {
                     console.error(e);
+                    this.showNotification('Không thể thực hiện thao tác. Vui lòng thử lại.', 'error');
                 }
             },
+            getActionErrorMessage(data) {
+                return typeof data?.message === 'string' && data.message.trim() !== ''
+                    ? data.message
+                    : 'Không thể thực hiện thao tác. Vui lòng thử lại.';
+            },
             showNotification(msg, type = 'success') {
-                this.actionMessage = msg;
-                this.actionType = type;
-                setTimeout(() => { this.actionMessage = ''; }, 3500);
+                if (window.AppToast?.show) {
+                    window.AppToast.show({ message: msg, type });
+                    return;
+                }
+
+                console.error('Shared toast API is unavailable.');
             }
         }" class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            
-            <!-- THÔNG BÁO TOAST NỔI -->
-            <div x-show="actionMessage" 
-                 x-transition:enter="transition ease-out duration-300 transform"
-                 x-transition:enter-start="opacity-0 translate-y-2"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 x-transition:leave="transition ease-in duration-200"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl border flex items-center gap-3 bg-slate-900 text-white border-slate-800 text-sm font-semibold">
-                <span class="text-emerald-400 font-bold">✓</span>
-                <span x-text="actionMessage"></span>
-            </div>
 
             <!-- Danh sách khóa học trong giỏ hàng -->
             <div class="lg:col-span-2 space-y-4">
