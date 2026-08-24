@@ -9,6 +9,9 @@
     $selectedLanguage = old('language', $course->language ?? 'vi');
     $discountPrice = old('discount_price', $course->discount_price ?? $course->sale_price ?? null);
     $wideLayout = $wideLayout ?? false;
+    $editLayout = $editLayout ?? false;
+    $showActionBar = $showActionBar ?? true;
+    $formId = $formId ?? null;
     $existingThumbnailUrl = $isEdit && $course->thumbnail
         ? asset('storage/' . $course->thumbnail)
         : '';
@@ -26,14 +29,14 @@
     </div>
 @endif --}}
 
-<form method="POST" action="{{ $action }}" enctype="multipart/form-data" class="w-full min-w-0 space-y-4 {{ $wideLayout ? 'lg:flex lg:min-h-[calc(100vh-9rem)] lg:flex-col' : '' }}">
+<form @if($formId) id="{{ $formId }}" @endif method="POST" action="{{ $action }}" enctype="multipart/form-data" class="w-full min-w-0 space-y-4 {{ $wideLayout ? 'lg:flex lg:min-h-[calc(100vh-9rem)] lg:flex-col' : '' }}">
     @csrf
     @if($method !== 'POST')
         @method($method)
     @endif
 
-    <div class="grid min-w-0 items-stretch gap-4 lg:flex-1 {{ $wideLayout ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)_minmax(320px,1.05fr)]' : 'lg:grid-cols-[minmax(0,1fr)_320px]' }}">
-        <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:h-full lg:p-5 {{ $wideLayout ? 'lg:row-span-2 xl:row-span-1' : 'lg:row-span-2' }}">
+    <div class="grid min-w-0 items-stretch gap-4 lg:flex-1 {{ $wideLayout ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)_minmax(320px,1.05fr)]' : ($editLayout ? 'min-[992px]:grid-cols-[minmax(0,1.7fr)_minmax(330px,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_320px]') }}">
+        <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:h-full lg:p-5 {{ $wideLayout ? 'lg:row-span-2 xl:row-span-1' : ($editLayout ? 'min-[992px]:row-span-2' : 'lg:row-span-2') }}">
             <div class="border-b border-slate-100 pb-3">
                 <h2 class="text-base font-bold text-slate-950">Thông tin khóa học</h2>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Cung cấp thông tin cơ bản về khóa học của bạn.</p>
@@ -56,7 +59,7 @@
                     <label for="short_description" class="mb-1 block text-sm font-semibold text-slate-700">Mô tả ngắn</label>
                     <textarea id="short_description" name="short_description" rows="2" maxlength="500"
                               placeholder="Tóm tắt giá trị khóa học trong 1-2 câu."
-                              class="h-[72px] min-h-[72px] w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('short_description') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('short_description', $course->short_description ?? '') }}</textarea>
+                              class="{{ $editLayout ? 'h-[60px] min-h-[60px]' : 'h-[72px] min-h-[72px]' }} w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('short_description') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('short_description', $course->short_description ?? '') }}</textarea>
                     @error('short_description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
@@ -64,7 +67,7 @@
                     <label for="description" class="mb-1 block text-sm font-semibold text-slate-700">Mô tả chi tiết</label>
                     <textarea id="description" name="description" rows="3"
                               placeholder="Nội dung khóa học, đối tượng phù hợp, kết quả sau khi hoàn thành..."
-                              class="h-[96px] min-h-[96px] w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('description') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('description', $course->description ?? '') }}</textarea>
+                              class="{{ $editLayout ? 'h-[72px] min-h-[72px]' : 'h-[96px] min-h-[96px]' }} w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('description') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('description', $course->description ?? '') }}</textarea>
                     @error('description') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
@@ -72,20 +75,20 @@
                     <label for="objectives" class="mb-1 block text-sm font-semibold text-slate-700">Mục tiêu khóa học</label>
                     <textarea id="objectives" name="objectives" rows="3"
                               placeholder="Học viên sẽ đạt được những kỹ năng/kiến thức gì sau khóa học..."
-                              class="h-[88px] min-h-[88px] w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('objectives') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('objectives', $course->objectives ?? '') }}</textarea>
+                              class="{{ $editLayout ? 'h-[72px] min-h-[72px]' : 'h-[88px] min-h-[88px]' }} w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('objectives') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">{{ old('objectives', $course->objectives ?? '') }}</textarea>
                     @error('objectives') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                 </div>
             </div>
         </section>
 
-        <div class="min-w-0 space-y-4 lg:flex lg:h-full lg:flex-col lg:gap-4 lg:space-y-0 {{ $wideLayout ? 'lg:col-start-2 lg:row-start-2 xl:row-start-1' : '' }}">
+        <div class="min-w-0 space-y-4 {{ $editLayout ? 'min-[992px]:flex min-[992px]:h-full min-[992px]:flex-col min-[992px]:gap-4 min-[992px]:space-y-0' : 'lg:flex lg:h-full lg:flex-col lg:gap-4 lg:space-y-0' }} {{ $wideLayout ? 'lg:col-start-2 lg:row-start-2 xl:row-start-1' : '' }}">
             <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:flex-[1.1] lg:p-5">
                 <div class="border-b border-slate-100 pb-3">
                     <h2 class="text-base font-bold text-slate-950">Phân loại & thiết lập</h2>
                     <p class="mt-1 text-xs leading-5 text-slate-500">Giúp học viên tìm thấy khóa học phù hợp.</p>
                 </div>
 
-                <div class="mt-3 space-y-3">
+                <div class="mt-3 space-y-3 {{ $editLayout ? 'md:grid md:grid-cols-2 md:gap-x-3 md:gap-y-3 md:space-y-0' : '' }}">
                     <div>
                         <label for="category_id" class="mb-1 block text-sm font-semibold text-slate-700">Danh mục <span class="text-rose-500">*</span></label>
                         <select id="category_id" name="category_id"
@@ -179,16 +182,17 @@
             </section>
         </div>
 
-        <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:h-full lg:p-5 {{ $wideLayout ? 'lg:col-start-2 lg:row-start-1 xl:col-start-3 xl:row-start-1' : 'lg:col-start-2' }}">
+        <section class="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:h-full lg:p-5 {{ $wideLayout ? 'lg:col-start-2 lg:row-start-1 xl:col-start-3 xl:row-start-1' : ($editLayout ? 'min-[992px]:col-start-2' : 'lg:col-start-2') }}">
             <div class="border-b border-slate-100 pb-3">
                 <h2 class="text-base font-bold text-slate-950">Hình ảnh & video</h2>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Tải lên ảnh đại diện và thêm video giới thiệu.</p>
             </div>
 
+            <div class="mt-3 {{ $editLayout ? 'sm:grid sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-3' : '' }}">
             <div id="course-media-preview"
                  data-existing-image-url="{{ $existingThumbnailUrl }}"
                  data-existing-image-alt="{{ $existingThumbnailAlt }}"
-                 class="mt-3 aspect-video w-full max-h-[190px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                 class="{{ $editLayout ? 'h-[140px] w-full sm:h-[150px]' : 'aspect-video w-full max-h-[190px]' }} overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
                  aria-label="Xem trước hình ảnh hoặc video khóa học"
                  aria-live="polite">
                 <div class="h-full w-full">
@@ -200,7 +204,7 @@
                 </div>
             </div>
 
-            <div class="mt-3">
+            <div class="{{ $editLayout ? 'mt-3 sm:mt-0' : 'mt-3' }}">
                 <span class="mb-1 block text-sm font-semibold text-slate-700">Ảnh thumbnail</span>
                 <input id="thumbnail" type="file" name="thumbnail" accept="image/*" class="peer sr-only" aria-describedby="thumbnail-help thumbnail-file-name">
                 <label for="thumbnail"
@@ -215,6 +219,7 @@
                     <span id="thumbnail-file-name" class="max-w-28 shrink-0 truncate text-right text-slate-400">Chưa chọn tệp</span>
                 </div>
                 @error('thumbnail') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
+            </div>
             </div>
 
             <div class="mt-3">
@@ -234,6 +239,7 @@
         </section>
     </div>
 
+    @if($showActionBar)
     <div class="sticky bottom-16 z-20 mt-4 w-full rounded-lg border border-slate-200 bg-white/95 p-2.5 shadow-lg backdrop-blur lg:bottom-2 lg:mt-auto">
         <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
             <p class="text-xs leading-5 text-slate-500">Khóa học được lưu ở trạng thái nháp cho đến khi bạn gửi duyệt.</p>
@@ -249,6 +255,7 @@
             </div>
         </div>
     </div>
+    @endif
 </form>
 
 <script>

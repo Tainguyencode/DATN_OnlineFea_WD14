@@ -1,4 +1,4 @@
-<x-instructor-layout :title="$course->title" page-title="Chỉnh sửa khóa học" :breadcrumb="$course->title">
+<x-instructor-layout :title="$course->title" page-title="Chỉnh sửa khóa học" page-title-class="text-lg sm:text-xl font-bold leading-tight text-slate-900 truncate" breadcrumb="Cập nhật thông tin khóa học và gửi duyệt để xuất bản">
 
 @php
     $statusStyles = [
@@ -14,10 +14,38 @@
 
     $sectionCount = $course->courseSections->count();
     $lessonCount = $course->courseSections->sum(fn ($section) => $section->lessons->count());
+    $categoryLabel = $course->category?->full_name ?? $course->category?->name ?? 'Chưa chọn';
+    $languageLabel = ['vi' => 'Tiếng Việt', 'en' => 'English'][$course->language] ?? $course->language;
 @endphp
 
-<div class="space-y-6">
-    <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+<div class="space-y-4">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        @if($course->isPublished())
+            <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
+               class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.25 12S5.625 5.25 12 5.25 21.75 12 21.75 12 18.375 18.75 12 18.75 2.25 12 2.25 12Z" /><circle cx="12" cy="12" r="2.5" stroke-width="1.8" /></svg>
+                Xem trước
+            </a>
+        @endif
+        <a href="{{ route('instructor.courses.curriculum', $course) }}"
+           class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4.5 5.25A2.25 2.25 0 0 1 6.75 3h10.5a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 17.25 21H6.75a2.25 2.25 0 0 1-2.25-2.25V5.25ZM8.25 7.5h7.5m-7.5 4h7.5m-7.5 4h4.5" /></svg>
+            Quản lý nội dung
+        </a>
+        @if($course->canBeSubmittedForReview() && $submissionCheck->passes())
+            <button type="button" onclick="openCopyrightModal()"
+                    class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+                {{ in_array($course->status, ['published', 'rejected_update'], true) ? 'Gửi duyệt cập nhật' : (in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt') }}
+            </button>
+        @endif
+        <button type="submit" form="course-edit-form"
+                class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+            Lưu thay đổi
+        </button>
+    </div>
+
+    <div class="grid gap-4 min-[992px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:p-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -30,7 +58,7 @@
                 <p class="mt-1 text-sm text-slate-500">{{ $course->short_description ?: 'Bổ sung mô tả ngắn để học viên hiểu nhanh giá trị khóa học.' }}</p>
             </div>
 
-            <div class="flex flex-wrap gap-2">
+            <div class="hidden flex-wrap gap-2">
                 <a href="{{ route('instructor.courses.index') }}"
                    class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">
                     Quay lại
@@ -51,6 +79,21 @@
                         {{ in_array($course->status, ['published', 'rejected_update'], true) ? 'Gửi duyệt cập nhật' : (in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt') }}
                     </button>
                 @endif
+            </div>
+        </div>
+
+        <div class="mt-4 grid gap-3 border-t border-slate-100 pt-3 text-xs text-slate-600 sm:grid-cols-3">
+            <div class="flex items-center gap-2">
+                <svg class="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6.75 3v2.25M17.25 3v2.25M3.75 9.75h16.5M5.25 5.25h13.5A1.5 1.5 0 0 1 20.25 6.75v11.5a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V6.75a1.5 1.5 0 0 1 1.5-1.5Z" /></svg>
+                <span>Tạo ngày: {{ $course->created_at?->format('d/m/Y') }}</span>
+            </div>
+            <div class="flex min-w-0 items-center gap-2">
+                <svg class="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3.75 6.75A2.25 2.25 0 0 1 6 4.5h3l1.5 1.5H18a2.25 2.25 0 0 1 2.25 2.25v9A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25v-10.5Z" /></svg>
+                <span class="truncate">Danh mục: {{ $categoryLabel }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <svg class="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.25" stroke-width="1.8" /><path stroke-linecap="round" stroke-width="1.8" d="M3.75 12h16.5M12 3.75c2.1 2.3 3.15 5.05 3.15 8.25S14.1 17.95 12 20.25C9.9 17.95 8.85 15.2 8.85 12S9.9 6.05 12 3.75Z" /></svg>
+                <span>Ngôn ngữ: {{ $languageLabel }}</span>
             </div>
         </div>
 
@@ -78,15 +121,21 @@
         @endif
     </div>
 
-    @if(in_array($course->status, ['rejected', 'rejected_update'], true))
-        @include('instructor.courses.partials.ai-moderation-results', ['course' => $course])
-    @endif
-
     @if($course->canBeSubmittedForReview())
         @include('instructor.courses.partials.submission-readiness', [
             'course' => $course,
             'submissionCheck' => $submissionCheck,
         ])
+    @else
+        <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:p-5">
+            <p class="text-sm font-bold text-slate-950">Khóa học chưa thể gửi duyệt</p>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Trạng thái hiện tại không cho phép gửi khóa học để kiểm duyệt.</p>
+        </section>
+    @endif
+    </div>
+
+    @if(in_array($course->status, ['rejected', 'rejected_update'], true))
+        @include('instructor.courses.partials.ai-moderation-results', ['course' => $course])
     @endif
 
     @include('instructor.courses._form', [
@@ -94,24 +143,46 @@
         'categories' => $categories,
         'action' => route('instructor.courses.update', $course),
         'method' => 'PUT',
+        'editLayout' => true,
+        'showActionBar' => false,
+        'formId' => 'course-edit-form',
         'submitLabel' => 'Lưu nháp',
     ])
 
-    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-                <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600">Curriculum builder</p>
-                <h2 class="mt-1 text-lg font-bold text-slate-950">Nội dung khóa học</h2>
-                <p class="mt-1 text-sm text-slate-500">{{ $sectionCount }} chương · {{ $lessonCount }} bài học</p>
+    <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:p-5">
+        <div>
+            <h2 class="text-base font-bold text-slate-950">Nội dung khóa học</h2>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Quản lý chương, bài học và nội dung chi tiết của khóa học.</p>
+        </div>
+        <div class="mt-3 flex flex-col gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex min-w-0 items-center gap-3">
+                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4.5 5.25A2.25 2.25 0 0 1 6.75 3h3.75a2.25 2.25 0 0 1 1.59.66L12.75 4.5h4.5a2.25 2.25 0 0 1 2.25 2.25v11.5A2.25 2.25 0 0 1 17.25 20.5H6.75A2.25 2.25 0 0 1 4.5 18.25v-13ZM8.25 9h7.5m-7.5 4h7.5m-7.5 4h4.5" /></svg>
+                </span>
+                <div class="min-w-0">
+                    <p class="text-sm font-bold text-slate-900">Curriculum Builder</p>
+                    <p class="mt-0.5 text-xs text-slate-500">{{ $sectionCount }} chương · {{ $lessonCount }} bài học · {{ $lessonCount ? 'Đã có nội dung' : 'Chưa có nội dung' }}</p>
+                </div>
             </div>
             <a href="{{ route('instructor.courses.curriculum', $course) }}"
-               class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
+               class="inline-flex min-h-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-700 transition-colors duration-200 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                 Mở trình quản lý nội dung
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5h5v5m0-5-8 8M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" /></svg>
             </a>
         </div>
     </section>
 
     {{-- ===== LỊCH SỬ KIỂM DUYỆT ===== --}}
+    <div class="sticky bottom-16 z-20 rounded-lg border border-slate-200 bg-white/95 p-2.5 shadow-lg backdrop-blur lg:bottom-2">
+        <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-xs leading-5 text-slate-500">Khóa học được lưu ở trạng thái nháp cho đến khi bạn gửi duyệt.</p>
+            <div class="grid grid-cols-2 gap-2 sm:flex">
+                <a href="{{ route('instructor.courses.index') }}" class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Hủy</a>
+                <button type="submit" form="course-edit-form" class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">Lưu nháp</button>
+            </div>
+        </div>
+    </div>
+
     @if($courseReviews->isNotEmpty())
     @php
         $statusBadge = [
