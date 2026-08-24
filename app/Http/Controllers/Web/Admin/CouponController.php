@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreCouponRequest;
 use App\Models\Coupon;
 use App\Models\Course;
+use App\Models\MonthlyRewardLog;
 use App\Models\Order;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\ActivityLogService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -161,156 +164,103 @@ class CouponController extends Controller
     }
 
     /**
-     * Hiển thị giao diện Admin tạo & tặng voucher riêng cho học viên.
+     * Giao diện cấu hình phần thưởng TOP Bảng Xếp Hạng Tháng.
      */
-    public function grantForm(Request $request): View
+    public function rewardConfigForm(): View
     {
-        $startDate = now()->startOfMonth();
-        $endDate = now()->endOfMonth();
+        $configs = [
+            1 => [
+                'type' => SystemSetting::get('leaderboard_reward_top1_type', 'fixed'),
+                'value' => SystemSetting::get('leaderboard_reward_top1_value', 200000),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top1_expiry_days', 30),
+            ],
+            2 => [
+                'type' => SystemSetting::get('leaderboard_reward_top2_type', 'fixed'),
+                'value' => SystemSetting::get('leaderboard_reward_top2_value', 150000),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top2_expiry_days', 30),
+            ],
+            3 => [
+                'type' => SystemSetting::get('leaderboard_reward_top3_type', 'fixed'),
+                'value' => SystemSetting::get('leaderboard_reward_top3_value', 50000),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top3_expiry_days', 30),
+            ],
+        ];
 
-        // Subquery tính tổng điểm XP trong tháng hiện tại
-        $pointsSubquery = DB::table('user_points')
-            ->select('user_id', DB::raw('SUM(points) as period_xp'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->groupBy('user_id');
-
-        // Lấy danh sách Học viên TOP tháng (được xếp hạng theo XP)
-        $topStudents = User::query()
-            ->where('role', 'student')
-            ->where('is_active', true)
-            ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
-            ->select('users.*', 'points_table.period_xp')
-            ->orderByDesc('points_table.period_xp')
-            ->get();
-
-        $topUserIds = $topStudents->pluck('id')->toArray();
-
-        // Lấy tất cả học viên còn lại
-        $otherStudents = User::query()
-            ->where('role', 'student')
-            ->where('is_active', true)
-            ->whereNotIn('id', $topUserIds)
-            ->orderBy('name')
-            ->get(['id', 'name', 'email']);
-
-        $courses = Course::query()
-            ->published()
-            ->orderBy('title')
-            ->get(['id', 'title']);
-
-        $selectedUserId = $request->query('user_id');
-
-        // Mặc định chọn TOP 1 học viên tháng này nếu chưa chỉ định user_id
-        if (! $selectedUserId && $topStudents->isNotEmpty()) {
-            $selectedUserId = $topStudents->first()->id;
-        }
-
-        return view('admin.coupons.grant', compact('topStudents', 'otherStudents', 'courses', 'selectedUserId'));
+        return view('admin.coupons.reward_config', compact('configs'));
     }
 
     /**
-     * Xử lý Admin khởi tạo voucher riêng và tặng cho học viên.
+     * Lưu cấu hình phần thưởng TOP Bảng Xếp Hạng Tháng.
      */
-    public function grantStore(Request $request): RedirectResponse
+    public function rewardConfigStore(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'code' => 'required|string|max:50|unique:coupons,code',
-            'type' => 'required|in:percent,fixed',
-            'value' => 'required|numeric|min:0.01',
-            'min_order_amount' => 'nullable|numeric|min:0',
-            'max_uses' => 'nullable|integer|min:1',
-            'course_id' => 'nullable|exists:courses,id',
-            'expires_at' => 'nullable|date',
-            'reason' => 'required|string|max:255',
+            'top1_type' => 'required|in:fixed,percent',
+            'top1_value' => 'required|numeric|min:0.01',
+            'top1_expiry_days' => 'required|integer|min:1',
+
+            'top2_type' => 'required|in:fixed,percent',
+            'top2_value' => 'required|numeric|min:0.01',
+            'top2_expiry_days' => 'required|integer|min:1',
+
+            'top3_type' => 'required|in:fixed,percent',
+            'top3_value' => 'required|numeric|min:0.01',
+            'top3_expiry_days' => 'required|integer|min:1',
         ], [
-            'user_id.required' => 'Vui lòng chọn học viên nhận voucher.',
-            'user_id.exists' => 'Học viên không tồn tại trong hệ thống.',
-            'code.required' => 'Vui lòng nhập mã giảm giá.',
-            'code.max' => 'Mã voucher không vượt quá 50 ký tự.',
-            'code.unique' => 'Mã voucher này đã tồn tại trong hệ thống, vui lòng đổi mã khác.',
-            'type.required' => 'Vui lòng chọn loại giảm giá.',
-            'type.in' => 'Loại giảm giá không hợp lệ.',
-            'value.required' => 'Vui lòng nhập giá trị giảm.',
-            'value.min' => 'Giá trị giảm phải lớn hơn 0.',
-            'max_uses.integer' => 'Số lượt sử dụng phải là số nguyên.',
-            'max_uses.min' => 'Số lượt sử dụng phải lớn hơn hoặc bằng 1.',
-            'reason.required' => 'Vui lòng nhập lý do tặng voucher.',
-            'reason.max' => 'Lý do tặng không vượt quá 255 ký tự.',
+            'top1_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 1.',
+            'top2_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 2.',
+            'top3_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 3.',
+            'top1_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top2_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top3_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
         ]);
 
-        $student = User::where('id', $validated['user_id'])
-            ->where('role', 'student')
-            ->firstOrFail();
+        SystemSetting::set('leaderboard_reward_top1_type', $validated['top1_type']);
+        SystemSetting::set('leaderboard_reward_top1_value', $validated['top1_value']);
+        SystemSetting::set('leaderboard_reward_top1_expiry_days', $validated['top1_expiry_days']);
 
-        // 1. Tạo Voucher riêng (is_private = true)
-        $coupon = Coupon::create([
-            'code' => strtoupper(trim($validated['code'])),
-            'type' => $validated['type'],
-            'value' => $validated['value'],
-            'min_order_amount' => $validated['min_order_amount'] ?? 0,
-            'max_uses' => $validated['max_uses'] ?? 1,
-            'course_id' => $validated['course_id'] ?? null,
-            'expires_at' => $validated['expires_at'] ?? null,
-            'is_active' => true,
-            'is_private' => true,
-            'creator_type' => 'admin',
-        ]);
+        SystemSetting::set('leaderboard_reward_top2_type', $validated['top2_type']);
+        SystemSetting::set('leaderboard_reward_top2_value', $validated['top2_value']);
+        SystemSetting::set('leaderboard_reward_top2_expiry_days', $validated['top2_expiry_days']);
 
-        // 2. Tạo bản ghi liên kết UserCoupon dành riêng cho học viên
-        UserCoupon::create([
-            'user_id' => $student->id,
-            'coupon_id' => $coupon->id,
-            'source' => 'admin',
-            'reason' => $validated['reason'],
-            'granted_by' => auth()->id(),
-            'granted_at' => now(),
-            'saved_at' => now(),
-        ]);
-
-        // 3. Gửi thông báo cho học viên qua NotificationService
-        $discountText = $coupon->type === 'percent'
-            ? (int) $coupon->value.'%'
-            : number_format($coupon->value, 0, ',', '.').'đ';
-
-        app(NotificationService::class)->send(
-            $student,
-            '🎁 Bạn vừa nhận được voucher!',
-            "Admin đã tặng bạn voucher riêng \"{$coupon->code}\" (Giảm {$discountText}). Mã: {$coupon->code}. Lý do: \"{$validated['reason']}\". Voucher đã được thêm vào Kho Voucher của bạn.",
-            'voucher_granted',
-            route('student.vouchers.index')
-        );
-
-        ActivityLogService::log(
-            auth()->id(),
-            'create_and_grant_private_voucher',
-            UserCoupon::class,
-            $coupon->id,
-            [
-                'student_id' => $student->id,
-                'student_name' => $student->name,
-                'coupon_code' => $coupon->code,
-                'reason' => $validated['reason'],
-            ],
-            $request
-        );
+        SystemSetting::set('leaderboard_reward_top3_type', $validated['top3_type']);
+        SystemSetting::set('leaderboard_reward_top3_value', $validated['top3_value']);
+        SystemSetting::set('leaderboard_reward_top3_expiry_days', $validated['top3_expiry_days']);
 
         return redirect()
-            ->route('admin.coupons.grant_history')
-            ->with('success', "🎁 Đã tạo và tặng thành công voucher riêng {$coupon->code} cho học viên {$student->name}.");
+            ->route('admin.coupons.reward_config')
+            ->with('success', '🏆 Cấu hình phần thưởng TOP Bảng Xếp Hạng Tháng đã được lưu thành công.');
     }
 
     /**
-     * Xem lịch sử Admin tặng voucher cho học viên.
+     * Chạy trao thưởng thủ công ngay lập tức từ Admin UI cho tháng chỉ định.
      */
-    public function grantHistory(Request $request): View
+    public function rewardRunNow(Request $request): RedirectResponse
     {
-        $grants = UserCoupon::query()
-            ->where('source', 'admin')
-            ->with(['user:id,name,email,avatar', 'coupon', 'grantedBy:id,name,email'])
-            ->orderByDesc('granted_at')
+        $period = $request->input('period', now()->subMonth()->format('Y-m'));
+
+        Artisan::call('leaderboard:reward-monthly', [
+            '--period' => $period,
+        ]);
+
+        $output = Artisan::output();
+
+        return redirect()
+            ->route('admin.coupons.reward_history')
+            ->with('success', "Đã kích hoạt tiến trình trao thưởng tháng {$period}. Kết quả: " . trim($output));
+    }
+
+    /**
+     * Hiển thị Lịch sử tự động trao thưởng TOP Bảng Xếp Hạng Tháng.
+     */
+    public function rewardHistory(Request $request): View
+    {
+        $rewards = MonthlyRewardLog::query()
+            ->with(['user:id,name,email,avatar', 'coupon', 'userCoupon'])
+            ->orderByDesc('period_key')
+            ->orderBy('rank')
             ->paginate(15);
 
-        return view('admin.coupons.grant_history', compact('grants'));
+        return view('admin.coupons.reward_history', compact('rewards'));
     }
 }
