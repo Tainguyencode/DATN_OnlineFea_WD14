@@ -1,4 +1,4 @@
-<x-auth.layout title="Admin Login - FEA Learning" subtitle="Đăng nhập hệ thống quản trị riêng biệt.">
+<x-auth.layout :standalone="true" title="Admin Login - FEA Learning" subtitle="Đăng nhập hệ thống quản trị riêng biệt.">
     <div class="mb-6 text-center">
         <h1 class="text-2xl font-bold text-[#0F172A]">Admin Portal</h1>
         <p class="mt-2 text-xs text-[#6B7280]">Chỉ dành cho Admin / Super Admin</p>
