@@ -67,11 +67,11 @@ class CourseController extends Controller
             'category:id,parent_id,name,slug',
             'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
-                ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'upload_status', 'processing_status', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->when(! $canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
             'chapters.lessons' => fn ($q) => $q
-                ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'upload_status', 'processing_status', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->when(! $canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
         ]);

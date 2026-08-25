@@ -32,7 +32,7 @@ class AiModerationController extends Controller
                     'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
                 ]);
                 $draftLesson->id = $lessonId;
-                return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
+                return [$draftLesson, $payload['original_video_key'] ?? $payload['video_path'] ?? $payload['hls_manifest_key'] ?? null];
             }
         }
 
@@ -48,11 +48,11 @@ class AiModerationController extends Controller
             if ($pendingUpdate) {
                 $p = $pendingUpdate->payload ?? [];
                 if (!empty($p['original_video_key']) || !empty($p['hls_manifest_key']) || !empty($p['video_path'])) {
-                    return [$lesson, $p['video_path'] ?? $p['hls_manifest_key'] ?? $p['original_video_key']];
+                    return [$lesson, $p['original_video_key'] ?? $p['video_path'] ?? $p['hls_manifest_key']];
                 }
             }
 
-            return [$lesson, $lesson->video_path ?: ($lesson->hls_manifest_key ?: $lesson->original_video_key)];
+            return [$lesson, $lesson->original_video_key ?: ($lesson->video_path ?: $lesson->hls_manifest_key)];
         }
 
         // Fallback check if $lessonId is a numeric ContentUpdate ID
@@ -67,7 +67,7 @@ class AiModerationController extends Controller
                 'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
             ]);
             $draftLesson->id = 'update_les_' . $update->id;
-            return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
+            return [$draftLesson, $payload['original_video_key'] ?? $payload['video_path'] ?? $payload['hls_manifest_key'] ?? null];
         }
 
         return [null, null];
@@ -287,7 +287,27 @@ class AiModerationController extends Controller
         }
 
         $videoPath = null;
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPathRel)) {
+        $temporaryVideoPath = null;
+
+        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        if ($useS3 && $lesson?->original_video_key && \Illuminate\Support\Facades\Storage::disk('s3')->exists($lesson->original_video_key)) {
+            $extension = pathinfo($lesson->original_video_key, PATHINFO_EXTENSION) ?: 'mp4';
+            $temporaryVideoPath = storage_path('app/temp_ai_video_'.$lessonId.'.'.$extension);
+
+            $stream = \Illuminate\Support\Facades\Storage::disk('s3')->readStream($lesson->original_video_key);
+            if ($stream) {
+                $target = fopen($temporaryVideoPath, 'wb');
+                if ($target) {
+                    stream_copy_to_stream($stream, $target);
+                    fclose($target);
+                    $videoPath = $temporaryVideoPath;
+                }
+
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+        } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPathRel)) {
             $videoPath = \Illuminate\Support\Facades\Storage::disk('local')->path($videoPathRel);
         } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($videoPathRel)) {
             $videoPath = \Illuminate\Support\Facades\Storage::disk('public')->path($videoPathRel);
@@ -300,6 +320,10 @@ class AiModerationController extends Controller
         try {
             $frames = $extractor->extract($videoPath, 300, $lessonId);
 
+            if ($temporaryVideoPath && file_exists($temporaryVideoPath)) {
+                @unlink($temporaryVideoPath);
+            }
+
             if (empty($frames)) {
                 return response()->json(['error' => 'Không thể trích xuất hình ảnh từ video này.'], 422);
             }
@@ -309,6 +333,10 @@ class AiModerationController extends Controller
                 'total' => count($frames),
             ]);
         } catch (\Throwable $e) {
+            if ($temporaryVideoPath && file_exists($temporaryVideoPath)) {
+                @unlink($temporaryVideoPath);
+            }
+
             return response()->json(['error' => 'Lỗi khi cắt frame: '.$e->getMessage()], 500);
         }
     }
