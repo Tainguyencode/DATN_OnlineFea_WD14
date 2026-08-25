@@ -90,6 +90,10 @@ function initializeLessonImport(root) {
         error: root.querySelector('[data-lesson-import-error]'),
         errorMessage: root.querySelector('[data-lesson-import-error-message]'),
         errorGuidance: root.querySelector('[data-lesson-import-error-guidance]'),
+        confirmError: root.querySelector('[data-lesson-import-confirm-error]'),
+        confirmErrorMessage: root.querySelector('[data-lesson-import-confirm-error-message]'),
+        confirm: root.querySelector('[data-lesson-import-confirm]'),
+        confirmLabel: root.querySelector('[data-lesson-import-confirm-label]'),
         rows: root.querySelector('[data-lesson-import-rows]'),
         tableWrap: root.querySelector('[data-lesson-import-table-wrap]'),
         empty: root.querySelector('[data-lesson-import-empty]'),
@@ -97,7 +101,7 @@ function initializeLessonImport(root) {
         live: root.querySelector('[data-lesson-import-live]'),
     };
 
-    if (!elements.panel || !elements.section || !elements.file || !elements.fileTrigger || !elements.submit || !elements.rows) return;
+    if (!elements.panel || !elements.section || !elements.file || !elements.fileTrigger || !elements.submit || !elements.confirm || !elements.rows) return;
 
     const triggers = document.querySelectorAll(`[data-lesson-import-open][aria-controls="${root.id}"]`);
     const filterButtons = [...root.querySelectorAll('[data-lesson-import-filter]')];
@@ -107,6 +111,8 @@ function initializeLessonImport(root) {
     const state = {
         isOpen: false,
         isLoading: false,
+        isImporting: false,
+        confirmUnavailable: false,
         selectedSection: '',
         file: null,
         preview: null,
@@ -133,17 +139,56 @@ function initializeLessonImport(root) {
         elements.error.classList.add('hidden');
     }
 
+    function showConfirmError(message, unavailable = false) {
+        elements.confirmErrorMessage.textContent = message;
+        elements.confirmError.classList.remove('hidden');
+        state.confirmUnavailable = unavailable;
+        updateConfirmAvailability();
+    }
+
+    function clearConfirmError() {
+        elements.confirmErrorMessage.textContent = '';
+        elements.confirmError.classList.add('hidden');
+        state.confirmUnavailable = false;
+    }
+
     function selectedPreviewUrl() {
         return elements.section.selectedOptions[0]?.dataset.previewUrl || '';
     }
 
+    function selectedConfirmUrl() {
+        return elements.section.selectedOptions[0]?.dataset.confirmUrl || '';
+    }
+
     function updateSubmitAvailability() {
-        elements.submit.disabled = state.isLoading || !state.selectedSection || !state.file;
-        elements.section.disabled = state.isLoading || elements.section.options.length <= 1;
-        elements.file.disabled = state.isLoading || elements.section.options.length <= 1;
-        elements.fileTrigger.disabled = state.isLoading || elements.section.options.length <= 1;
+        const isBusy = state.isLoading || state.isImporting;
+        elements.submit.disabled = isBusy || !state.selectedSection || !state.file;
+        elements.section.disabled = isBusy || elements.section.options.length <= 1;
+        elements.file.disabled = isBusy || elements.section.options.length <= 1;
+        elements.fileTrigger.disabled = isBusy || elements.section.options.length <= 1;
         elements.submit.setAttribute('aria-busy', String(state.isLoading));
         elements.submitLabel.textContent = state.isLoading ? 'Đang kiểm tra...' : 'Kiểm tra file';
+    }
+
+    function updateConfirmAvailability() {
+        const rowCount = Number(state.preview?.batch?.row_count || 0);
+        const errorCount = Number(state.preview?.batch?.error_count || 0);
+        const canImport = Boolean(state.batchToken)
+            && rowCount > 0
+            && errorCount === 0
+            && !state.confirmUnavailable;
+
+        elements.confirm.disabled = state.isImporting || !canImport;
+        elements.confirm.setAttribute('aria-busy', String(state.isImporting));
+        elements.confirmLabel.textContent = state.isImporting
+            ? 'Đang import...'
+            : (canImport ? `Import ${rowCount} bài học` : 'Chưa thể import');
+        elements.panel.setAttribute('aria-busy', String(state.isImporting));
+
+        if (chooseAnotherButton) chooseAnotherButton.disabled = state.isImporting;
+        closeButtons.forEach((button) => {
+            button.disabled = state.isImporting;
+        });
     }
 
     function updateFilename() {
@@ -171,6 +216,8 @@ function initializeLessonImport(root) {
 
     function resetPreviewState({ selectedSection = '' } = {}) {
         state.isLoading = false;
+        state.isImporting = false;
+        state.confirmUnavailable = false;
         state.preview = null;
         state.batchToken = null;
         state.activeFilter = 'all';
@@ -184,6 +231,7 @@ function initializeLessonImport(root) {
         elements.errorGuidance.classList.add('hidden');
         elements.filterSummary.textContent = '';
         clearFileError();
+        clearConfirmError();
         updateFilename();
         setStep('select');
 
@@ -192,6 +240,7 @@ function initializeLessonImport(root) {
         });
 
         updateSubmitAvailability();
+        updateConfirmAvailability();
     }
 
     function cancelRequest() {
@@ -219,7 +268,7 @@ function initializeLessonImport(root) {
     }
 
     function closeModal() {
-        if (!state.isOpen) return;
+        if (!state.isOpen || state.isImporting) return;
 
         cancelRequest();
         state.isOpen = false;
@@ -419,8 +468,10 @@ function initializeLessonImport(root) {
         elements.empty.classList.toggle('hidden', !isEmpty);
         elements.tableWrap.classList.toggle('hidden', isEmpty);
         elements.errorGuidance.classList.toggle('hidden', Number(batch.error_count || 0) <= 0);
+        clearConfirmError();
         setStep('preview');
         updateFilter();
+        updateConfirmAvailability();
         setLiveMessage(`Đã kiểm tra ${batch.row_count ?? rows.length} dòng dữ liệu.`);
         elements.heading.focus();
 
@@ -497,6 +548,79 @@ function initializeLessonImport(root) {
         }
     }
 
+    async function submitConfirm() {
+        const rowCount = Number(state.preview?.batch?.row_count || 0);
+        const errorCount = Number(state.preview?.batch?.error_count || 0);
+        if (state.isImporting || !state.batchToken || rowCount <= 0 || errorCount > 0 || state.confirmUnavailable) return;
+
+        const confirmUrl = selectedConfirmUrl();
+        if (!confirmUrl) {
+            showConfirmError('Chương đã chọn không hợp lệ. Vui lòng chọn file và kiểm tra lại.', true);
+            return;
+        }
+
+        clearConfirmError();
+        state.isImporting = true;
+        updateSubmitAvailability();
+        updateConfirmAvailability();
+        setLiveMessage(`Đang import ${rowCount} bài học. Vui lòng chờ.`);
+
+        try {
+            const response = await fetch(confirmUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ batch_token: state.batchToken }),
+            });
+            const payload = await readJsonSafely(response);
+
+            if (!response.ok || !payload || payload.success !== true) {
+                const message = firstValidationMessage(payload)
+                    || (typeof payload?.message === 'string' ? payload.message : null)
+                    || 'Không thể import bài học. Không có dữ liệu nào được thay đổi.';
+                const nonRetryableCodes = new Set([
+                    'batch_not_found',
+                    'batch_context_mismatch',
+                    'batch_expired',
+                    'batch_has_errors',
+                    'empty_batch',
+                    'invalid_canonical_payload',
+                    'canonical_row_count_mismatch',
+                    'course_not_eligible',
+                    'duplicate_file',
+                    'invalid_batch_status',
+                ]);
+                showConfirmError(message, nonRetryableCodes.has(payload?.error_code));
+                setLiveMessage(message);
+
+                if (response.status >= 500) {
+                    window.AppToast?.show?.({ type: 'error', message: 'Không thể import bài học. Vui lòng thử lại.' });
+                }
+                return;
+            }
+
+            if (typeof payload.redirect_url !== 'string' || payload.redirect_url === '') {
+                showConfirmError('Bài học đã được xử lý nhưng không thể tải lại Curriculum. Vui lòng tự tải lại trang.');
+                return;
+            }
+
+            window.location.assign(payload.redirect_url);
+        } catch (error) {
+            const message = 'Không nhận được phản hồi từ máy chủ. Hãy kiểm tra lại khóa học trước khi thử lại.';
+            showConfirmError(message);
+            setLiveMessage(message);
+            window.AppToast?.show?.({ type: 'error', message });
+        } finally {
+            state.isImporting = false;
+            updateSubmitAvailability();
+            updateConfirmAvailability();
+        }
+    }
+
     function trapFocus(event) {
         if (!state.isOpen || event.key !== 'Tab') return;
 
@@ -527,6 +651,10 @@ function initializeLessonImport(root) {
     root.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             event.preventDefault();
+            if (state.isImporting) {
+                setLiveMessage('Đang import bài học. Vui lòng chờ hoàn tất.');
+                return;
+            }
             closeModal();
             return;
         }
@@ -553,7 +681,9 @@ function initializeLessonImport(root) {
         if (!elements.fileTrigger.disabled) elements.file.click();
     });
     elements.submit.addEventListener('click', submitPreview);
+    elements.confirm.addEventListener('click', submitConfirm);
     chooseAnotherButton?.addEventListener('click', () => {
+        if (state.isImporting) return;
         const selectedSection = state.selectedSection;
         cancelRequest();
         resetPreviewState({ selectedSection });
@@ -567,6 +697,7 @@ function initializeLessonImport(root) {
     });
 
     updateSubmitAvailability();
+    updateConfirmAvailability();
 }
 
 function initializeLessonImports() {

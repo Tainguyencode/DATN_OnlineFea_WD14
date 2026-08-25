@@ -11,6 +11,7 @@ class LessonImportException extends RuntimeException
         public readonly string $issueCode,
         public readonly string $userMessage,
         ?Throwable $previous = null,
+        public readonly int $httpStatus = 422,
     ) {
         parent::__construct($userMessage, 0, $previous);
     }

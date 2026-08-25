@@ -26,7 +26,7 @@
                 <button
                     type="button"
                     data-lesson-import-close
-                    class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Đóng cửa sổ import bài học"
                 >
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -68,6 +68,7 @@
                                     <option
                                         value="{{ $section->id }}"
                                         data-preview-url="{{ route('instructor.courses.lessons.import.preview', [$course, $section]) }}"
+                                        data-confirm-url="{{ route('instructor.courses.lessons.import.confirm', [$course, $section]) }}"
                                     >
                                         {{ $chapterLabel }}
                                     </option>
@@ -137,7 +138,7 @@
                         Tải file mẫu
                     </a>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row">
-                        <button type="button" data-lesson-import-close class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                        <button type="button" data-lesson-import-close class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50">
                             Hủy
                         </button>
                         <button
@@ -176,6 +177,11 @@
                     <div data-lesson-import-error-guidance class="hidden rounded-lg border border-rose-200 bg-rose-50 p-4" role="status">
                         <p class="text-sm font-bold text-rose-900">File còn dòng lỗi và chưa sẵn sàng để import.</p>
                         <p class="mt-1 text-sm text-rose-800">Vui lòng sửa các dòng lỗi trong file Excel và kiểm tra lại.</p>
+                    </div>
+
+                    <div data-lesson-import-confirm-error class="hidden rounded-lg border border-rose-200 bg-rose-50 p-4" role="alert">
+                        <p class="text-sm font-bold text-rose-900">Chưa thể import file</p>
+                        <p data-lesson-import-confirm-error-message class="mt-1 text-sm leading-5 text-rose-800"></p>
                     </div>
 
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -222,11 +228,19 @@
                 </div>
 
                 <footer class="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
-                    <button type="button" data-lesson-import-choose-another class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                    <button type="button" data-lesson-import-choose-another class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50">
                         Chọn file khác
                     </button>
-                    <button type="button" data-lesson-import-close class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-slate-900 px-5 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500">
+                    <button type="button" data-lesson-import-close class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50">
                         Đóng
+                    </button>
+                    <button
+                        type="button"
+                        data-lesson-import-confirm
+                        class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                        disabled
+                    >
+                        <span data-lesson-import-confirm-label>Chưa thể import</span>
                     </button>
                 </footer>
             </div>
