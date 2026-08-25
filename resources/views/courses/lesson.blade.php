@@ -172,10 +172,50 @@
             @elseif($lesson->type === 'document')
                 <div class="flex min-h-[320px] items-center justify-center bg-[#1c1d1f] p-6 lg:min-h-[calc(100vh-14rem)]">
                     <div class="max-w-lg text-center text-white">
+                        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-white backdrop-blur-sm border border-white/10 shadow-lg">
+                            <svg class="h-8 w-8 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
                         <h2 class="text-xl font-bold">{{ $lesson->title }}</h2>
-                        <p class="mt-2 text-sm text-white/80">Bài đọc / tài liệu</p>
+                        <p class="mt-2 text-sm text-white/70">Tài liệu học tập / Bài đọc đính kèm</p>
                         @if($lesson->document_file)
-                            <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="mt-5 inline-flex h-11 items-center rounded bg-[#0056D2] px-6 text-sm font-bold text-white hover:bg-[#0046B8]">Mở tài liệu</a>
+                            @php
+                                $fileUrl = asset('storage/'.$lesson->document_file);
+                                $ext = strtolower(pathinfo($lesson->document_file, PATHINFO_EXTENSION));
+                                $downloadName = \Illuminate\Support\Str::slug($lesson->title ?: 'tai-lieu') . ($ext ? '.' . $ext : '');
+
+                                $fileSizeFormatted = null;
+                                try {
+                                    if (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->document_file)) {
+                                        $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($lesson->document_file);
+                                        if ($bytes >= 1048576) {
+                                            $fileSizeFormatted = number_format($bytes / 1048576, 2) . ' MB';
+                                        } elseif ($bytes >= 1024) {
+                                            $fileSizeFormatted = number_format($bytes / 1024, 1) . ' KB';
+                                        } else {
+                                            $fileSizeFormatted = $bytes . ' B';
+                                        }
+                                    }
+                                } catch (\Throwable $e) {}
+                            @endphp
+
+                            <div class="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs text-white/90 border border-white/10 backdrop-blur-xs">
+                                <svg class="h-4 w-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                                <span class="font-semibold truncate max-w-xs">{{ $lesson->title . ($ext ? '.' . $ext : '') }}</span>
+                                @if($fileSizeFormatted)
+                                    <span class="text-white/60">• {{ $fileSizeFormatted }}</span>
+                                @endif
+                            </div>
+
+                            <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+                                <a href="{{ $fileUrl }}" target="_blank" rel="noopener noreferrer" class="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0056D2] px-6 text-sm font-bold text-white shadow-lg transition hover:bg-[#0046B8]">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                    <span>Mở xem tài liệu ({{ strtoupper($ext ?: 'FILE') }})</span>
+                                </a>
+                                <a href="{{ $fileUrl }}" download="{{ $downloadName }}" class="inline-flex h-11 items-center gap-2 rounded-xl bg-white/15 border border-white/20 px-5 text-sm font-bold text-white transition hover:bg-white/25">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                    <span>Tải về máy</span>
+                                </a>
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -204,13 +244,6 @@
                     :lesson-notes="$lessonNotes"
                     :lesson-notes-index-url="$lessonNotesIndexUrl"
                     :lesson-notes-store-url="$lessonNotesStoreUrl"
-                />
-
-                <x-learning.ai-study-assistant
-                    :lesson="$lesson"
-                    :course="$course"
-                    :can-use-lesson-ai="$canUseLessonAi"
-                    :ai-chat-url="$aiChatUrl"
                 />
             @endif
         </main>
