@@ -5,40 +5,34 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class QuizAttemptAnswer extends Model
+class QuizVersionQuestion extends Model
 {
     protected $fillable = [
-        'quiz_attempt_id',
+        'quiz_version_id',
         'question_id',
         'question_version_id',
-        'answer_id',
-        'is_correct',
+        'sort_order',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_correct' => 'boolean',
+            'sort_order' => 'integer',
         ];
     }
 
-    public function attempt(): BelongsTo
+    public function quizVersion(): BelongsTo
     {
-        return $this->belongsTo(QuizAttempt::class, 'quiz_attempt_id');
+        return $this->belongsTo(QuizVersion::class);
     }
 
     public function question(): BelongsTo
     {
-        return $this->belongsTo(QuizQuestion::class, 'question_id');
+        return $this->belongsTo(QuizQuestion::class);
     }
 
     public function questionVersion(): BelongsTo
     {
         return $this->belongsTo(QuestionVersion::class);
-    }
-
-    public function answer(): BelongsTo
-    {
-        return $this->belongsTo(QuizOption::class, 'answer_id');
     }
 }

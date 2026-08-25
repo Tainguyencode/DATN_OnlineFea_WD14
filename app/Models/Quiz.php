@@ -10,6 +10,8 @@ class Quiz extends Model
 {
     protected $fillable = [
         'lesson_id',
+        'current_published_version_id',
+        'current_draft_version_id',
         'title',
         'description',
         'pass_score',
@@ -41,5 +43,30 @@ class Quiz extends Model
     public function questions(): HasMany
     {
         return $this->hasMany(QuizQuestion::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(QuizVersion::class)->orderBy('version');
+    }
+
+    public function currentPublishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(QuizVersion::class, 'current_published_version_id');
+    }
+
+    public function currentDraftVersion(): BelongsTo
+    {
+        return $this->belongsTo(QuizVersion::class, 'current_draft_version_id');
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->currentPublishedVersion();
+    }
+
+    public function authoringVersion(): BelongsTo
+    {
+        return $this->currentDraftVersion();
     }
 }
