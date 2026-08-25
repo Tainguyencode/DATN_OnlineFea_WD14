@@ -162,9 +162,11 @@ class S3MultipartUploadController extends Controller
             'parts' => ['required', 'array', 'min:1'],
             'parts.*.PartNumber' => ['required', 'integer', 'min:1'],
             'parts.*.ETag' => ['required', 'string'],
+            'duration' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $key = $validated['key'];
+        $duration = (int) round((float) ($validated['duration'] ?? 0));
         $this->validateKeyPrefix($course, $key);
 
         try {
@@ -173,11 +175,16 @@ class S3MultipartUploadController extends Controller
             // Kích hoạt ConvertVideoToHLS nếu lesson đã được tạo/lưu trong DB
             $lesson = \App\Models\Lesson::where('original_video_key', $key)->first();
             if ($lesson && ! $lesson->isHlsReady()) {
-                $lesson->update([
+                $lessonUpdateData = [
                     'upload_status' => 'uploaded',
                     'processing_status' => 'pending',
-                ]);
-                \Illuminate\Support\Facades\Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key]);
+                ];
+                if ($duration > 0 && ($lesson->duration <= 0 || $lesson->duration_seconds <= 0)) {
+                    $lessonUpdateData['duration'] = $duration;
+                    $lessonUpdateData['duration_seconds'] = $duration;
+                }
+                $lesson->update($lessonUpdateData);
+                \Illuminate\Support\Facades\Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key, 'duration' => $duration]);
                 \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
             }
 

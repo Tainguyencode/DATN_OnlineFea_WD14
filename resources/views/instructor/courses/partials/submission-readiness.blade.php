@@ -26,25 +26,29 @@
         </div>
     </div>
 
-    <ul class="mt-3 grid gap-x-6 md:grid-cols-2">
+    <ul class="mt-3 grid gap-x-8 gap-y-2.5 lg:grid-cols-2">
         @foreach ($items as $item)
-            <li class="flex min-w-0 items-center gap-2 border-b border-dotted border-slate-200 py-1.5 text-xs">
-                <span @class([
-                    'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white',
-                    'bg-emerald-600' => $item['passed'],
-                    'bg-rose-500' => ! $item['passed'],
-                ])>
-                    @if ($item['passed'])
-                        <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                        </svg>
-                    @else
-                        !
-                    @endif
-                </span>
-                <span class="min-w-0 truncate font-semibold text-slate-700">{{ $item['label'] }}</span>
+            <li class="flex flex-col justify-between gap-1.5 border-b border-dotted border-slate-200 pb-2 text-xs sm:flex-row sm:items-center">
+                <div class="flex items-center gap-2 min-w-0 shrink-0">
+                    <span @class([
+                        'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white',
+                        'bg-emerald-600' => $item['passed'],
+                        'bg-rose-500' => ! $item['passed'],
+                    ])>
+                        @if ($item['passed'])
+                            <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                            </svg>
+                        @else
+                            !
+                        @endif
+                    </span>
+                    <span class="font-bold text-slate-800">{{ $item['label'] }}</span>
+                </div>
                 @if (! $item['passed'])
-                    <span class="ml-auto shrink-0 text-right font-semibold text-rose-600">{{ $item['message'] ?: 'Chưa có' }}</span>
+                    <span class="text-xs font-semibold text-rose-600 break-words sm:text-right pl-6 sm:pl-2 leading-relaxed">
+                        {{ $item['message'] ?: 'Chưa có' }}
+                    </span>
                 @endif
             </li>
         @endforeach
