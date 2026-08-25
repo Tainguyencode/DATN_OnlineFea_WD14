@@ -79,6 +79,17 @@ class LessonImportPreviewTest extends TestCase
     {
         $instructor = $this->signInInstructor();
         [$course, $section] = $this->courseWithSection($instructor);
+        $section->update(['title' => 'Chương 1']);
+        CourseSection::create([
+            'course_id' => $course->id,
+            'title' => 'Laravel cơ bản',
+            'sort_order' => 1,
+        ]);
+        CourseSection::create([
+            'course_id' => $course->id,
+            'title' => '   ',
+            'sort_order' => 2,
+        ]);
 
         $response = $this->get(route('instructor.courses.curriculum', $course));
 
@@ -93,7 +104,13 @@ class LessonImportPreviewTest extends TestCase
             'data-preview-url="'.route('instructor.courses.lessons.import.preview', [$course, $section]).'"',
             false,
         );
-        $response->assertSee('Chương 1 — Section 1');
+        $response->assertSee('Chương 1');
+        $response->assertDontSee('Chương 1 — Chương 1');
+        $response->assertSee('Chương 2 — Laravel cơ bản');
+        $response->assertSee('data-lesson-import-file-trigger', false);
+        $response->assertSee('Chọn file Excel');
+        $response->assertSee('Chưa chọn file');
+        $response->assertSee('class="sr-only"', false);
         $response->assertSee('data-lesson-import-step="preview"', false);
         $response->assertSee('Tổng số');
         $response->assertSee('Chọn file khác');

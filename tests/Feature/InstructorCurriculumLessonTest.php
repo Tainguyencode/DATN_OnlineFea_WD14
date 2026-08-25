@@ -334,6 +334,66 @@ class InstructorCurriculumLessonTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_section_create_and_update_keep_plain_text_description_without_code_leak(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+
+        $this->post(route('instructor.courses.sections.store', $course), [
+            'title' => '  Chương mô tả  ',
+            'description' => '  Nội dung chương bằng văn bản thuần.  ',
+        ])->assertRedirect();
+
+        $section = CourseSection::where('course_id', $course->id)
+            ->where('title', 'Chương mô tả')
+            ->firstOrFail();
+
+        $this->assertSame('Nội dung chương bằng văn bản thuần.', $section->description);
+        $this->get(route('instructor.courses.curriculum', $course))
+            ->assertOk()
+            ->assertSeeText('Nội dung chương bằng văn bản thuần.');
+
+        $this->put(route('instructor.courses.sections.update', [$course, $section]), [
+            'title' => 'Chương mô tả đã sửa',
+            'description' => 'Mô tả sau chỉnh sửa.',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('course_sections', [
+            'id' => $section->id,
+            'title' => 'Chương mô tả đã sửa',
+            'description' => 'Mô tả sau chỉnh sửa.',
+        ]);
+        $this->get(route('instructor.courses.curriculum', $course))
+            ->assertOk()
+            ->assertSeeText('Mô tả sau chỉnh sửa.');
+    }
+
+    public function test_section_description_rejects_markup_and_legacy_blade_source_is_not_rendered(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+        $rawBlade = '<div class="mt-4">@error(\'title\') raw form source @enderror</div>';
+
+        $this->post(route('instructor.courses.sections.store', $course), [
+            'title' => 'Chương không hợp lệ',
+            'description' => $rawBlade,
+        ])
+            ->assertRedirect()
+            ->assertSessionHasErrors(['description'], null, 'storeSection');
+
+        $this->assertDatabaseMissing('course_sections', [
+            'course_id' => $course->id,
+            'title' => 'Chương không hợp lệ',
+        ]);
+
+        $section->forceFill(['description' => $rawBlade])->save();
+
+        $this->get(route('instructor.courses.curriculum', $course))
+            ->assertOk()
+            ->assertDontSee("@error('title')", false)
+            ->assertSeeText('Mô tả cũ chứa dữ liệu không hợp lệ. Hãy nhập lại mô tả bằng văn bản thuần.');
+    }
+
     private function signInInstructor(?User $user = null): User
     {
         $user ??= User::factory()->create([

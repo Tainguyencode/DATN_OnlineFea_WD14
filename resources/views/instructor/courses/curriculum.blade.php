@@ -151,6 +151,11 @@
 
     <div class="space-y-5">
         @forelse($curriculumSections as $section)
+            @php
+                $hasInvalidSectionDescription = filled($section->description)
+                    && \App\Models\CourseSection::descriptionContainsMarkup($section->description);
+                $safeSectionDescription = $hasInvalidSectionDescription ? null : $section->description;
+            @endphp
             <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-100 bg-slate-50 px-5 py-4">
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -169,8 +174,8 @@
                                 @endif
                             </div>
                             <h3 class="mt-2 text-lg font-bold text-slate-950">{{ $section->title }}</h3>
-                            @if($section->description)
-                                <p class="mt-1 text-sm leading-6 text-slate-500">{{ $section->description }}</p>
+                            @if(filled($safeSectionDescription))
+                                <p class="mt-1 text-sm leading-6 text-slate-500">{{ $safeSectionDescription }}</p>
                             @endif
                         </div>
                         <div class="flex shrink-0 flex-wrap gap-2">
@@ -189,7 +194,10 @@
                                         </label>
                                         <label class="block">
                                             <span class="mb-1 block text-xs font-bold text-slate-600">Mô tả</span>
-                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $section->description }}</textarea>
+                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $safeSectionDescription }}</textarea>
+                                            @if($hasInvalidSectionDescription)
+                                                <p class="mt-1 text-xs font-semibold text-amber-700">Mô tả cũ chứa dữ liệu không hợp lệ. Hãy nhập lại mô tả bằng văn bản thuần.</p>
+                                            @endif
                                             @error('description', 'updateSection_'.$section->id) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                         </label>
                                         <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 cursor-pointer">Lưu chương</button>
