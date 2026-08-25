@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
+use Symfony\Component\Process\ExecutableFinder;
 use Throwable;
 
 class ConvertVideoToHLS implements ShouldQueue
@@ -50,6 +52,9 @@ class ConvertVideoToHLS implements ShouldQueue
         }
 
         $this->lesson->update(['processing_status' => 'processing']);
+
+        $ffmpegConfig = $this->getFfmpegConfig();
+        $this->ensureFfmpegBinariesAreAvailable($ffmpegConfig);
 
         $tmpDir = storage_path('app/tmp_ffmpeg/lesson_' . $lessonId . '_' . Str::random(8));
         File::makeDirectory($tmpDir, 0755, true, true);
@@ -101,7 +106,6 @@ class ConvertVideoToHLS implements ShouldQueue
             File::makeDirectory($hlsOutDir, 0755, true, true);
             $playlistPath = $hlsOutDir . '/playlist.m3u8';
 
-            $ffmpegConfig = $this->getFfmpegConfig();
             Log::info("[ConvertVideoToHLS] [FFMPEG START] Starting HLS conversion", [
                 'lesson_id' => $lessonId,
                 'input' => $localInputPath,
@@ -251,25 +255,19 @@ class ConvertVideoToHLS implements ShouldQueue
         $ffmpegBin = env('FFMPEG_BINARIES') ?: env('FFMPEG_BIN');
         $ffprobeBin = env('FFPROBE_BINARIES') ?: env('FFPROBE_BIN');
 
-        if (!$ffmpegBin) {
-            if (file_exists('C:/laragon/bin/ffmpeg/bin/ffmpeg.exe')) {
-                $ffmpegBin = 'C:/laragon/bin/ffmpeg/bin/ffmpeg.exe';
-            } elseif (file_exists('C:/ffmpeg/bin/ffmpeg.exe')) {
-                $ffmpegBin = 'C:/ffmpeg/bin/ffmpeg.exe';
-            } else {
-                $ffmpegBin = 'ffmpeg';
-            }
-        }
+        $ffmpegBin ??= $this->firstExistingBinary([
+            'C:/laragon/bin/ffmpeg/bin/ffmpeg.exe',
+            'C:/ffmpeg/bin/ffmpeg.exe',
+            'C:/Program Files/ffmpeg/bin/ffmpeg.exe',
+            'C:/ProgramData/chocolatey/bin/ffmpeg.exe',
+        ]) ?: 'ffmpeg';
 
-        if (!$ffprobeBin) {
-            if (file_exists('C:/laragon/bin/ffmpeg/bin/ffprobe.exe')) {
-                $ffprobeBin = 'C:/laragon/bin/ffmpeg/bin/ffprobe.exe';
-            } elseif (file_exists('C:/ffmpeg/bin/ffprobe.exe')) {
-                $ffprobeBin = 'C:/ffmpeg/bin/ffprobe.exe';
-            } else {
-                $ffprobeBin = 'ffprobe';
-            }
-        }
+        $ffprobeBin ??= $this->firstExistingBinary([
+            'C:/laragon/bin/ffmpeg/bin/ffprobe.exe',
+            'C:/ffmpeg/bin/ffprobe.exe',
+            'C:/Program Files/ffmpeg/bin/ffprobe.exe',
+            'C:/ProgramData/chocolatey/bin/ffprobe.exe',
+        ]) ?: 'ffprobe';
 
         return [
             'ffmpeg.binaries'  => $ffmpegBin,
@@ -277,5 +275,33 @@ class ConvertVideoToHLS implements ShouldQueue
             'timeout'          => 3600,
             'ffmpeg.threads'   => (int) env('FFMPEG_THREADS', 12),
         ];
+    }
+
+    private function firstExistingBinary(array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function ensureFfmpegBinariesAreAvailable(array $config): void
+    {
+        $finder = new ExecutableFinder();
+
+        foreach (['ffmpeg.binaries' => 'FFmpeg', 'ffprobe.binaries' => 'FFprobe'] as $key => $label) {
+            $binary = (string) ($config[$key] ?? '');
+
+            if ($binary !== '' && (str_contains($binary, '/') || str_contains($binary, '\\')) && ! is_file($binary)) {
+                throw new RuntimeException("{$label} không tồn tại tại đường dẫn: {$binary}. Hãy kiểm tra FFMPEG_BINARIES/FFPROBE_BINARIES trong .env.");
+            }
+
+            if ($binary !== '' && ! str_contains($binary, '/') && ! str_contains($binary, '\\') && ! $finder->find($binary)) {
+                throw new RuntimeException("Không tìm thấy {$label} trong PATH. Hãy cài FFmpeg hoặc cấu hình FFMPEG_BINARIES/FFPROBE_BINARIES trong .env.");
+            }
+        }
     }
 }

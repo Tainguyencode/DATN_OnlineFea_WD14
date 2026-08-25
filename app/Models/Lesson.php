@@ -106,6 +106,17 @@ class Lesson extends Model
         return $this->hasMany(AiChatMessage::class);
     }
 
+    public function hasVideoSource(): bool
+    {
+        return $this->type === 'video'
+            && (
+                filled($this->video_path)
+                || filled($this->video_url)
+                || filled($this->original_video_key)
+                || filled($this->hls_manifest_key)
+            );
+    }
+
     /**
      * Kiểm tra video đã sẵn sàng phát HLS hay chưa (S3 hoặc local)
      */

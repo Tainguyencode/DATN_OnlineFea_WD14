@@ -229,7 +229,7 @@
                                         $lessonIndex++;
                                         $canAccessLesson = $canAccessFullCourse || $lesson->is_preview;
                                         $duration = $formatDuration($lesson->duration ?? $lesson->duration_seconds);
-                                        $hasVideoSource = $lesson->type === 'video' && ($lesson->video_path || $lesson->video_url);
+                                        $hasVideoSource = $lesson->hasVideoSource();
                                     @endphp
                                     <div class="px-4 py-4">
                                         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
