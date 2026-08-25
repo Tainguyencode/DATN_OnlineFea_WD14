@@ -206,12 +206,40 @@ class CurriculumController extends Controller
             return response()->json([
                 'success' => true,
                 'lesson_id' => $lesson->id,
+                'lesson' => [
+                    'id' => $lesson->id,
+                    'section_id' => $sectionId,
+                    'title' => $lesson->title,
+                    'type' => $lesson->type,
+                    'sort_order' => $lesson->sort_order,
+                    'duration' => (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0),
+                    'duration_formatted' => $this->formatDuration((int) ($lesson->duration ?? $lesson->duration_seconds ?? 0)),
+                    'is_preview' => (bool) $lesson->is_preview,
+                    'status' => $lesson->status,
+                    'original_video_key' => $lesson->original_video_key,
+                    'upload_status' => $lesson->upload_status,
+                    'processing_status' => $lesson->processing_status,
+                    'content' => $lesson->content,
+                    'destroy_url' => route('instructor.courses.lessons.destroy', [$course, $lesson->id]),
+                ],
                 'title' => $lesson->title,
                 'message' => 'Đã thêm bài học.',
             ]);
         }
 
         return back()->with('success', 'Đã thêm bài học. Video đang được xử lý ngầm, vui lòng đợi trong giây lát.');
+    }
+
+    private function formatDuration(int $seconds): string
+    {
+        if ($seconds <= 0) {
+            return 'Chưa đặt';
+        }
+
+        $minutes = intdiv($seconds, 60);
+        $remaining = $seconds % 60;
+
+        return $minutes > 0 ? $minutes.' phút'.($remaining ? ' '.$remaining.' giây' : '') : $remaining.' giây';
     }
 
     public function updateLesson(StoreLessonRequest $request, Course $course, Lesson $lesson): RedirectResponse

@@ -753,7 +753,21 @@ function createLessonFormState(config) {
                         const resData = await response.json();
 
                         if (isCreateForm) {
-                            // Reset các ô nhập liệu của form tạo mới
+                            // 1. Cập nhật lessonId cho item trong CourseUploadQueue nếu đang upload
+                            if (this.currentQueueId && resData.lesson) {
+                                const qItem = CourseUploadQueue.queue.find(q => q.id === this.currentQueueId);
+                                if (qItem) {
+                                    qItem.lessonId = resData.lesson.id;
+                                    qItem.title = resData.lesson.title;
+                                }
+                            }
+
+                            // 2. Render ngay lập tức bài học vào danh sách Curriculum DOM
+                            if (resData.lesson) {
+                                appendLessonToCurriculumDOM(resData.lesson);
+                            }
+
+                            // 3. Reset các ô nhập liệu của form tạo mới
                             const titleInput = form.querySelector('input[name="title"]');
                             if (titleInput) titleInput.value = '';
 
@@ -774,6 +788,13 @@ function createLessonFormState(config) {
                             this.uploadProgress = 0;
                             this.uploadStatus = 'idle';
                             this.uploadStatusMessage = '';
+                            this.currentQueueId = null;
+
+                            // 4. Đóng accordion "+ Thêm bài học" để sẵn sàng cho bài tiếp theo
+                            const parentDetails = form.closest('details');
+                            if (parentDetails) {
+                                parentDetails.removeAttribute('open');
+                            }
                         }
 
                         if (window.triggerHlsPolling) {
@@ -782,8 +803,9 @@ function createLessonFormState(config) {
 
                         // Hiển thị thông báo thành công
                         if (window.showCurriculumToast) {
+                            const lessonTitle = resData.lesson ? resData.lesson.title : '';
                             const msg = isCreateForm
-                                ? 'Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.'
+                                ? (lessonTitle ? `Đã lưu bài học "${lessonTitle}" thành công! Video đang tiếp tục tải lên trong hàng chờ.` : 'Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.')
                                 : 'Đã cập nhật bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.';
                             window.showCurriculumToast(msg);
                         }
@@ -964,12 +986,108 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
     pollInterval = setInterval(checkStatus, 5000);
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function appendLessonToCurriculumDOM(lesson) {
+    if (!lesson || !lesson.section_id) return;
+
+    const container = document.getElementById('section-lessons-' + lesson.section_id)
+        || document.querySelector(`[data-section-lessons-container="${lesson.section_id}"]`);
+    if (!container) return;
+
+    // Xóa empty notice nếu có
+    const emptyNotice = container.querySelector('[data-empty-lessons-notice]');
+    if (emptyNotice) {
+        emptyNotice.remove();
+    }
+
+    const typeLabels = {
+        'video': 'Video',
+        'document': 'Tài liệu',
+        'quiz': 'Quiz',
+        'assignment': 'Bài tập'
+    };
+    const typeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    const isVideo = lesson.type === 'video';
+
+    const lessonItem = document.createElement('div');
+    lessonItem.className = 'p-5 border-t border-slate-100 first:border-t-0';
+    lessonItem.id = 'lesson-item-' + lesson.id;
+
+    let videoBadgeHtml = '';
+    if (isVideo) {
+        videoBadgeHtml = `<span class="rounded-full border px-2.5 py-1 text-xs font-bold border-emerald-200 bg-emerald-50 text-emerald-700">Đã có video</span>`;
+    }
+
+    let previewBadgeHtml = '';
+    if (lesson.is_preview) {
+        previewBadgeHtml = `<span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>`;
+    }
+
+    let hlsStatusHtml = '';
+    if (isVideo) {
+        hlsStatusHtml = `<span data-hls-status-key="lesson_${lesson.id}" data-hls-processing="true" class="font-semibold text-amber-600">Video đang tải lên...</span>`;
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        || document.querySelector('input[name="_token"]')?.value || '';
+
+    lessonItem.innerHTML = `
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full border px-2.5 py-1 text-xs font-bold ${typeClass}">${typeLabels[lesson.type] || 'Video'}</span>
+                    <span class="rounded-full border px-2.5 py-1 text-xs font-bold bg-slate-100 text-slate-700 border-slate-200">Nháp</span>
+                    ${previewBadgeHtml}
+                    ${videoBadgeHtml}
+                </div>
+                <h4 class="mt-2 font-bold text-slate-950">${escapeHtml(lesson.title)}</h4>
+                <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                    <span>Thời lượng: ${lesson.duration_formatted || 'Chưa đặt'}</span>
+                    <span>Bài ${lesson.sort_order ?? 0}</span>
+                    ${hlsStatusHtml}
+                </div>
+                ${lesson.content ? `<p class="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">${escapeHtml(lesson.content)}</p>` : ''}
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+                ${lesson.destroy_url ? `
+                    <form method="POST" action="${lesson.destroy_url}" onsubmit="return confirm('Bạn chắc chắn muốn xóa bài học này?')">
+                        <input type="hidden" name="_token" value="${csrfToken}">
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-50 cursor-pointer">
+                            Xóa
+                        </button>
+                    </form>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    container.appendChild(lessonItem);
+
+    // Cập nhật số lượng bài học trên thống kê đầu trang
+    const totalLessonsEl = document.getElementById('overview-total-lessons');
+    if (totalLessonsEl) {
+        const count = parseInt(totalLessonsEl.textContent.trim()) || 0;
+        totalLessonsEl.textContent = count + 1;
+    }
+}
+
 if (typeof window !== 'undefined') {
     window.S3MultipartUploader = S3MultipartUploader;
     window.CourseUploadQueue = CourseUploadQueue;
     window.createLessonFormState = createLessonFormState;
     window.initCurriculumHlsPolling = initCurriculumHlsPolling;
     window.showCurriculumToast = showCurriculumToast;
+    window.appendLessonToCurriculumDOM = appendLessonToCurriculumDOM;
 
     // Cảnh báo người dùng nếu reload hoặc thoát trang trong lúc video đang upload
     window.addEventListener('beforeunload', function (e) {
