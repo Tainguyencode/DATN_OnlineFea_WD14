@@ -236,6 +236,10 @@ class CourseController extends Controller
             ]);
         }
 
+        if ($course->hasIncompleteHlsVideos()) {
+            return back()->with('error', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
+        }
+
         if (! $course->submissionCheck()->passes()) {
             return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');
         }

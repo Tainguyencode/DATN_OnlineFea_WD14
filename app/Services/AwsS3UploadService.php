@@ -180,4 +180,20 @@ class AwsS3UploadService
 
         return (string) $request->getUri();
     }
+
+    /**
+     * Kiểm tra xem một S3 object key đã thực sự tồn tại hoàn chỉnh trên S3 chưa
+     */
+    public function doesObjectExist(string $key): bool
+    {
+        try {
+            $client = $this->getS3Client();
+            $bucket = $this->getBucket();
+
+            return $client->doesObjectExist($bucket, $key);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("S3 doesObjectExist check error for key {$key}: " . $e->getMessage());
+            return false;
+        }
+    }
 }

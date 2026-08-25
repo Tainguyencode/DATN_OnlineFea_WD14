@@ -7,7 +7,7 @@
             </a>
         </div>
 
-        <form method="POST" action="{{ route('admin.learning-paths.store') }}" class="space-y-6">
+        <form method="POST" action="{{ route('admin.learning-paths.store') }}" class="space-y-6" novalidate>
             @csrf
 
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6">
@@ -15,47 +15,59 @@
 
                 <div>
                     <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Tên lộ trình học tập *</label>
-                    <input type="text" name="title" value="{{ old('title') }}" required placeholder="Ví dụ: Lộ trình trở thành Web Fullstack Developer" class="ui-input">
+                    <input type="text" name="title" value="{{ old('title') }}" placeholder="Ví dụ: Lộ trình trở thành Web Fullstack Developer" class="ui-input @error('title') !border-rose-500 @enderror">
                     @error('title')
-                        <p class="mt-1 text-xs text-rose-600 font-semibold">{{ $message }}</p>
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400 font-semibold">{{ $message }}</p>
                     @enderror
                 </div>
 
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Cấp độ phù hợp *</label>
-                        <select name="level" required class="ui-select">
+                        <select name="level" class="ui-select @error('level') !border-rose-500 @enderror">
+                            <option value="">-- Chọn cấp độ --</option>
                             <option value="beginner" @selected(old('level') === 'beginner')>🌱 Cơ bản (Beginner)</option>
                             <option value="intermediate" @selected(old('level', 'intermediate') === 'intermediate')>⚡ Trung cấp (Intermediate)</option>
                             <option value="advanced" @selected(old('level') === 'advanced')>🚀 Nâng cao (Advanced)</option>
                         </select>
                         @error('level')
-                            <p class="mt-1 text-xs text-rose-600 font-semibold">{{ $message }}</p>
+                            <p class="mt-1 text-xs text-rose-600 dark:text-rose-400 font-semibold">{{ $message }}</p>
                         @enderror
                     </div>
 
                     <div>
                         <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Vị trí việc làm mục tiêu</label>
-                        <input type="text" name="target_role" value="{{ old('target_role') }}" placeholder="Ví dụ: Fullstack Web Developer" class="ui-input">
+                        <input type="text" name="target_role" value="{{ old('target_role') }}" placeholder="Ví dụ: Fullstack Web Developer" class="ui-input @error('target_role') !border-rose-500 @enderror">
+                        @error('target_role')
+                            <p class="mt-1 text-xs text-rose-600 dark:text-rose-400 font-semibold">{{ $message }}</p>
+                        @enderror
                     </div>
                 </div>
-
 
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Thời lượng ước tính</label>
-                        <input type="text" name="estimated_duration" value="{{ old('estimated_duration') }}" placeholder="Ví dụ: 6 - 8 tháng (180h học)" class="ui-input">
+                        <input type="text" name="estimated_duration" value="{{ old('estimated_duration') }}" placeholder="Ví dụ: 6 - 8 tháng (180h học)" class="ui-input @error('estimated_duration') !border-rose-500 @enderror">
+                        @error('estimated_duration')
+                            <p class="mt-1 text-xs text-rose-600 dark:text-rose-400 font-semibold">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div>
                         <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Danh sách kỹ năng (Phân cách bởi dấu phẩy ,)</label>
-                        <input type="text" name="skills_input" value="{{ old('skills_input') }}" placeholder="HTML5, CSS3, JavaScript, Vue.js, Laravel, Docker" class="ui-input">
+                        <input type="text" name="skills_input" value="{{ old('skills_input') }}" placeholder="HTML5, CSS3, JavaScript, Vue.js, Laravel, Docker" class="ui-input @error('skills_input') !border-rose-500 @enderror">
+                        @error('skills_input')
+                            <p class="mt-1 text-xs text-rose-600 dark:text-rose-400 font-semibold">{{ $message }}</p>
+                        @enderror
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Mô tả ngắn lộ trình</label>
-                    <textarea name="description" rows="3" placeholder="Mô tả mục tiêu đầu ra và đối tượng phù hợp của lộ trình học tập này..." class="ui-input">{{ old('description') }}</textarea>
+                    <textarea name="description" rows="3" placeholder="Mô tả mục tiêu đầu ra và đối tượng phù hợp của lộ trình học tập này..." class="ui-input @error('description') !border-rose-500 @enderror">{{ old('description') }}</textarea>
+                    @error('description')
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400 font-semibold">{{ $message }}</p>
+                    @enderror
                 </div>
             </div>
 

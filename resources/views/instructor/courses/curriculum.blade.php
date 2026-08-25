@@ -106,9 +106,52 @@
         </div>
     </div>
 
+    {{-- HÀNG CHỜ UPLOAD VIDEO LÊN S3 --}}
+    <div id="global-video-upload-queue-panel" class="hidden"></div>
 
+    {{-- THÔNG BÁO BẢO MẬT HLS CHUNG DUY NHẤT VÀ NÚT GỬI DUYỆT (Requirement 7, 8, 14, 15, 16, 18) --}}
+    @php
+        $hasIncompleteHls = $course->hasIncompleteHlsVideos();
+        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasIncompleteHls;
+    @endphp
 
+    <div id="common-hls-banner-wrapper"
+         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $hasIncompleteHls ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900' }}">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3">
+                <span id="common-hls-icon" class="text-xl shrink-0">
+                    {{ $hasIncompleteHls ? '⏳' : '✅' }}
+                </span>
+                <div>
+                    <p id="common-hls-message" class="text-sm font-bold">
+                        @if($hasIncompleteHls)
+                            Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.
+                        @else
+                            Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.
+                        @endif
+                    </p>
+                </div>
+            </div>
 
+            <div class="shrink-0 flex items-center gap-2">
+                @if($course->canBeSubmittedForReview())
+                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" id="curriculumSubmitForm">
+                        @csrf
+                        <input type="hidden" name="copyright_agreed" value="1">
+                        <button type="submit"
+                                id="curriculum-submit-review-btn"
+                                {{ $hasIncompleteHls ? 'disabled' : '' }}
+                                @if($hasIncompleteHls)
+                                    title="Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật."
+                                @endif
+                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasIncompleteHls ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
+                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+    </div>
 
     <form method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -249,13 +292,23 @@
                                         <span>Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
                                         <span>Bài {{ $lesson->sort_order }}</span>
                                         @if($lesson->type === 'video' && ($lesson->original_video_key || $lesson->hls_manifest_key || $lesson->video_path))
-                                            <span class="font-semibold text-emerald-600">
-                                                @if($lesson->processing_status === 'completed' || $lesson->hls_manifest_key || (!empty($lesson->video_path) && !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))
-                                                    Video S3 HLS (Đã bảo mật)
-                                                @elseif($lesson->processing_status === 'failed')
-                                                    Video S3 (Lỗi xử lý HLS)
+                                            @php
+                                                $isHlsReady = $lesson->isHlsReady();
+                                                $isHlsFailed = $lesson->hasFailedProcessing();
+                                                $isHlsProcessing = $lesson->isProcessing();
+                                                $hlsKey = !empty($lesson->is_draft_create) && isset($lesson->draft_update) 
+                                                    ? 'update_' . $lesson->draft_update->id 
+                                                    : 'lesson_' . $lesson->id;
+                                            @endphp
+                                            <span data-hls-status-key="{{ $hlsKey }}"
+                                                  @if($isHlsProcessing) data-hls-processing="true" @endif
+                                                  class="font-semibold @if($isHlsReady) text-emerald-600 @elseif($isHlsFailed) text-rose-600 @else text-amber-600 @endif">
+                                                @if($isHlsReady)
+                                                    Video đã được xử lý bảo mật thành công.
+                                                @elseif($isHlsFailed)
+                                                    Video xử lý bảo mật thất bại.
                                                 @else
-                                                    Video S3 (Đang chờ xử lý HLS)
+                                                    Video đang trong quá trình xử lý bảo mật. Vui lòng chờ trong giây lát.
                                                 @endif
                                             </span>
                                         @elseif($lesson->type === 'video' && $lesson->video_url)
@@ -461,6 +514,10 @@
 
         video.src = objectUrl;
     });
+
+    if (window.initCurriculumHlsPolling) {
+        window.initCurriculumHlsPolling(@js(route('instructor.courses.hls-status', $course)));
+    }
 </script>
 
 </x-instructor-layout>
