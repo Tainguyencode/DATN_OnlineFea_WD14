@@ -29,6 +29,7 @@
 <form method="POST"
       action="{{ $action }}"
       enctype="multipart/form-data"
+      @submit="submitLessonForm($event)"
       class="space-y-4"
       x-data="createLessonFormState({
           selectedType: @js($selectedType),
@@ -36,6 +37,9 @@
           videoOriginalName: @js($valueFor('video_original_name', $lesson->video_original_name ?? '')),
           videoSize: @js($valueFor('video_size', $lesson->video_size ?? '')),
           videoMime: @js($valueFor('video_mime', $lesson->video_mime ?? '')),
+          processingStatus: @js($lesson?->processing_status ?? ''),
+          hlsManifestKey: @js($lesson?->hls_manifest_key ?? ''),
+          videoPath: @js($lesson?->video_path ?? ''),
           courseId: @js($courseModel?->id),
           lessonId: @js($lesson?->id),
           createUrl: @js($createMultipartUrl),
@@ -123,11 +127,12 @@
                 <span>Nội dung video bài giảng</span>
                 <span class="text-[11px] font-bold text-indigo-600 bg-indigo-100/80 px-2 py-0.5 rounded-full">AWS S3 Multipart Upload</span>
             </h4>
-            <p class="mt-1 text-xs font-medium text-indigo-700">Tải file video bài giảng trực tiếp lên Amazon S3 (hỗ trợ file từ 50MB đến 2GB+ với tiến trình thời gian thực).</p>
+            <p class="mt-1 text-xs font-medium text-indigo-700">Tải file video bài giảng lên Amazon S3 (mỗi bài học gắn 1 video, hệ thống tự động xử lý nền theo hàng chờ).</p>
         </div>
 
         {{-- S3 Multipart Uploader Box --}}
-        <div class="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+        <div class="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm space-y-3">
+            {{-- Vùng chọn File (1 file duy nhất) --}}
             <template x-if="!s3Key && !isUploading">
                 <div>
                     <label class="flex flex-col items-center justify-center border-2 border-dashed border-indigo-300 rounded-xl p-6 hover:bg-indigo-50/50 transition cursor-pointer text-center">
@@ -136,7 +141,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                             </svg>
                         </div>
-                        <span class="text-sm font-bold text-slate-800">Nhấn để chọn video tải lên trực tiếp S3</span>
+                        <span class="text-sm font-bold text-slate-800">Nhấn để chọn video cho bài học này</span>
                         <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV (Dung lượng khuyến nghị: 100MB - 2GB+)</span>
                         <input type="file"
                                x-ref="s3FileInput"
@@ -151,19 +156,19 @@
             <template x-if="isUploading">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between text-xs font-bold">
-                        <span class="text-indigo-900 flex items-center gap-1.5">
-                            <svg class="animate-spin h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                        <span class="text-indigo-900 flex items-center gap-1.5 truncate max-w-sm">
+                            <svg class="animate-spin h-3.5 w-3.5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span x-text="uploadStatusMessage"></span>
+                            <span x-text="uploadStatusMessage || ('Đang tải: ' + videoOriginalName)"></span>
                         </span>
                         <span class="text-indigo-600 font-mono" x-text="uploadProgress + '%'"></span>
                     </div>
 
                     {{-- Progress Bar --}}
-                    <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-indigo-100">
-                        <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-3 rounded-full transition-all duration-300 ease-out"
+                    <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-indigo-100">
+                        <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2.5 rounded-full transition-all duration-300 ease-out"
                              :style="`width: ${uploadProgress}%`"></div>
                     </div>
 
@@ -186,7 +191,7 @@
                 </div>
             </template>
 
-            {{-- Trạng thái tải lên S3 hoàn tất (Success) --}}
+            {{-- Trạng thái Video ĐÃ TẢI LÊN S3 thành công cho bài học này --}}
             <template x-if="s3Key && !isUploading">
                 <div class="flex items-start justify-between bg-emerald-50/80 border border-emerald-200 rounded-lg p-3">
                     <div class="flex items-start gap-2.5">
@@ -196,7 +201,7 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="text-xs font-bold text-emerald-950">Video đã tải lên Amazon S3 an toàn</p>
+                            <p class="text-xs font-bold text-emerald-950">Video đã tải lên Amazon S3 an toàn và sẵn sàng lưu bài học</p>
                             <p class="text-xs text-emerald-800 font-medium mt-0.5" x-text="videoOriginalName || 'Video file'"></p>
                             <p class="text-[11px] text-emerald-700 font-mono mt-0.5 truncate max-w-sm" x-text="'Key: ' + s3Key"></p>
                         </div>
@@ -211,7 +216,7 @@
 
             {{-- Trạng thái lỗi --}}
             <template x-if="uploadStatus === 'error' && !s3Key">
-                <div class="mt-3 bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-center justify-between text-xs text-rose-700">
+                <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-center justify-between text-xs text-rose-700">
                     <div class="flex items-center gap-2">
                         <svg class="h-4 w-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -227,13 +232,14 @@
             </template>
         </div>
 
+        {{-- Video hiện tại của bài học (nếu đang chỉnh sửa) --}}
         @if($lesson?->video_path || $lesson?->original_video_key)
-            <div class="mt-3 rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-indigo-900">
-                <div class="font-bold text-xs flex items-center gap-2">
+            <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                <div class="font-bold text-xs flex items-center gap-2 text-slate-800">
                     <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                    <span>Video hiện tại trên hệ thống: {{ $lesson->video_original_name ?: basename($lesson->original_video_key ?: $lesson->video_path) }}</span>
+                    <span>Video hiện tại: {{ $lesson->video_original_name ?: basename($lesson->original_video_key ?: $lesson->video_path) }}</span>
                     @if($formatVideoSize($lesson->video_size))
-                        <span class="font-semibold text-indigo-700">({{ $formatVideoSize($lesson->video_size) }})</span>
+                        <span class="text-slate-500 font-normal">({{ $formatVideoSize($lesson->video_size) }})</span>
                     @endif
                 </div>
             </div>
@@ -352,16 +358,7 @@
     </fieldset>
 
     <button type="submit"
-            :disabled="isUploading"
-            :class="isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-700 cursor-pointer'"
-            class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
-        <span x-show="!isUploading">{{ $submitLabel }}</span>
-        <span x-show="isUploading" class="flex items-center gap-2">
-            <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Đang tải video lên S3...</span>
-        </span>
+            class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
+        <span>{{ $submitLabel }}</span>
     </button>
 </form>

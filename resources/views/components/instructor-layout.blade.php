@@ -1,6 +1,7 @@
 @props([
     'title' => 'Instructor Dashboard',
     'pageTitle' => 'Instructor Dashboard',
+    'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
 ])
 
@@ -10,8 +11,11 @@
     if ($currentUser && $currentUser->isInstructor()) {
         $instructorCourseIds = \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
         if ($instructorCourseIds->isNotEmpty()) {
-            $discussions = \App\Models\Discussion::whereHas('lesson', function ($q) use ($instructorCourseIds) {
-                $q->whereIn('course_id', $instructorCourseIds);
+            $discussions = \App\Models\Discussion::where(function ($q) use ($instructorCourseIds) {
+                $q->whereIn('course_id', $instructorCourseIds)
+                  ->orWhereHas('lesson', function ($lq) use ($instructorCourseIds) {
+                      $lq->whereIn('course_id', $instructorCourseIds);
+                  });
             })->with('replies')->get();
 
             $instructorDiscussionsPendingCount = $discussions->filter(fn ($d) => $d->needsReply())->count();
@@ -62,8 +66,15 @@
                     'label' => 'Mã giảm giá',
                     'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>',
                 ],
+                [
+                    'route' => 'instructor.learning-paths.index',
+                    'active' => ['instructor.learning-paths.*'],
+                    'label' => 'Lộ trình học tập',
+                    'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>',
+                ],
             ],
         ],
+
         [
             'label' => 'Học viên & tương tác',
             'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>',
@@ -147,6 +158,7 @@
     :menu="$menu"
     :title="$title"
     :pageTitle="$pageTitle"
+    :pageTitleClass="$pageTitleClass"
     :breadcrumb="$breadcrumb"
 >
     @if(config('auth.email_verification_enabled', true) && auth()->check() && ! auth()->user()->hasVerifiedEmail())

@@ -9,6 +9,30 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Lesson extends Model
 {
+    public const TYPE_VIDEO = 'video';
+
+    public const TYPE_DOCUMENT = 'document';
+
+    public const TYPE_QUIZ = 'quiz';
+
+    public const TYPE_ASSIGNMENT = 'assignment';
+
+    public const TYPES = [
+        self::TYPE_VIDEO,
+        self::TYPE_DOCUMENT,
+        self::TYPE_QUIZ,
+        self::TYPE_ASSIGNMENT,
+    ];
+
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_PUBLISHED = 'published';
+
+    public const STATUSES = [
+        self::STATUS_DRAFT,
+        self::STATUS_PUBLISHED,
+    ];
+
     protected $fillable = [
         'course_id', 'section_id', 'chapter_id', 'title', 'type',
         'video_url', 'video_path', 'original_video_key', 'hls_manifest_key',
@@ -18,6 +42,20 @@ class Lesson extends Model
         'duration_seconds', 'is_preview', 'is_required', 'sort_order', 'status',
         'attachments', 'subtitles', 'ai_summary', 'content_version',
     ];
+
+    protected $attributes = [
+        'video_size' => 0,
+        'duration_seconds' => 0,
+        'is_preview' => false,
+        'is_required' => true,
+        'sort_order' => 0,
+        'status' => 'draft',
+    ];
+
+    public function setVideoSizeAttribute($value): void
+    {
+        $this->attributes['video_size'] = $value !== null ? (int) $value : 0;
+    }
 
     protected function casts(): array
     {
@@ -137,6 +175,24 @@ class Lesson extends Model
         return false;
     }
 
+    public function hasVideoSource(): bool
+    {
+        return $this->type === self::TYPE_VIDEO
+            && (
+                filled($this->original_video_key)
+                || filled($this->hls_manifest_key)
+                || filled($this->video_path)
+                || filled($this->video_url)
+                || filled($this->hls_playlist)
+                || filled($this->hls_path)
+            );
+    }
+
+    public function effectiveDurationSeconds(): int
+    {
+        return max(0, (int) ($this->duration_seconds ?: $this->duration ?: 0));
+    }
+
     /**
      * Kiểm tra video có đang trong quá trình chuyển đổi HLS hay không
      */
@@ -151,7 +207,7 @@ class Lesson extends Model
         }
 
         return (filled($this->original_video_key) || filled($this->video_path))
-            && $this->type === 'video'
+            && $this->type === self::TYPE_VIDEO
             && empty($this->video_url)
             && $this->processing_status !== 'failed';
     }

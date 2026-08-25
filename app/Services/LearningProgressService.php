@@ -57,6 +57,10 @@ class LearningProgressService
                 ? $statusOverride
                 : ((bool) ($existing?->is_completed ?? false) || $forceCompleted || $progressPercent >= $threshold);
 
+            if ($completed) {
+                $progressPercent = 100;
+            }
+
             $completedAt = $completed ? ($existing?->completed_at ?? now()) : null;
 
             LessonProgress::updateOrCreate(
@@ -152,6 +156,35 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->first();
 
+            $durationSeconds = $this->durationSeconds($lesson, $payload);
+
+            if (!empty($payload['completed'])) {
+                $completedAt = $existing?->completed_at ?? now();
+                $watchedSeconds = $durationSeconds > 0 ? $durationSeconds : (int) ($existing?->watched_seconds ?? 0);
+                
+                $progress = LessonProgress::updateOrCreate(
+                    ['user_id' => $userId, 'lesson_id' => $lesson->id],
+                    [
+                        'course_id' => $course->id,
+                        'watched_seconds' => $watchedSeconds,
+                        'duration_seconds' => $durationSeconds,
+                        'last_position_seconds' => $watchedSeconds,
+                        'furthest_position_seconds' => max($watchedSeconds, (int) ($existing?->furthest_position_seconds ?? 0)),
+                        'progress_percent' => 100,
+                        'is_completed' => true,
+                        'last_watched_at' => now(),
+                        'last_client_updated_at' => now(),
+                        'completed_at' => $completedAt,
+                    ]
+                );
+
+                if (! ($existing?->is_completed ?? false)) {
+                    app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+                }
+
+                return $this->refreshCourseProgress($enrollment, $userId, $course, $progress);
+            }
+
             $clientUpdatedAt = $this->clientUpdatedAt($payload['client_updated_at'] ?? null);
             if (
                 $existing?->last_client_updated_at
@@ -161,7 +194,6 @@ class LearningProgressService
                 return $this->progressResponse($enrollment, $existing, false, true);
             }
 
-            $durationSeconds = $this->durationSeconds($lesson, $payload);
             $lastPosition = $this->normalizeSeconds((int) ($payload['last_position_seconds'] ?? $payload['watched_seconds'] ?? 0), $durationSeconds);
             $clientFurthest = $this->normalizeSeconds((int) ($payload['furthest_position_seconds'] ?? 0), $durationSeconds);
             $playedSeconds = max(0, (int) ($payload['played_seconds'] ?? 0));

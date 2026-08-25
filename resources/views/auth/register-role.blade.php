@@ -159,8 +159,31 @@
                         Hồ sơ Giảng viên
                     </h3>
 
+                    @if(!empty($categories) && $categories->isNotEmpty())
+                        <div>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                Ngành / Lĩnh vực giảng dạy *
+                            </label>
+                            <select name="category_id" required class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                                <option value="">-- Chọn ngành / lĩnh vực giảng dạy --</option>
+                                @foreach($categories as $cat)
+                                    <option value="{{ $cat->id }}" @selected(old('category_id') == $cat->id)>
+                                        {{ $cat->name }}
+                                    </option>
+                                    @if($cat->children->isNotEmpty())
+                                        @foreach($cat->children as $child)
+                                            <option value="{{ $child->id }}" @selected(old('category_id') == $child->id)>
+                                                &nbsp;&nbsp;↳ {{ $child->name }}
+                                            </option>
+                                        @endforeach
+                                    @endif
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+
                     <x-auth.input
-                        label="Lĩnh vực chuyên môn *"
+                        label="Lĩnh vực chuyên môn chi tiết *"
                         name="specialty"
                         :value="old('specialty')"
                         placeholder="Ví dụ: Lập trình Web Fullstack, Data Science, AI..."
@@ -235,7 +258,6 @@
             <x-auth.captcha :question="$captcha['question']" />
 
             @if($isStudent)
-
                 <div>
                     <div class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 transition duration-200 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400 @error('terms') border-red-400 dark:border-red-500 @enderror">
                         <input
@@ -263,6 +285,13 @@
                                 Xem chi tiết điều khoản đăng ký
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/></svg>
                             </button>
+                        </div>
+                    </div>
+                    @error('terms')
+                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                    @enderror
+                </div>
+
                         </div>
                     </div>
                     @error('terms')
@@ -394,6 +423,25 @@
                                         <div>
                                             <h4 class="text-[15px] font-semibold text-slate-900 dark:text-white">8. Cập nhật điều khoản</h4>
                                             <p class="mt-1.5 text-sm leading-[1.6] text-slate-600 dark:text-slate-300">Nền tảng có thể cập nhật điều khoản dành cho giảng viên khi cần thiết.</p>
+                                        </div>
+
+                                        {{-- Khối xem file PDF gốc --}}
+                                        <div class="rounded-xl border border-violet-100 bg-violet-50/70 p-3.5 dark:border-violet-900/40 dark:bg-violet-950/30">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <div class="text-xs text-violet-900 dark:text-violet-200">
+                                                    <span class="font-bold block">Tài liệu pháp lý PDF</span>
+                                                    <span>Xem văn bản PDF chính thức có dấu và điều khoản chi tiết.</span>
+                                                </div>
+                                                <a
+                                                    href="{{ route('legal.registration-terms') }}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700"
+                                                >
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                                    <span>Mở PDF trong tab mới</span>
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
 

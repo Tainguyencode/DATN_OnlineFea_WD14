@@ -3,30 +3,32 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\StudyGroupInvitationMail;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\StudyGroup;
+use App\Models\StudyGroupInvitation;
 use App\Models\StudyGroupMessage;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 /**
  * Controller Quản lý Nhóm học tập & Chat thời gian thực (Study Groups & Group Chat API/Web)
- * 
- * Chức năng chính:
- * 1. Tạo nhóm, quản lý danh sách nhóm học tập theo từng khóa học.
- * 2. Phân quyền tham gia (Chỉ học viên đã đăng ký khóa học hoặc Giảng viên/Admin mới được tham gia).
- * 3. Chat trong nhóm: Gửi tin nhắn văn bản, hình ảnh, video và tệp tài liệu đính kèm (PDF, Word, Excel, ZIP).
- * 4. Gửi thông báo Push Notification đến tất cả thành viên trong nhóm khi có tin nhắn mới.
- * 5. Bảo mật tệp tin chat: Tải về hoặc xem trực tuyến thông qua route bảo vệ quyền thành viên.
  */
 class StudyGroupController extends Controller
 {
+    public function __construct(
+        protected NotificationService $notificationService
+    ) {}
+
     /**
      * Danh sách tất cả các nhóm học tập khả dụng.
-     * 
-     * @param Request $request Tham số lọc 'course_id' (nếu có)
-     * @return mixed JSON data nếu gọi AJAX/API hoặc Render View nếu truy cập trực tiếp
      */
     public function index(Request $request)
     {
@@ -64,26 +66,49 @@ class StudyGroupController extends Controller
 
     /**
      * Tạo một nhóm học tập mới cho khóa học.
-     * 
-     * @param Request $request Chứa course_id, name, description, max_members
-     * @return mixed
      */
     public function store(Request $request)
     {
-        if ($request->wantsJson() || $request->ajax()) {
-            $request->validate([
-                'course_id' => 'required|exists:courses,id',
-                'name' => 'required|string|max:255',
-                'description' => 'nullable|string',
-                'max_members' => 'nullable|integer|min:1',
-            ]);
-        } else {
-            $request->validate([
-                'course_id' => 'required|exists:courses,id',
-                'name' => 'required|string|max:255',
-                'description' => 'nullable|string',
-                'max_members' => 'required|integer|min:2',
-            ]);
+        $limitType = $request->input('max_members_type', 'custom');
+        $rawMaxMembers = $request->input('max_members');
+
+        // Validation rules
+        $rules = [
+            'course_id' => 'required|exists:courses,id',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'max_members' => 'nullable',
+        ];
+
+        $messages = [
+            'course_id.required' => 'Vui lòng chọn khóa học áp dụng.',
+            'course_id.exists' => 'Khóa học không tồn tại.',
+            'name.required' => 'Tên nhóm học tập không được để trống.',
+            'name.max' => 'Tên nhóm không được vượt quá 255 ký tự.',
+        ];
+
+        $validator = Validator::make($request->all(), $rules, $messages);
+
+        $maxMembers = null;
+        if ($limitType === 'custom' || ($limitType !== 'unlimited' && $request->filled('max_members'))) {
+            if ($request->filled('max_members')) {
+                if (!is_numeric($rawMaxMembers) || (int) $rawMaxMembers != $rawMaxMembers || (int) $rawMaxMembers <= 0) {
+                    $validator->errors()->add('max_members', 'Giới hạn thành viên phải là số nguyên dương.');
+                } else {
+                    $maxMembers = (int) $rawMaxMembers;
+                }
+            }
+        }
+
+        if ($validator->errors()->isNotEmpty()) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $validator->errors()->first(),
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return redirect()->back()->withErrors($validator)->withInput();
         }
 
         $user = auth()->user();
@@ -96,7 +121,7 @@ class StudyGroupController extends Controller
             ->exists();
 
         $course = Course::findOrFail($courseId);
-        $isInstructorOrAdmin = $user->role === 'admin' || ($user->role === 'instructor' && $course->instructor_id === $user->id);
+        $isInstructorOrAdmin = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
 
         if (!$isEnrolled && !$isInstructorOrAdmin) {
             $message = 'Bạn phải đăng ký khóa học này mới có thể lập nhóm học tập.';
@@ -115,7 +140,7 @@ class StudyGroupController extends Controller
             'creator_id' => $user->id,
             'name' => $request->input('name'),
             'description' => $request->input('description'),
-            'max_members' => $request->input('max_members') ?? 50,
+            'max_members' => $maxMembers,
         ]);
 
         // Gán người tạo làm Trưởng nhóm (moderator)
@@ -134,25 +159,28 @@ class StudyGroupController extends Controller
 
     /**
      * Xem chi tiết phòng chat của Nhóm học tập.
-     * 
-     * @param StudyGroup $studyGroup Model nhóm học tập
-     * @param Request $request
-     * @return mixed
      */
     public function show(StudyGroup $studyGroup, Request $request)
     {
         $user = auth()->user();
 
-        // Phân quyền: Phải là thành viên trong nhóm hoặc Admin hệ thống mới được vào xem
+        $pendingInvitation = null;
+        // Phân quyền: Phải là thành viên trong nhóm, Admin hệ thống, hoặc người có lời mời đang chờ
         if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
-            $message = 'Bạn không phải là thành viên của nhóm này.';
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $message
-                ], 403);
+            $pendingInvitation = $studyGroup->pendingInvitations()
+                ->where('invited_user_id', $user->id)
+                ->first();
+
+            if (!$pendingInvitation) {
+                $message = 'Bạn không phải là thành viên của nhóm này.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message
+                    ], 403);
+                }
+                return redirect()->route('study-groups.index')->with('error', $message);
             }
-            return redirect()->route('study-groups.index')->with('error', $message);
         }
 
         // Tự động đánh dấu các thông báo tin nhắn liên quan đến nhóm này là đã đọc
@@ -160,7 +188,7 @@ class StudyGroupController extends Controller
             $notificationUrl = route('study-groups.show', $studyGroup);
             $user->pushNotifications()
                 ->where('is_read', false)
-                ->where('type', 'study_group')
+                ->whereIn('type', ['study_group', 'study_group_invitation'])
                 ->where(function ($query) use ($notificationUrl, $studyGroup) {
                     $query->where('url', $notificationUrl)
                         ->orWhere('url', 'like', '%/study-groups/' . $studyGroup->id . '%');
@@ -170,15 +198,18 @@ class StudyGroupController extends Controller
                     'read_at' => now(),
                 ]);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("Failed to mark study group notifications as read: " . $e->getMessage());
+            Log::error("Failed to mark study group notifications as read: " . $e->getMessage());
         }
 
-        // Tải thông tin người tạo, các thành viên và lịch sử tin nhắn sắp xếp theo thời gian
+        // Tải thông tin người tạo, các thành viên, lời mời đang chờ và lịch sử tin nhắn
         $studyGroup->load([
             'creator',
+            'course',
             'members',
+            'pendingInvitations.invitedUser',
+            'pendingInvitations.inviter',
             'messages' => function ($query) {
-                $query->with('user')->orderBy('created_at', 'asc');
+                $query->with(['user', 'replyTo.user'])->orderBy('created_at', 'asc');
             }
         ]);
 
@@ -188,15 +219,11 @@ class StudyGroupController extends Controller
                 'data' => $studyGroup
             ]);
         }
-        return view('student.study_groups.show', compact('studyGroup'));
+        return view('student.study_groups.show', compact('studyGroup', 'pendingInvitation'));
     }
 
     /**
-     * Gửi tin nhắn mới vào Nhóm học tập (Hỗ trợ Văn bản & File đính kèm Ảnh, Video, Tài liệu).
-     * 
-     * @param Request $request Chứa 'message' hoặc 'file'
-     * @param StudyGroup $studyGroup
-     * @return mixed
+     * Gửi tin nhắn mới vào Nhóm học tập (Hỗ trợ Reply, Text, File, Image, Video).
      */
     public function storeMessage(Request $request, StudyGroup $studyGroup)
     {
@@ -219,11 +246,24 @@ class StudyGroupController extends Controller
             $request->files->set('file', $request->file('image'));
         }
 
-        // Validate nội dung tin nhắn và tệp tin đính kèm
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+        // Validate nội dung tin nhắn, reply_to_message_id và tệp tin đính kèm
+        $validator = Validator::make($request->all(), [
             'message' => 'nullable|string',
+            'reply_to_message_id' => 'nullable|integer',
             'file' => 'nullable|file|max:102400', // Tối đa 100MB tổng thể
         ]);
+
+        $replyToMessageId = $request->input('reply_to_message_id');
+        $parentMessage = null;
+        if ($replyToMessageId) {
+            $parentMessage = StudyGroupMessage::where('id', $replyToMessageId)
+                ->where('study_group_id', $studyGroup->id)
+                ->first();
+
+            if (!$parentMessage) {
+                $validator->errors()->add('reply_to_message_id', 'Tin nhắn được chọn không thuộc nhóm này.');
+            }
+        }
 
         $validator->after(function ($validator) use ($request) {
             if (!$request->filled('message') && !$request->hasFile('file')) {
@@ -277,7 +317,7 @@ class StudyGroupController extends Controller
             }
         });
 
-        if ($validator->fails()) {
+        if ($validator->fails() || $validator->errors()->isNotEmpty()) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -315,6 +355,7 @@ class StudyGroupController extends Controller
         // Tạo tin nhắn mới trong CSDL
         $studyGroupMessage = $studyGroup->messages()->create([
             'user_id' => $user->id,
+            'reply_to_message_id' => $parentMessage?->id,
             'message' => $request->input('message'),
             'message_type' => $messageType,
             'file_name' => $fileName,
@@ -327,12 +368,15 @@ class StudyGroupController extends Controller
         try {
             $otherMembers = $studyGroup->members()->where('users.id', '!=', $user->id)->get();
             if ($otherMembers->isNotEmpty()) {
-                $notificationService = app(\App\Services\NotificationService::class);
                 $title = "Tin nhắn mới trong nhóm " . $studyGroup->name;
                 
                 $bodyText = $user->name . ": ";
+                if ($parentMessage) {
+                    $bodyText = $user->name . " đã trả lời " . ($parentMessage->user?->name ?? 'thành viên') . ": ";
+                }
+
                 if ($messageType === 'text') {
-                    $bodyText .= \Illuminate\Support\Str::limit($request->input('message'), 60);
+                    $bodyText .= Str::limit($request->input('message'), 60);
                 } elseif ($messageType === 'image') {
                     $bodyText .= '[Hình ảnh]';
                 } elseif ($messageType === 'video') {
@@ -343,7 +387,7 @@ class StudyGroupController extends Controller
 
                 $notificationUrl = route('study-groups.show', $studyGroup);
 
-                $notificationService->sendToMany(
+                $this->notificationService->sendToMany(
                     $otherMembers,
                     $title,
                     $bodyText,
@@ -352,15 +396,17 @@ class StudyGroupController extends Controller
                 );
             }
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("Failed to send study group notification: " . $e->getMessage());
+            Log::error("Failed to send study group notification: " . $e->getMessage());
         }
+
+        $studyGroupMessage->load(['user', 'replyTo.user']);
 
         $messageText = 'Gửi tin nhắn thành công.';
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => $messageText,
-                'data' => $studyGroupMessage->load('user')
+                'data' => $studyGroupMessage
             ], 201);
         }
 
@@ -368,10 +414,71 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Tải xuống hoặc Stream file phương tiện (Ảnh, Video, Tệp tin) bảo mật trong phòng chat.
-     * 
-     * @param StudyGroup $studyGroup Nhóm học tập
-     * @param StudyGroupMessage $message Model tin nhắn chứa file
+     * Thu hồi tin nhắn của chính mình trong nhóm học tập.
+     */
+    public function recallMessage(StudyGroup $studyGroup, StudyGroupMessage $message, Request $request)
+    {
+        $user = auth()->user();
+
+        // Kiểm tra quyền: Chỉ chính chủ tin nhắn hoặc Admin mới được thu hồi
+        if ((int) $message->user_id !== (int) $user->id && $user->role !== 'admin') {
+            $errorMessage = 'Bạn không có quyền thu hồi tin nhắn này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], 403);
+            }
+            return redirect()->back()->with('error', $errorMessage);
+        }
+
+        // Đảm bảo tin nhắn thuộc đúng nhóm
+        if ($message->study_group_id !== $studyGroup->id) {
+            $errorMessage = 'Tin nhắn không thuộc nhóm học tập này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], 404);
+            }
+            return redirect()->back()->with('error', $errorMessage);
+        }
+
+        // Xóa file vật lý đính kèm nếu có
+        if ($message->file_path && Storage::disk('local')->exists($message->file_path)) {
+            Storage::disk('local')->delete($message->file_path);
+        }
+        if ($message->image_path && Storage::disk('public')->exists($message->image_path)) {
+            Storage::disk('public')->delete($message->image_path);
+        }
+
+        // Cập nhật trạng thái thu hồi
+        $message->update([
+            'is_recalled' => true,
+            'message' => 'Tin nhắn đã được thu hồi',
+            'image_path' => null,
+            'file_path' => null,
+            'file_name' => null,
+            'mime_type' => null,
+            'file_size' => null,
+        ]);
+
+        $message->load(['user', 'replyTo.user']);
+
+        $successMessage = 'Đã thu hồi tin nhắn thành công.';
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'data' => $message
+            ]);
+        }
+
+        return redirect()->back()->with('success', $successMessage);
+    }
+
+    /**
+     * Tải xuống hoặc Stream file phương tiện bảo mật trong phòng chat.
      */
     public function downloadFile(StudyGroup $studyGroup, StudyGroupMessage $message)
     {
@@ -382,19 +489,24 @@ class StudyGroupController extends Controller
             abort(403, 'Bạn không có quyền truy cập tệp tin này.');
         }
 
+        // Nếu tin nhắn đã thu hồi thì không cho tải file
+        if ($message->is_recalled) {
+            abort(404, 'Tin nhắn đã được thu hồi.');
+        }
+
         // Đảm bảo tin nhắn thuộc đúng nhóm
         if ($message->study_group_id !== $studyGroup->id) {
             abort(404, 'Tệp tin không tìm thấy.');
         }
 
         // Kiểm tra file có thực sự tồn tại trong disk local hay không
-        if (!$message->file_path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($message->file_path)) {
+        if (!$message->file_path || !Storage::disk('local')->exists($message->file_path)) {
             abort(404, 'Tệp tin không tồn tại trên hệ thống.');
         }
 
-        $fullPath = \Illuminate\Support\Facades\Storage::disk('local')->path($message->file_path);
+        $fullPath = Storage::disk('local')->path($message->file_path);
 
-        // Với Ảnh & Video: Trả về dạng stream inline để hiển thị trực tiếp trên web/app
+        // Với Ảnh & Video: Trả về dạng stream inline
         if (in_array($message->message_type, ['video', 'image'])) {
             return response()->file($fullPath, [
                 'Content-Type' => $message->mime_type,
@@ -402,20 +514,21 @@ class StudyGroupController extends Controller
             ]);
         }
 
-        // Với các tệp tin khác (PDF, Word, ZIP): Trả về dạng download về máy
+        // Với các tệp tin khác: Trả về dạng download
         return response()->download($fullPath, $message->file_name);
     }
 
     /**
-     * Update the specified study group in storage.
+     * Cập nhật thông tin & Giới hạn thành viên nhóm.
+     * Chỉ Trưởng nhóm (Owner), Giảng viên phụ trách khóa học, hoặc Admin mới được phép.
      */
     public function update(Request $request, StudyGroup $studyGroup)
     {
         $user = auth()->user();
 
-        // Check if user is creator or admin
-        if ($user->id !== $studyGroup->creator_id && $user->role !== 'admin') {
-            $message = 'Bạn không có quyền chỉnh sửa nhóm này.';
+        // Kiểm tra quyền: Trưởng nhóm, Giảng viên khóa học, hoặc Admin
+        if (!$studyGroup->canManage($user)) {
+            $message = 'Bạn không có quyền thay đổi giới hạn thành viên của nhóm.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -426,14 +539,51 @@ class StudyGroupController extends Controller
         }
 
         $currentMemberCount = $studyGroup->members()->count();
+        $limitType = $request->input('max_members_type', 'custom');
+        $rawMaxMembers = $request->input('max_members');
 
-        $request->validate([
+        $rules = [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'max_members' => 'nullable|integer|min:' . $currentMemberCount,
-        ]);
+            'max_members' => 'nullable',
+        ];
 
-        $studyGroup->update($request->only(['name', 'description', 'max_members']));
+        $messages = [
+            'name.required' => 'Tên nhóm học tập không được để trống.',
+        ];
+
+        $validator = Validator::make($request->all(), $rules, $messages);
+
+        $maxMembers = null;
+        if ($limitType === 'custom' || ($limitType !== 'unlimited' && $request->filled('max_members'))) {
+            if ($request->filled('max_members')) {
+                if (!is_numeric($rawMaxMembers) || (int) $rawMaxMembers != $rawMaxMembers || (int) $rawMaxMembers <= 0) {
+                    $validator->errors()->add('max_members', 'Giới hạn thành viên phải là số nguyên dương.');
+                } else {
+                    $maxMembers = (int) $rawMaxMembers;
+                    if ($maxMembers < $currentMemberCount) {
+                        $validator->errors()->add('max_members', 'Không thể đặt giới hạn thấp hơn số thành viên hiện tại của nhóm.');
+                    }
+                }
+            }
+        }
+
+        if ($validator->errors()->isNotEmpty()) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $validator->errors()->first(),
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
+
+        $studyGroup->update([
+            'name' => $request->input('name'),
+            'description' => $request->input('description'),
+            'max_members' => $maxMembers,
+        ]);
 
         $message = 'Cập nhật thông tin nhóm thành công.';
         if ($request->wantsJson() || $request->ajax()) {
@@ -447,14 +597,13 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Remove the specified study group from storage.
+     * Xóa nhóm học tập.
      */
     public function destroy(StudyGroup $studyGroup, Request $request)
     {
         $user = auth()->user();
 
-        // Check if user is creator or admin
-        if ($user->id !== $studyGroup->creator_id && $user->role !== 'admin') {
+        if (!$studyGroup->canManage($user)) {
             $message = 'Bạn không có quyền xóa nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
@@ -478,13 +627,13 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Join the specified study group.
+     * Tham gia nhóm học tập trực tiếp.
      */
     public function join(StudyGroup $studyGroup, Request $request)
     {
         $user = auth()->user();
 
-        // Check if already a member
+        // Kiểm tra xem đã là thành viên chưa
         if ($studyGroup->hasMember($user->id)) {
             $message = 'Bạn đã là thành viên của nhóm này rồi.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -496,14 +645,14 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
-        // Check if the user is enrolled or has permission (instructor/admin)
+        // Kiểm tra quyền đăng ký khóa học hoặc Giảng viên/Admin
         $isEnrolled = Enrollment::where('user_id', $user->id)
             ->where('course_id', $studyGroup->course_id)
             ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED])
             ->exists();
 
         $course = $studyGroup->course;
-        $isInstructorOrAdmin = $user->role === 'admin' || ($user->role === 'instructor' && $course->instructor_id === $user->id);
+        $isInstructorOrAdmin = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
 
         if (!$isEnrolled && !$isInstructorOrAdmin) {
             $message = 'Bạn phải đăng ký khóa học này mới có thể tham gia nhóm.';
@@ -516,9 +665,9 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
-        // Check if the group is full
+        // Kiểm tra giới hạn thành viên
         if ($studyGroup->isFull()) {
-            $message = 'Nhóm học tập đã đạt số lượng thành viên tối đa.';
+            $message = 'Nhóm đã đạt giới hạn thành viên.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -529,6 +678,14 @@ class StudyGroupController extends Controller
         }
 
         $studyGroup->members()->attach($user->id, ['role' => 'member']);
+
+        // Đánh dấu accepted nếu có lời mời đang pending
+        $studyGroup->pendingInvitations()
+            ->where('invited_user_id', $user->id)
+            ->update([
+                'status' => StudyGroupInvitation::STATUS_ACCEPTED,
+                'accepted_at' => now(),
+            ]);
 
         $message = 'Tham gia nhóm học tập thành công.';
         if ($request->wantsJson() || $request->ajax()) {
@@ -542,13 +699,12 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Leave the specified study group.
+     * Rời nhóm học tập.
      */
     public function leave(StudyGroup $studyGroup, Request $request)
     {
         $user = auth()->user();
 
-        // Check if user is a member
         if (!$studyGroup->hasMember($user->id)) {
             $message = 'Bạn không phải là thành viên của nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -560,7 +716,7 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
-        // Creator cannot leave (they should use delete to disband)
+        // Creator không thể rời nhóm
         if ($user->id === $studyGroup->creator_id) {
             $message = 'Người tạo nhóm không thể rời nhóm. Hãy xóa nhóm nếu muốn giải tán.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -585,7 +741,7 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * List all members of the specified study group.
+     * Danh sách thành viên nhóm.
      */
     public function members(StudyGroup $studyGroup)
     {
@@ -598,14 +754,13 @@ class StudyGroupController extends Controller
     }
 
     /**
-     * Remove a member from the study group (Kick).
+     * Xóa thành viên khỏi nhóm (Kick).
      */
     public function removeMember(StudyGroup $studyGroup, User $user, Request $request)
     {
         $currentUser = auth()->user();
 
-        // Check if current user is group creator or admin
-        if ($currentUser->id !== $studyGroup->creator_id && $currentUser->role !== 'admin') {
+        if (!$studyGroup->canManage($currentUser)) {
             $message = 'Bạn không có quyền xóa thành viên khỏi nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
@@ -616,7 +771,7 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
-        // Creator cannot remove themselves (they must delete the group)
+        // Không thể xóa chính Trưởng nhóm
         if ($user->id === $studyGroup->creator_id) {
             $message = 'Trưởng nhóm không thể bị xóa khỏi nhóm. Hãy xóa nhóm nếu muốn giải tán.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -628,7 +783,6 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
-        // Check if user is a member of the group
         if (!$studyGroup->hasMember($user->id)) {
             $message = 'Người này không phải là thành viên của nhóm.';
             if ($request->wantsJson() || $request->ajax()) {
@@ -640,7 +794,6 @@ class StudyGroupController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
-        // Detach the user from the group
         $studyGroup->members()->detach($user->id);
 
         $message = "Đã xóa thành viên {$user->name} ra khỏi nhóm.";
@@ -651,5 +804,343 @@ class StudyGroupController extends Controller
             ]);
         }
         return redirect()->back()->with('success', $message);
+    }
+
+    /**
+     * Tìm kiếm người dùng bằng email hoặc username để mời vào nhóm.
+     */
+    public function searchUsers(Request $request, StudyGroup $studyGroup)
+    {
+        $user = auth()->user();
+
+        if (!$studyGroup->canManage($user) && !$studyGroup->hasMember($user->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tìm kiếm thành viên cho nhóm này.'
+            ], 403);
+        }
+
+        $query = trim((string) $request->input('q', ''));
+        if ($query === '') {
+            return response()->json([
+                'success' => true,
+                'data' => []
+            ]);
+        }
+
+        $users = User::query()
+            ->where(function ($q) use ($query) {
+                $q->where('email', $query)
+                  ->orWhere('username', $query)
+                  ->orWhere('email', 'like', "%{$query}%")
+                  ->orWhere('username', 'like', "%{$query}%")
+                  ->orWhere('name', 'like', "%{$query}%");
+            })
+            ->limit(10)
+            ->get();
+
+        $result = $users->map(function (User $u) use ($studyGroup, $user) {
+            $isSelf = (int) $u->id === (int) $user->id;
+            $isMember = $studyGroup->hasMember($u->id);
+            $hasPendingInvite = $studyGroup->pendingInvitations()->where('invited_user_id', $u->id)->exists();
+
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'username' => $u->username ?? Str::slug($u->name, ''),
+                'email' => $u->email,
+                'avatar_url' => $u->avatarUrl(),
+                'is_self' => $isSelf,
+                'is_member' => $isMember,
+                'has_pending_invite' => $hasPendingInvite,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $result
+        ]);
+    }
+
+    /**
+     * Gửi lời mời tham gia nhóm học tập.
+     */
+    public function invite(Request $request, StudyGroup $studyGroup)
+    {
+        $currentUser = auth()->user();
+
+        // Kiểm tra quyền mời: Chỉ Trưởng nhóm (Owner), Giảng viên, hoặc Admin
+        if (!$studyGroup->canManage($currentUser)) {
+            $message = 'Bạn không có quyền mời thành viên vào nhóm này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Tìm kiếm target user theo user_id hoặc email/username
+        $targetUser = null;
+        if ($request->filled('user_id')) {
+            $targetUser = User::find($request->input('user_id'));
+        } elseif ($request->filled('identifier')) {
+            $identifier = trim((string) $request->input('identifier'));
+            $targetUser = User::where('email', $identifier)
+                ->orWhere('username', $identifier)
+                ->first();
+        }
+
+        if (!$targetUser) {
+            $message = 'Người dùng không tồn tại.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 404);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Không cho mời chính mình
+        if ((int) $targetUser->id === (int) $currentUser->id) {
+            $message = 'Bạn không thể mời chính mình.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Không cho mời người đã là member
+        if ($studyGroup->hasMember($targetUser->id)) {
+            $message = 'Người dùng này đã là thành viên của nhóm.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Không tạo duplicate invitation pending
+        $hasPending = $studyGroup->pendingInvitations()
+            ->where('invited_user_id', $targetUser->id)
+            ->exists();
+
+        if ($hasPending) {
+            $message = 'Lời mời đang chờ người dùng xác nhận.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Kiểm tra giới hạn thành viên
+        if ($studyGroup->isFull()) {
+            $message = 'Nhóm đã đạt giới hạn thành viên.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Tạo invitation record
+        $invitation = StudyGroupInvitation::create([
+            'study_group_id' => $studyGroup->id,
+            'invited_user_id' => $targetUser->id,
+            'invited_by' => $currentUser->id,
+            'status' => StudyGroupInvitation::STATUS_PENDING,
+            'expires_at' => now()->addDays(7),
+        ]);
+
+        // Gửi thông báo đến người được mời
+        try {
+            $title = 'Bạn được mời vào nhóm học';
+            $notificationMessage = "{$currentUser->name} đã mời bạn tham gia nhóm \"{$studyGroup->name}\".";
+            $url = route('study-groups.show', $studyGroup);
+
+            $this->notificationService->send(
+                $targetUser,
+                $title,
+                $notificationMessage,
+                'study_group_invitation',
+                $url
+            );
+        } catch (\Throwable $e) {
+            Log::error("Failed to send study group invitation notification: " . $e->getMessage());
+        }
+
+        // Gửi email mời tham gia nhóm học tập trực tiếp tới hộp thư email của người được mời
+        try {
+            if ($targetUser->email) {
+                Mail::to($targetUser->email)->send(
+                    new StudyGroupInvitationMail(
+                        invitedUser: $targetUser,
+                        inviter: $currentUser,
+                        studyGroup: $studyGroup,
+                        invitation: $invitation,
+                        actionUrl: route('study-groups.show', $studyGroup)
+                    )
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to send study group invitation email: " . $e->getMessage());
+        }
+
+        $successMessage = "Đã gửi lời mời tham gia nhóm tới {$targetUser->name}.";
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'data' => $invitation->load(['invitedUser', 'inviter'])
+            ], 201);
+        }
+
+        return redirect()->back()->with('success', $successMessage);
+    }
+
+    /**
+     * Hủy lời mời đang pending.
+     */
+    public function cancelInvitation(StudyGroup $studyGroup, StudyGroupInvitation $invitation, Request $request)
+    {
+        $currentUser = auth()->user();
+
+        if (!$studyGroup->canManage($currentUser)) {
+            $message = 'Bạn không có quyền hủy lời mời này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->back()->with('error', $message);
+        }
+
+        if ($invitation->study_group_id !== $studyGroup->id) {
+            abort(404, 'Lời mời không tồn tại.');
+        }
+
+        $invitation->update([
+            'status' => StudyGroupInvitation::STATUS_CANCELLED,
+        ]);
+
+        $successMessage = 'Đã hủy lời mời thành công.';
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage
+            ]);
+        }
+
+        return redirect()->back()->with('success', $successMessage);
+    }
+
+    /**
+     * Chấp nhận lời mời tham gia nhóm học tập.
+     */
+    public function acceptInvitation(StudyGroupInvitation $invitation, Request $request)
+    {
+        $user = auth()->user();
+
+        if ((int) $invitation->invited_user_id !== (int) $user->id) {
+            $message = 'Bạn không có quyền thao tác trên lời mời này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->route('study-groups.index')->with('error', $message);
+        }
+
+        if ($invitation->status !== StudyGroupInvitation::STATUS_PENDING) {
+            $message = 'Lời mời này không còn hiệu lực.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->route('study-groups.index')->with('error', $message);
+        }
+
+        $studyGroup = $invitation->studyGroup;
+
+        // BẮT BUỘC: Kiểm tra lại giới hạn thành viên tại thời điểm accept
+        if ($studyGroup->isFull()) {
+            $message = 'Nhóm đã đạt giới hạn thành viên.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return redirect()->route('study-groups.index')->with('error', $message);
+        }
+
+        if (!$studyGroup->hasMember($user->id)) {
+            $studyGroup->members()->attach($user->id, ['role' => 'member']);
+        }
+
+        $invitation->update([
+            'status' => StudyGroupInvitation::STATUS_ACCEPTED,
+            'accepted_at' => now(),
+        ]);
+
+        $successMessage = 'Bạn đã tham gia nhóm học tập thành công.';
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'data' => $studyGroup->load('members')
+            ]);
+        }
+
+        return redirect()->route('study-groups.show', $studyGroup)->with('success', $successMessage);
+    }
+
+    /**
+     * Từ chối lời mời tham gia nhóm học tập.
+     */
+    public function rejectInvitation(StudyGroupInvitation $invitation, Request $request)
+    {
+        $user = auth()->user();
+
+        if ((int) $invitation->invited_user_id !== (int) $user->id) {
+            $message = 'Bạn không có quyền thao tác trên lời mời này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 403);
+            }
+            return redirect()->route('study-groups.index')->with('error', $message);
+        }
+
+        $invitation->update([
+            'status' => StudyGroupInvitation::STATUS_REJECTED,
+        ]);
+
+        $successMessage = 'Đã từ chối lời mời tham gia nhóm.';
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage
+            ]);
+        }
+
+        return redirect()->route('study-groups.index')->with('success', $successMessage);
     }
 }

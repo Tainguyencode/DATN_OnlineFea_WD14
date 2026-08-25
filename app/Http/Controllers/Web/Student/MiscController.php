@@ -22,9 +22,7 @@ class MiscController extends Controller
     public function wishlist(): View
     {
         $items = Wishlist::where('user_id', auth()->id())
-            ->whereHas('course', fn ($query) => $query
-                ->where('status', Course::STATUS_PUBLISHED)
-                ->where('is_published', true))
+            ->whereHas('course', fn ($query) => $query->published())
             ->with(['course' => fn ($query) => $query
                 ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
                 ->withCount(['lessons', 'courseSections'])])
@@ -122,8 +120,22 @@ class MiscController extends Controller
             }
 
             if ($sent > 0) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Email chứng chỉ đã được gửi tới hòm thư của bạn!',
+                    ]);
+                }
+
                 return redirect()->route('student.certificates')
                     ->with('success', 'Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không gửi được email chứng chỉ. Vui lòng thử lại sau.',
+                ], 422);
             }
 
             return redirect()->route('student.certificates')

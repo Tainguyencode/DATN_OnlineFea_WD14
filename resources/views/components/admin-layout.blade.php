@@ -59,6 +59,18 @@
                     'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h6M4 10h6m-6 4h6m6-8h4m-4 4h4m-4 4h4M4 18h16"/></svg>',
                 ],
                 [
+                    'route' => 'admin.learning-paths.index',
+                    'active' => ['admin.learning-paths.*'],
+                    'label' => 'Lộ trình học tập',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>',
+                ],
+                [
+                    'route' => 'admin.instructors.requirements.index',
+                    'active' => ['admin.instructors.requirements.*'],
+                    'label' => 'Yêu cầu hồ sơ ngành',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+                ],
+                [
                     'route' => 'admin.courses.pending',
                     'active' => ['admin.courses.pending', 'admin.courses.review', 'admin.course-reviews.*'],
                     'label' => 'Duyệt khóa học',
@@ -99,9 +111,21 @@
                 ],
                 [
                     'route' => 'admin.coupons.index',
-                    'active' => ['admin.coupons.*'],
+                    'active' => ['admin.coupons.index', 'admin.coupons.create', 'admin.coupons.edit'],
                     'label' => 'Mã giảm giá',
                     'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>',
+                ],
+                [
+                    'route' => 'admin.coupons.reward_config',
+                    'active' => ['admin.coupons.reward_config'],
+                    'label' => 'Cấu hình thưởng TOP',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V6a2 2 0 10-2 2h2zm0 13C10.832 18.477 9.246 18 7.5 18S4.168 18.477 3 19.253V6.253C4.168 5.477 5.754 5 7.5 5s3.332.477 4.5 1.253m0 13C13.168 18.477 14.754 18 16.5 18c1.747 0 3.332.477 4.5 1.253V6.253C19.832 5.477 18.247 5 16.5 5c-1.746 0-3.332.477-4.5 1.253"/></svg>',
+                ],
+                [
+                    'route' => 'admin.coupons.reward_history',
+                    'active' => ['admin.coupons.reward_history'],
+                    'label' => 'Lịch sử thưởng TOP',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
                 ],
             ],
         ],

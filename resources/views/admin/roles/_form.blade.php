@@ -7,16 +7,6 @@
     $totalPermissions = $permissionGroups->sum(fn ($group) => $group['permissions']->count());
 @endphp
 
-@if($errors->any())
-    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-        <ul class="list-inside list-disc space-y-1">
-            @foreach($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    </div>
-@endif
-
 <form
     method="POST"
     action="{{ $isEdit ? route('admin.roles.update', $role) : route('admin.roles.store') }}"

@@ -1,18 +1,6 @@
 @use('App\Models\CourseReviewItem')
 @use('App\Models\Course')
 <x-admin-layout :title="'Duyệt - '.$course->title" page-title="Kiểm duyệt khóa học" :breadcrumb="$course->title">
-    @if(session('success'))
-        <div class="my-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-            {{ session('success') }}
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="my-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
-            {{ session('error') }}
-        </div>
-    @endif
-
 @php
     $formatPrice = fn ($value) => (float) $value <= 0 ? 'Miễn phí' : number_format((float) $value, 0, ',', '.').'đ';
     $price = $course->discount_price ?? $course->sale_price ?? $course->price;
@@ -69,8 +57,16 @@
                         <span class="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Cập nhật chờ duyệt</span>
                     @elseif($course->status === 'published')
                         <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Đã xuất bản</span>
+                    @elseif($course->status === 'approved')
+                        @if($course->instructor?->instructor_status === 'approved' && ! $course->instructor?->isLocked())
+                            <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Đã duyệt & Xuất bản</span>
+                        @else
+                            <span class="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Đã duyệt nội dung (Chờ duyệt GV)</span>
+                        @endif
+                    @elseif($course->status === 'rejected')
+                        <span class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Bị từ chối</span>
                     @else
-                        <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đang chờ duyệt</span>
+                        <span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Đang chờ duyệt</span>
                     @endif
                     <span class="text-xs font-semibold text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }}</span>
                     @if($course->submitted_at)
@@ -363,11 +359,13 @@
                                             </div>
                                         @endif
                                             
-                                            {{-- Nút và khu vực hiển thị quét AI --}}
+                                            {{-- Nút và khu vực hiển thị quét AI (Chỉ video mới có nút quét) --}}
                                             <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $videoLessonKey }}">
-                                                <button type="button" class="btn-scan-ai inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
-                                                    <span>Quét nội dung</span>
-                                                </button>
+                                                @if($lesson->type === 'video')
+                                                    <button type="button" class="btn-scan-ai inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                                                        <span>Quét nội dung</span>
+                                                    </button>
+                                                @endif
                                                 
                                                 <div class="ai-progress-area hidden mt-3 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
                                                     <p class="ai-status-text text-sm font-semibold text-indigo-700">Đang khởi tạo...</p>
@@ -788,11 +786,106 @@
         </form>
     </section>
 
+    <div
+        id="ai-review-result-modal"
+        class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-review-result-title"
+        aria-describedby="ai-review-result-message"
+        aria-hidden="true"
+    >
+        <div class="w-full max-w-xl overscroll-contain rounded-2xl border border-violet-200 bg-white p-6 shadow-2xl dark:border-violet-900/60 dark:bg-slate-900">
+            <h2 id="ai-review-result-title" class="text-xl font-bold text-slate-950 dark:text-white"></h2>
+            <p id="ai-review-result-message" class="mt-3 max-h-[60vh] overflow-y-auto whitespace-pre-line break-words text-sm leading-6 text-slate-600 dark:text-slate-300"></p>
+            <button
+                type="button"
+                id="ai-review-result-close"
+                class="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 sm:w-auto"
+            >
+                Đóng
+            </button>
+        </div>
+    </div>
+
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var commentInput = document.getElementById('review-comment');
     var jsCommentError = document.getElementById('js-comment-error');
+    var aiResultModal = document.getElementById('ai-review-result-modal');
+    var aiResultTitle = document.getElementById('ai-review-result-title');
+    var aiResultMessage = document.getElementById('ai-review-result-message');
+    var aiResultClose = document.getElementById('ai-review-result-close');
+
+    function showAdminToast(message, type) {
+        var safeMessage = typeof message === 'string' && message.trim() !== ''
+            ? message
+            : 'Không thể thực hiện thao tác. Vui lòng thử lại.';
+
+        if (window.AppToast?.show) {
+            window.AppToast.show({ type: type || 'info', message: safeMessage });
+            return;
+        }
+
+        console.error(safeMessage);
+    }
+
+    function createAiUserFacingError(message) {
+        var error = new Error(message);
+        error.isUserFacing = true;
+        return error;
+    }
+
+    function getAiUserFacingMessage(error, fallback) {
+        return error?.isUserFacing && typeof error.message === 'string' && error.message.trim() !== ''
+            ? error.message
+            : fallback;
+    }
+
+    function showAiReviewResult(title, message) {
+        return new Promise(function (resolve) {
+            var previousFocus = document.activeElement;
+            var previousOverflow = document.body.style.overflow;
+
+            aiResultTitle.textContent = title;
+            aiResultMessage.textContent = typeof message === 'string' && message.trim() !== ''
+                ? message
+                : 'Không có nội dung đánh giá.';
+            aiResultModal.classList.remove('hidden');
+            aiResultModal.classList.add('flex');
+            aiResultModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+
+            function closeModal() {
+                aiResultModal.classList.add('hidden');
+                aiResultModal.classList.remove('flex');
+                aiResultModal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = previousOverflow;
+                aiResultClose.removeEventListener('click', closeModal);
+                document.removeEventListener('keydown', handleModalKeydown);
+                if (previousFocus instanceof HTMLElement) previousFocus.focus();
+                resolve();
+            }
+
+            function handleModalKeydown(event) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeModal();
+                    return;
+                }
+
+                if (event.key === 'Tab') {
+                    event.preventDefault();
+                    aiResultClose.focus();
+                }
+            }
+
+            aiResultClose.addEventListener('click', closeModal);
+            document.addEventListener('keydown', handleModalKeydown);
+            aiResultClose.focus();
+        });
+    }
 
     @if($errors->any())
         if (window.location.hash !== '#review-decision-section') {
@@ -993,11 +1086,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
             if (response.status === 419) {
-                throw new Error('Phiên làm việc đã hết hạn. Vui lòng tải lại trang và thử lại.');
+                throw createAiUserFacingError('Phiên làm việc đã hết hạn. Vui lòng tải lại trang và thử lại.');
             }
-            throw new Error(`Máy chủ trả về phản hồi không hợp lệ (HTTP ${response.status}).`);
+            throw createAiUserFacingError('Máy chủ trả về phản hồi không hợp lệ. Vui lòng thử lại.');
         }
-        return response.json();
+
+        try {
+            return await response.json();
+        } catch (error) {
+            throw createAiUserFacingError('Máy chủ trả về phản hồi không hợp lệ. Vui lòng thử lại.');
+        }
     }
 
     function aiFetchHeaders() {
@@ -1076,14 +1174,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var extData = await parseJsonResponse(extRes);
         if (!extRes.ok) {
-            throw new Error(extData.error || 'Lỗi cắt frame');
+            throw createAiUserFacingError(extData.error || 'Không thể trích xuất khung hình. Vui lòng thử lại.');
         }
 
         var frames = extData.frames;
         var total = extData.total;
 
         if (total === 0) {
-            throw new Error('Không cắt được frame nào');
+            throw createAiUserFacingError('Không trích xuất được khung hình nào từ video này.');
         }
 
         var aiResults = [];
@@ -1111,10 +1209,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (aiResults.length === 0) {
-            throw new Error(
-                lastApiError
-                    ? 'Không phân tích được frame nào: ' + lastApiError
-                    : 'Không phân tích được frame nào. Kiểm tra lại API key OpenRouter hoặc quota.'
+            throw createAiUserFacingError(
+                lastApiError || 'Không thể phân tích nội dung video lúc này. Vui lòng thử lại.'
             );
         }
 
@@ -1128,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var saveData = await parseJsonResponse(saveRes);
         if (!saveRes.ok) {
-            throw new Error(saveData.error || saveData.message || 'Lỗi lưu DB');
+            throw createAiUserFacingError(saveData.error || saveData.message || 'Không thể lưu kết quả kiểm duyệt. Vui lòng thử lại.');
         }
 
         onProgress({ phase: 'done', frameIndex: total, frameTotal: total });
@@ -1172,11 +1268,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     ? saveData.moderation.summary
                     : 'Không phát hiện dấu hiệu đáng chú ý.';
 
-                alert('✅ Quét AI hoàn tất thành công!\n\nAI Nhận xét: ' + modSummary);
-
+                showAdminToast('Đã hoàn tất kiểm duyệt AI cho bài học.', 'success');
+                await showAiReviewResult('Kết quả kiểm duyệt AI', modSummary);
                 window.location.reload();
             } catch (err) {
-                alert('Lỗi quét AI: ' + err.message);
+                showAdminToast(
+                    getAiUserFacingMessage(err, 'Không thể phân tích bài học lúc này. Vui lòng thử lại.'),
+                    'error'
+                );
                 labelSpan.innerText = defaultLabel;
                 progressArea.classList.add('hidden');
                 setAiScanBusy(false);
@@ -1191,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var totalVideos = videoLessons.length;
 
             if (totalVideos === 0) {
-                alert('Khóa học không có video để quét.');
+                showAdminToast('Khóa học không có video để kiểm duyệt.', 'warning');
                 return;
             }
 
@@ -1221,7 +1320,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     stats.success++;
                 } catch (err) {
                     stats.failed++;
-                    stats.errors.push({ title: lesson.title, message: err.message });
+                    stats.errors.push({
+                        title: lesson.title,
+                        message: getAiUserFacingMessage(err, 'Không thể phân tích video này.'),
+                    });
                     console.error('[AI Moderation] Lỗi quét video "' + lesson.title + '" (ID: ' + lesson.id + '):', err);
                 }
             }
@@ -1244,7 +1346,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 }).join('\n');
             }
 
-            alert(summary);
+            showAdminToast(
+                stats.failed > 0 ? 'Đã hoàn tất kiểm duyệt AI, một số video gặp lỗi.' : 'Đã hoàn tất kiểm duyệt AI cho khóa học.',
+                stats.failed > 0 ? 'warning' : 'success'
+            );
+            await showAiReviewResult('Tổng hợp kiểm duyệt AI', summary);
             window.location.reload();
         });
     }
@@ -1276,7 +1382,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 var data = await parseJsonResponse(res);
                 if (!res.ok) {
-                    throw new Error(data.message || 'Lỗi lưu ghi chú');
+                    throw createAiUserFacingError(data.message || 'Không thể lưu ghi chú. Vui lòng thử lại.');
                 }
 
                 if (labelSpan) labelSpan.innerText = 'Cập nhật ghi chú';
@@ -1290,7 +1396,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 this.disabled = false;
             } catch (err) {
-                alert('Lỗi lưu ghi chú bài học: ' + err.message);
+                showAdminToast(
+                    getAiUserFacingMessage(err, 'Không thể lưu ghi chú bài học. Vui lòng thử lại.'),
+                    'error'
+                );
                 if (labelSpan) labelSpan.innerText = originalText;
                 this.disabled = false;
             }

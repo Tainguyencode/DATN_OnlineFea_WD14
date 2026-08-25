@@ -57,6 +57,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Cart::class);
     }
 
+    public function studyGroupInvitations(): HasMany
+    {
+        return $this->hasMany(StudyGroupInvitation::class, 'invited_user_id');
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
@@ -109,6 +114,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function supportTickets(): HasMany
     {
         return $this->hasMany(SupportTicket::class);
+    }
+
+    public function userCoupons(): HasMany
+    {
+        return $this->hasMany(UserCoupon::class);
+    }
+
+    public function coupons(): BelongsToMany
+    {
+        return $this->belongsToMany(Coupon::class, 'user_coupons')
+            ->withPivot(['saved_at', 'used_at'])
+            ->withTimestamps();
     }
 
     public function activityLogs(): HasMany
@@ -440,6 +457,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
     }
 
+    public function getAvatarUrlAttribute(): string
+    {
+        return $this->avatarUrl();
+    }
+
     public function getCommissionRate(): float
     {
         if ($this->commission_rate !== null) {
@@ -483,5 +505,76 @@ class User extends Authenticatable implements MustVerifyEmail
     public function getAvailableBalanceAttribute(): float
     {
         return max(0, $this->total_earnings - $this->total_withdrawn - $this->pending_withdrawal);
+    }
+
+    /**
+     * Lấy toàn bộ danh sách các ngành/lĩnh vực giảng dạy đã đăng ký của Giảng viên
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, Category>
+     */
+    public function getTeachingCategories(): \Illuminate\Database\Eloquent\Collection
+    {
+        $profile = $this->relationLoaded('instructorProfile') ? $this->instructorProfile : $this->instructorProfile()->first();
+        if (! $profile) {
+            return new \Illuminate\Database\Eloquent\Collection();
+        }
+
+        $categories = $profile->teachingCategories()->get();
+        if ($categories->isNotEmpty()) {
+            return $categories;
+        }
+
+        // Fallback cho legacy category_id hoặc teaching_field
+        $singleCat = $this->getTeachingCategory();
+        if ($singleCat) {
+            return new \Illuminate\Database\Eloquent\Collection([$singleCat]);
+        }
+
+        return new \Illuminate\Database\Eloquent\Collection();
+    }
+
+    public function getTeachingCategory(): ?Category
+    {
+        $profile = $this->relationLoaded('instructorProfile') ? $this->instructorProfile : $this->instructorProfile()->first();
+        if (! $profile) {
+            return null;
+        }
+
+        // Ưu tiên lấy category có is_primary = true từ pivot
+        $primary = $profile->teachingCategories()->wherePivot('is_primary', true)->first();
+        if ($primary) {
+            return $primary;
+        }
+
+        $first = $profile->teachingCategories()->first();
+        if ($first) {
+            return $first;
+        }
+
+        if ($profile->category_id) {
+            return $profile->relationLoaded('category') ? $profile->category : $profile->category()->first();
+        }
+
+        // Fallback: match by teaching_field or specialty string
+        if ($profile->teaching_field) {
+            $cat = Category::where('name', $profile->teaching_field)->orWhere('slug', \Illuminate\Support\Str::slug($profile->teaching_field))->first();
+            if ($cat) {
+                return $cat;
+            }
+        }
+
+        if ($profile->specialty) {
+            $cat = Category::where('name', $profile->specialty)->orWhere('slug', \Illuminate\Support\Str::slug($profile->specialty))->first();
+            if ($cat) {
+                return $cat;
+            }
+        }
+
+        return null;
+    }
+
+    public function getTeachingCategoryId(): ?int
+    {
+        return $this->getTeachingCategory()?->id;
     }
 }

@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Enrollment;
 use App\Services\PointService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
@@ -40,19 +41,25 @@ class LeaderboardController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('user_id');
 
-        // 3. Query student users with points in period
-        $leaderboardQuery = User::query()
+        // 3. Query top 50 student users with points in period
+        $top50Users = User::query()
             ->where('role', 'student')
             ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
             ->select('users.*', 'points_table.period_xp')
             ->when($search, fn($q) => $q->where('users.name', 'like', "%{$search}%"))
             ->orderByDesc('points_table.period_xp')
-            ->orderBy('users.id');
+            ->orderBy('users.id')
+            ->take(50)
+            ->get();
 
-        $leaderboard = $leaderboardQuery->paginate(20)->withQueryString();
+        $page = (int) $request->query('page', 1);
+        $perPage = 20;
+        $offset = ($page - 1) * $perPage;
+
+        $currentPageItems = $top50Users->slice($offset, $perPage)->values();
 
         // Attach rank and extra metrics to page items
-        foreach ($leaderboard->items() as $index => $user) {
+        foreach ($currentPageItems as $user) {
             $user->period_xp = (int) $user->period_xp;
             $user->total_xp = $pointService->getUserTotalPoints($user->id);
             $user->completed_courses_count = Enrollment::where('user_id', $user->id)
@@ -60,6 +67,17 @@ class LeaderboardController extends Controller
                 ->count();
             $user->streak_days = $pointService->getUserStreakDays($user->id);
         }
+
+        $leaderboard = new LengthAwarePaginator(
+            $currentPageItems,
+            $top50Users->count(),
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
         // Top 1, Top 2, Top 3 for podium display (if on page 1)
         $top3 = [];
@@ -95,13 +113,53 @@ class LeaderboardController extends Controller
             ];
         }
 
+        // Monthly Top 3 Rewards definition
+        $monthlyRewards = [
+            1 => [
+                'rank' => 'TOP 1',
+                'title' => 'Quán Quân Tháng',
+                'voucher' => 'Voucher Giảm 40%',
+                'xp' => '+1.000 XP Thưởng',
+                'badge' => 'Huy hiệu Bá Vương Tháng',
+            ],
+            2 => [
+                'rank' => 'TOP 2',
+                'title' => 'Á Quân Tháng',
+                'voucher' => 'Voucher Giảm 30%',
+                'xp' => '+500 XP Thưởng',
+                'badge' => 'Huy hiệu Á Quân Tháng',
+            ],
+            3 => [
+                'rank' => 'TOP 3',
+                'title' => 'Top 3 Tinh Anh',
+                'voucher' => 'Voucher Giảm 20%',
+                'xp' => '+300 XP Thưởng',
+                'badge' => 'Huy hiệu Top 3 Tháng',
+            ],
+            '4_9' => [
+                'rank' => 'TOP 4 - TOP 9',
+                'title' => 'Khuyến Khích',
+                'voucher' => 'Voucher Giảm 15%',
+                'xp' => '+100 XP Thưởng',
+                'badge' => 'Huy hiệu Top 9 Tháng',
+            ],
+            '10_50' => [
+                'rank' => 'TOP 10 - TOP 50',
+                'title' => 'Tích Cực',
+                'voucher' => 'Voucher Giảm 10%',
+                'xp' => '+50 XP Thưởng',
+                'badge' => 'Huy hiệu Top 50 Tháng',
+            ],
+        ];
+
         return view('leaderboard.index', compact(
             'leaderboard',
             'top3',
             'currentUserData',
             'period',
             'search',
-            'countdownTarget'
+            'countdownTarget',
+            'monthlyRewards'
         ));
     }
 }

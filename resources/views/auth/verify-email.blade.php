@@ -16,18 +16,6 @@
 @if($studentHub)
     <div class="bg-slate-50 py-8 dark:bg-slate-950">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            @if(session('success'))
-                <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
-                    {{ session('success') }}
-                </div>
-            @endif
-
-            @if(session('error'))
-                <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
-                    {{ session('error') }}
-                </div>
-            @endif
-
             @if($errors->any())
                 <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
                     <ul class="space-y-1">
@@ -88,8 +76,8 @@
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
                         </span>
                         <div>
-                            <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Dev Mode Helper</h3>
-                            <p class="text-xs text-blue-700/80 dark:text-blue-400/80">Bạn đang chạy trong môi trường cục bộ (local). Bạn có thể xác thực nhanh tài khoản tại đây mà không cần kiểm tra file log.</p>
+                            <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Hỗ trợ xác thực nhanh</h3>
+                            <p class="text-xs text-blue-700/80 dark:text-blue-400/80">Bạn có thể bấm xác thực nhanh tài khoản tại đây để tiếp tục trải nghiệm.</p>
                         </div>
                     </div>
                     <div class="mt-4 flex flex-wrap items-center gap-3">
@@ -99,9 +87,6 @@
                                 Xác thực nhanh tài khoản này
                             </button>
                         </form>
-                        <span class="text-xs text-slate-500 dark:text-slate-400">
-                            Hoặc tìm liên kết xác thực được gửi đến trong file: <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">storage/logs/laravel.log</code>
-                        </span>
                     </div>
                 </div>
             @endif
@@ -115,6 +100,7 @@
                     ['href' => '#wishlist', 'label' => 'Yêu thích'],
                     ['href' => '#certificates', 'label' => 'Chứng chỉ'],
                     ['href' => route('student.orders'), 'label' => 'Đơn hàng', 'external' => true],
+                    ['href' => route('student.vouchers.index'), 'label' => 'Kho Voucher', 'external' => true],
                     ['href' => route('study-groups.index'), 'label' => 'Nhóm học tập', 'external' => true],
                     ['href' => route('student.profile'), 'label' => 'Hồ sơ', 'external' => true],
                 ] as $item)
@@ -511,18 +497,6 @@
                     </p>
                 </div>
 
-                @if(session('success'))
-                    <div class="ui-alert-success mx-auto mt-6 max-w-lg">
-                        {{ session('success') }}
-                    </div>
-                @endif
-
-                @if(session('error'))
-                    <div class="ui-alert-error mx-auto mt-6 max-w-lg">
-                        {{ session('error') }}
-                    </div>
-                @endif
-
                 @if($errors->any())
                     <div class="ui-alert-error mx-auto mt-6 max-w-lg">
                         <ul class="space-y-1 text-left">
@@ -584,8 +558,8 @@
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
                             </span>
                             <div>
-                                <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Dev Mode Helper</h3>
-                                <p class="text-xs text-blue-700/80 dark:text-blue-400/80">Bạn đang chạy trong môi trường cục bộ (local). Bạn có thể kích hoạt nhanh email mà không cần mở file log.</p>
+                                <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Hỗ trợ xác thực nhanh</h3>
+                                <p class="text-xs text-blue-700/80 dark:text-blue-400/80">Bạn có thể kích hoạt nhanh email tại đây để tiếp tục trải nghiệm.</p>
                             </div>
                         </div>
                         <div class="mt-4 flex flex-wrap items-center gap-3">
@@ -595,9 +569,6 @@
                                     Xác thực nhanh tài khoản
                                 </button>
                             </form>
-                            <span class="text-xs text-slate-500 dark:text-slate-400">
-                                Email đã được ghi nhận trong file: <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">storage/logs/laravel.log</code>
-                            </span>
                         </div>
                     </div>
                 @endif

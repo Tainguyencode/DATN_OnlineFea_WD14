@@ -9,7 +9,9 @@ use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
+use App\Models\Submission;
 use App\Models\Category;
+use App\Models\Certificate;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -234,6 +236,10 @@ class CourseController extends Controller
             ]);
         }
 
+        if ($course->hasIncompleteHlsVideos()) {
+            return back()->with('error', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
+        }
+
         if (! $course->submissionCheck()->passes()) {
             return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');
         }
@@ -278,6 +284,278 @@ class CourseController extends Controller
             'quizStats' => $stats['quizStats'],
             'labStats' => $stats['labStats'],
         ]);
+    }
+
+    public function studentDetail(Course $course, User $student): View
+    {
+        // 1. Authorization: Verify ownership or admin access
+        abort_unless($course->isOwnedBy(auth()->user()) || (auth()->check() && auth()->user()->isAdmin()), 403, 'Bạn không có quyền truy cập thông tin học viên của khóa học này.');
+
+        // 2. Fetch Enrollment (Returns 404 if student is not registered in this course)
+        $enrollment = Enrollment::query()
+            ->where('course_id', $course->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+
+        // 3. Fetch all lessons in this course using the standard logic
+        $lessons = Lesson::query()
+            ->where(function ($query) use ($course) {
+                $query->where('course_id', $course->id)
+                    ->orWhereHas('section', fn ($q) => $q->where('course_id', $course->id))
+                    ->orWhereHas('chapter', fn ($q) => $q->where('course_id', $course->id));
+            })
+            ->with(['quiz', 'assignment'])
+            ->orderBy('chapter_id')
+            ->orderBy('section_id')
+            ->orderBy('sort_order')
+            ->get();
+
+        // 4. Fetch lesson progress of the student for all lessons in this course
+        $lessonProgress = LessonProgress::query()
+            ->where('user_id', $student->id)
+            ->where('course_id', $course->id)
+            ->get()
+            ->keyBy('lesson_id');
+
+        // 5. Fetch quiz attempts of the student for quizzes in this course
+        $quizzes = Quiz::query()
+            ->whereIn('lesson_id', $lessons->pluck('id'))
+            ->get();
+
+        $quizAttempts = QuizAttempt::query()
+            ->where('user_id', $student->id)
+            ->whereIn('quiz_id', $quizzes->pluck('id'))
+            ->orderByDesc('completed_at')
+            ->get()
+            ->groupBy('quiz_id');
+
+        // 6. Fetch assignment submissions of the student for assignments in this course
+        $assignments = Assignment::query()
+            ->where('course_id', $course->id)
+            ->get();
+
+        $submissions = Submission::query()
+            ->where('user_id', $student->id)
+            ->whereIn('assignment_id', $assignments->pluck('id'))
+            ->get()
+            ->keyBy('assignment_id');
+
+        // 7. Check if certificate is issued
+        $certificate = Certificate::query()
+            ->where('user_id', $student->id)
+            ->where('course_id', $course->id)
+            ->first();
+
+        // 8. Determine "Last active time" (Lần hoạt động gần nhất)
+        // We will collect timestamps from multiple actual data sources:
+        // - enrollment->last_accessed_at (Last access to the course)
+        // - lesson_progress->last_watched_at (Last watch/read of a lesson)
+        // - quiz_attempt->completed_at / started_at (Last quiz attempt completed)
+        // - submission->submitted_at / graded_at (Last submission activity)
+        $timestamps = collect();
+
+        if ($enrollment->last_accessed_at) {
+            $timestamps->push($enrollment->last_accessed_at);
+        }
+
+        foreach ($lessonProgress as $progress) {
+            if ($progress->last_watched_at) {
+                $timestamps->push($progress->last_watched_at);
+            }
+            if ($progress->completed_at) {
+                $timestamps->push($progress->completed_at);
+            }
+        }
+
+        foreach ($quizAttempts as $attempts) {
+            foreach ($attempts as $attempt) {
+                if ($attempt->completed_at) {
+                    $timestamps->push($attempt->completed_at);
+                }
+                if ($attempt->started_at) {
+                    $timestamps->push($attempt->started_at);
+                }
+            }
+        }
+
+        foreach ($submissions as $submission) {
+            if ($submission->submitted_at) {
+                $timestamps->push($submission->submitted_at);
+            }
+            if ($submission->graded_at) {
+                $timestamps->push($submission->graded_at);
+            }
+        }
+
+        // Sort all timestamps to find the absolute latest active date
+        $lastActiveAt = $timestamps->isNotEmpty() ? $timestamps->max() : null;
+
+        // 9. Build Activity Timeline
+        $activities = collect();
+
+        // Enrollment event
+        $activities->push((object)[
+            'type' => 'enrollment',
+            'title' => 'Ghi danh khóa học',
+            'description' => 'Đã tham gia và kích hoạt học tập trong khóa học.',
+            'time' => $enrollment->enrolled_at ?? $enrollment->created_at,
+        ]);
+
+        // Lesson progress completion events
+        foreach ($lessonProgress as $progress) {
+            if ($progress->is_completed && $progress->completed_at) {
+                $lesson = $lessons->firstWhere('id', $progress->lesson_id);
+                $activities->push((object)[
+                    'type' => 'lesson_completed',
+                    'title' => 'Hoàn thành bài học',
+                    'description' => $lesson ? "Đã hoàn thành bài học: \"{$lesson->title}\"" : 'Đã hoàn thành bài học',
+                    'time' => $progress->completed_at,
+                ]);
+            }
+        }
+
+        // Quiz attempts events
+        foreach ($quizAttempts as $quizId => $attempts) {
+            $quiz = $quizzes->firstWhere('id', $quizId);
+            foreach ($attempts as $attempt) {
+                if ($attempt->completed_at) {
+                    $statusStr = $attempt->passed ? 'Đạt' : 'Không đạt';
+                    $activities->push((object)[
+                        'type' => 'quiz_attempt',
+                        'title' => 'Làm bài trắc nghiệm',
+                        'description' => $quiz 
+                            ? "Làm bài trắc nghiệm: \"{$quiz->title}\" - Kết quả: {$attempt->score}/{$attempt->total_score} ({$attempt->percent}%) - {$statusStr}" 
+                            : "Làm bài trắc nghiệm - Kết quả: {$attempt->percent}% - {$statusStr}",
+                        'time' => $attempt->completed_at,
+                    ]);
+                }
+            }
+        }
+
+        // Submissions events
+        foreach ($submissions as $assignmentId => $submission) {
+            $assignment = $assignments->firstWhere('id', $assignmentId);
+            if ($submission->submitted_at) {
+                $activities->push((object)[
+                    'type' => 'assignment_submission',
+                    'title' => 'Nộp bài thực hành',
+                    'description' => $assignment ? "Đã nộp bài thực hành: \"{$assignment->title}\"" : 'Đã nộp bài thực hành',
+                    'time' => $submission->submitted_at,
+                ]);
+            }
+            if ($submission->status === 'graded' && $submission->graded_at) {
+                $activities->push((object)[
+                    'type' => 'assignment_graded',
+                    'title' => 'Bài thực hành được chấm điểm',
+                    'description' => $assignment 
+                        ? "Bài thực hành \"{$assignment->title}\" đã được chấm: {$submission->score}/{$assignment->max_score} điểm" 
+                        : "Bài thực hành đã được chấm: {$submission->score} điểm",
+                    'time' => $submission->graded_at,
+                ]);
+            }
+        }
+
+        // Certificate event
+        if ($certificate && $certificate->issued_at) {
+            $activities->push((object)[
+                'type' => 'certificate',
+                'title' => 'Nhận chứng chỉ',
+                'description' => "Được cấp chứng chỉ hoàn thành khóa học (Mã số: {$certificate->certificate_code})",
+                'time' => $certificate->issued_at,
+            ]);
+        }
+
+        // Sort timeline chronologically (newest first)
+        $activities = $activities->sortByDesc('time')->values();
+
+        // 10. Compute Alerts (Cảnh báo học tập)
+        $alerts = collect();
+
+        // Warning: Chưa bắt đầu học
+        $hasStarted = $lessonProgress->isNotEmpty() || $quizAttempts->isNotEmpty() || $submissions->isNotEmpty();
+        if ($enrollment->progress_percent == 0 && !$hasStarted) {
+            $alerts->push('Học viên chưa bắt đầu học khóa học này.');
+        }
+
+        // Warning: Tiến độ thấp (đăng ký >= 7 ngày nhưng tiến độ học < 20%)
+        $enrolledDays = ($enrollment->enrolled_at ?? $enrollment->created_at)->diffInDays(now());
+        if ($enrolledDays >= 7 && $enrollment->progress_percent < 20) {
+            $alerts->push("Tiến độ học tập chậm ({$enrollment->progress_percent}% hoàn thành sau {$enrolledDays} ngày ghi danh).");
+        }
+
+        // Warning: Quiz chưa đạt (có làm quiz nhưng tất cả các lần đều không qua)
+        foreach ($quizzes as $quiz) {
+            $attempts = $quizAttempts->get($quiz->id, collect());
+            if ($attempts->isNotEmpty()) {
+                $hasPassed = $attempts->where('passed', true)->isNotEmpty();
+                if (!$hasPassed) {
+                    $alerts->push("Bài trắc nghiệm \"{$quiz->title}\" chưa đạt điểm yêu cầu (Điểm đạt yêu cầu: {$quiz->pass_score}%).");
+                }
+            }
+        }
+
+        // Warning: Bài thực hành chưa nộp hoặc chưa đạt
+        foreach ($assignments as $assignment) {
+            $submission = $submissions->get($assignment->id);
+            if (!$submission) {
+                if ($assignment->is_required) {
+                    $alerts->push("Học viên chưa nộp bài thực hành bắt buộc: \"{$assignment->title}\".");
+                }
+            } else {
+                if ($submission->status === 'graded') {
+                    $passingLimit = $assignment->passing_score ?? 70;
+                    if ($submission->score < $passingLimit) {
+                        $alerts->push("Bài thực hành \"{$assignment->title}\" chưa đạt điểm yêu cầu (Đạt {$submission->score}/{$assignment->max_score} điểm, yêu cầu tối thiểu {$passingLimit} điểm).");
+                    }
+                }
+            }
+        }
+
+        // Warning: Không hoạt động quá 7 ngày (chỉ báo nếu học viên đã từng hoạt động)
+        if ($hasStarted && $lastActiveAt) {
+            $inactiveDays = $lastActiveAt->diffInDays(now());
+            if ($inactiveDays >= 7) {
+                $alerts->push("Học viên không có hoạt động học tập nào trong {$inactiveDays} ngày qua.");
+            }
+        }
+
+        // 11. Statistical calculations
+        // Quiz Average score
+        $bestAttempts = collect();
+        foreach ($quizAttempts as $quizId => $attempts) {
+            $bestAttempts->put($quizId, $attempts->max('percent'));
+        }
+        $avgQuizScore = $bestAttempts->isNotEmpty() ? round($bestAttempts->avg(), 0) : null;
+        $maxQuizScore = $bestAttempts->isNotEmpty() ? $bestAttempts->max() : null;
+
+        // Assignments stats
+        $totalAssignments = $assignments->count();
+        $submittedAssignmentsCount = $submissions->count();
+        $gradedAssignments = $submissions->where('status', 'graded');
+        $gradedAssignmentsCount = $gradedAssignments->count();
+        $averageAssignmentScore = $gradedAssignmentsCount > 0 ? round($gradedAssignments->avg('score'), 1) : null;
+
+        return view('instructor.courses.student_detail', compact(
+            'course',
+            'student',
+            'enrollment',
+            'lessons',
+            'lessonProgress',
+            'quizzes',
+            'quizAttempts',
+            'assignments',
+            'submissions',
+            'certificate',
+            'lastActiveAt',
+            'activities',
+            'alerts',
+            'avgQuizScore',
+            'maxQuizScore',
+            'totalAssignments',
+            'submittedAssignmentsCount',
+            'gradedAssignmentsCount',
+            'averageAssignmentScore'
+        ));
     }
 
     public function exportStudents(Course $course, Request $request): StreamedResponse

@@ -1,17 +1,5 @@
 <x-student-layout title="Đã xem gần đây" page-title="Khóa học đã xem gần đây" breadcrumb="Các khóa học bạn vừa truy cập">
 
-@if(session('success'))
-    <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
-        {{ session('success') }}
-    </div>
-@endif
-
-@if(session('error'))
-    <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
-        {{ session('error') }}
-    </div>
-@endif
-
 <div class="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
     <div>
         <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Khóa học đã xem gần đây</h2>

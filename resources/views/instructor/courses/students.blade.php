@@ -92,13 +92,23 @@
                                         <span class="text-xs text-slate-400 italic">Chưa làm</span>
                                     @endif
                                 </td>
-                                <td class="px-6 py-4 text-center">
-                                    @if($lStat !== null)
-                                        <span class="inline-block text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                                            {{ $lStat['score'] }}/{{ $lStat['max'] }}
+                                <td class="px-6 py-4 text-center whitespace-nowrap">
+                                    @if($lStat !== null && $lStat['max'] > 0)
+                                        @php
+                                            $scoreVal = floatval($lStat['score']);
+                                            $maxVal = floatval($lStat['max']);
+                                            $percent = round(($scoreVal / $maxVal) * 100);
+                                        @endphp
+                                        <span class="text-sm font-extrabold text-slate-800 dark:text-slate-200">
+                                            {{ $scoreVal }}/{{ $maxVal }}
+                                        </span>
+                                        <span class="text-xs font-semibold text-slate-400 dark:text-slate-500 ml-1">
+                                            · {{ $percent }}%
                                         </span>
                                     @else
-                                        <span class="text-xs text-slate-400 italic">Chưa nộp</span>
+                                        <span class="text-xs text-slate-400 dark:text-slate-500 italic">
+                                            — Chưa có điểm
+                                        </span>
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 text-center">
@@ -118,26 +128,13 @@
                                     {{ ($enrollment->enrolled_at ?? $enrollment->created_at)->format('H:i - d/m/Y') }}
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <button
-                                        type="button"
-                                        @click="openStudentDetail({{ json_encode([
-                                            'id' => $enrollment->user_id,
-                                            'name' => $enrollment->user->name,
-                                            'email' => $enrollment->user->email,
-                                            'course_title' => $course->title,
-                                            'enrolled_at' => ($enrollment->enrolled_at ?? $enrollment->created_at)->format('H:i:s - d/m/Y'),
-                                            'progress' => number_format($enrollment->progress_percent, 0) . '%',
-                                            'last_lesson' => $lastLessonTitle,
-                                            'quiz_score' => $qScore !== null ? $qScore . '%' : 'Chưa tham gia trắc nghiệm',
-                                            'lab_score' => $lStat !== null ? $lStat['score'] . '/' . $lStat['max'] . ' điểm' : 'Chưa nộp bài thực hành',
-                                            'status' => $isCompleted ? 'Đã hoàn thành khóa học' : 'Đang học tập chủ động',
-                                            'completed_at' => $enrollment->completed_at ? $enrollment->completed_at->format('H:i:s - d/m/Y') : 'Chưa hoàn thành',
-                                        ]) }})"
+                                    <a
+                                        href="{{ route('instructor.courses.students.detail', [$course, $enrollment->user_id]) }}"
                                         class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer"
                                     >
                                         <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                         Chi tiết
-                                    </button>
+                                    </a>
                                 </td>
                             </tr>
                         @empty
@@ -158,121 +155,6 @@
             @if($enrollments->hasPages())
                 <div class="p-4 border-t border-slate-100">{{ $enrollments->links() }}</div>
             @endif
-        </div>
-
-        {{-- Modal Chi tiết Mua khóa học & Học viên --}}
-        <div
-            x-show="showStudentModal"
-            x-cloak
-            class="fixed inset-0 z-50 overflow-y-auto"
-            aria-labelledby="student-modal-title"
-            role="dialog"
-            aria-modal="true"
-        >
-            <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
-                <div
-                    x-show="showStudentModal"
-                    x-transition:enter="ease-out duration-200"
-                    x-transition:enter-start="opacity-0"
-                    x-transition:enter-end="opacity-100"
-                    x-transition:leave="ease-in duration-150"
-                    x-transition:leave-start="opacity-100"
-                    x-transition:leave-end="opacity-0"
-                    @click="showStudentModal = false"
-                    class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-                ></div>
-
-                <div
-                    x-show="showStudentModal"
-                    x-transition:enter="ease-out duration-200"
-                    x-transition:enter-start="opacity-0 scale-95"
-                    x-transition:enter-end="opacity-100 scale-100"
-                    x-transition:leave="ease-in duration-150"
-                    x-transition:leave-start="opacity-100 scale-100"
-                    x-transition:leave-end="opacity-0 scale-95"
-                    class="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-6"
-                >
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-4">
-                        <div class="flex items-center gap-3">
-                            <div class="h-10 w-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
-                                🎓
-                            </div>
-                            <div>
-                                <h3 class="text-base font-bold text-slate-900" id="student-modal-title">
-                                    Chi tiết Đăng ký Mua Khóa học
-                                </h3>
-                                <p class="text-xs text-slate-500 font-mono" x-text="activeStudent ? activeStudent.name : ''"></p>
-                            </div>
-                        </div>
-                        <button type="button" @click="showStudentModal = false" class="text-slate-400 hover:text-slate-600">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                        </button>
-                    </div>
-
-                    <template x-if="activeStudent">
-                        <div class="mt-5 space-y-4">
-                            {{-- Header Banner --}}
-                            <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Khóa học đăng ký mua:</span>
-                                <span class="text-sm font-bold text-slate-900 mt-0.5 block" x-text="activeStudent.course_title"></span>
-                            </div>
-
-                            {{-- Student & Purchase Specs --}}
-                            <div class="rounded-2xl border border-slate-200 divide-y divide-slate-100 bg-slate-50/50 text-xs">
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Tên học viên:</span>
-                                    <span class="font-bold text-slate-900 text-sm" x-text="activeStudent.name"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Email tài khoản:</span>
-                                    <span class="font-mono font-bold text-slate-800" x-text="activeStudent.email"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Thời gian mua/ghi danh:</span>
-                                    <span class="font-semibold text-slate-800" x-text="activeStudent.enrolled_at"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Tiến độ hoàn thành:</span>
-                                    <span class="font-bold text-emerald-600 text-sm" x-text="activeStudent.progress"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Bài học xem gần nhất:</span>
-                                    <span class="font-medium text-slate-800 truncate max-w-[200px]" x-text="activeStudent.last_lesson"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Kết quả Trắc nghiệm (Quiz):</span>
-                                    <span class="font-bold text-slate-900" x-text="activeStudent.quiz_score"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Bài nộp thực hành:</span>
-                                    <span class="font-bold text-slate-900" x-text="activeStudent.lab_score"></span>
-                                </div>
-
-                                <div class="p-3.5 flex justify-between items-center">
-                                    <span class="text-slate-500 font-semibold">Trạng thái khóa học:</span>
-                                    <span class="font-bold text-slate-900" x-text="activeStudent.status"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-
-                    <div class="mt-6 flex justify-end">
-                        <button
-                            type="button"
-                            @click="showStudentModal = false"
-                            class="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition cursor-pointer"
-                        >
-                            Đóng
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
 
     </div>
