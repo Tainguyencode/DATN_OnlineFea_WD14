@@ -30,7 +30,7 @@ class LearningPlayerService
         $lesson->loadMissing([
             'section:id,course_id,title,sort_order',
             'chapter:id,course_id,title,sort_order',
-            'quiz.questions.options',
+            'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
         ]);
 
         $enrollment = $user
@@ -349,9 +349,12 @@ class LearningPlayerService
     ): ?array {
         $quiz = $lesson->quiz;
 
-        if (! $quiz || ! $quiz->is_active) {
+        if (! $quiz || ! app(QuizContentService::class)->isEffectivelyActive($quiz)) {
             return null;
         }
+
+        $versioning = app(QuizVersioningService::class);
+        $quiz = $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
 
         $attemptsCount = $user
             ? $quiz->attempts()->where('user_id', $user->id)->count()

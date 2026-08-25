@@ -14,7 +14,12 @@ class QuizService
         $answers = [];
         $questions = [];
 
-        $quiz->loadMissing('questions.options');
+        if ($quiz->current_published_version_id) {
+            $versioning = app(QuizVersioningService::class);
+            $quiz = $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
+        } else {
+            $quiz->loadMissing('questions.options');
+        }
 
         foreach ($quiz->questions as $question) {
             $points = (int) $question->points;

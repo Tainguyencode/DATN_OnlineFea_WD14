@@ -13,6 +13,7 @@ use App\Services\LearningProgressService;
 use App\Services\PointService;
 use App\Services\QuizContentService;
 use App\Services\QuizService;
+use App\Services\QuizVersioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,7 +26,11 @@ class QuizController extends Controller
     {
         $this->authorizePublishedLesson($course, $lesson);
 
-        $lesson->loadMissing(['section:id,course_id,title', 'chapter:id,course_id,title', 'quiz.questions.options']);
+        $lesson->loadMissing([
+            'section:id,course_id,title',
+            'chapter:id,course_id,title',
+            'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
+        ]);
         $quiz = $this->activeQuiz($lesson);
         $isEnrolled = $this->isEnrolled($course);
         $canBypass = auth()->check() && (
@@ -67,7 +72,7 @@ class QuizController extends Controller
                 ->with('error', 'Ban can dang ky khoa hoc de nop quiz.');
         }
 
-        $lesson->loadMissing(['quiz.questions.options']);
+        $lesson->loadMissing(['quiz.currentPublishedVersion.questionMappings.questionVersion.options']);
         $quiz = $this->activeQuiz($lesson);
 
         if ($quiz->max_attempts !== null && $quiz->attempts()->where('user_id', $request->user()->id)->count() >= $quiz->max_attempts) {
@@ -157,7 +162,7 @@ class QuizController extends Controller
             return response()->json(['success' => false, 'message' => 'Bạn cần đăng ký khóa học để làm quiz.'], 403);
         }
 
-        $lesson->loadMissing(['quiz.questions.options']);
+        $lesson->loadMissing(['quiz.currentPublishedVersion.questionMappings.questionVersion.options']);
         $quiz = $this->activeQuiz($lesson);
 
         if ($quiz->max_attempts !== null && $quiz->attempts()->where('user_id', $request->user()->id)->count() >= $quiz->max_attempts) {
@@ -275,7 +280,9 @@ class QuizController extends Controller
 
         abort_unless($quiz && app(QuizContentService::class)->isEffectivelyActive($quiz), 404);
 
-        return $quiz;
+        $published = app(QuizVersioningService::class)->currentPublished($quiz);
+
+        return app(QuizVersioningService::class)->projectVersion($quiz, $published);
     }
 
     private function authorizePublishedLesson(Course $course, Lesson $lesson): void

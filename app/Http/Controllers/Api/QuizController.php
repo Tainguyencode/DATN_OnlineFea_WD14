@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Services\QuizVersioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,11 +16,12 @@ class QuizController extends Controller
 
     public function show(Quiz $quiz): JsonResponse
     {
-        return $this->success($quiz);
+        return $this->success($this->publishedQuiz($quiz));
     }
 
     public function start(Request $request, Quiz $quiz): JsonResponse
     {
+        $quiz = $this->publishedQuiz($quiz);
         $attempt = QuizAttempt::create([
             'user_id' => $request->user()->id,
             'quiz_id' => $quiz->id,
@@ -34,6 +36,7 @@ class QuizController extends Controller
 
     public function submit(Request $request, Quiz $quiz): JsonResponse
     {
+        $quiz = $this->publishedQuiz($quiz);
         $validated = $request->validate([
             'answers' => 'required|array', // e.g. [question_id => selected_option_index, ...]
         ]);
@@ -84,5 +87,14 @@ class QuizController extends Controller
             'is_passed' => $isPassed,
             'pass_score' => $quiz->pass_score,
         ], $isPassed ? 'Chúc mừng! Bạn đã vượt qua bài kiểm tra' : 'Bạn chưa đạt điểm yêu cầu');
+    }
+
+    private function publishedQuiz(Quiz $quiz): Quiz
+    {
+        abort_unless($quiz->current_published_version_id, 404);
+
+        $versioning = app(QuizVersioningService::class);
+
+        return $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
     }
 }

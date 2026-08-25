@@ -87,7 +87,11 @@ class StoreQuizRequest extends FormRequest
                 return;
             }
 
-            $quiz = $lesson->quiz()->with('questions.options')->first();
+            if (! $this->boolean('is_active')) {
+                return;
+            }
+
+            $quiz = $lesson->quiz()->first();
 
             if (! $quiz) {
                 $validator->errors()->add('quiz', 'Vui lòng thêm câu hỏi trước khi lưu quiz.');

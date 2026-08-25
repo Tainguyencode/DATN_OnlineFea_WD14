@@ -10,6 +10,7 @@ use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
 use App\Services\QuizContentService;
+use App\Services\QuizVersioningService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,6 +20,7 @@ class QuizController extends Controller
 {
     public function __construct(
         private readonly QuizContentService $quizContent,
+        private readonly QuizVersioningService $quizVersioning,
     ) {}
 
     public function show(Course $course, Lesson $lesson): View
@@ -29,15 +31,32 @@ class QuizController extends Controller
             $lesson->setRelation('quiz', $this->quizContent->getOrCreateForLesson($lesson));
         }
 
-        $lesson->loadMissing(['quiz.questions.options']);
-        $quiz = $lesson->quiz;
+        $lesson->loadMissing('quiz');
+        $quizIdentity = $lesson->quiz;
+        $authoringVersion = $quizIdentity ? $this->quizVersioning->authoringVersion($quizIdentity) : null;
+        $publishedVersion = $quizIdentity?->current_published_version_id
+            ? $this->quizVersioning->currentPublished($quizIdentity)
+            : null;
+        $quiz = $quizIdentity && $authoringVersion
+            ? $this->quizVersioning->projectVersion($quizIdentity, $authoringVersion)
+            : $quizIdentity;
+        $reviewUpdate = $quizIdentity && $quizIdentity->current_draft_version_id && $authoringVersion
+            ? $this->quizVersioning->contentUpdateForVersion($quizIdentity, $authoringVersion)
+            : null;
 
         return view('instructor.quizzes.show', [
             'course' => $course,
             'lesson' => $lesson,
             'quiz' => $quiz,
-            'quizValidation' => $quiz ? $this->quizContent->validateQuiz($quiz) : null,
+            'quizValidation' => $authoringVersion ? $this->quizContent->validateQuizVersion($authoringVersion) : null,
             'questionTypes' => $this->quizContent->questionTypes(),
+            'authoringVersion' => $authoringVersion,
+            'publishedVersion' => $publishedVersion,
+            'reviewUpdate' => $reviewUpdate,
+            'mutationsLocked' => $reviewUpdate && ($reviewUpdate->isPending() || $reviewUpdate->isApproved()),
+            'desiredIsActive' => $reviewUpdate
+                ? (bool) data_get($reviewUpdate->payload, 'desired_is_active', $quizIdentity?->is_active)
+                : (bool) $quizIdentity?->is_active,
         ]);
     }
 
@@ -49,7 +68,7 @@ class QuizController extends Controller
 
         return redirect()
             ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
-            ->with('success', 'Da luu thong tin quiz cho bai hoc.');
+            ->with('success', 'Đã lưu bản nháp Quiz.');
     }
 
     public function storeQuestion(Request $request, Quiz $quiz): RedirectResponse
@@ -59,7 +78,7 @@ class QuizController extends Controller
 
         $this->quizContent->createQuestion($quiz, $validated);
 
-        return back()->with('success', 'Da them cau hoi.');
+        return back()->with('success', 'Đã thêm câu hỏi vào bản nháp Quiz.');
     }
 
     public function updateQuestion(Request $request, QuizQuestion $question): RedirectResponse
@@ -69,7 +88,7 @@ class QuizController extends Controller
 
         $this->quizContent->updateQuestion($question, $validated);
 
-        return back()->with('success', 'Da cap nhat cau hoi.');
+        return back()->with('success', 'Đã cập nhật câu hỏi trong bản nháp Quiz.');
     }
 
     public function destroyQuestion(QuizQuestion $question): RedirectResponse
@@ -77,7 +96,7 @@ class QuizController extends Controller
         $this->authorizeQuestion($question);
         $this->quizContent->deleteQuestion($question);
 
-        return back()->with('success', 'Da xoa cau hoi.');
+        return back()->with('success', 'Đã gỡ câu hỏi khỏi bản nháp Quiz.');
     }
 
     public function storeAnswer(Request $request, QuizQuestion $question): RedirectResponse
@@ -87,13 +106,13 @@ class QuizController extends Controller
 
         $this->quizContent->createOption($question, $validated);
 
-        return back()->with('success', 'Da them dap an.');
+        return back()->with('success', 'Đã thêm đáp án vào bản nháp Quiz.');
     }
 
     public function updateAnswers(Request $request, QuizQuestion $question): RedirectResponse
     {
         $this->authorizeQuestion($question);
-        $question->loadMissing('options');
+        $authoringQuestion = $this->authoringQuestion($question);
 
         $validated = $request->validate([
             'answers' => ['required', 'array'],
@@ -106,7 +125,7 @@ class QuizController extends Controller
             'delete_answers.*' => ['integer'],
         ]);
 
-        $selectedCorrectIds = $question->type === QuizQuestion::TYPE_MULTIPLE
+        $selectedCorrectIds = $authoringQuestion->type === QuizQuestion::TYPE_MULTIPLE
             ? collect($request->input('correct_answers', []))->map(fn ($id) => (int) $id)
             : collect([$request->input('correct_answer')])->map(fn ($id) => (int) $id);
 
@@ -117,7 +136,7 @@ class QuizController extends Controller
             $selectedCorrectIds->filter()->values()->all(),
         );
 
-        return back()->with('success', 'Da luu dap an cho cau hoi.');
+        return back()->with('success', 'Đã lưu đáp án trong bản nháp Quiz.');
     }
 
     public function updateAnswer(Request $request, QuizOption $answer): RedirectResponse
@@ -127,7 +146,7 @@ class QuizController extends Controller
 
         $this->quizContent->updateOption($answer, $validated);
 
-        return back()->with('success', 'Da cap nhat dap an.');
+        return back()->with('success', 'Đã cập nhật đáp án trong bản nháp Quiz.');
     }
 
     public function destroyAnswer(QuizOption $answer): RedirectResponse
@@ -135,7 +154,7 @@ class QuizController extends Controller
         $this->authorizeAnswer($answer);
         $this->quizContent->deleteOption($answer);
 
-        return back()->with('success', 'Da xoa dap an.');
+        return back()->with('success', 'Đã xóa đáp án khỏi bản nháp Quiz.');
     }
 
     private function validatedQuestion(Request $request): array
@@ -201,6 +220,23 @@ class QuizController extends Controller
         $answer->loadMissing('question.quiz.lesson.course');
 
         abort_unless($answer->question?->quiz?->lesson?->course?->isOwnedBy(auth()->user()), 403);
+    }
+
+    private function authoringQuestion(QuizQuestion $question): QuizQuestion
+    {
+        $question->loadMissing('quiz');
+        $version = $this->quizVersioning->authoringVersion($question->quiz);
+
+        if (! $version) {
+            abort(422, 'Quiz chưa có phiên bản nội dung để chỉnh sửa.');
+        }
+
+        $projectedQuiz = $this->quizVersioning->projectVersion($question->quiz, $version);
+        $projected = $projectedQuiz->questions->firstWhere('id', $question->id);
+
+        abort_unless($projected, 422, 'Câu hỏi không thuộc phiên bản Quiz hiện tại.');
+
+        return $projected;
     }
 
     private function lessonBelongsToCourse(Course $course, Lesson $lesson): bool

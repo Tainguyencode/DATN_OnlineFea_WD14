@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\CourseReviewStatus;
 use App\Enums\CourseStatus;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseReview;
 use App\Models\PushNotification;
@@ -47,14 +48,14 @@ class CourseReviewService
             ]);
 
             // Cập nhật mốc thời gian submitted_at và chuyển trạng thái pending cho các bản ghi content_updates của khóa học này
-            \App\Models\ContentUpdate::where('course_id', $course->id)
-                ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING])
+            ContentUpdate::where('course_id', $course->id)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
                 ->update([
-                    'status' => \App\Models\ContentUpdate::STATUS_PENDING,
+                    'status' => ContentUpdate::STATUS_PENDING,
                     'submitted_at' => now(),
                 ]);
 
-            $noticeMsg = $isAlreadyPublished 
+            $noticeMsg = $isAlreadyPublished
                 ? "Giảng viên đã gửi bản CẬP NHẬT khóa học \"{$course->title}\" lần {$submissionNumber}."
                 : "Giảng viên đã gửi khóa học \"{$course->title}\" lần {$submissionNumber}.";
 
@@ -87,7 +88,13 @@ class CourseReviewService
 
         $this->assertChecklistComplete($checklist);
 
-        return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately) {
+        $wasAlreadyPublished = (bool) $course->is_published || in_array($course->status, [
+            Course::STATUS_PUBLISHED,
+            Course::STATUS_PENDING_UPDATE,
+            Course::STATUS_REJECTED_UPDATE,
+        ], true);
+
+        return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately, $wasAlreadyPublished) {
             $review = $this->latestPendingReview($course);
 
             if ($review) {
@@ -100,14 +107,18 @@ class CourseReviewService
             }
 
             // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này (phê duyệt chapter trước lesson)
-            $pendingUpdates = \App\Models\ContentUpdate::where('course_id', $course->id)
-                ->where('status', \App\Models\ContentUpdate::STATUS_PENDING)
-                ->orderByRaw("FIELD(type, 'chapter', 'lesson', 'course')")
+            $pendingUpdates = ContentUpdate::where('course_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->orderByRaw("CASE type WHEN 'chapter' THEN 1 WHEN 'lesson' THEN 2 WHEN 'quiz' THEN 3 WHEN 'course' THEN 4 ELSE 5 END")
                 ->get();
 
-            $contentUpdateService = app(\App\Services\ContentUpdateService::class);
+            $contentUpdateService = app(ContentUpdateService::class);
             foreach ($pendingUpdates as $pendingUpdate) {
                 $contentUpdateService->applyApprovedUpdate($pendingUpdate, $admin);
+            }
+
+            if (! $wasAlreadyPublished) {
+                app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             }
 
             $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
@@ -146,7 +157,7 @@ class CourseReviewService
 
             ActivityLogService::log($admin->id, 'approve_course', Course::class, $course->id);
 
-            return $review ? $review->fresh() : new CourseReview();
+            return $review ? $review->fresh() : new CourseReview;
         });
     }
 
@@ -167,22 +178,23 @@ class CourseReviewService
             ->where('instructor_id', $instructor->id)
             ->where(function ($q) {
                 $q->where('status', CourseStatus::Approved->value)
-                  ->orWhere(function ($subQ) {
-                      $subQ->whereNotNull('approved_at')
-                           ->where('is_published', false)
-                           ->whereNotIn('status', [
-                               CourseStatus::Draft->value,
-                               CourseStatus::PendingReview->value,
-                               CourseStatus::Rejected->value,
-                               CourseStatus::Suspended->value,
-                               CourseStatus::Archived->value,
-                           ]);
-                  });
+                    ->orWhere(function ($subQ) {
+                        $subQ->whereNotNull('approved_at')
+                            ->where('is_published', false)
+                            ->whereNotIn('status', [
+                                CourseStatus::Draft->value,
+                                CourseStatus::PendingReview->value,
+                                CourseStatus::Rejected->value,
+                                CourseStatus::Suspended->value,
+                                CourseStatus::Archived->value,
+                            ]);
+                    });
             })
             ->get();
 
         $count = 0;
         foreach ($approvedCourses as $course) {
+            app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             $course->update([
                 'status' => CourseStatus::Published->value,
                 'is_published' => true,
@@ -226,10 +238,10 @@ class CourseReviewService
             }
 
             // Cập nhật trạng thái các content_updates đang pending thành rejected
-            \App\Models\ContentUpdate::where('course_id', $course->id)
-                ->where('status', \App\Models\ContentUpdate::STATUS_PENDING)
+            ContentUpdate::where('course_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
                 ->update([
-                    'status' => \App\Models\ContentUpdate::STATUS_REJECTED,
+                    'status' => ContentUpdate::STATUS_REJECTED,
                     'rejection_reason' => $comment,
                     'reviewed_by' => $admin->id,
                     'reviewed_at' => now(),
@@ -248,7 +260,7 @@ class CourseReviewService
 
             ActivityLogService::log($admin->id, 'reject_course', Course::class, $course->id);
 
-            return $review ? $review->fresh() : new CourseReview();
+            return $review ? $review->fresh() : new CourseReview;
         });
     }
 
@@ -270,12 +282,15 @@ class CourseReviewService
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::Approved->value, CourseStatus::Suspended->value], true), 422);
 
-        $course->update([
-            'status' => CourseStatus::Published->value,
-            'is_published' => true,
-            'published_at' => $course->published_at ?? now(),
-            'suspended_at' => null,
-        ]);
+        DB::transaction(function () use ($course): void {
+            app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+            $course->update([
+                'status' => CourseStatus::Published->value,
+                'is_published' => true,
+                'published_at' => $course->published_at ?? now(),
+                'suspended_at' => null,
+            ]);
+        });
 
         ActivityLogService::log($admin->id, 'publish_course', Course::class, $course->id);
     }

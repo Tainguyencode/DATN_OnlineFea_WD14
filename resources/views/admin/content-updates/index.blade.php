@@ -2,7 +2,7 @@
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Quản lý Cập nhật Nội dung</h1>
-            <p class="mt-1 text-sm text-slate-500">Danh sách các cập nhật thay đổi nội dung (Khóa học, Chương học, Bài học) từ Giảng viên</p>
+            <p class="mt-1 text-sm text-slate-500">Danh sách các cập nhật thay đổi nội dung (Khóa học, Chương học, Bài học, Quiz) từ Giảng viên</p>
         </div>
         <form method="GET" class="flex gap-2">
             <select name="type" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
@@ -34,12 +34,25 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @forelse($updates as $update)
+                    @php($candidate = $update->type === \App\Models\ContentUpdate::TYPE_QUIZ
+                        ? $quizCandidates->get((int) data_get($update->payload, 'quiz_version_id'))
+                        : null)
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-mono text-xs text-slate-500">#{{ $update->id }}</td>
                         <td class="px-4 py-3 font-medium text-slate-900">{{ $update->course?->title ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <span class="font-semibold uppercase text-xs text-indigo-600">{{ $update->type }}</span>
                             <span class="text-xs text-slate-500">({{ $update->action }})</span>
+                            @if ($update->type === \App\Models\ContentUpdate::TYPE_QUIZ)
+                                @if ($candidate)
+                                    <div class="mt-1 text-xs text-slate-600">
+                                        {{ $candidate->title }} · V{{ $candidate->version }} · {{ $candidate->question_mappings_count }} câu hỏi
+                                        @if ($candidate->quiz?->currentPublishedVersion)
+                                            · đang áp dụng V{{ $candidate->quiz->currentPublishedVersion->version }}
+                                        @endif
+                                    </div>
+                                @endif
+                            @endif
                         </td>
                         <td class="px-4 py-3 text-slate-600">{{ $update->creator?->name ?? '—' }}</td>
                         <td class="px-4 py-3 text-xs text-slate-500">{{ $update->submitted_at?->format('d/m/Y H:i') ?? $update->created_at->format('d/m/Y H:i') }}</td>
@@ -102,6 +115,13 @@
                                             <span class="text-xs uppercase font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">{{ $update->type }} - {{ $update->action }}</span>
                                         </div>
                                         <div>
+                                            @if ($update->type === \App\Models\ContentUpdate::TYPE_QUIZ && isset($candidate) && $candidate)
+                                                <div class="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                                                    <p class="font-bold">{{ $candidate->title }} — Quiz V{{ $candidate->version }}</p>
+                                                    <p class="mt-1">{{ $candidate->question_mappings_count }} câu hỏi. Phiên bản đang áp dụng: V{{ $candidate->quiz?->currentPublishedVersion?->version ?? '—' }}.</p>
+                                                    <p class="mt-1 text-xs font-semibold">Phê duyệt ở Phase 2B0.7 không kích hoạt V2 cho học viên.</p>
+                                                </div>
+                                            @endif
                                             <h4 class="text-xs font-semibold text-slate-500 uppercase">Dữ liệu cập nhật mới (Payload):</h4>
                                             <pre class="mt-2 max-h-60 overflow-y-auto rounded-lg bg-slate-900 p-3 text-xs font-mono text-emerald-400 whitespace-pre-wrap">{{ json_encode($update->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
                                         </div>
