@@ -305,6 +305,15 @@ class CurriculumController extends Controller
 
         Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update Success)');
 
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'lesson_id' => $lesson->id,
+                'title' => $lesson->title,
+                'message' => 'Đã cập nhật bài học.',
+            ]);
+        }
+
         return back()->with('success', 'Đã cập nhật bài học. Nếu có video mới, video đang được xử lý ngầm.');
     }
 
@@ -331,7 +340,7 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã xóa bài học.');
     }
 
-    public function updateContentUpdate(StoreLessonRequest $request, Course $course, ContentUpdate $contentUpdate): RedirectResponse
+    public function updateContentUpdate(StoreLessonRequest $request, Course $course, ContentUpdate $contentUpdate): RedirectResponse|JsonResponse
     {
         $this->authorizeCourse($course);
         abort_unless((int) $contentUpdate->course_id === (int) $course->id, 403);
@@ -350,16 +359,31 @@ class CurriculumController extends Controller
             'duration_seconds' => $lessonData['duration'] ?? ($existingPayload['duration'] ?? 0),
             'is_preview' => $request->boolean('is_preview'),
             'sort_order' => $lessonData['sort_order'] ?? ($existingPayload['sort_order'] ?? 0),
-            'status' => $lessonData['status'] ?? Lesson::STATUS_DRAFT,
+            'status' => $lessonData['status'] ?? ($existingPayload['status'] ?? Lesson::STATUS_DRAFT),
         ]);
 
         $contentUpdate->update([
             'payload' => $newPayload,
-            'status' => ContentUpdate::STATUS_DRAFT,
+            'summary' => $this->buildLessonUpdateSummary($existingPayload, $newPayload),
         ]);
 
-        if (($request->hasFile('video_file') || $request->filled('s3_key')) && ($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
-            ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+        if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
+            if ($request->hasFile('video_file')) {
+                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            } elseif ($request->filled('s3_key')) {
+                $s3Key = (string) $request->input('s3_key');
+                if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
+                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                }
+            }
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'content_update_id' => $contentUpdate->id,
+                'message' => 'Đã cập nhật bản nháp bài học.',
+            ]);
         }
 
         return back()->with('success', 'Đã cập nhật bản nháp bài học. Nếu có video mới, video đang được xử lý HLS ngầm.');
