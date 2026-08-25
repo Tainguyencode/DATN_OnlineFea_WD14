@@ -8,9 +8,10 @@ use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
-use App\Models\QuizQuestion;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
+use App\Services\PointService;
+use App\Services\QuizContentService;
 use App\Services\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -126,7 +127,7 @@ class QuizController extends Controller
             true,
         );
 
-        app(\App\Services\PointService::class)->awardQuizPoints(
+        app(PointService::class)->awardQuizPoints(
             $request->user()->id,
             $quiz,
             (float) $attempt->percent,
@@ -214,7 +215,7 @@ class QuizController extends Controller
             true,
         );
 
-        app(\App\Services\PointService::class)->awardQuizPoints(
+        app(PointService::class)->awardQuizPoints(
             $request->user()->id,
             $quiz,
             (float) $attempt->percent,
@@ -268,88 +269,11 @@ class QuizController extends Controller
         return route('courses.lessons.show', [$course, $ordered[$index + 1]]);
     }
 
-    private function gradeQuiz(Quiz $quiz, array $submittedAnswers): array
-    {
-        $score = 0;
-        $totalScore = 0;
-        $answers = [];
-        $questions = [];
-
-        $quiz->loadMissing('questions.options');
-
-        foreach ($quiz->questions as $question) {
-            $points = (int) $question->points;
-            $totalScore += $points;
-
-            $selectedIds = $this->selectedAnswerIds($submittedAnswers[$question->id] ?? [], $question);
-            $correctIds = $question->options
-                ->where('is_correct', true)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->values()
-                ->all();
-
-            $questionPassed = $this->questionIsCorrect($question, $selectedIds, $correctIds);
-
-            if ($questionPassed) {
-                $score += $points;
-            }
-
-            $answers[$question->id] = $selectedIds;
-            $questions[$question->id] = [
-                'selected_ids' => $selectedIds,
-                'correct_ids' => $correctIds,
-                'is_correct' => $questionPassed,
-            ];
-        }
-
-        $percent = $totalScore > 0 ? round(($score / $totalScore) * 100, 2) : 0;
-
-        return [
-            'score' => $score,
-            'total_score' => $totalScore,
-            'percent' => $percent,
-            'passed' => $percent >= (int) $quiz->pass_score,
-            'answers' => $answers,
-            'questions' => $questions,
-        ];
-    }
-
-    private function selectedAnswerIds(mixed $rawAnswers, QuizQuestion $question): array
-    {
-        $rawAnswers = is_array($rawAnswers) ? $rawAnswers : [$rawAnswers];
-        $validIds = $question->options->pluck('id')->map(fn ($id) => (int) $id)->all();
-
-        return collect($rawAnswers)
-            ->filter(fn ($id) => $id !== null && $id !== '')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->filter(fn ($id) => in_array($id, $validIds, true))
-            ->values()
-            ->all();
-    }
-
-    private function questionIsCorrect(QuizQuestion $question, array $selectedIds, array $correctIds): bool
-    {
-        sort($selectedIds);
-        sort($correctIds);
-
-        if ($correctIds === []) {
-            return false;
-        }
-
-        if ($question->type === QuizQuestion::TYPE_MULTIPLE) {
-            return $selectedIds === $correctIds;
-        }
-
-        return count($selectedIds) === 1 && $selectedIds[0] === $correctIds[0];
-    }
-
     private function activeQuiz(Lesson $lesson): Quiz
     {
         $quiz = $lesson->quiz;
 
-        abort_unless($quiz && $quiz->is_active, 404);
+        abort_unless($quiz && app(QuizContentService::class)->isEffectivelyActive($quiz), 404);
 
         return $quiz;
     }
@@ -357,11 +281,11 @@ class QuizController extends Controller
     private function authorizePublishedLesson(Course $course, Lesson $lesson): void
     {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
-        
+
         $user = auth()->user();
         $canBypass = $user && ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user)));
-        
-        if (!$canBypass) {
+
+        if (! $canBypass) {
             abort_unless($course->isPublished(), 404);
         }
     }
@@ -369,7 +293,7 @@ class QuizController extends Controller
     private function isEnrolled(Course $course): bool
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -382,6 +306,7 @@ class QuizController extends Controller
                 'progress_percent' => 0,
                 'enrolled_at' => now(),
             ]);
+
             return true;
         }
 

@@ -8,13 +8,8 @@
             'true_false' => 'Đúng/Sai',
         ];
         $questions = $quiz?->questions ?? collect();
-        $questionsMissingCorrectAnswer = $questions->filter(
-            fn($question) => $question->options->where('is_correct', true)->isEmpty(),
-        );
-        $canSaveQuiz = $quiz && $questions->isNotEmpty() && $questionsMissingCorrectAnswer->isEmpty();
-        $saveBlockText = $questions->isEmpty()
-            ? 'Them it nhat 1 cau hoi va danh dau dap an dung truoc khi luu quiz.'
-            : 'Moi cau hoi can co it nhat 1 dap an dung truoc khi luu quiz.';
+        $quizValidation ??= ['is_complete' => false, 'errors' => ['Quiz chưa sẵn sàng.'], 'warnings' => []];
+        $canSaveQuiz = $quiz && $quizValidation['is_complete'];
     @endphp
 
     <div class="space-y-6 pb-28">
@@ -72,30 +67,48 @@
                     class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500">{{ old('description', $quiz->description ?? '') }}</textarea>
             </label>
 
-            @unless ($canSaveQuiz)
-                <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
-                    {{ $saveBlockText }}
-                    @if ($questionsMissingCorrectAnswer->isNotEmpty())
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            @foreach ($questionsMissingCorrectAnswer as $missingQuestion)
-                                <a href="#question-{{ $missingQuestion->id }}"
-                                    class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
-                                    Cau {{ $loop->iteration }}
-                                </a>
-                            @endforeach
-                        </div>
-                    @endif
+            @if (!$canSaveQuiz)
+                <div id="quiz-save-requirements" role="status"
+                    class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                    <p class="text-sm font-bold">Quiz chưa thể lưu/đưa vào sử dụng vì còn thiếu:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-medium">
+                        @foreach ($quizValidation['errors'] as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
                 </div>
-            @endunless
+            @endif
+
+            @if ($quizValidation['warnings'] !== [])
+                <div class="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-950">
+                    <p class="text-sm font-bold">Cần lưu ý:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-medium">
+                        @foreach ($quizValidation['warnings'] as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            @if ($errors->has('quiz'))
+                <div role="alert" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 text-rose-950">
+                    <p class="text-sm font-bold">Không thể lưu quiz:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-medium">
+                        @foreach ($errors->get('quiz') as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
 
             <div class="mt-4 flex flex-wrap items-center gap-3">
                 <label
                     class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                    <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $quiz->is_active ?? true))
+                    <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $quiz->is_active ?? false))
                         class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                     Dang bat
                 </label>
-                <button type="submit" @disabled(!$canSaveQuiz)
+                <button type="submit" @disabled(!$canSaveQuiz) @if (!$canSaveQuiz) aria-describedby="quiz-save-requirements" @endif
                     class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600">
                     Luu quiz
                 </button>
@@ -229,10 +242,10 @@
                                 <div
                                     class="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(0,1fr)_110px_150px_110px] lg:items-center">
                                     <input type="text" name="answers[{{ $answer->id }}][answer_text]"
-                                        value="{{ $answer->option_text }}"
+                                        value="{{ $answer->option_text }}" @readonly($isTrueFalse)
                                         class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500">
                                     <input type="number" name="answers[{{ $answer->id }}][sort_order]"
-                                        value="{{ $answer->sort_order }}" min="0"
+                                        value="{{ $answer->sort_order }}" min="0" @readonly($isTrueFalse)
                                         class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500">
                                     <label class="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
                                         @if ($isMultipleChoice)
@@ -272,7 +285,8 @@
                             @endif
                         </form>
 
-                        <form method="POST"
+                        @unless ($isTrueFalse)
+                            <form method="POST"
                             action="{{ route('instructor.quiz-questions.answers.store', $question) }}"
                             class="mt-3 grid gap-3 rounded-lg border border-dashed border-slate-300 p-3 lg:grid-cols-[minmax(0,1fr)_120px_150px_auto] lg:items-center">
                             @csrf
@@ -296,7 +310,8 @@
                                 class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
                                 Thêm đáp án
                             </button>
-                        </form>
+                            </form>
+                        @endunless
                     </article>
                 @empty
                     <div

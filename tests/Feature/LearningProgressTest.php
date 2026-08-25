@@ -267,6 +267,20 @@ class LearningProgressTest extends TestCase
         $question = QuizQuestion::create(['quiz_id' => $quiz->id, 'question' => 'Q', 'type' => 'single', 'points' => 1]);
         $wrong = QuizOption::create(['quiz_question_id' => $question->id, 'option_text' => 'Wrong', 'is_correct' => false]);
         QuizOption::create(['quiz_question_id' => $question->id, 'option_text' => 'Right', 'is_correct' => true]);
+        QuizOption::create(['quiz_question_id' => $question->id, 'option_text' => 'Other', 'is_correct' => false]);
+
+        for ($index = 2; $index <= 5; $index++) {
+            $extraQuestion = QuizQuestion::create([
+                'quiz_id' => $quiz->id,
+                'question' => 'Q'.$index,
+                'type' => 'single',
+                'points' => 1,
+                'sort_order' => $index,
+            ]);
+            QuizOption::create(['quiz_question_id' => $extraQuestion->id, 'option_text' => 'A'.$index, 'is_correct' => true]);
+            QuizOption::create(['quiz_question_id' => $extraQuestion->id, 'option_text' => 'B'.$index, 'is_correct' => false]);
+            QuizOption::create(['quiz_question_id' => $extraQuestion->id, 'option_text' => 'C'.$index, 'is_correct' => false]);
+        }
         $this->enroll($student, $course);
 
         $this->actingAs($student)
@@ -338,7 +352,11 @@ class LearningProgressTest extends TestCase
 
     private function publishedCourse(array $attributes = []): Course
     {
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'is_active' => true,
+        ]);
         $course = Course::create(array_merge([
             'instructor_id' => $instructor->id,
             'category_id' => Category::create(['name' => 'Test', 'slug' => 'test-'.uniqid()])->id,
