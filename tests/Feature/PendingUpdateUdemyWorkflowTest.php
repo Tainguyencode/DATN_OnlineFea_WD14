@@ -94,6 +94,33 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_pending_update_course_keeps_using_content_update_workflow(): void
+    {
+        [$instructor, $course, $section] = $this->createPublishedCourseWithSection();
+        $course->update(['status' => Course::STATUS_PENDING_UPDATE]);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
+                'title' => 'Additional pending update lesson',
+                'type' => Lesson::TYPE_VIDEO,
+                'video_url' => 'https://example.com/pending-update.mp4',
+                'duration' => 300,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('lessons', [
+            'course_id' => $course->id,
+            'title' => 'Additional pending update lesson',
+        ]);
+        $this->assertDatabaseHas('content_updates', [
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'status' => ContentUpdate::STATUS_DRAFT,
+        ]);
+    }
+
     public function test_instructor_curriculum_renders_merged_lessons_with_draft_badge(): void
     {
         [$instructor, $course, $section, $publishedLesson] = $this->createPublishedCourseWithSection();
@@ -207,5 +234,48 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
         ]);
 
         $this->assertEquals(ContentUpdate::STATUS_APPROVED, $update->fresh()->status);
+    }
+
+    public function test_admin_approval_of_assignment_lesson_creates_assignment_atomically(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$instructor, $course, $section] = $this->createPublishedCourseWithSection();
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
+                'title' => 'Published assignment update',
+                'type' => Lesson::TYPE_ASSIGNMENT,
+                'content' => 'Build the final project.',
+                'assignment_due_days' => 14,
+                'assignment_max_score' => 120,
+                'assignment_passing_score' => 80,
+                'duration' => 900,
+            ])
+            ->assertRedirect();
+
+        $update = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('type', ContentUpdate::TYPE_LESSON)
+            ->where('action', ContentUpdate::ACTION_CREATE)
+            ->latest('id')
+            ->firstOrFail();
+
+        app(ContentUpdateService::class)->applyApprovedUpdate($update, $admin);
+
+        $lesson = Lesson::query()
+            ->where('course_id', $course->id)
+            ->where('title', 'Published assignment update')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('assignments', [
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+            'title' => 'Published assignment update',
+            'description' => 'Build the final project.',
+            'due_days' => 14,
+            'max_score' => 120,
+            'passing_score' => 80,
+        ]);
     }
 }

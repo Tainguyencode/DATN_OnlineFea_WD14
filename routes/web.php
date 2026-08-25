@@ -25,6 +25,7 @@ use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponCont
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
+use App\Http\Controllers\Web\Instructor\LessonImportController as InstructorLessonImportController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Instructor\S3MultipartUploadController;
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
@@ -356,6 +357,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
             Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
             Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
+            Route::get('/courses/{course}/lessons/import/template', [InstructorLessonImportController::class, 'downloadTemplate'])->name('courses.lessons.import.template');
+            Route::post('/courses/{course}/sections/{section}/lessons/import/preview', [InstructorLessonImportController::class, 'preview'])->name('courses.lessons.import.preview');
             Route::get('/courses/{course}/sections/{section}/lessons', fn ($course) => redirect()->route('instructor.courses.curriculum', $course));
             Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
             Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');

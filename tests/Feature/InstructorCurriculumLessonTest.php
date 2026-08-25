@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\Assignment;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use App\Models\User;
+use App\Services\CurriculumLessonService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Tests\TestCase;
 
 class InstructorCurriculumLessonTest extends TestCase
@@ -138,6 +142,89 @@ class InstructorCurriculumLessonTest extends TestCase
             'max_score' => 100,
             'passing_score' => 60,
         ]);
+    }
+
+    public function test_rejected_course_uses_the_same_direct_creation_flow_as_draft_course(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+        $course->update(['status' => Course::STATUS_REJECTED]);
+
+        $this->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
+            'title' => 'Tài liệu sửa sau từ chối',
+            'type' => Lesson::TYPE_DOCUMENT,
+            'content' => 'Nội dung đã chỉnh sửa.',
+            'duration' => 75,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('lessons', [
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'title' => 'Tài liệu sửa sau từ chối',
+            'duration' => 75,
+            'duration_seconds' => 75,
+        ]);
+        $this->assertDatabaseMissing('content_updates', [
+            'course_id' => $course->id,
+            'type' => 'lesson',
+        ]);
+    }
+
+    public function test_pending_review_course_cannot_receive_direct_lesson_writes(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+        $course->update(['status' => Course::STATUS_PENDING]);
+
+        $this->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
+            'title' => 'Không được ghi trực tiếp',
+            'type' => Lesson::TYPE_DOCUMENT,
+            'content' => 'Nội dung không hợp lệ theo trạng thái khóa.',
+            'duration' => 75,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('lessons', [
+            'course_id' => $course->id,
+            'title' => 'Không được ghi trực tiếp',
+        ]);
+    }
+
+    public function test_service_rolls_back_lesson_and_cleans_uploaded_file_when_assignment_creation_fails(): void
+    {
+        Storage::fake('public');
+
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+
+        Assignment::creating(static function (): void {
+            throw new RuntimeException('Simulated assignment persistence failure.');
+        });
+
+        try {
+            app(CurriculumLessonService::class)->create($course, $section, [
+                'title' => 'Bài tập phải rollback',
+                'type' => Lesson::TYPE_ASSIGNMENT,
+                'content' => 'Nội dung bài tập.',
+                'document_file' => UploadedFile::fake()->create('assignment.pdf', 20, 'application/pdf'),
+                'assignment_max_score' => 100,
+                'assignment_passing_score' => 70,
+                'duration' => 120,
+            ]);
+
+            $this->fail('The simulated assignment failure was not raised.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Simulated assignment persistence failure.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('lessons', [
+            'course_id' => $course->id,
+            'title' => 'Bài tập phải rollback',
+        ]);
+        $this->assertDatabaseMissing('assignments', [
+            'course_id' => $course->id,
+            'title' => 'Bài tập phải rollback',
+        ]);
+        $this->assertSame([], Storage::disk('public')->allFiles('lesson-documents'));
     }
 
     public function test_validation_depends_on_selected_lesson_type_and_keeps_old_type(): void
