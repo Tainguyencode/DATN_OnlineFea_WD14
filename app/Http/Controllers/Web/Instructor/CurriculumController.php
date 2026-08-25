@@ -293,6 +293,16 @@ class CurriculumController extends Controller
 
             Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update ContentUpdate)');
 
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'content_update_id' => $contentUpdate->id,
+                    'lesson_id' => $lesson->id,
+                    'title' => $payload['title'] ?? $lesson->title,
+                    'message' => 'Đã lưu bản cập nhật nội dung bài học.',
+                ]);
+            }
+
             return back()->with('success', 'Đã lưu bản cập nhật nội dung bài học. Video đang được xử lý HLS ngầm.');
         }
 
@@ -594,7 +604,7 @@ class CurriculumController extends Controller
 
         $lessons = Lesson::where('course_id', $course->id)
             ->where('type', 'video')
-            ->select(['id', 'processing_status', 'upload_status', 'hls_manifest_key', 'video_path', 'original_video_key'])
+            ->select(['id', 'processing_status', 'upload_status', 'hls_manifest_key', 'video_path', 'original_video_key', 'duration', 'duration_seconds'])
             ->get();
 
         $updates = ContentUpdate::where('course_id', $course->id)
@@ -606,6 +616,7 @@ class CurriculumController extends Controller
             $isReady = $lesson->isHlsReady();
             $isProcessing = $lesson->isProcessing();
             $isFailed = $lesson->hasFailedProcessing();
+            $durationSec = (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0);
 
             $statuses['lesson_'.$lesson->id] = [
                 'id' => $lesson->id,
@@ -613,6 +624,8 @@ class CurriculumController extends Controller
                 'is_ready' => $isReady,
                 'is_processing' => $isProcessing,
                 'is_failed' => $isFailed,
+                'duration' => $durationSec,
+                'duration_formatted' => $this->formatDuration($durationSec),
                 'status_message' => $isReady
                     ? 'Video đã được xử lý bảo mật thành công.'
                     : ($isFailed
@@ -630,6 +643,7 @@ class CurriculumController extends Controller
             $isReady = $pStatus === 'completed' || filled($pManifest);
             $isFailed = $pStatus === 'failed' && ! $isReady;
             $isProcessing = in_array($pStatus, ['processing', 'pending'], true) && ! $isReady;
+            $durationSec = (int) ($payload['duration'] ?? $payload['duration_seconds'] ?? 0);
 
             $key = $update->action === ContentUpdate::ACTION_CREATE
                 ? 'update_'.$update->id
@@ -642,6 +656,8 @@ class CurriculumController extends Controller
                 'is_ready' => $isReady,
                 'is_processing' => $isProcessing,
                 'is_failed' => $isFailed,
+                'duration' => $durationSec,
+                'duration_formatted' => $this->formatDuration($durationSec),
                 'status_message' => $isReady
                     ? 'Video đã được xử lý bảo mật thành công.'
                     : ($isFailed

@@ -196,6 +196,19 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             $payload['processing_status'] = 'completed';
             $payload['upload_status'] = 'uploaded';
             $payload['video_path'] = 'lesson-hls/update_' . $updateId . '/playlist.m3u8';
+
+            // Trích xuất thời lượng video
+            try {
+                $ffprobe = \FFMpeg\FFProbe::create($ffmpegConfig);
+                $extractedDuration = (int) round((float) $ffprobe->format($localInputPath)->get('duration'));
+                if ($extractedDuration > 0) {
+                    $payload['duration_seconds'] = $extractedDuration;
+                    $payload['duration'] = $extractedDuration;
+                }
+            } catch (\Throwable $probeEx) {
+                Log::warning("[ConvertContentUpdateVideoToHLS] Could not probe video duration: " . $probeEx->getMessage());
+            }
+
             if ($useS3) {
                 $payload['hls_manifest_key'] = $s3HlsDir . '/master.m3u8';
             }

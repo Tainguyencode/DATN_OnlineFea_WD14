@@ -312,18 +312,20 @@
                                             </span>
                                         @endif
                                     </div>
+                                    @php
+                                        $hlsKey = !empty($lesson->is_draft_create) && isset($lesson->draft_update) 
+                                            ? 'update_' . $lesson->draft_update->id 
+                                            : 'lesson_' . $lesson->id;
+                                    @endphp
                                     <h4 class="mt-2 font-bold text-slate-950">{{ $lesson->title }}</h4>
                                     <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
-                                        <span>Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
+                                        <span data-lesson-duration-key="{{ $hlsKey }}">Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
                                         <span>Bài {{ $lesson->sort_order }}</span>
                                         @if($lesson->type === 'video' && ($lesson->original_video_key || $lesson->hls_manifest_key || $lesson->video_path))
                                             @php
                                                 $isHlsReady = $lesson->isHlsReady();
                                                 $isHlsFailed = $lesson->hasFailedProcessing();
                                                 $isHlsProcessing = $lesson->isProcessing();
-                                                $hlsKey = !empty($lesson->is_draft_create) && isset($lesson->draft_update) 
-                                                    ? 'update_' . $lesson->draft_update->id 
-                                                    : 'lesson_' . $lesson->id;
                                             @endphp
                                             <span data-hls-status-key="{{ $hlsKey }}"
                                                   @if($isHlsProcessing) data-hls-processing="true" @endif
