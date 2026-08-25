@@ -7,10 +7,10 @@ use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use App\Models\Quiz;
-use App\Models\QuizOption;
-use App\Models\QuizQuestion;
 use App\Models\User;
 use App\Services\CourseSubmissionValidator;
+use App\Services\QuizContentService;
+use App\Services\QuizVersioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,7 +26,7 @@ class QuizCourseReadinessTest extends TestCase
         $this->assertFalse($missing['passed']);
         $this->assertStringContainsString("Quiz '{$lesson->title}' chưa có nội dung quiz", $missing['message']);
 
-        Quiz::create($this->quizAttributes($lesson));
+        app(QuizContentService::class)->getOrCreateForLesson($lesson);
         $empty = $this->quizItem($course->fresh());
         $this->assertFalse($empty['passed']);
         $this->assertStringContainsString('chưa đủ 5 câu hỏi', $empty['message']);
@@ -35,7 +35,7 @@ class QuizCourseReadinessTest extends TestCase
     public function test_four_complete_questions_fail_and_five_pass_even_when_quiz_is_inactive(): void
     {
         [$course, $lesson] = $this->otherwiseReadyCourse();
-        $quiz = Quiz::create($this->quizAttributes($lesson));
+        $quiz = app(QuizContentService::class)->getOrCreateForLesson($lesson);
 
         for ($index = 1; $index <= 4; $index++) {
             $this->addCompleteSingleQuestion($quiz, $index);
@@ -53,13 +53,14 @@ class QuizCourseReadinessTest extends TestCase
     public function test_malformed_question_fails_with_user_facing_message(): void
     {
         [$course, $lesson] = $this->otherwiseReadyCourse();
-        $quiz = Quiz::create($this->quizAttributes($lesson));
+        $quiz = app(QuizContentService::class)->getOrCreateForLesson($lesson);
 
         for ($index = 1; $index <= 5; $index++) {
             $this->addCompleteSingleQuestion($quiz, $index);
         }
 
-        $quiz->questions()->firstOrFail()->options()->where('is_correct', true)->update(['is_correct' => false]);
+        $draft = app(QuizVersioningService::class)->currentDraft($quiz->fresh());
+        $draft->questionMappings()->firstOrFail()->questionVersion->options()->where('is_correct', true)->update(['is_correct' => false]);
 
         $item = $this->quizItem($course);
         $this->assertFalse($item['passed']);
@@ -143,37 +144,18 @@ class QuizCourseReadinessTest extends TestCase
         return [$course, $quizLesson];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function quizAttributes(Lesson $lesson): array
-    {
-        return [
-            'lesson_id' => $lesson->id,
-            'title' => $lesson->title,
-            'pass_score' => 70,
-            'is_active' => false,
-        ];
-    }
-
     private function addCompleteSingleQuestion(Quiz $quiz, int $index): void
     {
-        $question = QuizQuestion::create([
-            'quiz_id' => $quiz->id,
-            'question' => 'Question '.$index,
-            'type' => QuizQuestion::TYPE_SINGLE,
-            'points' => 1,
-            'sort_order' => $index,
+        app(QuizContentService::class)->createQuestion($quiz->fresh(), [
+            'question_text' => 'Question '.$index,
+            'question_type' => 'single',
+            'score' => 1,
+            'sort_order' => $index - 1,
+        ], [
+            ['option_text' => 'A'.$index, 'is_correct' => true, 'sort_order' => 0],
+            ['option_text' => 'B'.$index, 'is_correct' => false, 'sort_order' => 1],
+            ['option_text' => 'C'.$index, 'is_correct' => false, 'sort_order' => 2],
         ]);
-
-        foreach ([['A', true], ['B', false], ['C', false]] as $optionIndex => [$text, $isCorrect]) {
-            QuizOption::create([
-                'quiz_question_id' => $question->id,
-                'option_text' => $text.$index,
-                'is_correct' => $isCorrect,
-                'sort_order' => $optionIndex,
-            ]);
-        }
     }
 
     /**

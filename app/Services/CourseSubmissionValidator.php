@@ -123,7 +123,10 @@ class CourseSubmissionValidator
     {
         $lessons = $course->lessons()
             ->where('type', Lesson::TYPE_QUIZ)
-            ->with('quiz.questions.options')
+            ->with([
+                'quiz.currentDraftVersion.questionMappings.questionVersion.options',
+                'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
+            ])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();

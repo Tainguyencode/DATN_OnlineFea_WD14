@@ -8,6 +8,8 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\Quiz;
+use App\Models\QuizVersion;
 use App\Models\User;
 use App\Models\VideoModeration;
 use Illuminate\Support\Collection;
@@ -62,6 +64,13 @@ class ContentUpdateService
                 case ContentUpdate::TYPE_LESSON:
                     $this->applyLessonUpdate($update, $payload);
                     break;
+
+                case ContentUpdate::TYPE_QUIZ:
+                    $this->approveQuizCandidate($update, $payload);
+                    break;
+
+                default:
+                    abort(422, 'Loại cập nhật nội dung không được hỗ trợ.');
             }
 
             $update->update([
@@ -121,6 +130,35 @@ class ContentUpdateService
                 'level', 'language', 'category_id',
             ])));
         }
+    }
+
+    private function approveQuizCandidate(ContentUpdate $update, array $payload): void
+    {
+        $quizId = (int) ($payload['quiz_id'] ?? 0);
+        $versionId = (int) ($payload['quiz_version_id'] ?? 0);
+        $quiz = Quiz::query()->lockForUpdate()->with('lesson')->find($quizId);
+        $version = QuizVersion::query()->lockForUpdate()->find($versionId);
+
+        abort_unless($quiz && $version, 422, 'Không tìm thấy ứng viên Quiz cần duyệt.');
+        abort_unless((int) $update->entity_id === $quizId, 422, 'ContentUpdate không khớp Quiz ứng viên.');
+        abort_unless((int) $quiz->lesson?->course_id === (int) $update->course_id, 422, 'Quiz không thuộc khóa học của ContentUpdate.');
+
+        $versioning = app(QuizVersioningService::class);
+        $versioning->assertVersionBelongsToQuiz($quiz, $version);
+        abort_unless((int) $quiz->current_draft_version_id === $versionId, 422, 'Ứng viên không còn là bản nháp Quiz hiện tại.');
+
+        $validation = app(QuizContentService::class)->validateQuizVersion($version);
+        abort_unless($validation['is_complete'], 422, implode(' ', $validation['errors']));
+
+        // Phase 2B0.7 intentionally does not switch an existing published pointer.
+        // Learner attempts are not version-bound until Phase 2B0.8, so V1 remains live.
+        $update->update([
+            'payload' => [
+                ...$payload,
+                'activation_deferred' => true,
+                'approved_candidate_at' => now()->toIso8601String(),
+            ],
+        ]);
     }
 
     private function applyChapterUpdate(ContentUpdate $update, array $payload): void

@@ -8,17 +8,27 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ContentUpdate extends Model
 {
     public const TYPE_COURSE = 'course';
+
     public const TYPE_CHAPTER = 'chapter';
+
     public const TYPE_LESSON = 'lesson';
 
+    public const TYPE_QUIZ = 'quiz';
+
     public const ACTION_CREATE = 'create';
+
     public const ACTION_UPDATE = 'update';
+
     public const ACTION_DELETE = 'delete';
+
     public const ACTION_REORDER = 'reorder';
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [

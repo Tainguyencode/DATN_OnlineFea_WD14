@@ -7,7 +7,6 @@ use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use App\Models\Quiz;
-use App\Models\QuizOption;
 use App\Models\QuizQuestion;
 use App\Models\User;
 use App\Services\QuizContentService;
@@ -25,9 +24,8 @@ class InstructorQuizAuthoringTest extends TestCase
         $this->actingAs($instructor)
             ->get(route('instructor.courses.lessons.quiz.show', [$course, $lesson]))
             ->assertOk()
-            ->assertSee('Quiz chưa thể lưu/đưa vào sử dụng vì còn thiếu:')
-            ->assertSee('chưa đủ 5 câu hỏi')
-            ->assertSee('disabled', false);
+            ->assertSee('Quiz chưa sẵn sàng để bật hoặc gửi duyệt vì còn thiếu:')
+            ->assertSee('chưa đủ 5 câu hỏi');
 
         $this->actingAs($instructor)
             ->get(route('instructor.courses.lessons.quiz.show', [$course, $lesson]))
@@ -109,18 +107,16 @@ class InstructorQuizAuthoringTest extends TestCase
             ->assertSessionHasErrors('quiz');
 
         for ($index = 1; $index <= 5; $index++) {
-            $question = QuizQuestion::create([
-                'quiz_id' => $quiz->id,
-                'question' => 'Question '.$index,
-                'type' => QuizQuestion::TYPE_SINGLE,
-                'points' => 1,
-                'sort_order' => $index,
+            $question = app(QuizContentService::class)->createQuestion($quiz->fresh(), [
+                'question_text' => 'Question '.$index,
+                'question_type' => QuizQuestion::TYPE_SINGLE,
+                'score' => 1,
+                'sort_order' => $index - 1,
             ]);
 
             foreach ([['A', true], ['B', false], ['C', false]] as $sortOrder => [$text, $correct]) {
-                QuizOption::create([
-                    'quiz_question_id' => $question->id,
-                    'option_text' => $text.$index,
+                app(QuizContentService::class)->createOption($question, [
+                    'answer_text' => $text.$index,
                     'is_correct' => $correct,
                     'sort_order' => $sortOrder,
                 ]);

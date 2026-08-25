@@ -8,11 +8,10 @@ use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
-use App\Models\Quiz;
-use App\Models\QuizOption;
-use App\Models\QuizQuestion;
 use App\Models\User;
 use App\Services\LearningProgressService;
+use App\Services\QuizContentService;
+use App\Services\QuizVersioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -263,24 +262,44 @@ class LearningProgressTest extends TestCase
             'is_required' => true,
             'status' => 'published',
         ]);
-        $quiz = Quiz::create(['lesson_id' => $lesson->id, 'title' => 'Quiz', 'pass_score' => 100, 'is_active' => true]);
-        $question = QuizQuestion::create(['quiz_id' => $quiz->id, 'question' => 'Q', 'type' => 'single', 'points' => 1]);
-        $wrong = QuizOption::create(['quiz_question_id' => $question->id, 'option_text' => 'Wrong', 'is_correct' => false]);
-        QuizOption::create(['quiz_question_id' => $question->id, 'option_text' => 'Right', 'is_correct' => true]);
-        QuizOption::create(['quiz_question_id' => $question->id, 'option_text' => 'Other', 'is_correct' => false]);
+        $content = app(QuizContentService::class);
+        $quiz = $content->getOrCreateForLesson($lesson);
+        $content->saveMetadata($lesson, [
+            'title' => 'Quiz',
+            'pass_score' => 100,
+            'description' => null,
+            'time_limit_minutes' => null,
+            'max_attempts' => null,
+        ], false);
+        $question = $content->createQuestion($quiz, [
+            'question_text' => 'Q',
+            'question_type' => 'single',
+            'score' => 1,
+            'sort_order' => 0,
+        ], [
+            ['option_text' => 'Wrong', 'is_correct' => false, 'sort_order' => 0],
+            ['option_text' => 'Right', 'is_correct' => true, 'sort_order' => 1],
+            ['option_text' => 'Other', 'is_correct' => false, 'sort_order' => 2],
+        ]);
+        $wrong = $question->options->firstWhere('option_text', 'Wrong');
 
         for ($index = 2; $index <= 5; $index++) {
-            $extraQuestion = QuizQuestion::create([
-                'quiz_id' => $quiz->id,
-                'question' => 'Q'.$index,
-                'type' => 'single',
-                'points' => 1,
-                'sort_order' => $index,
+            $content->createQuestion($quiz->fresh(), [
+                'question_text' => 'Q'.$index,
+                'question_type' => 'single',
+                'score' => 1,
+                'sort_order' => $index - 1,
+            ], [
+                ['option_text' => 'A'.$index, 'is_correct' => true, 'sort_order' => 0],
+                ['option_text' => 'B'.$index, 'is_correct' => false, 'sort_order' => 1],
+                ['option_text' => 'C'.$index, 'is_correct' => false, 'sort_order' => 2],
             ]);
-            QuizOption::create(['quiz_question_id' => $extraQuestion->id, 'option_text' => 'A'.$index, 'is_correct' => true]);
-            QuizOption::create(['quiz_question_id' => $extraQuestion->id, 'option_text' => 'B'.$index, 'is_correct' => false]);
-            QuizOption::create(['quiz_question_id' => $extraQuestion->id, 'option_text' => 'C'.$index, 'is_correct' => false]);
         }
+        $quiz->update(['is_active' => true]);
+        app(QuizVersioningService::class)->publishDraft(
+            $quiz->fresh(),
+            app(QuizVersioningService::class)->currentDraft($quiz->fresh()),
+        );
         $this->enroll($student, $course);
 
         $this->actingAs($student)
