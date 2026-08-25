@@ -8,7 +8,7 @@ class Coupon extends Model
 {
     protected $fillable = [
         'code', 'creator_type', 'instructor_id', 'course_id', 'type', 'value', 'min_order_amount', 'max_uses',
-        'used_count', 'starts_at', 'expires_at', 'is_active',
+        'used_count', 'starts_at', 'expires_at', 'is_active', 'is_private',
     ];
 
     protected function casts(): array
@@ -19,6 +19,7 @@ class Coupon extends Model
             'starts_at' => 'datetime',
             'expires_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_private' => 'boolean',
         ];
     }
 
@@ -30,6 +31,11 @@ class Coupon extends Model
     public function course()
     {
         return $this->belongsTo(Course::class, 'course_id');
+    }
+
+    public function userCoupons()
+    {
+        return $this->hasMany(UserCoupon::class);
     }
 
     public function isInstructorCoupon(): bool

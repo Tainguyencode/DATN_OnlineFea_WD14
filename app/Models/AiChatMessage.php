@@ -11,9 +11,18 @@ class AiChatMessage extends Model
         'conversation_id',
         'user_id',
         'lesson_id',
+        'learning_path_id',
         'role',
         'content',
+        'metadata',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+        ];
+    }
 
     public function conversation(): BelongsTo
     {
@@ -28,5 +37,10 @@ class AiChatMessage extends Model
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
+    }
+
+    public function learningPath(): BelongsTo
+    {
+        return $this->belongsTo(LearningPath::class);
     }
 }

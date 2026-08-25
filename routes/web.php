@@ -25,10 +25,15 @@ use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponCont
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
+use App\Http\Controllers\Web\Instructor\LessonImportController as InstructorLessonImportController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Instructor\S3MultipartUploadController;
 use App\Http\Controllers\Web\Instructor\WalletController as InstructorWalletController;
 use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalController;
+use App\Http\Controllers\Web\LearningPathController;
+use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathController;
+use App\Http\Controllers\Web\Instructor\LearningPathController as InstructorLearningPathController;
+
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
@@ -49,6 +54,7 @@ use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
 use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
 use App\Http\Controllers\Web\Student\AssignmentController as StudentAssignmentController;
+use App\Http\Controllers\Web\Student\VoucherController as StudentVoucherController;
 use App\Http\Controllers\Api\StudyGroupController;
 use App\Models\User;
 use App\Services\GeminiService;
@@ -86,6 +92,13 @@ Route::get('/instructors/{user}', [InstructorController::class, 'show'])->name('
 Route::get('/courses/category/{category:slug}', [CourseController::class, 'category'])->name('courses.category');
 Route::get('/leaderboard', [\App\Http\Controllers\Web\LeaderboardController::class, 'index'])->name('leaderboard');
 
+// ─── LỘ TRÌNH HỌC TẬP (PUBLIC) ───
+Route::get('/learning-paths', [LearningPathController::class, 'index'])->name('learning-paths.index');
+Route::get('/learning-paths/{slug}', [LearningPathController::class, 'show'])->name('learning-paths.show');
+Route::post('/learning-paths/ai/chat', [\App\Http\Controllers\Web\LearningPathAiController::class, 'chat'])->name('learning-paths.ai.chat');
+Route::get('/learning-paths/ai/conversation', [\App\Http\Controllers\Web\LearningPathAiController::class, 'getConversation'])->name('learning-paths.ai.conversation');
+Route::post('/learning-paths/ai/reset', [\App\Http\Controllers\Web\LearningPathAiController::class, 'reset'])->name('learning-paths.ai.reset');
+
 // ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───
 Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertificate'])->name('certificates.public');
 Route::get('/certificates/{code}/pdf', [StudentMiscController::class, 'publicCertificatePdf'])->name('certificates.public.pdf');
@@ -103,8 +116,16 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('study-groups.leave');
     Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('study-groups.members');
     Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('study-groups.messages.store');
+    Route::post('/study-groups/{studyGroup}/messages/{message}/recall', [StudyGroupController::class, 'recallMessage'])->name('study-groups.messages.recall');
     Route::get('/study-groups/{studyGroup}/messages/{message}/file', [StudyGroupController::class, 'downloadFile'])->name('study-groups.messages.download');
     Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('study-groups.members.remove');
+
+    // Study Group Invitations
+    Route::get('/study-groups/{studyGroup}/search-users', [StudyGroupController::class, 'searchUsers'])->name('study-groups.search-users');
+    Route::post('/study-groups/{studyGroup}/invite', [StudyGroupController::class, 'invite'])->name('study-groups.invite');
+    Route::post('/study-groups/{studyGroup}/invitations/{invitation}/cancel', [StudyGroupController::class, 'cancelInvitation'])->name('study-groups.invitations.cancel');
+    Route::post('/study-groups/invitations/{invitation}/accept', [StudyGroupController::class, 'acceptInvitation'])->name('study-groups.invitations.accept');
+    Route::post('/study-groups/invitations/{invitation}/reject', [StudyGroupController::class, 'rejectInvitation'])->name('study-groups.invitations.reject');
 });
 Route::middleware(['auth', 'active', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentMiscController::class, 'wishlist'])->name('favorites.index');
@@ -272,6 +293,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');
     Route::get('/orders', [StudentMiscController::class, 'orders'])->name('orders');
     Route::get('/orders/{order}', [StudentMiscController::class, 'showOrder'])->name('orders.show');
+    Route::get('/vouchers', [StudentVoucherController::class, 'index'])->name('vouchers.index');
     Route::get('/profile', [ProfileController::class, 'studentShow'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
@@ -305,6 +327,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
         Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
         Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
+        Route::get('/courses/{course}/students/{student}', [InstructorCourseController::class, 'studentDetail'])->name('courses.students.detail');
         Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
         Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
         Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
@@ -312,6 +335,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->name('wallet.withdraw');
         Route::resource('coupons', InstructorCouponController::class)->except(['show']);
         Route::post('coupons/{coupon}/toggle-status', [InstructorCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+        Route::resource('learning-paths', InstructorLearningPathController::class);
+
         Route::get('/reviews', [InstructorReviewController::class, 'index'])->name('reviews.index');
         Route::get('/submissions', [SubmissionController::class, 'index'])->name('submissions.index');
         Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
@@ -331,10 +356,14 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'signPart'])->name('courses.s3.multipart.sign-part');
             Route::post('/courses/{course}/s3/multipart/complete', [S3MultipartUploadController::class, 'complete'])->name('courses.s3.multipart.complete');
             Route::post('/courses/{course}/s3/multipart/abort', [S3MultipartUploadController::class, 'abort'])->name('courses.s3.multipart.abort');
+            Route::get('/courses/{course}/hls-status', [InstructorCurriculumController::class, 'getHlsStatus'])->name('courses.hls-status');
             Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
             Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
             Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
             Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
+            Route::get('/courses/{course}/lessons/import/template', [InstructorLessonImportController::class, 'downloadTemplate'])->name('courses.lessons.import.template');
+            Route::post('/courses/{course}/sections/{section}/lessons/import/preview', [InstructorLessonImportController::class, 'preview'])->name('courses.lessons.import.preview');
+            Route::post('/courses/{course}/sections/{section}/lessons/import/confirm', [InstructorLessonImportController::class, 'confirm'])->name('courses.lessons.import.confirm');
             Route::get('/courses/{course}/sections/{section}/lessons', fn ($course) => redirect()->route('instructor.courses.curriculum', $course));
             Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
             Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
@@ -393,6 +422,15 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
     });
+
+    // Quản lý cấu hình yêu cầu hồ sơ theo ngành
+    Route::prefix('instructors/requirements')->name('instructors.requirements.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'store'])->name('store');
+        Route::put('/{requirement}', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'update'])->name('update');
+        Route::post('/{requirement}/toggle-status', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'toggleStatus'])->name('toggle-status');
+        Route::delete('/{requirement}', [\App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController::class, 'destroy'])->name('destroy');
+    });
     Route::get('/categories', [AdminCategoryController::class, 'index'])->name('categories.index');
     Route::get('/categories/create', [AdminCategoryController::class, 'create'])->name('categories.create');
     Route::post('/categories', [AdminCategoryController::class, 'store'])->name('categories.store');
@@ -400,8 +438,17 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])->name('categories.update');
     Route::post('/categories/{category}/toggle-status', [AdminCategoryController::class, 'toggleStatus'])->name('categories.toggle-status');
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->name('categories.destroy');
+    // Cấu hình phần thưởng TOP Tháng & Lịch sử trao thưởng
+    Route::get('coupons/reward-config', [AdminCouponController::class, 'rewardConfigForm'])->name('coupons.reward_config');
+    Route::post('coupons/reward-config', [AdminCouponController::class, 'rewardConfigStore'])->name('coupons.reward_config.store');
+    Route::post('coupons/reward-run-now', [AdminCouponController::class, 'rewardRunNow'])->name('coupons.reward_run_now');
+    Route::get('coupons/reward-history', [AdminCouponController::class, 'rewardHistory'])->name('coupons.reward_history');
+
     Route::resource('coupons', AdminCouponController::class)->except(['show']);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
+
+
+    Route::resource('learning-paths', AdminLearningPathController::class);
     Route::get('/courses', [ManageController::class, 'index'])->name('courses.index');
     Route::get('/course-reviews', [CourseReviewController::class, 'index'])->name('course-reviews.index');
     Route::get('/course-reviews/{course}', [CourseReviewController::class, 'show'])->name('course-reviews.show');
@@ -449,6 +496,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/homepage', [ManageController::class, 'homepage'])->name('homepage');
     Route::put('/homepage', [ManageController::class, 'updateHomepage'])->name('homepage.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
 // ─── STREAMING VIDEO KIỂM DUYỆT (Admin & Giảng viên) ───
@@ -466,13 +514,14 @@ if (app()->environment('local')) {
     })->name('dev.login-as-admin');
 
     Route::get('/dev/login-as-student', function () {
-        $user = User::where('email', 'leanhtuan291111@gmail.com')->first()
-            ?? User::where('role', 'student')->firstOrFail();
+        $user = User::where('role', 'student')->first()
+            ?? User::firstOrFail();
 
         auth()->login($user);
 
         return redirect()->route('dashboard');
     })->name('dev.login-as-student');
+
 }
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───

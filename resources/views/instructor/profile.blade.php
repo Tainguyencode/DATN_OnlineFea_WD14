@@ -1,6 +1,17 @@
 <x-instructor-layout title="Hồ sơ & Chứng chỉ" page-title="Hồ sơ & Chứng chỉ Giảng viên" breadcrumb="Quản lý thông tin cá nhân, chuyên môn và tài liệu minh chứng">
 
-<div class="space-y-8" x-data="{ activeTab: 'general', showUploadModal: false }">
+<div class="space-y-8" x-data="{ 
+    activeTab: '{{ session('active_tab', request()->query('tab')) }}' || (['general', 'documents', 'security'].includes(window.location.hash.replace('#', '')) ? window.location.hash.replace('#', '') : 'general'), 
+    showUploadModal: false,
+    setTab(tab) {
+        this.activeTab = tab;
+        if (window.history.replaceState) {
+            window.history.replaceState(null, null, '#' + tab);
+        } else {
+            window.location.hash = '#' + tab;
+        }
+    }
+}">
     {{-- TRẠNG THÁI KHÓA HOẶC CẢNH BÁO DEADLINE / REVIEW BANNER                    --}}
     @if($user->isLocked())
         <div class="overflow-hidden rounded-2xl border-2 border-rose-500/40 bg-gradient-to-r from-rose-950/80 via-rose-900/60 to-slate-900 p-6 text-white shadow-xl">
@@ -156,7 +167,7 @@
     <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
         <button
             type="button"
-            @click="activeTab = 'general'"
+            @click="setTab('general')"
             :class="activeTab === 'general' ? 'bg-[#0056D2] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'"
             class="rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition duration-150 cursor-pointer"
         >
@@ -164,7 +175,7 @@
         </button>
         <button
             type="button"
-            @click="activeTab = 'documents'"
+            @click="setTab('documents')"
             :class="activeTab === 'documents' ? 'bg-[#0056D2] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'"
             class="relative rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition duration-150 cursor-pointer"
         >
@@ -173,7 +184,7 @@
         </button>
         <button
             type="button"
-            @click="activeTab = 'security'"
+            @click="setTab('security')"
             :class="activeTab === 'security' ? 'bg-[#0056D2] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'"
             class="rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition duration-150 cursor-pointer"
         >
@@ -229,39 +240,193 @@
                 </div>
             </div>
 
-            {{-- SECTION B: THÔNG TIN NGHỀ NGHIỆP & CHUYÊN MÔN --}}
-            <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <h3 class="text-base font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">B. Thông tin nghề nghiệp & Chuyên môn</h3>
-                <div class="mt-6 grid gap-5 sm:grid-cols-3">
+            {{-- SECTION B: THÔNG TIN NGHỀ NGHIỆP & CHUYÊN MÔN THEO TỪNG NGÀNH --}}
+            <div x-data="{
+                fields: @js(old('teaching_fields', !empty($teachingFields) ? $teachingFields : [[
+                    'category_id' => $selectedCategoryIds[0] ?? ($categories->first()?->children->first()?->id ?? $categories->first()?->id ?? 1),
+                    'organization' => $profile->organization ?? '',
+                    'position' => $profile->position ?? '',
+                    'specialty' => $profile->specialty ?? '',
+                    'experience' => $profile->experience ?? '',
+                ]])),
+                categories: @js($categories->map(function($c) {
+                    return [
+                        'id' => $c->id,
+                        'name' => $c->name,
+                        'children' => $c->children->map(fn($ch) => ['id' => $ch->id, 'name' => $ch->name])->values(),
+                    ];
+                })),
+                getCategoryName(id) {
+                    id = parseInt(id);
+                    for (let cat of this.categories) {
+                        if (cat.id === id) return cat.name;
+                        if (cat.children) {
+                            for (let ch of cat.children) {
+                                if (ch.id === id) return ch.name;
+                            }
+                        }
+                    }
+                    return 'Chọn ngành giảng dạy';
+                },
+                getAvailableCategories() {
+                    const selectedIds = this.fields.map(f => parseInt(f.category_id)).filter(id => !isNaN(id));
+                    let list = [];
+                    for (let cat of this.categories) {
+                        if (cat.children && cat.children.length > 0) {
+                            for (let ch of cat.children) {
+                                list.push({ id: ch.id, name: ch.name + ' (' + cat.name + ')' });
+                            }
+                        } else {
+                            list.push({ id: cat.id, name: cat.name });
+                        }
+                    }
+                    return list;
+                },
+                addField() {
+                    const selectedIds = this.fields.map(f => parseInt(f.category_id)).filter(id => !isNaN(id));
+                    const all = this.getAvailableCategories();
+                    const available = all.find(c => !selectedIds.includes(c.id));
+                    this.fields.push({
+                        category_id: available ? available.id : (all[0]?.id || ''),
+                        organization: '',
+                        position: '',
+                        specialty: '',
+                        experience: ''
+                    });
+                },
+                removeField(index) {
+                    if (this.fields.length > 1) {
+                        this.fields.splice(index, 1);
+                    }
+                }
+            }" class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6">
+                
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Trường / Đơn vị công tác</label>
-                        <input type="text" name="organization" value="{{ old('organization', $profile->organization) }}" placeholder="Đại học Bách Khoa, FPT Software..."
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                        <h3 class="text-base font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-lg bg-[#0056D2] text-[11px] font-black text-white">B</span>
+                            <span>Thông tin nghề nghiệp & Chuyên môn theo từng ngành</span>
+                        </h3>
+                        <p class="mt-1 text-xs text-slate-500">Mỗi ngành giảng dạy có thể khai báo đơn vị công tác, chức vụ và kinh nghiệm riêng biệt.</p>
                     </div>
 
-                    <div>
-                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Chức vụ / Vị trí</label>
-                        <input type="text" name="position" value="{{ old('position', $profile->position) }}" placeholder="Giảng viên chính, Senior Engineer..."
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                    </div>
-
-                    <div>
-                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Ngành / Lĩnh vực giảng dạy</label>
-                        <input type="text" name="teaching_field" value="{{ old('teaching_field', $profile->teaching_field) }}" placeholder="Công nghệ thông tin, Thiết kế đồ họa..."
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                    </div>
+                    <button type="button" @click="addField()"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-4 py-2 text-xs font-bold text-[#0056D2] transition hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <span>+ Thêm ngành giảng dạy</span>
+                    </button>
                 </div>
 
-                <div class="mt-5">
-                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Lĩnh vực chuyên môn chi tiết</label>
-                    <input type="text" name="specialty" value="{{ old('specialty', $profile->specialty) }}" placeholder="Fullstack Web, AI, Data Science, DevOps..."
-                        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                @error('category_ids')
+                    <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-600 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400">
+                        {{ $message }}
+                    </div>
+                @enderror
+
+                {{-- DANH SÁCH KHỐI THÔNG TIN TỪNG NGÀNH --}}
+                <div class="space-y-6">
+                    <template x-for="(field, index) in fields" :key="index">
+                        <div class="relative rounded-2xl border-2 border-slate-200/80 bg-slate-50/60 p-5 sm:p-6 transition hover:border-blue-300 dark:border-slate-800 dark:bg-slate-800/40 space-y-5">
+                            
+                            {{-- Header của từng Khối Ngành --}}
+                            <div class="flex items-center justify-between border-b border-slate-200/70 pb-3 dark:border-slate-700/60">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-xl bg-[#0056D2] text-xs font-black text-white shadow-sm" x-text="index + 1"></span>
+                                    <span class="text-sm font-black text-slate-900 dark:text-white" x-text="getCategoryName(field.category_id)"></span>
+                                </div>
+
+                                <template x-if="fields.length > 1">
+                                    <button type="button" @click="removeField(index)"
+                                            class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                        <span>Xóa ngành này</span>
+                                    </button>
+                                </template>
+                            </div>
+
+                            {{-- Hàng 1: Ngành + Đơn vị + Chức vụ --}}
+                            <div class="grid gap-4 sm:grid-cols-3">
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                        Ngành / Lĩnh vực giảng dạy *
+                                    </label>
+                                    <select :name="'teaching_fields[' + index + '][category_id]'"
+                                            x-model="field.category_id"
+                                            required
+                                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                        <option value="" disabled>-- Chọn ngành giảng dạy --</option>
+                                        <template x-for="cat in categories" :key="'grp-' + cat.id">
+                                            <template x-if="cat.children && cat.children.length > 0">
+                                                <optgroup :label="cat.name">
+                                                    <template x-for="child in cat.children" :key="'opt-' + child.id">
+                                                        <option :value="child.id" x-text="child.name" :selected="child.id == field.category_id"></option>
+                                                    </template>
+                                                </optgroup>
+                                            </template>
+                                            <template x-if="!cat.children || cat.children.length === 0">
+                                                <option :value="cat.id" x-text="cat.name" :selected="cat.id == field.category_id"></option>
+                                            </template>
+                                        </template>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                        Trường / Đơn vị công tác
+                                    </label>
+                                    <input type="text"
+                                           :name="'teaching_fields[' + index + '][organization]'"
+                                           x-model="field.organization"
+                                           placeholder="VD: Đại học Bách Khoa, FPT Software..."
+                                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                </div>
+
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                        Chức vụ / Vị trí
+                                    </label>
+                                    <input type="text"
+                                           :name="'teaching_fields[' + index + '][position]'"
+                                           x-model="field.position"
+                                           placeholder="VD: Giảng viên chính, Senior Engineer..."
+                                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                </div>
+                            </div>
+
+                            {{-- Hàng 2: Lĩnh vực chuyên môn chi tiết --}}
+                            <div>
+                                <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                    Lĩnh vực chuyên môn chi tiết của ngành này
+                                </label>
+                                <input type="text"
+                                       :name="'teaching_fields[' + index + '][specialty]'"
+                                       x-model="field.specialty"
+                                       placeholder="VD: Fullstack Web, React, Laravel, Node.js, Cloud..."
+                                       class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                            </div>
+
+                            {{-- Hàng 3: Kinh nghiệm giảng dạy & làm việc --}}
+                            <div>
+                                <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                    Kinh nghiệm giảng dạy & làm việc trong ngành này
+                                </label>
+                                <textarea :name="'teaching_fields[' + index + '][experience]'"
+                                          x-model="field.experience"
+                                          rows="3"
+                                          placeholder="Mô tả các dự án thực tế, số năm kinh nghiệm hoặc các cơ sở đào tạo đã từng tham gia..."
+                                          class="w-full rounded-xl border border-slate-300 bg-white p-3.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white"></textarea>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
-                <div class="mt-5">
-                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Kinh nghiệm giảng dạy & làm việc</label>
-                    <textarea name="experience" rows="3" placeholder="Mô tả các dự án thực tế, số năm kinh nghiệm hoặc các cơ sở đào tạo đã từng tham gia..."
-                        class="w-full rounded-xl border border-slate-300 bg-white p-3.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">{{ old('experience', $profile->experience) }}</textarea>
+                {{-- Nút Thêm Ngành ở cuối --}}
+                <div class="pt-2">
+                    <button type="button" @click="addField()"
+                            class="w-full rounded-2xl border-2 border-dashed border-slate-300 p-4 text-center text-xs font-bold text-slate-600 transition hover:border-[#0056D2] hover:bg-blue-50/50 hover:text-[#0056D2] dark:border-slate-700 dark:text-slate-400 dark:hover:border-blue-500 dark:hover:bg-slate-800/60 dark:hover:text-blue-300 flex items-center justify-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <span>+ Thêm một ngành / lĩnh vực giảng dạy khác</span>
+                    </button>
                 </div>
             </div>
 
@@ -298,124 +463,280 @@
     </div>
 
     {{-- ========================================================================= --}}
-    {{-- TAB 2: HỒ SƠ MINH CHỨNG & ĐA CHỨNG CHỈ                                   --}}
+    {{-- TAB 2: HỒ SƠ MINH CHỨNG & CHỨNG CHỈ THEO NGÀNH                           --}}
     {{-- ========================================================================= --}}
-    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6">
+    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{ uploadModal: false, activeRequirementId: null, activeRequirementTitle: '', activeDocType: 'certificate' }">
 
-        {{-- FORM TẢI LÊN TÀI LIỆU MỚI --}}
-        <div class="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50/50 via-white to-white p-6 sm:p-8 shadow-sm dark:border-violet-900/40 dark:bg-slate-900">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-violet-100 pb-5 dark:border-violet-900/30">
+        {{-- BANNER TÓM TẮT TIẾN ĐỘ HỒ SƠ THEO NGÀNH --}}
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-5 dark:border-slate-800">
                 <div>
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                        <svg class="h-6 w-6 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        Tải lên Chứng chỉ & Hồ sơ minh chứng
-                    </h3>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Bạn có thể tải lên nhiều tài liệu minh chứng (Chứng chỉ, Bằng cấp, Hợp đồng lao động, Bảng điểm...). Mỗi tài liệu được lưu trữ riêng biệt.</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if(!empty($requirementData['categories']) && $requirementData['categories']->isNotEmpty())
+                            @foreach($requirementData['categories'] as $cat)
+                                <span class="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-[#0056D2] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                     {{ $cat->name }}
+                                </span>
+                            @endforeach
+                        @else
+                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                                Chưa chọn ngành giảng dạy
+                            </span>
+                        @endif
+
+                        @if($requirementData['summary']['total_requirements'] === 0)
+                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                ℹ Chưa có cấu hình yêu cầu hồ sơ
+                            </span>
+                        @elseif($requirementData['summary']['required_count'] === 0)
+                            <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                                ℹ Không có hồ sơ bắt buộc
+                            </span>
+                        @elseif($requirementData['summary']['can_approve'])
+                            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                ✔ Đã đủ hồ sơ bắt buộc
+                            </span>
+                        @else
+                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                 Còn thiếu {{ $requirementData['summary']['required_missing_count'] + $requirementData['summary']['required_rejected_count'] }} tài liệu bắt buộc
+                            </span>
+                        @endif
+                    </div>
+                    <h3 class="text-xl font-black text-slate-900 dark:text-white mt-2">Hồ sơ minh chứng theo ngành giảng dạy</h3>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Để đảm bảo chất lượng đào tạo, hệ thống yêu cầu Giảng viên cung cấp đúng các văn bằng, chứng chỉ phù hợp với từng ngành đã đăng ký.
+                    </p>
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-6 space-y-5">
-                @csrf
-                <div class="grid gap-5 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Loại tài liệu minh chứng *</label>
-                        <select name="document_type" required class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                            @foreach($documentTypes as $key => $label)
-                                <option value="{{ $key }}">{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Tiêu đề tài liệu (Tùy chọn)</label>
-                        <input type="text" name="title" placeholder="Ví dụ: Bằng Cử nhân CNTT, Chứng chỉ AWS Solutions Architect..."
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Chọn tệp (Hỗ trợ chọn nhiều tệp: PDF, JPG, PNG, WEBP, DOC, DOCX - Tối đa 10MB/tệp) *</label>
-                    <input type="file" name="files[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" required
-                        class="w-full rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-2 file:text-xs file:font-bold file:text-white hover:file:bg-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                </div>
-
-                <div class="flex justify-end">
-                    <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-violet-700">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                        <span>Tải lên tài liệu</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        {{-- DANH SÁCH TÀI LIỆU MINH CHỨNG ĐÃ TẢI LÊN --}}
-        <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h3 class="text-base font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Danh sách tài liệu đã nộp ({{ $certificatesCount }})</h3>
-
-            @if($certificates->isEmpty())
-                <div class="my-8 text-center">
-                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800">
-                        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    </div>
-                    <p class="mt-3 text-sm font-bold text-slate-700 dark:text-slate-300">Chưa có tài liệu minh chứng nào</p>
-                    <p class="mt-1 text-xs text-slate-500">Vui lòng tải lên chứng chỉ hoặc bằng cấp của bạn ở form trên.</p>
+            {{-- Checklist các yêu cầu theo từng ngành --}}
+            @if(empty($requirementData['categories_requirements']))
+                <div class="my-8 rounded-2xl bg-amber-50 p-6 text-center text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                    <p class="text-sm font-bold">Chưa có danh sách yêu cầu tài liệu cụ thể hoặc bạn chưa chọn ngành giảng dạy.</p>
+                    <p class="mt-1 text-xs">Vui lòng chọn ngành ở Tab "Thông tin cá nhân & nghề nghiệp" để hệ thống tải bộ yêu cầu tương ứng.</p>
                 </div>
             @else
-                <div class="mt-6 divide-y divide-slate-100 dark:divide-slate-800">
-                    @foreach($certificates as $doc)
-                        <div class="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between transition hover:bg-slate-50/60 dark:hover:bg-slate-800/40 rounded-xl px-3">
-                            <div class="flex items-center gap-3.5 min-w-0">
-                                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl {{ $doc->isPdf() ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' }}">
-                                    @if($doc->isPdf())
-                                        <span class="text-xs font-black">PDF</span>
-                                    @else
-                                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                    @endif
-                                </div>
-                                <div class="min-w-0">
-                                    <div class="flex items-center gap-2">
-                                        <h4 class="font-bold text-sm text-slate-900 dark:text-white truncate">{{ $doc->title ?: $doc->original_name }}</h4>
-                                        <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                            {{ $doc->documentTypeLabel() }}
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                        {{ $doc->formattedFileSize() }} · Tải lên {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : 'N/A' }}
-                                    </p>
-                                    @if($doc->isRejected() && $doc->rejection_reason)
-                                        <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
-                                            Lý do từ chối: {{ $doc->rejection_reason }}
+                <div class="mt-6 space-y-8">
+                    @foreach($requirementData['categories_requirements'] as $catGroup)
+                        @php
+                            $groupCat = $catGroup['category'];
+                            $groupReqs = $catGroup['requirements'];
+                            $groupSummary = $catGroup['summary'];
+                        @endphp
+                        <div class="rounded-3xl border border-slate-200 bg-slate-50/50 p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/50 space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3 dark:border-slate-800">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#0056D2] text-white text-xs font-black">
+                                        {{ $loop->iteration }}
+                                    </span>
+                                    <div>
+                                        <h4 class="text-base font-black text-slate-900 dark:text-white">
+                                            Ngành: {{ $groupCat->name }}
+                                        </h4>
+                                        <p class="text-xs text-slate-500">
+                                            {{ $groupSummary['required_count'] }} yêu cầu bắt buộc · {{ $groupSummary['optional_count'] }} tùy chọn
                                         </p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    @if($groupSummary['total_requirements'] === 0)
+                                        <span class="rounded-full bg-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                            ℹ Chưa cấu hình hồ sơ
+                                        </span>
+                                    @elseif($groupSummary['required_count'] === 0)
+                                        <span class="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
+                                            ℹ Không có hồ sơ bắt buộc
+                                        </span>
+                                    @elseif($groupSummary['has_all_required_submitted'])
+                                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                            ✔ Đủ hồ sơ ngành này
+                                        </span>
+                                    @else
+                                        <span class="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                             Thiếu {{ $groupSummary['required_missing_count'] + $groupSummary['required_rejected_count'] }} tài liệu bắt buộc
+                                        </span>
                                     @endif
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-3 shrink-0">
-                                @if($doc->isApproved())
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                        Đã duyệt
-                                    </span>
-                                @elseif($doc->isRejected())
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                        Từ chối
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                        Chờ duyệt
-                                    </span>
-                                @endif
+                            @if(empty($groupReqs))
+                                <div class="rounded-2xl bg-white p-4 text-center text-xs text-slate-400 dark:bg-slate-800">
+                                    Ngành này chưa có cấu hình yêu cầu tài liệu cụ thể.
+                                </div>
+                            @else
+                                <div class="space-y-4">
+                                    @foreach($groupReqs as $item)
+                                        @php
+                                            $req = $item['requirement'];
+                                            $docs = $item['documents'];
+                                            $status = $item['status'];
+                                        @endphp
+                                        <div class="rounded-2xl border {{ $req->is_required ? ($item['is_fulfilled'] ? 'border-emerald-200 bg-white dark:bg-slate-800/90' : 'border-amber-200 bg-white dark:bg-slate-800/90') : 'border-slate-200 bg-white dark:bg-slate-800/90' }} p-4.5 transition">
+                                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div class="space-y-1 min-w-0">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <h5 class="text-sm font-black text-slate-900 dark:text-white">
+                                                            {{ $loop->iteration }}. {{ $req->document_title }}
+                                                        </h5>
+                                                        @if($req->is_required)
+                                                            <span class="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                                                                Bắt buộc
+                                                            </span>
+                                                        @else
+                                                            <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                                                Tùy chọn
+                                                            </span>
+                                                        @endif
 
-                                <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-                                    Xem
+                                                        {{-- Badge trạng thái --}}
+                                                        @if($status === 'approved')
+                                                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                                                ✔ Đã duyệt ({{ $item['approved_count'] }})
+                                                            </span>
+                                                        @elseif($status === 'pending')
+                                                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                                                 Đã nộp - Chờ duyệt ({{ $item['pending_count'] }})
+                                                            </span>
+                                                        @elseif($status === 'rejected')
+                                                            <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                                                ✖ Bị từ chối
+                                                            </span>
+                                                        @else
+                                                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                                Chưa nộp
+                                                            </span>
+                                                        @endif
+                                                    </div>
+
+                                                    @if($req->description)
+                                                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                                            {{ $req->description }}
+                                                        </p>
+                                                    @endif
+                                                </div>
+
+                                                <button type="button"
+                                                        @click="activeRequirementId = {{ $req->id }}; activeRequirementTitle = '{{ addslashes($req->document_title) }} ({{ addslashes($groupCat->name) }})'; activeDocType = '{{ $req->document_type }}'; uploadModal = true"
+                                                        class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#0056D2] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0046B8]">
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                                    <span>Tải lên</span>
+                                                </button>
+                                            </div>
+
+                                            {{-- Danh sách file đã nộp cho requirement này --}}
+                                            @if($docs->isNotEmpty())
+                                                <div class="mt-3 border-t border-slate-100 pt-2.5 dark:border-slate-700/60 space-y-2">
+                                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tệp đã nộp ({{ $docs->count() }}):</span>
+                                                    @foreach($docs as $doc)
+                                                        <div class="flex flex-col gap-2 rounded-xl bg-slate-50/80 p-3 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between border border-slate-100 dark:border-slate-700/40">
+                                                            <div class="flex items-center gap-3 min-w-0">
+                                                                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {{ $doc->isPdf() ? 'bg-rose-50 text-rose-600 font-bold text-[10px]' : 'bg-blue-50 text-blue-600 text-xs' }}">
+                                                                    {{ $doc->isPdf() ? 'PDF' : 'IMG' }}
+                                                                </span>
+                                                                <div class="min-w-0">
+                                                                    <div class="flex flex-wrap items-center gap-2">
+                                                                        <h6 class="text-xs font-bold text-slate-800 dark:text-white truncate">{{ $doc->title ?: $doc->original_name }}</h6>
+                                                                        @if($doc->isApproved())
+                                                                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                                                        @elseif($doc->isRejected())
+                                                                            <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
+                                                                        @else
+                                                                            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
+                                                                        @endif
+                                                                    </div>
+                                                                    <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->original_name }} · {{ $doc->formattedFileSize() }} · Tải lên: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
+                                                                    @if($doc->isRejected() && $doc->rejection_reason)
+                                                                        <p class="text-[11px] font-semibold text-rose-600 mt-1">Lý do từ chối: {{ $doc->rejection_reason }}</p>
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                                                <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">
+                                                                    Xem tệp
+                                                                </a>
+                                                                @unless($doc->isApproved())
+                                                                    <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button type="submit" class="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600">
+                                                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                                        </button>
+                                                                    </form>
+                                                                @endunless
+                                                            </div>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+
+        {{-- TÀI LIỆU MINH CHỨNG BỔ SUNG KHÁC (TỰ DO) --}}
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
+                <div>
+                    <h3 class="text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                        Tài liệu minh chứng bổ sung khác (Tự do)
+                    </h3>
+                    <p class="mt-0.5 text-xs text-slate-500">
+                        Tải lên các tài liệu bổ trợ như Bảng điểm, Bằng khen, Thư giới thiệu, Hợp đồng hoặc minh chứng năng lực khác.
+                    </p>
+                </div>
+                <button type="button"
+                        @click="activeRequirementId = null; activeRequirementTitle = 'Tài liệu minh chứng bổ sung khác (Tự do)'; activeDocType = 'other'; uploadModal = true"
+                        class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>Tải lên tài liệu bổ sung</span>
+                </button>
+            </div>
+
+            @if(!empty($requirementData['unassigned_certificates']) && $requirementData['unassigned_certificates']->isNotEmpty())
+                <div class="mt-5 space-y-3">
+                    @foreach($requirementData['unassigned_certificates'] as $doc)
+                        <div class="flex flex-col gap-2 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between border border-slate-100 dark:border-slate-700">
+                            <div class="flex items-center gap-3.5 min-w-0">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ $doc->isPdf() ? 'bg-rose-100 text-rose-600 font-black text-xs' : 'bg-blue-100 text-blue-600 text-xs' }}">
+                                    {{ $doc->isPdf() ? 'PDF' : 'IMG' }}
+                                </span>
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <h5 class="text-sm font-bold text-slate-900 dark:text-white truncate">{{ $doc->title ?: $doc->original_name }}</h5>
+                                        <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                            {{ $doc->documentTypeLabel() }}
+                                        </span>
+                                        @if($doc->isApproved())
+                                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                        @elseif($doc->isRejected())
+                                            <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
+                                        @else
+                                            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
+                                        @endif
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->original_name }} · {{ $doc->formattedFileSize() }} · Tải lên: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : 'N/A' }}</p>
+                                    @if($doc->isRejected() && $doc->rejection_reason)
+                                        <p class="text-[11px] font-semibold text-rose-600 mt-1">Lý do từ chối: {{ $doc->rejection_reason }}</p>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">
+                                    Xem tệp
                                 </a>
-
                                 @unless($doc->isApproved())
-                                    <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Bạn có chắc chắn muốn xóa tài liệu này?')">
+                                    <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40">
+                                        <button type="submit" class="rounded-xl bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300" title="Xóa tài liệu">
                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         </button>
                                     </form>
@@ -424,7 +745,66 @@
                         </div>
                     @endforeach
                 </div>
+            @else
+                <div class="mt-6 rounded-2xl bg-slate-50 p-6 text-center text-slate-500 dark:bg-slate-800/40 dark:text-slate-400">
+                    <p class="text-xs">Chưa có tài liệu bổ sung nào được tải lên.</p>
+                </div>
             @endif
+        </div>
+
+        {{-- MODAL TẢI LÊN TÀI LIỆU --}}
+        <div x-show="uploadModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div class="w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800" @click.away="uploadModal = false">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
+                    <div>
+                        <h3 class="text-base font-black text-slate-900 dark:text-white">Tải lên tài liệu minh chứng</h3>
+                        <p class="text-xs text-blue-600 dark:text-blue-400 font-bold mt-0.5" x-text="activeRequirementTitle"></p>
+                    </div>
+                    <button type="button" @click="uploadModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+
+                <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-5 space-y-4">
+                    @csrf
+                    <input type="hidden" name="requirement_id" :value="activeRequirementId">
+
+                    {{-- Chọn loại tài liệu khi upload tự do --}}
+                    <div x-show="!activeRequirementId">
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Loại tài liệu bổ sung *
+                        </label>
+                        <select name="document_type" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                            <option value="transcript">Bảng điểm (Transcript)</option>
+                            <option value="certificate">Chứng chỉ / Bằng khen chuyên môn khác</option>
+                            <option value="employment_confirmation">Giấy xác nhận công tác / Giấy khen</option>
+                            <option value="portfolio">Hồ sơ năng lực / Dự án thực tế (Portfolio)</option>
+                            <option value="work_contract">Hợp đồng lao động</option>
+                            <option value="degree">Văn bằng phụ</option>
+                            <option value="other" selected>Tài liệu minh chứng khác</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Tiêu đề tài liệu</label>
+                        <input type="text" name="title" placeholder="Ví dụ: Bảng điểm tốt nghiệp ĐH, Bằng khen xuất sắc 2025..."
+                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Chọn tệp (PDF, JPG, PNG, WEBP, DOCX - Tối đa 10MB) *</label>
+                        <input type="file" name="files[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" required
+                               class="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0056D2] file:px-3.5 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-[#00419e] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <button type="button" @click="uploadModal = false" class="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300">
+                            Hủy
+                        </button>
+                        <button type="submit" class="rounded-xl bg-[#0056D2] px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-[#00419e]">
+                            Tải lên
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 

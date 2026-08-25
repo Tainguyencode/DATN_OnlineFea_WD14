@@ -5,6 +5,7 @@ namespace App\Http\Requests\Instructor;
 use App\Models\Course;
 use App\Models\Lesson;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -22,7 +23,7 @@ class StoreLessonRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] START REQUEST', [
+        Log::info('[UPLOAD TRACE] START REQUEST', [
             'has_video_file' => $this->hasFile('video_file'),
             'video_size_bytes' => $this->hasFile('video_file') ? $this->file('video_file')->getSize() : null,
             'type' => $this->input('type'),
@@ -47,14 +48,14 @@ class StoreLessonRequest extends FormRequest
 
     protected function passedValidation(): void
     {
-        \Illuminate\Support\Facades\Log::info('[UPLOAD TRACE] VALIDATION PASSED');
+        Log::info('[UPLOAD TRACE] VALIDATION PASSED');
     }
 
     protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void
     {
         $videoFile = $this->file('video_file');
 
-        \Illuminate\Support\Facades\Log::warning('[EXACT VALIDATION FAILED LOG]', [
+        Log::warning('[EXACT VALIDATION FAILED LOG]', [
             'failed_rules' => $validator->failed(),
             'errors' => $validator->errors()->toArray(),
             'all' => $this->except(['video_file', 'document_file']),
@@ -78,12 +79,9 @@ class StoreLessonRequest extends FormRequest
      */
     public function rules(): array
     {
-        $lessonTypes = ['video', 'document', 'quiz', 'assignment'];
-        $lessonStatuses = ['draft', 'published'];
-
         return [
             'title' => ['required', 'string', 'max:255'],
-            'type' => ['required', Rule::in($lessonTypes)],
+            'type' => ['required', Rule::in(Lesson::TYPES)],
             's3_key' => ['nullable', 'string', 'max:500', 'prohibited_unless:type,video'],
             'video_original_name' => ['nullable', 'string', 'max:255'],
             'video_mime' => ['nullable', 'string', 'max:100'],
@@ -96,33 +94,33 @@ class StoreLessonRequest extends FormRequest
                 'file',
                 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,zip,rar',
                 'max:10240',
-                Rule::prohibitedIf(fn () => ! in_array($this->input('type'), ['document', 'assignment'], true)),
+                Rule::prohibitedIf(fn () => ! in_array($this->input('type'), [Lesson::TYPE_DOCUMENT, Lesson::TYPE_ASSIGNMENT], true)),
             ],
             'assignment_due_days' => [
                 'nullable',
                 'integer',
                 'min:1',
                 'max:3650',
-                Rule::prohibitedIf(fn () => $this->input('type') !== 'assignment'),
+                Rule::prohibitedIf(fn () => $this->input('type') !== Lesson::TYPE_ASSIGNMENT),
             ],
             'assignment_max_score' => [
                 'nullable',
                 'integer',
                 'min:1',
                 'max:1000',
-                Rule::prohibitedIf(fn () => $this->input('type') !== 'assignment'),
+                Rule::prohibitedIf(fn () => $this->input('type') !== Lesson::TYPE_ASSIGNMENT),
             ],
             'assignment_passing_score' => [
                 'nullable',
                 'integer',
                 'min:0',
                 'max:1000',
-                Rule::prohibitedIf(fn () => $this->input('type') !== 'assignment'),
+                Rule::prohibitedIf(fn () => $this->input('type') !== Lesson::TYPE_ASSIGNMENT),
             ],
             'duration' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'is_preview' => ['sometimes', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
-            'status' => ['nullable', Rule::in($lessonStatuses)],
+            'status' => ['nullable', Rule::in(Lesson::STATUSES)],
         ];
     }
 
@@ -137,21 +135,21 @@ class StoreLessonRequest extends FormRequest
                 $lesson = $this->route('lesson');
                 $type = $this->input('type');
 
-                if ($type === 'video' && ! $this->hasVideoContent($lesson)) {
+                if ($type === Lesson::TYPE_VIDEO && ! $this->hasVideoContent($lesson)) {
                     $validator->errors()->add('video_url', 'Vui lòng tải file video bài giảng lên.');
                     $validator->errors()->add('video_file', 'Vui lòng tải file video bài giảng lên.');
                     $validator->errors()->add('video_url', 'Vui lòng tải file video bài giảng lên hoặc nhập Video URL.');
                 }
 
-                if ($type === 'document' && ! $this->hasDocumentContent($lesson)) {
+                if ($type === Lesson::TYPE_DOCUMENT && ! $this->hasDocumentContent($lesson)) {
                     $validator->errors()->add('content', 'Vui lòng nhập nội dung tài liệu hoặc tải tệp tài liệu lên.');
                 }
 
-                if ($type === 'assignment' && ! $this->hasAssignmentContent($lesson)) {
+                if ($type === Lesson::TYPE_ASSIGNMENT && ! $this->hasAssignmentContent($lesson)) {
                     $validator->errors()->add('content', 'Vui lòng nhập yêu cầu bài tập hoặc tải file đính kèm lên.');
                 }
 
-                if ($type === 'assignment'
+                if ($type === Lesson::TYPE_ASSIGNMENT
                     && $this->filled('assignment_max_score')
                     && $this->filled('assignment_passing_score')
                     && $this->integer('assignment_passing_score') > $this->integer('assignment_max_score')) {

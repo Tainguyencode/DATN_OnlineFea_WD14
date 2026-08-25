@@ -105,9 +105,16 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::delete('/study-groups/{studyGroup}', [StudyGroupController::class, 'destroy'])->name('api.study-groups.destroy');
     Route::post('/study-groups/{studyGroup}/join', [StudyGroupController::class, 'join'])->name('api.study-groups.join');
     Route::post('/study-groups/{studyGroup}/leave', [StudyGroupController::class, 'leave'])->name('api.study-groups.leave');
-    Route::get('/study-groups/{studyGroup}/members', [StudyGroupController::class, 'members'])->name('api.study-groups.members');
     Route::post('/study-groups/{studyGroup}/messages', [StudyGroupController::class, 'storeMessage'])->name('api.study-groups.messages.store');
+    Route::post('/study-groups/{studyGroup}/messages/{message}/recall', [StudyGroupController::class, 'recallMessage'])->name('api.study-groups.messages.recall');
     Route::delete('/study-groups/{studyGroup}/members/{user}', [StudyGroupController::class, 'removeMember'])->name('api.study-groups.members.remove');
+
+    // Study Group Invitations API
+    Route::get('/study-groups/{studyGroup}/search-users', [StudyGroupController::class, 'searchUsers'])->name('api.study-groups.search-users');
+    Route::post('/study-groups/{studyGroup}/invite', [StudyGroupController::class, 'invite'])->name('api.study-groups.invite');
+    Route::post('/study-groups/{studyGroup}/invitations/{invitation}/cancel', [StudyGroupController::class, 'cancelInvitation'])->name('api.study-groups.invitations.cancel');
+    Route::post('/study-groups/invitations/{invitation}/accept', [StudyGroupController::class, 'acceptInvitation'])->name('api.study-groups.invitations.accept');
+    Route::post('/study-groups/invitations/{invitation}/reject', [StudyGroupController::class, 'rejectInvitation'])->name('api.study-groups.invitations.reject');
 });
 
 // Session check endpoint (Called every 10-15s by frontend)

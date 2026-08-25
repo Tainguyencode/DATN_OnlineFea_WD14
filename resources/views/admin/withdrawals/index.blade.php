@@ -1,4 +1,4 @@
-<x-admin-layout title="Quản lý Rút tiền Giảng viên" pageTitle="Duyệt Yêu cầu Rút tiền Giảng viên (VietQR Napas247)">
+<x-admin-layout title="Quản lý Rút tiền Giảng viên" page-title="Duyệt Yêu cầu Rút tiền Giảng viên (VietQR Napas247)">
 
     <div x-data="{
         qrModalOpen: false,
@@ -55,23 +55,6 @@
             setTimeout(() => { this.copiedField = null; }, 2000);
         }
     }" class="space-y-6">
-
-        {{-- Session Flash Notifications --}}
-        @if (session('success'))
-            <div class="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-emerald-800 shadow-sm backdrop-blur-sm">
-                <div class="flex items-center gap-3">
-                    <div class="rounded-xl bg-emerald-500/10 p-2 text-emerald-600">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                    </div>
-                    <span class="text-sm font-semibold">{{ session('success') }}</span>
-                </div>
-                <button type="button" @click="$el.parentElement.remove()" class="text-emerald-500 hover:text-emerald-700">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-        @endif
 
         @if ($errors->any())
             <div class="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-rose-800 shadow-sm">
@@ -222,11 +205,18 @@
                                 </td>
 
                                 <td class="px-5 py-4">
-                                    <p class="font-bold text-slate-900 flex items-center gap-1.5">
-                                        {{ $item->bank_name }}
-                                        <span class="rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[10px] px-1.5 py-0.2 uppercase">{{ $item->bank_code ?? 'Napas' }}</span>
-                                    </p>
-                                    <p class="font-mono text-slate-800 font-bold mt-0.5 text-xs">{{ $item->bank_account_number }}</p>
+                                    <div class="flex items-center gap-2">
+                                        <div class="h-7 w-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 shadow-2xs overflow-hidden">
+                                            <img src="https://api.vietqr.io/img/{{ $item->bank_code ?? 'MB' }}.png" alt="{{ $item->bank_name }}" class="max-h-full max-w-full object-contain" onerror="this.style.display='none'">
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                                                {{ $item->bank_name }}
+                                                <span class="rounded bg-emerald-100 text-emerald-800 font-mono font-bold text-[10px] px-1.5 py-0.2 uppercase">{{ $item->bank_code ?? 'Napas' }}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p class="font-mono text-slate-800 font-bold mt-1 text-xs">{{ $item->bank_account_number }}</p>
                                     <p class="text-[11px] text-slate-500 uppercase font-semibold">{{ $item->bank_account_name }}</p>
                                 </td>
 
@@ -373,8 +363,20 @@
                                 
                                 {{-- Ngân hàng --}}
                                 <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex items-center gap-3">
-                                    <div class="h-8 w-8 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 shadow-2xs">
-                                        <span x-text="(bankCode || 'MB').slice(0,3)"></span>
+                                    <div
+                                        class="h-10 w-10 rounded-xl flex items-center justify-center font-black text-xs uppercase tracking-wider shrink-0 shadow-2xs transition"
+                                        :class="{
+                                            'bg-red-600 text-white': (bankCode || '').toUpperCase() === 'TCB',
+                                            'bg-blue-900 text-white': (bankCode || '').toUpperCase() === 'MB',
+                                            'bg-emerald-700 text-white': (bankCode || '').toUpperCase() === 'VCB',
+                                            'bg-emerald-600 text-white': (bankCode || '').toUpperCase() === 'VPB',
+                                            'bg-teal-700 text-white': (bankCode || '').toUpperCase() === 'BIDV',
+                                            'bg-blue-600 text-white': (bankCode || '').toUpperCase() === 'ACB',
+                                            'bg-purple-700 text-white': (bankCode || '').toUpperCase() === 'TPB',
+                                            'bg-slate-800 text-white': !['TCB','MB','VCB','VPB','BIDV','ACB','TPB'].includes((bankCode || '').toUpperCase())
+                                        }"
+                                    >
+                                        <span x-text="(bankCode || 'MB').slice(0,4)"></span>
                                     </div>
                                     <div>
                                         <span class="text-slate-400 font-medium block text-xs">Ngân hàng thụ hưởng</span>

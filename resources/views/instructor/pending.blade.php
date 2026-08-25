@@ -89,21 +89,6 @@
             </form>
         </div>
 
-        {{-- Flash Alerts --}}
-        @if(session('success'))
-            <div class="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-900 shadow-sm dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-200">
-                <svg class="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <div>{{ session('success') }}</div>
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="mb-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-200">
-                <svg class="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <div>{{ session('error') }}</div>
-            </div>
-        @endif
-
         @if($errors->any())
             <div class="mb-6 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-200">
                 <ul class="list-disc list-inside space-y-1">
@@ -392,6 +377,62 @@
                         @endif
                     </div>
 
+                    {{-- Danh sách yêu cầu theo ngành đã đăng ký --}}
+                    @if(!empty($requirementData['requirements']))
+                        <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-5 dark:border-blue-900/30 dark:bg-slate-900 space-y-3">
+                            <div class="flex items-center justify-between border-b border-blue-100 pb-3 dark:border-blue-900/30">
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                        <span class="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] text-white font-bold">Ngành: {{ $requirementData['category']?->name }}</span>
+                                        <span>Danh mục hồ sơ yêu cầu</span>
+                                    </h4>
+                                    <p class="text-xs text-slate-500 mt-0.5">Tất cả tài liệu [Bắt buộc] phải được nộp đầy đủ trước khi gửi hồ sơ xét duyệt.</p>
+                                </div>
+                                @if($requirementData['summary']['can_approve'])
+                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                        ✔ Đã nộp đủ
+                                    </span>
+                                @else
+                                    <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-black text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                        Thiếu {{ $requirementData['summary']['required_missing_count'] + $requirementData['summary']['required_rejected_count'] }} mục bắt buộc
+                                    </span>
+                                @endif
+                            </div>
+
+                            <div class="space-y-2">
+                                @foreach($requirementData['requirements'] as $item)
+                                    @php
+                                        $req = $item['requirement'];
+                                        $status = $item['status'];
+                                    @endphp
+                                    <div class="flex items-center justify-between rounded-xl bg-white p-3 shadow-xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                                        <div class="min-w-0 pr-3">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{{ $req->document_title }}</span>
+                                                @if($req->is_required)
+                                                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-black text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Bắt buộc</span>
+                                                @else
+                                                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">Tùy chọn</span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <div>
+                                            @if($status === 'approved')
+                                                <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                            @elseif($status === 'pending')
+                                                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Đã nộp</span>
+                                            @elseif($status === 'rejected')
+                                                <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
+                                            @else
+                                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">Chưa nộp</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
                     {{-- Danh sách chứng chỉ (Nếu đã upload) --}}
                     @if($certificatesCount > 0)
                         <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 space-y-4">
@@ -521,6 +562,22 @@
                 "
             >
                 @csrf
+
+                @if(!empty($requirementData['requirements']))
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                            Hồ sơ theo ngành ({{ $requirementData['category']?->name ?? 'Chuyên ngành' }}) *
+                        </label>
+                        <select name="requirement_id" class="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                            @foreach($requirementData['requirements'] as $reqItem)
+                                <option value="{{ $reqItem['requirement']->id }}">
+                                    {{ $reqItem['requirement']->document_title }} {{ $reqItem['requirement']->is_required ? '— [Bắt buộc]' : '— [Tùy chọn]' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                         Tên / Tiêu đề chứng chỉ (Tùy chọn)

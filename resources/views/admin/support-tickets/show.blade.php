@@ -1,8 +1,4 @@
 <x-admin-layout title="Chi tiết Ticket" page-title="Chi tiết Ticket hỗ trợ">
-    @if(session('success'))
-        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ session('success') }}</div>
-    @endif
-
     <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
             <p class="font-mono text-sm font-bold text-rose-600">{{ $ticket->code }}</p>

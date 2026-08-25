@@ -88,7 +88,7 @@ class CourseReviewWorkflowTest extends TestCase
     public function test_admin_can_approve_course(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true]);
         $course = $this->makeSubmittableCourse($instructor);
         app(CourseReviewService::class)->submitForReview($course, $instructor);
 

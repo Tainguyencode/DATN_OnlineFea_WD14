@@ -79,6 +79,13 @@ class InstructorPendingController extends Controller
         $deadlineAt = $user->instructor_deadline_at;
         $daysRemaining = $user->instructor_deadline_days_remaining;
 
+        $requirementData = app(\App\Services\InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $categories = \App\Models\Category::query()
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($q) => $q->orderBy('name')])
+            ->orderBy('name')
+            ->get();
+
         return view('instructor.pending', [
             'user' => $user,
             'profile' => $user->instructorProfile,
@@ -88,10 +95,12 @@ class InstructorPendingController extends Controller
             'state' => $state,
             'deadlineAt' => $deadlineAt,
             'daysRemaining' => $daysRemaining,
+            'requirementData' => $requirementData,
+            'categories' => $categories,
         ]);
     }
 
-    public function uploadCertificate(UploadCertificateRequest $request): RedirectResponse
+    public function uploadCertificate(Request $request): RedirectResponse
     {
         $user = $request->user();
 
@@ -101,6 +110,19 @@ class InstructorPendingController extends Controller
             return redirect()->route('student.dashboard')
                 ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ. Tài khoản đã chuyển về Học viên.');
         }
+
+        $request->validate([
+            'requirement_id' => ['nullable', 'integer'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'files' => ['nullable', 'array', 'max:10'],
+            'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+        ], [
+            'files.*.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX.',
+            'files.*.max' => 'Dung lượng mỗi tài liệu tối đa là 10MB.',
+            'file.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX.',
+            'file.max' => 'Dung lượng tài liệu tối đa là 10MB.',
+        ]);
 
         $uploadedCount = 0;
         $files = [];
@@ -112,8 +134,23 @@ class InstructorPendingController extends Controller
         }
 
         if (empty($files)) {
-            return back()->with('error', 'Vui lòng chọn ít nhất một tệp chứng chỉ để tải lên.');
+            return back()->with('error', 'Vui lòng chọn ít nhất một tệp để tải lên.');
         }
+
+        $requirementId = $request->input('requirement_id');
+        $requirement = null;
+
+        if ($requirementId) {
+            $requirement = app(\App\Services\InstructorRequirementService::class)
+                ->validateRequirementForInstructor($user, (int) $requirementId);
+            $documentType = $requirement->document_type;
+            $defaultTitle = $requirement->document_title;
+        } else {
+            $documentType = $request->input('document_type', 'certificate');
+            $defaultTitle = null;
+        }
+
+        $customTitle = $request->input('title') ?: $defaultTitle;
 
         foreach ($files as $file) {
             if (! $file || ! $file->isValid()) {
@@ -133,11 +170,13 @@ class InstructorPendingController extends Controller
 
             InstructorCertificate::create([
                 'user_id' => $user->id,
+                'requirement_id' => $requirement?->id,
                 'file_path' => $storedPath,
                 'original_name' => $originalName,
                 'mime_type' => $mimeType,
                 'file_size' => $fileSize,
-                'title' => $request->input('title') ?: pathinfo($originalName, PATHINFO_FILENAME),
+                'title' => $customTitle ?: pathinfo($originalName, PATHINFO_FILENAME),
+                'document_type' => $documentType,
                 'status' => 'pending',
                 'uploaded_at' => now(),
             ]);
@@ -147,10 +186,11 @@ class InstructorPendingController extends Controller
 
         ActivityLogService::log($user->id, 'upload_instructor_certificate', User::class, $user->id, [
             'uploaded_count' => $uploadedCount,
+            'requirement_id' => $requirement?->id,
         ], $request);
 
         return redirect()->route('instructor.pending')
-            ->with('success', "Đã tải lên thành công {$uploadedCount} chứng chỉ/bằng cấp.");
+            ->with('success', "Đã tải lên {$uploadedCount} tài liệu thành công. Kết quả phân tích AI đã được cập nhật.");
     }
 
     public function deleteCertificate(Request $request, InstructorCertificate $certificate): RedirectResponse
@@ -227,9 +267,15 @@ class InstructorPendingController extends Controller
                 ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ. Tài khoản đã chuyển về Học viên.');
         }
 
+        $completeness = app(\App\Services\InstructorRequirementService::class)->checkCanApproveInstructor($user);
+        if (! $completeness['can_approve']) {
+            $missingList = implode(', ', $completeness['missing_titles']);
+            return back()->with('error', "Hồ sơ của bạn còn thiếu tài liệu bắt buộc: {$missingList}. Vui lòng bổ sung đầy đủ trước khi nộp xét duyệt.");
+        }
+
         $certsCount = $user->instructorCertificates()->count();
         if ($certsCount === 0) {
-            return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ trước khi gửi hồ sơ xét duyệt.');
+            return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ/tài liệu trước khi gửi hồ sơ xét duyệt.');
         }
 
         $user->update([

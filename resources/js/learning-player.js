@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     initLearningSidebar();
     initVideoProgressV2();
+    initYouTubeProgress();
     initQuizPlayer();
     initMarkComplete();
     initCertificateDropdown();
@@ -14,18 +15,31 @@ function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 }
 
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('learning-toast');
-    if (!toast) return;
+function showToast(message, type = 'info') {
+    const normalizedType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
+    const safeMessage = typeof message === 'string' && message.trim() !== ''
+        ? message
+        : 'Đã xảy ra sự cố. Vui lòng thử lại.';
 
-    toast.textContent = message;
-    toast.className = `learning-toast learning-toast--${type}`;
-    toast.hidden = false;
+    if (window.AppToast?.show) {
+        window.AppToast.show({ type: normalizedType, message: safeMessage });
+        return;
+    }
 
-    window.clearTimeout(showToast._timer);
-    showToast._timer = window.setTimeout(() => {
-        toast.hidden = true;
-    }, 2800);
+    console.error('Shared toast API is unavailable.', { type: normalizedType, message: safeMessage });
+}
+
+function createUserFacingError(message) {
+    const error = new Error(message);
+    error.userFacingMessage = typeof message === 'string' && message.trim() !== '' ? message : null;
+
+    return error;
+}
+
+function getUserFacingErrorMessage(error, fallback) {
+    return typeof error?.userFacingMessage === 'string' && error.userFacingMessage.trim() !== ''
+        ? error.userFacingMessage
+        : fallback;
 }
 
 function updateHeaderProgress(percent) {
@@ -184,6 +198,7 @@ function initVideoProgressV2() {
     let completed = video.dataset.initialCompleted === '1';
     let requestInFlight = false;
     let pendingSave = false;
+    let completedSent = completed;
 
     const durationSeconds = () => Math.floor(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint);
     const currentPosition = () => clampVideoTime(video.currentTime || 0, durationSeconds());
@@ -350,6 +365,17 @@ function initVideoProgressV2() {
     video.addEventListener('timeupdate', () => {
         notePlayedSegment();
         sendProgress(false, { silent: true });
+
+        // Auto complete at 95%
+        const duration = durationSeconds();
+        if (duration > 0) {
+            const progress = (video.currentTime / duration) * 100;
+            if (progress >= 95 && !completedSent) {
+                completedSent = true;
+                completed = true;
+                sendCompletionAJAX(progressUrl, Number(video.dataset.lessonId || 0));
+            }
+        }
     });
     video.addEventListener('seeking', () => {
         lastPlayhead = null;
@@ -568,7 +594,7 @@ function initQuizPlayer() {
 
             const data = await response.json();
             if (!response.ok || !data.success) {
-                throw new Error(data.message || 'submit_failed');
+                throw createUserFacingError(data.message || 'Không thể nộp bài quiz.');
             }
 
             active.hidden = true;
@@ -583,7 +609,7 @@ function initQuizPlayer() {
             nextBtn.disabled = false;
             nextBtn.textContent = 'Nộp bài';
             prevBtn.disabled = currentIndex === 0;
-            showToast(error.message || 'Không thể nộp bài quiz.', 'error');
+            showToast(getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'), 'error');
         }
     };
 
@@ -1059,14 +1085,14 @@ function initLessonNotes() {
                     });
                     const data = await parseJsonResponse(response);
                     if (!response.ok || !data.success) {
-                        throw new Error(validationMessage(data, 'Không thể cập nhật ghi chú.'));
+                        throw createUserFacingError(validationMessage(data, 'Không thể cập nhật ghi chú.'));
                     }
                     notes = notes.map((itemNote) => Number(itemNote.id) === Number(note.id) ? data.note : itemNote);
                     showToast('Đã cập nhật ghi chú.');
                     render();
                 } catch (error) {
                     editStatus.className = 'text-xs font-semibold text-rose-600';
-                    editStatus.textContent = error.message || 'Không thể cập nhật ghi chú.';
+                    editStatus.textContent = getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.');
                     save.disabled = false;
                 }
             });
@@ -1088,13 +1114,13 @@ function initLessonNotes() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể xóa ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể xóa ghi chú.'));
                 }
                 notes = notes.filter((itemNote) => Number(itemNote.id) !== Number(note.id));
                 showToast('Đã xóa ghi chú.');
                 render();
             } catch (error) {
-                showToast(error.message || 'Không thể xóa ghi chú.', 'error');
+                showToast(getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'), 'error');
             }
         };
 
@@ -1158,7 +1184,7 @@ function initLessonNotes() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể lưu ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể lưu ghi chú.'));
                 }
 
                 notes.push(data.note);
@@ -1170,8 +1196,9 @@ function initLessonNotes() {
                 syncTimestampFromVideo();
             } catch (error) {
                 statusEl.textContent = '';
-                setError(error.message || 'Không thể lưu ghi chú.');
-                showToast(error.message || 'Không thể lưu ghi chú.', 'error');
+                const message = getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.');
+                setError(message);
+                showToast(message, 'error');
             } finally {
                 createInFlight = false;
                 submitButton.disabled = false;
@@ -1243,7 +1270,7 @@ function initStudyNotesPage() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể cập nhật ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể cập nhật ghi chú.'));
                 }
 
                 content.textContent = data.note.content;
@@ -1253,7 +1280,7 @@ function initStudyNotesPage() {
                 status.textContent = '';
                 showToast('Đã cập nhật ghi chú.');
             } catch (error) {
-                status.textContent = error.message || 'Không thể cập nhật ghi chú.';
+                status.textContent = getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.');
             } finally {
                 inFlight = false;
                 saveButton.disabled = false;
@@ -1278,13 +1305,13 @@ function initStudyNotesPage() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể xóa ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể xóa ghi chú.'));
                 }
                 card.remove();
                 showToast('Đã xóa ghi chú.');
             } catch (error) {
                 deleteButton.disabled = false;
-                showToast(error.message || 'Không thể xóa ghi chú.', 'error');
+                showToast(getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'), 'error');
             } finally {
                 inFlight = false;
             }
@@ -1308,29 +1335,28 @@ function initLessonAi() {
     const askInput = root.querySelector('[data-ai-question-input]');
     const askSubmit = root.querySelector('[data-ai-ask-submit]');
     const askStatus = root.querySelector('[data-ai-ask-status]');
+    const askError = root.querySelector('[data-ai-ask-error]');
     const chatLog = root.querySelector('[data-ai-chat-log]');
 
     let summaryInFlight = false;
     let askInFlight = false;
 
     const aiErrorMessage = (data, fallback) => {
-        if (data?.message) return data.message;
-
         const codeMessages = {
-            missing_api_key: 'Chưa cấu hình GEMINI_API_KEY trong .env.',
-            invalid_api_key: 'Khóa API Gemini không hợp lệ. Hãy tạo key mới tại Google AI Studio.',
-            invalid_model: 'Model Gemini không hợp lệ. Hãy kiểm tra GEMINI_MODEL / GEMINI_FALLBACK_MODELS trong .env.',
-            quota_exceeded: 'Gemini đã hết hạn mức trên các model đã thử. Hãy đợi vài phút hoặc đổi API key.',
+            missing_api_key: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            invalid_api_key: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            invalid_model: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            quota_exceeded: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
             timeout: 'Kết nối AI bị quá thời gian chờ. Vui lòng thử lại.',
-            ssl_error: 'Lỗi chứng chỉ SSL khi gọi Gemini. Kiểm tra cấu hình PHP/Laragon.',
-            connection_error: 'Không kết nối được dịch vụ AI. Kiểm tra mạng rồi thử lại.',
+            ssl_error: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            connection_error: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
             no_source: 'Bài học chưa có đủ nội dung văn bản để dùng AI.',
-            content_blocked: 'Nội dung bị Gemini chặn bởi bộ lọc an toàn.',
+            content_blocked: 'Nội dung này chưa thể được AI xử lý. Vui lòng thử câu hỏi khác.',
             response_truncated: 'Phản hồi AI bị cắt vì quá dài. Hãy hỏi ngắn hơn.',
             empty_response: 'AI không trả về nội dung. Vui lòng thử lại.',
             invalid_response: 'Phản hồi AI không hợp lệ. Vui lòng thử lại.',
             invalid_request: 'Yêu cầu gửi tới AI không hợp lệ.',
-            ai_unavailable: 'Dịch vụ Gemini đang gián đoạn. Vui lòng thử lại sau.',
+            ai_unavailable: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
             forbidden: 'Bạn không có quyền dùng AI hỗ trợ bài học.',
             lesson_mismatch: 'Bài học không thuộc khóa học này.',
             validation: 'Dữ liệu câu hỏi không hợp lệ.',
@@ -1461,18 +1487,42 @@ function initLessonAi() {
         }
     });
 
+    askInput?.addEventListener('input', () => {
+        if (askError) {
+            askError.textContent = '';
+            askError.classList.add('hidden');
+        }
+        if (askStatus && askStatus.textContent === 'Vui lòng nhập câu hỏi.') {
+            askStatus.textContent = '';
+        }
+    });
+
     askForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!explainUrl || askInFlight || !askInput) return;
 
         const question = askInput.value.trim();
         if (!question) {
-            if (askStatus) askStatus.textContent = 'Vui lòng nhập câu hỏi.';
+            if (askError) {
+                askError.textContent = 'Vui lòng nhập câu hỏi.';
+                askError.classList.remove('hidden');
+            }
+            if (askStatus) askStatus.textContent = '';
+            askInput.focus();
             return;
         }
         if (question.length > 1000) {
-            if (askStatus) askStatus.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+            if (askError) {
+                askError.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+                askError.classList.remove('hidden');
+            }
+            if (askStatus) askStatus.textContent = '';
             return;
+        }
+
+        if (askError) {
+            askError.textContent = '';
+            askError.classList.add('hidden');
         }
 
         askInFlight = true;
@@ -1567,8 +1617,6 @@ function initAiStudyAssistant() {
         if (response?.status === 429) {
             return 'Bạn đang gửi câu hỏi quá nhanh. Vui lòng thử lại sau.';
         }
-
-        if (data?.message) return data.message;
 
         const codeMessages = {
             timeout: 'AI đang phản hồi chậm. Vui lòng thử lại.',
@@ -1778,4 +1826,124 @@ function initAiStudyAssistant() {
 
     syncCount();
     syncQuickActions();
+}
+
+function initYouTubeProgress() {
+    const iframe = document.querySelector('iframe[data-lesson-progress-youtube]');
+    if (!iframe) return;
+
+    const progressUrl = iframe.dataset.progressUrl;
+    const lessonId = Number(iframe.dataset.lessonId || 0);
+    let completedSent = iframe.dataset.initialCompleted === '1';
+
+    if (completedSent) return;
+
+    // Load YouTube API if not already present
+    if (!window.YT) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+
+    let ytPollInterval = null;
+
+    const initPlayer = () => {
+        const player = new YT.Player(iframe.id, {
+            events: {
+                'onStateChange': (event) => {
+                    if (event.data === YT.PlayerState.PLAYING) {
+                        if (!ytPollInterval) {
+                            ytPollInterval = setInterval(() => {
+                                const duration = player.getDuration();
+                                const currentTime = player.getCurrentTime();
+                                if (duration > 0) {
+                                    const progress = (currentTime / duration) * 100;
+                                    if (progress >= 95 && !completedSent) {
+                                        completedSent = true;
+                                        clearInterval(ytPollInterval);
+                                        ytPollInterval = null;
+                                        sendCompletionAJAX(progressUrl, lessonId);
+                                    }
+                                }
+                            }, 500);
+                        }
+                    } else {
+                        if (ytPollInterval) {
+                            clearInterval(ytPollInterval);
+                            ytPollInterval = null;
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    const checkAndInit = () => {
+        if (window.YT && window.YT.Player) {
+            initPlayer();
+        } else {
+            setTimeout(checkAndInit, 100);
+        }
+    };
+
+    checkAndInit();
+}
+
+async function sendCompletionAJAX(progressUrl, lessonId) {
+    if (!progressUrl) return;
+
+    try {
+        const response = await fetch(progressUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify({
+                lesson_id: lessonId,
+                progress_percent: 100,
+                completed: true
+            }),
+        });
+
+        if (!response.ok) throw new Error('completion_failed');
+
+        const data = await response.json();
+        
+        // 1. Sidebar đổi icon bài học thành dấu ✓ màu xanh.
+        const currentItem = document.querySelector('[data-current-lesson-item]');
+        if (currentItem) {
+            const iconSpan = currentItem.querySelector('span');
+            if (iconSpan) {
+                iconSpan.innerHTML = '<svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+            }
+            const percentEl = currentItem.querySelector('[data-lesson-progress-percent]');
+            const statusEl = currentItem.querySelector('[data-lesson-progress-status]');
+            if (percentEl) percentEl.textContent = '100%';
+            if (statusEl) statusEl.textContent = 'Hoàn thành';
+        }
+
+        // Cập nhật text tỉ lệ X/Y bài hoàn thành trong sidebar
+        const sidebarProgressText = document.querySelector('[data-learning-sidebar] p.text-xs');
+        if (sidebarProgressText && typeof data.completed_lessons === 'number' && typeof data.total_lessons === 'number') {
+            const percent = typeof data.course_progress === 'number' ? data.course_progress : (data.progress_percent || 0);
+            sidebarProgressText.textContent = `${data.completed_lessons}/${data.total_lessons} bài · ${Math.round(percent)}%`;
+        }
+
+        // 2. Thanh tiến độ trên header cập nhật ngay.
+        if (typeof data.course_progress === 'number') {
+            updateHeaderProgress(data.course_progress);
+        } else if (typeof data.progress_percent === 'number') {
+            updateHeaderProgress(data.progress_percent);
+        }
+
+        // 3. Hiển thị Toast: ✅ Bạn đã hoàn thành bài học!
+        showToast('Bạn đã hoàn thành bài học!', 'success');
+
+    } catch (error) {
+        console.error('Error auto completing lesson:', error);
+    }
 }

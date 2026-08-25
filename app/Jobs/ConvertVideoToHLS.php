@@ -205,6 +205,18 @@ class ConvertVideoToHLS implements ShouldQueue
                 'status' => 'published',
             ];
 
+            // Trích xuất chính xác thời lượng video
+            try {
+                $ffprobe = \FFMpeg\FFProbe::create($ffmpegConfig);
+                $extractedDuration = (int) round((float) $ffprobe->format($localInputPath)->get('duration'));
+                if ($extractedDuration > 0) {
+                    $updateData['duration_seconds'] = $extractedDuration;
+                    $updateData['duration'] = $extractedDuration;
+                }
+            } catch (\Throwable $probeEx) {
+                Log::warning("[ConvertVideoToHLS] Could not probe video duration: " . $probeEx->getMessage());
+            }
+
             if ($useS3) {
                 $updateData['hls_manifest_key'] = $s3HlsDir . '/master.m3u8';
             }
@@ -215,6 +227,7 @@ class ConvertVideoToHLS implements ShouldQueue
 
             Log::info("[ConvertVideoToHLS] [SAVE DATABASE] Database updated successfully", [
                 'lesson_id' => $lessonId,
+                'duration_seconds' => $updateData['duration_seconds'] ?? $this->lesson->duration_seconds,
                 'hls_manifest_key' => $updateData['hls_manifest_key'] ?? null,
                 'video_path' => $updateData['video_path'],
                 'processing_status' => 'completed',

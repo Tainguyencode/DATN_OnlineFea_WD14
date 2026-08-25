@@ -90,14 +90,16 @@
                                     <span class="text-slate-600 dark:text-slate-300 text-xs">
                                         {{ $submission->submitted_at?->format('d/m/Y H:i') ?? 'N/A' }}
                                     </span>
-                                    @if($submission->isLate())
-                                        <span class="block mt-1 w-fit rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
-                                            Nộp trễ
-                                        </span>
-                                    @else
-                                        <span class="block mt-1 w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
-                                            Đúng hạn
-                                        </span>
+                                    @if($submission->assignment?->due_date)
+                                        @if($submission->isLate())
+                                            <span class="block mt-1 w-fit rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
+                                                Nộp trễ
+                                            </span>
+                                        @else
+                                            <span class="block mt-1 w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
+                                                Đúng hạn
+                                            </span>
+                                        @endif
                                     @endif
                                 </td>
 
@@ -131,8 +133,8 @@
                                 </td>
 
                                 <!-- Điểm -->
-                                <td class="px-6 py-4 font-bold text-slate-800 dark:text-slate-100">
-                                    {{ $submission->score !== null ? $submission->score . ' / ' . ($submission->assignment->max_score ?? 100) : '—' }}
+                                <td class="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                                    {{ $submission->score !== null ? floatval($submission->score) . '/' . ($submission->assignment->max_score ?? 100) : '—' }}
                                 </td>
 
                                 <!-- Hành động -->

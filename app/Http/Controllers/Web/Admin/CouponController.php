@@ -5,10 +5,17 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreCouponRequest;
 use App\Models\Coupon;
+use App\Models\Course;
+use App\Models\MonthlyRewardLog;
 use App\Models\Order;
+use App\Models\SystemSetting;
+use App\Models\User;
+use App\Models\UserCoupon;
 use App\Services\ActivityLogService;
+use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -154,5 +161,136 @@ class CouponController extends Controller
         return redirect()
             ->route('admin.coupons.index')
             ->with('success', 'Đã xóa mã giảm giá thành công.');
+    }
+
+    /**
+     * Giao diện cấu hình phần thưởng TOP Bảng Xếp Hạng Tháng.
+     */
+    public function rewardConfigForm(): View
+    {
+        $configs = [
+            1 => [
+                'type' => SystemSetting::get('leaderboard_reward_top1_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top1_value', 40),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top1_expiry_days', 30),
+            ],
+            2 => [
+                'type' => SystemSetting::get('leaderboard_reward_top2_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top2_value', 30),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top2_expiry_days', 30),
+            ],
+            3 => [
+                'type' => SystemSetting::get('leaderboard_reward_top3_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top3_value', 20),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top3_expiry_days', 30),
+            ],
+            '4_9' => [
+                'type' => SystemSetting::get('leaderboard_reward_top4_9_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top4_9_value', 15),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top4_9_expiry_days', 30),
+            ],
+            '10_50' => [
+                'type' => SystemSetting::get('leaderboard_reward_top10_50_type', 'percent'),
+                'value' => SystemSetting::get('leaderboard_reward_top10_50_value', 10),
+                'expiry_days' => SystemSetting::get('leaderboard_reward_top10_50_expiry_days', 30),
+            ],
+        ];
+
+        return view('admin.coupons.reward_config', compact('configs'));
+    }
+
+    /**
+     * Lưu cấu hình phần thưởng TOP Bảng Xếp Hạng Tháng.
+     */
+    public function rewardConfigStore(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'top1_type' => 'required|in:fixed,percent',
+            'top1_value' => 'required|numeric|min:0.01',
+            'top1_expiry_days' => 'required|integer|min:1',
+
+            'top2_type' => 'required|in:fixed,percent',
+            'top2_value' => 'required|numeric|min:0.01',
+            'top2_expiry_days' => 'required|integer|min:1',
+
+            'top3_type' => 'required|in:fixed,percent',
+            'top3_value' => 'required|numeric|min:0.01',
+            'top3_expiry_days' => 'required|integer|min:1',
+
+            'top4_9_type' => 'required|in:fixed,percent',
+            'top4_9_value' => 'required|numeric|min:0.01',
+            'top4_9_expiry_days' => 'required|integer|min:1',
+
+            'top10_50_type' => 'required|in:fixed,percent',
+            'top10_50_value' => 'required|numeric|min:0.01',
+            'top10_50_expiry_days' => 'required|integer|min:1',
+        ], [
+            'top1_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 1.',
+            'top2_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 2.',
+            'top3_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 3.',
+            'top4_9_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 4 - TOP 9.',
+            'top10_50_value.required' => 'Vui lòng nhập giá trị giảm cho TOP 10 - TOP 50.',
+            'top1_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top2_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top3_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top4_9_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+            'top10_50_expiry_days.min' => 'Hạn sử dụng tối thiểu là 1 ngày.',
+        ]);
+
+        SystemSetting::set('leaderboard_reward_top1_type', $validated['top1_type']);
+        SystemSetting::set('leaderboard_reward_top1_value', $validated['top1_value']);
+        SystemSetting::set('leaderboard_reward_top1_expiry_days', $validated['top1_expiry_days']);
+
+        SystemSetting::set('leaderboard_reward_top2_type', $validated['top2_type']);
+        SystemSetting::set('leaderboard_reward_top2_value', $validated['top2_value']);
+        SystemSetting::set('leaderboard_reward_top2_expiry_days', $validated['top2_expiry_days']);
+
+        SystemSetting::set('leaderboard_reward_top3_type', $validated['top3_type']);
+        SystemSetting::set('leaderboard_reward_top3_value', $validated['top3_value']);
+        SystemSetting::set('leaderboard_reward_top3_expiry_days', $validated['top3_expiry_days']);
+
+        SystemSetting::set('leaderboard_reward_top4_9_type', $validated['top4_9_type']);
+        SystemSetting::set('leaderboard_reward_top4_9_value', $validated['top4_9_value']);
+        SystemSetting::set('leaderboard_reward_top4_9_expiry_days', $validated['top4_9_expiry_days']);
+
+        SystemSetting::set('leaderboard_reward_top10_50_type', $validated['top10_50_type']);
+        SystemSetting::set('leaderboard_reward_top10_50_value', $validated['top10_50_value']);
+        SystemSetting::set('leaderboard_reward_top10_50_expiry_days', $validated['top10_50_expiry_days']);
+
+        return redirect()
+            ->route('admin.coupons.reward_config')
+            ->with('success', '🏆 Cấu hình phần thưởng TOP Bảng Xếp Hạng Tháng đã được lưu thành công.');
+    }
+
+    /**
+     * Chạy trao thưởng thủ công ngay lập tức từ Admin UI cho tháng chỉ định.
+     */
+    public function rewardRunNow(Request $request): RedirectResponse
+    {
+        $period = $request->input('period', now()->subMonth()->format('Y-m'));
+
+        Artisan::call('leaderboard:reward-monthly', [
+            '--period' => $period,
+        ]);
+
+        $output = Artisan::output();
+
+        return redirect()
+            ->route('admin.coupons.reward_history')
+            ->with('success', "Đã kích hoạt tiến trình trao thưởng tháng {$period}. Kết quả: " . trim($output));
+    }
+
+    /**
+     * Hiển thị Lịch sử tự động trao thưởng TOP Bảng Xếp Hạng Tháng.
+     */
+    public function rewardHistory(Request $request): View
+    {
+        $rewards = MonthlyRewardLog::query()
+            ->with(['user:id,name,email,avatar', 'coupon', 'userCoupon'])
+            ->orderByDesc('period_key')
+            ->orderBy('rank')
+            ->paginate(15);
+
+        return view('admin.coupons.reward_history', compact('rewards'));
     }
 }

@@ -6,10 +6,11 @@
     };
     $roleLabels = ['admin' => 'Quản trị viên', 'instructor' => 'Giảng viên', 'student' => 'Học viên'];
     $profileUpdateRoute = match (true) {
-        request()->routeIs('admin.*') => route('admin.profile.update'),
-        request()->routeIs('instructor.*') => route('instructor.profile.update'),
-        request()->routeIs('student.*') => route('student.profile.update'),
-        default => route('profile.update'),
+        request()->routeIs('admin.*') && \Illuminate\Support\Facades\Route::has('admin.profile.update') => route('admin.profile.update'),
+        request()->routeIs('instructor.*') && \Illuminate\Support\Facades\Route::has('instructor.profile.update') => route('instructor.profile.update'),
+        request()->routeIs('student.*') && \Illuminate\Support\Facades\Route::has('student.profile.update') => route('student.profile.update'),
+        \Illuminate\Support\Facades\Route::has('profile.update') => route('profile.update'),
+        default => url('/profile'),
     };
 @endphp
 
