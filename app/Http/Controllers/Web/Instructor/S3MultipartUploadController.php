@@ -7,6 +7,7 @@ use App\Models\Course;
 use App\Services\AwsS3UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -55,10 +56,14 @@ class S3MultipartUploadController extends Controller
                 'bucket' => $this->s3Service->getBucket(),
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 CreateMultipartUpload Error: ' . $e->getMessage());
+            Log::error('S3 multipart upload initialization failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'lesson_id' => $lessonId,
+            ]);
 
             return response()->json([
-                'message' => 'Không thể khởi tạo phiên tải lên S3: ' . $e->getMessage(),
+                'message' => 'Không thể bắt đầu tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -93,10 +98,14 @@ class S3MultipartUploadController extends Controller
                 'presignedUrls' => $presignedUrls,
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 SignPart Error: ' . $e->getMessage());
+            Log::error('S3 multipart batch signing failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'part_count' => count($partNumbers),
+            ]);
 
             return response()->json([
-                'message' => 'Lỗi tạo chữ ký upload part: ' . $e->getMessage(),
+                'message' => 'Không thể chuẩn bị tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -124,10 +133,14 @@ class S3MultipartUploadController extends Controller
                 'url' => $url,
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 SignPart Single Error: ' . $e->getMessage());
+            Log::error('S3 multipart part signing failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'part_number' => (int) $validated['partNumber'],
+            ]);
 
             return response()->json([
-                'message' => 'Lỗi tạo chữ ký upload part: ' . $e->getMessage(),
+                'message' => 'Không thể chuẩn bị tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -159,10 +172,14 @@ class S3MultipartUploadController extends Controller
                 'location' => $result['location'] ?? null,
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 CompleteMultipartUpload Error: ' . $e->getMessage());
+            Log::error('S3 multipart upload completion failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'part_count' => count($validated['parts']),
+            ]);
 
             return response()->json([
-                'message' => 'Lỗi ghép file trên S3: ' . $e->getMessage(),
+                'message' => 'Không thể hoàn tất tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }

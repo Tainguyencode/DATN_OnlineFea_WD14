@@ -3,6 +3,23 @@
  * Optimized for High-Speed Concurrent Uploads (Supports 50MB, 100MB, 500MB, 1GB - 5GB+)
  * Features: Multi-Thread Parallel Upload (4-5 workers), Dynamic Chunk Sizing, Live MB/s, Accurate ETA, Auto-Retry, Cancel
  */
+const S3_UPLOAD_PUBLIC_ERROR = 'Không thể tải video lên lúc này. Vui lòng thử lại.';
+
+function createS3UploadUserError(message) {
+    const error = new Error(message);
+    error.isUserFacing = true;
+
+    return error;
+}
+
+function toS3UploadUserError(error) {
+    if (error?.isUserFacing && typeof error.message === 'string' && error.message.trim() !== '') {
+        return error;
+    }
+
+    return createS3UploadUserError(S3_UPLOAD_PUBLIC_ERROR);
+}
+
 class S3MultipartUploader {
     constructor(options = {}) {
         this.courseId = options.courseId;
@@ -49,7 +66,7 @@ class S3MultipartUploader {
 
     async upload(file) {
         if (!file) {
-            throw new Error('Vui lòng chọn file video.');
+            throw createS3UploadUserError('Vui lòng chọn tệp video để tải lên.');
         }
 
         this.isCancelled = false;
@@ -84,7 +101,11 @@ class S3MultipartUploader {
 
             if (!initResponse.ok) {
                 const errData = await initResponse.json().catch(() => ({}));
-                throw new Error(errData.message || 'Không thể tạo phiên upload trên S3.');
+                throw createS3UploadUserError(
+                    typeof errData.message === 'string' && errData.message.trim() !== ''
+                        ? errData.message
+                        : S3_UPLOAD_PUBLIC_ERROR
+                );
             }
 
             const initData = await initResponse.json();
@@ -137,7 +158,11 @@ class S3MultipartUploader {
 
             if (!completeResponse.ok) {
                 const errData = await completeResponse.json().catch(() => ({}));
-                throw new Error(errData.message || 'Không thể ghép các phần trên S3.');
+                throw createS3UploadUserError(
+                    typeof errData.message === 'string' && errData.message.trim() !== ''
+                        ? errData.message
+                        : S3_UPLOAD_PUBLIC_ERROR
+                );
             }
 
             const completeData = await completeResponse.json();
@@ -158,8 +183,9 @@ class S3MultipartUploader {
                 this.onStatusChange('cancelled', 'Đã hủy tải lên.');
                 return;
             }
-            this.onStatusChange('error', error.message || 'Lỗi tải lên S3');
-            this.onError(error);
+            const userFacingError = toS3UploadUserError(error);
+            this.onStatusChange('error', userFacingError.message);
+            this.onError(userFacingError);
             throw error;
         }
     }
@@ -457,7 +483,7 @@ function createLessonFormState(config) {
                 onError: (err) => {
                     this.isUploading = false;
                     this.uploadStatus = 'error';
-                    this.uploadStatusMessage = err.message || 'Lỗi tải lên S3';
+                    this.uploadStatusMessage = toS3UploadUserError(err).message;
                 }
             });
 
