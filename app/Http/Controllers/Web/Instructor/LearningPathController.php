@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Instructor\StoreLearningPathRequest;
+use App\Http\Requests\Instructor\UpdateLearningPathRequest;
 use App\Models\Course;
 use App\Models\LearningPath;
 use Illuminate\Http\RedirectResponse;
@@ -51,22 +53,9 @@ class LearningPathController extends Controller
     /**
      * Lưu Lộ trình học tập mới của Giảng viên.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreLearningPathRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'level' => 'required|in:beginner,intermediate,advanced',
-            'target_role' => 'nullable|string|max:255',
-            'salary_range' => 'nullable|string|max:255',
-            'estimated_duration' => 'nullable|string|max:255',
-            'skills_input' => 'nullable|string',
-            'is_featured' => 'nullable|boolean',
-            'courses' => 'nullable|array',
-            'courses.*' => 'exists:courses,id',
-            'sort_orders' => 'nullable|array',
-            'stage_names' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         // Đảm bảo chỉ được chọn các khóa học do chính Giảng viên này làm chủ
         $instructorCourseIds = Course::where('instructor_id', auth()->id())->pluck('id')->toArray();
@@ -133,24 +122,11 @@ class LearningPathController extends Controller
     /**
      * Cập nhật Lộ trình học tập của Giảng viên.
      */
-    public function update(Request $request, LearningPath $learningPath): RedirectResponse
+    public function update(UpdateLearningPathRequest $request, LearningPath $learningPath): RedirectResponse
     {
         $this->authorizeInstructor($learningPath);
 
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'level' => 'required|in:beginner,intermediate,advanced',
-            'target_role' => 'nullable|string|max:255',
-            'salary_range' => 'nullable|string|max:255',
-            'estimated_duration' => 'nullable|string|max:255',
-            'skills_input' => 'nullable|string',
-            'is_featured' => 'nullable|boolean',
-            'courses' => 'nullable|array',
-            'courses.*' => 'exists:courses,id',
-            'sort_orders' => 'nullable|array',
-            'stage_names' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         // Đảm bảo chỉ được chọn các khóa học do chính Giảng viên này làm chủ
         $instructorCourseIds = Course::where('instructor_id', auth()->id())->pluck('id')->toArray();
