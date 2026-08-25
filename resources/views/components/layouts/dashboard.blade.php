@@ -212,6 +212,5 @@
         @endforeach
     </nav>
     <div class="h-16 lg:hidden"></div>
-    <div id="learning-toast" class="learning-toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

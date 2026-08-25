@@ -13,7 +13,6 @@
 </head>
 <body class="learning-player-body min-h-screen bg-white font-sans text-[#1c1d1f] antialiased">
     @yield('content')
-    <div id="learning-toast" class="learning-toast" role="status" aria-live="polite" hidden></div>
     
     @auth
     <script>

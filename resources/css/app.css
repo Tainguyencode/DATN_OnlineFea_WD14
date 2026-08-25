@@ -955,12 +955,6 @@ html.dark body.admin-shell hr {
     border-color: var(--admin-border) !important;
 }
 
-html.dark body.admin-shell .learning-toast {
-    border-color: var(--admin-border);
-    background: var(--admin-surface-raised);
-    color: var(--admin-text-primary);
-}
-
 html.dark body.admin-shell .admin-dashboard .admin-dashboard-scrollbar {
     scrollbar-color: var(--admin-border-strong) transparent;
 }
@@ -1102,28 +1096,6 @@ html {
     .learning-sidebar.learning-sidebar--closed {
         transform: translateX(100%);
     }
-}
-
-.learning-toast {
-    position: fixed;
-    right: 1rem;
-    bottom: 1rem;
-    z-index: 60;
-    max-width: 20rem;
-    border-radius: 6px;
-    border: 1px solid #d1d7dc;
-    background: #fff;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #1c1d1f;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-.learning-toast--error {
-    border-color: #fecaca;
-    background: #fef2f2;
-    color: #991b1b;
 }
 
 /* Role & Permission admin module */
