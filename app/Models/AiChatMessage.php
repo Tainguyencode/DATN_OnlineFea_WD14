@@ -14,7 +14,15 @@ class AiChatMessage extends Model
         'learning_path_id',
         'role',
         'content',
+        'metadata',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+        ];
+    }
 
     public function conversation(): BelongsTo
     {

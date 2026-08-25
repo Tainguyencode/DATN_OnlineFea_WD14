@@ -2,17 +2,6 @@
 
 <div class="mx-auto max-w-5xl">
 
-    @if ($errors->any())
-        <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-            <p class="font-bold">Vui lòng kiểm tra lại thông tin mã giảm giá.</p>
-            <ul class="mt-2 list-inside list-disc space-y-1">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
     @if (session('error'))
         <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-800">
             {{ session('error') }}

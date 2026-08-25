@@ -170,6 +170,10 @@
 
                                 {{-- Teaching Category --}}
                                 <td class="px-6 py-4">
+                                    @php
+                                        $categories = $app->getTeachingCategories();
+                                        $primaryCategory = $categories->firstWhere('pivot.is_primary', true) ?? $categories->first();
+                                        $additionalCount = max(0, $categories->count() - 1);
                                     @endphp
                                     <div class="max-w-xs">
                                         @if($primaryCategory)

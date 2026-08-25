@@ -18,6 +18,7 @@ class S3MultipartUploader {
         this.concurrency = options.concurrency || 4;
         this.maxRetries = options.maxRetries || 3;
 
+        this.onInit = options.onInit || (() => {});
         this.onProgress = options.onProgress || (() => {});
         this.onSuccess = options.onSuccess || (() => {});
         this.onError = options.onError || (() => {});
@@ -90,6 +91,10 @@ class S3MultipartUploader {
             const initData = await initResponse.json();
             this.uploadId = initData.uploadId;
             this.s3Key = initData.key;
+
+            if (typeof this.onInit === 'function') {
+                this.onInit(initData);
+            }
 
             if (this.isCancelled) return;
 
@@ -323,15 +328,10 @@ class S3MultipartUploader {
         });
     }
 
-    cancel() {
-        this.isCancelled = true;
-        this.activeXhrs.forEach(xhr => {
-            try { xhr.abort(); } catch (_) {}
-        });
-        this.activeXhrs = [];
-
-        if (this.s3Key && this.uploadId) {
-            fetch(this.abortUrl, {
+    async abortMultipartUpload() {
+        if (!this.uploadId || !this.s3Key) return;
+        try {
+            await fetch(this.abortUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -342,9 +342,19 @@ class S3MultipartUploader {
                     key: this.s3Key,
                     uploadId: this.uploadId,
                 }),
-            }).catch(() => {});
+            });
+        } catch (e) {
+            console.warn('S3 AbortMultipartUpload failed:', e);
         }
+    }
 
+    cancel() {
+        this.isCancelled = true;
+        this.activeXhrs.forEach(xhr => {
+            try { xhr.abort(); } catch (e) {}
+        });
+        this.activeXhrs = [];
+        this.abortMultipartUpload();
         this.onStatusChange('cancelled', 'Đã hủy tải lên.');
     }
 
@@ -354,12 +364,13 @@ class S3MultipartUploader {
             video.preload = 'metadata';
             const url = URL.createObjectURL(file);
 
-            video.onloadedmetadata = () => {
+            video.onloadedmetadata = function () {
                 URL.revokeObjectURL(url);
-                resolve(Math.round(video.duration || 0));
+                const dur = Math.round(video.duration || 0);
+                resolve(dur);
             };
 
-            video.onerror = () => {
+            video.onerror = function () {
                 URL.revokeObjectURL(url);
                 resolve(0);
             };
@@ -368,15 +379,17 @@ class S3MultipartUploader {
         });
     }
 
-    formatBytes(bytes) {
+    formatBytes(bytes, decimals = 2) {
         if (!bytes || bytes === 0) return '0 B';
         const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     }
 
     formatSpeed(bytesPerSecond) {
+        if (!bytesPerSecond || bytesPerSecond <= 0) return '0 B/s';
         return this.formatBytes(bytesPerSecond) + '/s';
     }
 
@@ -388,6 +401,187 @@ class S3MultipartUploader {
         return minutes + 'm ' + (remainingSec > 0 ? remainingSec + 's' : '');
     }
 }
+
+class CourseUploadQueueManager {
+    constructor() {
+        this.queue = [];
+        this.activeUploader = null;
+    }
+
+    addUpload(item) {
+        const queueItem = {
+            id: item.id || ('upl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+            title: item.title || item.file.name,
+            filename: item.file.name,
+            file: item.file,
+            size: item.file.size,
+            percent: 0,
+            status: 'queued', // 'queued' | 'uploading' | 'completed' | 'error'
+            statusText: 'Chờ tải',
+            key: item.key || '',
+            uploadId: item.uploadId || '',
+            config: item,
+            uploader: null
+        };
+
+        this.queue.push(queueItem);
+        this.render();
+        this.processNext();
+        return queueItem;
+    }
+
+    processNext() {
+        const active = this.queue.find(i => i.status === 'uploading');
+        if (active) return;
+
+        const next = this.queue.find(i => i.status === 'queued');
+        if (!next) {
+            this.render();
+            return;
+        }
+
+        next.status = 'uploading';
+        next.statusText = 'Đang tải';
+        this.render();
+
+        const uploader = new S3MultipartUploader({
+            courseId: next.config.courseId,
+            lessonId: next.config.lessonId,
+            createUrl: next.config.createUrl,
+            signPartUrl: next.config.signPartUrl,
+            completeUrl: next.config.completeUrl,
+            abortUrl: next.config.abortUrl,
+            concurrency: 4,
+            onInit: (initData) => {
+                next.key = initData.key;
+                next.uploadId = initData.uploadId;
+                if (typeof next.config.onInit === 'function') {
+                    next.config.onInit(initData);
+                }
+            },
+            onProgress: (prog) => {
+                next.percent = prog.percent;
+                next.statusText = `${prog.percent}%`;
+                this.render();
+
+                if (typeof next.config.onProgress === 'function') {
+                    next.config.onProgress(prog);
+                }
+            },
+            onSuccess: (data) => {
+                next.status = 'completed';
+                next.key = data.key;
+
+                if (typeof next.config.onSuccess === 'function') {
+                    next.config.onSuccess(data);
+                }
+
+                this.queue = this.queue.filter(i => i.id !== next.id);
+                this.render();
+
+                if (window.triggerHlsPolling) {
+                    window.triggerHlsPolling();
+                }
+
+                this.processNext();
+            },
+            onError: (err) => {
+                next.status = 'error';
+                next.statusText = 'Lỗi tải lên';
+                this.render();
+
+                if (typeof next.config.onError === 'function') {
+                    next.config.onError(err);
+                }
+
+                this.processNext();
+            }
+        });
+
+        uploader.s3Key = next.key || null;
+        next.uploader = uploader;
+        this.activeUploader = uploader;
+
+        uploader.upload(next.file).catch(err => {
+            console.error('Queue upload error for', next.filename, err);
+        });
+    }
+
+    cancelUpload(itemId) {
+        const item = this.queue.find(i => i.id === itemId);
+        if (!item) return;
+
+        if (item.uploader) {
+            item.uploader.cancel();
+        }
+
+        this.queue = this.queue.filter(i => i.id !== itemId);
+        this.render();
+        this.processNext();
+    }
+
+    render() {
+        const panel = document.getElementById('global-video-upload-queue-panel');
+        if (!panel) return;
+
+        const activeItems = this.queue.filter(i => i.status === 'uploading' || i.status === 'queued');
+
+        if (activeItems.length === 0) {
+            panel.classList.add('hidden');
+            panel.innerHTML = '';
+            return;
+        }
+
+        panel.classList.remove('hidden');
+
+        let html = `
+            <div class="rounded-xl border border-indigo-200 bg-indigo-50/80 p-4 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-2">
+                        <svg class="animate-spin h-3.5 w-3.5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>VIDEO ĐANG TẢI</span>
+                    </h4>
+                    <span class="text-xs font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">${activeItems.length} video</span>
+                </div>
+                <div class="space-y-2">
+        `;
+
+        activeItems.forEach(item => {
+            const isUploading = item.status === 'uploading';
+            html += `
+                <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-indigo-100 shadow-2xs text-xs">
+                    <div class="min-w-0 flex-1 pr-3">
+                        <div class="flex items-center justify-between font-bold text-slate-800 mb-1">
+                            <span class="truncate max-w-xs">${item.title}</span>
+                            <span class="font-mono text-indigo-600">${isUploading ? (item.percent + '%') : 'Chờ tải'}</span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2 rounded-full transition-all duration-300" style="width: ${item.percent}%"></div>
+                        </div>
+                    </div>
+                    <div class="shrink-0 flex items-center gap-2">
+                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold ${isUploading ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}">
+                            ${isUploading ? 'Đang tải' : 'Đang chờ'}
+                        </span>
+                        <button type="button" onclick="window.CourseUploadQueue.cancelUpload('${item.id}')" class="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer text-[11px]">Hủy</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+
+        panel.innerHTML = html;
+    }
+}
+
+const CourseUploadQueue = new CourseUploadQueueManager();
 
 function createLessonFormState(config) {
     return {
@@ -404,30 +598,56 @@ function createLessonFormState(config) {
         videoOriginalName: config.videoOriginalName || '',
         videoSize: config.videoSize || '',
         videoMime: config.videoMime || '',
-        uploaderInstance: null,
+        processingStatus: config.processingStatus || '',
+        hlsManifestKey: config.hlsManifestKey || '',
+        videoPath: config.videoPath || '',
+        courseId: config.courseId,
+        lessonId: config.lessonId || null,
+        createUrl: config.createUrl,
+        signPartUrl: config.signPartUrl,
+        completeUrl: config.completeUrl,
+        abortUrl: config.abortUrl,
+        currentQueueId: null,
+
+        generateS3Key(filename) {
+            const ext = (filename.split('.').pop() || 'mp4').toLowerCase();
+            const safeExt = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'].includes(ext) ? ext : 'mp4';
+            const uuid = 'u' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+            const lessonPart = this.lessonId ? this.lessonId : ('temp_' + Date.now().toString(36));
+            return `originals/courses/${this.courseId}/lessons/${lessonPart}/${uuid}.${safeExt}`;
+        },
 
         startS3Upload(event) {
-            const file = event.target.files[0];
+            const file = event.target.files && event.target.files[0];
             if (!file) return;
 
             const formElement = event.target.closest('form');
+            const titleInput = formElement ? formElement.querySelector("input[name='title']") : null;
+            const lessonTitle = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : file.name;
+
+            const preKey = this.generateS3Key(file.name);
+            this.s3Key = preKey;
+            this.videoOriginalName = file.name;
+            this.videoSize = file.size;
+            this.videoMime = file.type || 'video/mp4';
 
             this.isUploading = true;
             this.uploadProgress = 0;
             this.uploadStatus = 'uploading';
-            this.uploadStatusMessage = 'Đang chuẩn bị tải lên S3...';
+            this.uploadStatusMessage = 'Đã đưa vào hàng chờ tải lên...';
 
-            this.uploaderInstance = new S3MultipartUploader({
-                courseId: config.courseId,
-                lessonId: config.lessonId,
-                createUrl: config.createUrl,
-                signPartUrl: config.signPartUrl,
-                completeUrl: config.completeUrl,
-                abortUrl: config.abortUrl,
-                concurrency: 4, // 4 luồng song song
-                onStatusChange: (status, message) => {
-                    this.uploadStatus = status;
-                    this.uploadStatusMessage = message;
+            const queueItem = CourseUploadQueue.addUpload({
+                title: lessonTitle,
+                file: file,
+                key: preKey,
+                courseId: this.courseId,
+                lessonId: this.lessonId,
+                createUrl: this.createUrl,
+                signPartUrl: this.signPartUrl,
+                completeUrl: this.completeUrl,
+                abortUrl: this.abortUrl,
+                onInit: (initData) => {
+                    this.s3Key = initData.key;
                 },
                 onProgress: (prog) => {
                     this.uploadProgress = prog.percent;
@@ -461,14 +681,95 @@ function createLessonFormState(config) {
                 }
             });
 
-            this.uploaderInstance.upload(file).catch(err => {
-                console.error('S3 Upload Error:', err);
-            });
+            this.currentQueueId = queueItem.id;
+        },
+
+        async submitLessonForm(event) {
+            const form = event.target;
+            const isCreateForm = !this.lessonId;
+
+            if (isCreateForm && window.fetch) {
+                event.preventDefault();
+
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const origBtnText = submitBtn ? submitBtn.innerHTML : '';
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="flex items-center gap-1.5"><svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Đang lưu...</span></span>';
+                }
+
+                try {
+                    const formData = new FormData(form);
+                    if (this.s3Key) {
+                        formData.set('s3_key', this.s3Key);
+                    }
+                    if (this.videoOriginalName) {
+                        formData.set('video_original_name', this.videoOriginalName);
+                    }
+                    if (this.videoSize) {
+                        formData.set('video_size', this.videoSize);
+                    }
+                    if (this.videoMime) {
+                        formData.set('video_mime', this.videoMime);
+                    }
+
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const titleInput = form.querySelector('input[name="title"]');
+                        if (titleInput) titleInput.value = '';
+
+                        const durationInput = form.querySelector('input[name="duration"]');
+                        if (durationInput) durationInput.value = '';
+
+                        const contentInput = form.querySelector('textarea[name="content"]');
+                        if (contentInput) contentInput.value = '';
+
+                        const fileInput = this.$refs.s3FileInput;
+                        if (fileInput) fileInput.value = '';
+
+                        this.s3Key = '';
+                        this.videoOriginalName = '';
+                        this.videoSize = '';
+                        this.videoMime = '';
+                        this.isUploading = false;
+                        this.uploadProgress = 0;
+                        this.uploadStatus = 'idle';
+                        this.uploadStatusMessage = '';
+
+                        if (window.triggerHlsPolling) {
+                            window.triggerHlsPolling();
+                        }
+
+                        if (window.showCurriculumToast) {
+                            window.showCurriculumToast('Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.');
+                        }
+                    } else {
+                        form.submit();
+                    }
+                } catch (e) {
+                    console.error('AJAX lesson submit error, falling back:', e);
+                    form.submit();
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = origBtnText;
+                    }
+                }
+            }
         },
 
         cancelS3Upload() {
-            if (this.uploaderInstance) {
-                this.uploaderInstance.cancel();
+            if (this.currentQueueId) {
+                CourseUploadQueue.cancelUpload(this.currentQueueId);
+                this.currentQueueId = null;
             }
             this.isUploading = false;
             this.uploadProgress = 0;
@@ -484,11 +785,150 @@ function createLessonFormState(config) {
             this.videoOriginalName = '';
             this.videoSize = '';
             this.videoMime = '';
+            this.uploadStatus = 'idle';
+            this.uploadStatusMessage = '';
         }
     };
 }
 
+function showCurriculumToast(message, isError = false) {
+    let toast = document.getElementById('curriculum-floating-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'curriculum-floating-toast';
+        toast.className = 'fixed bottom-5 right-5 z-50 transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-none';
+        document.body.appendChild(toast);
+    }
+
+    toast.innerHTML = `
+        <div class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-bold ${isError ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-600 text-white border-emerald-700'}">
+            <span>${isError ? '⚠️' : '✅'}</span>
+            <span>${message}</span>
+        </div>
+    `;
+
+    toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
+    }, 4000);
+}
+
+/**
+ * Polling trạng thái HLS tự động trên trang Curriculum cấp Course
+ * Cập nhật DUY NHẤT 1 Banner thông báo chung và khóa/mở nút "Gửi duyệt"
+ */
+function initCurriculumHlsPolling(hlsStatusUrl) {
+    if (!hlsStatusUrl) return;
+
+    let pollInterval = null;
+
+    async function checkStatus() {
+        try {
+            const response = await fetch(hlsStatusUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const commonState = data.common_state || 'completed'; // 'completed' | 'processing' | 'failed'
+            const commonMessage = data.common_message || '';
+            const canSubmit = !!data.can_submit;
+
+            // 1. CẬP NHẬT BANNER HLS CHUNG TỔNG THỂ
+            const bannerWrapper = document.getElementById('common-hls-banner-wrapper');
+            const messageEl = document.getElementById('common-hls-message');
+            const iconEl = document.getElementById('common-hls-icon');
+
+            if (bannerWrapper && messageEl) {
+                messageEl.textContent = commonMessage;
+
+                if (commonState === 'completed') {
+                    bannerWrapper.className = 'rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900 shadow-xs transition-all duration-300';
+                    if (iconEl) iconEl.textContent = '✅';
+                } else if (commonState === 'failed') {
+                    bannerWrapper.className = 'rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-rose-900 shadow-xs transition-all duration-300';
+                    if (iconEl) iconEl.textContent = '⚠️';
+                } else {
+                    // processing
+                    bannerWrapper.className = 'rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs transition-all duration-300';
+                    if (iconEl) iconEl.textContent = '⏳';
+                }
+            }
+
+            // 2. CẬP NHẬT TRẠNG THÁI HLS CHI TIẾT BÊN CẠNH TỪNG VIDEO BÀI HỌC
+            const statuses = data.statuses || {};
+            for (const key in statuses) {
+                const info = statuses[key];
+                const elements = document.querySelectorAll(`[data-hls-status-key="${key}"]`);
+                elements.forEach(el => {
+                    if (info.is_ready) {
+                        el.className = 'font-semibold text-emerald-600';
+                        el.textContent = 'Video đã được xử lý bảo mật thành công.';
+                        el.removeAttribute('data-hls-processing');
+                    } else if (info.is_failed) {
+                        el.className = 'font-semibold text-rose-600';
+                        el.textContent = 'Video xử lý bảo mật thất bại.';
+                        el.removeAttribute('data-hls-processing');
+                    } else if (info.is_processing) {
+                        el.className = 'font-semibold text-amber-600';
+                        el.textContent = 'Video đang trong quá trình xử lý bảo mật. Vui lòng chờ trong giây lát.';
+                        el.setAttribute('data-hls-processing', 'true');
+                    }
+                });
+            }
+
+            // 2. KHÓA / MỞ NÚT "GỬI DUYỆT" TRÊN TOÀN BỘ TRANG (Requirement 15, 16)
+            const submitButtons = document.querySelectorAll('#curriculum-submit-review-btn, #readinessSubmitForm button[type="submit"], [data-submit-review-btn]');
+            submitButtons.forEach(btn => {
+                if (canSubmit) {
+                    btn.removeAttribute('disabled');
+                    btn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+                    btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
+                    btn.removeAttribute('title');
+                } else {
+                    btn.setAttribute('disabled', 'disabled');
+                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
+                    btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+                    btn.setAttribute('title', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
+                }
+            });
+
+            // Nếu toàn bộ HLS đã hoàn tất hoặc thất bại và không có upload nào đang chạy thì ngắt polling
+            const hasActiveUploads = CourseUploadQueue.queue.some(i => i.status === 'uploading' || i.status === 'queued');
+            if (commonState === 'completed' && !hasActiveUploads && pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        } catch (e) {
+            console.warn('HLS status poll error:', e);
+        }
+    }
+
+    window.triggerHlsPolling = () => {
+        checkStatus();
+        if (!pollInterval) {
+            pollInterval = setInterval(checkStatus, 5000);
+        }
+    };
+
+    // Bắt đầu polling ngay khi tải trang
+    checkStatus();
+    pollInterval = setInterval(checkStatus, 5000);
+}
+
 if (typeof window !== 'undefined') {
     window.S3MultipartUploader = S3MultipartUploader;
+    window.CourseUploadQueue = CourseUploadQueue;
     window.createLessonFormState = createLessonFormState;
+    window.initCurriculumHlsPolling = initCurriculumHlsPolling;
 }
+
+
+

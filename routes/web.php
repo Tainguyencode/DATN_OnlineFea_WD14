@@ -94,6 +94,9 @@ Route::get('/leaderboard', [\App\Http\Controllers\Web\LeaderboardController::cla
 // ─── LỘ TRÌNH HỌC TẬP (PUBLIC) ───
 Route::get('/learning-paths', [LearningPathController::class, 'index'])->name('learning-paths.index');
 Route::get('/learning-paths/{slug}', [LearningPathController::class, 'show'])->name('learning-paths.show');
+Route::post('/learning-paths/ai/chat', [\App\Http\Controllers\Web\LearningPathAiController::class, 'chat'])->name('learning-paths.ai.chat');
+Route::get('/learning-paths/ai/conversation', [\App\Http\Controllers\Web\LearningPathAiController::class, 'getConversation'])->name('learning-paths.ai.conversation');
+Route::post('/learning-paths/ai/reset', [\App\Http\Controllers\Web\LearningPathAiController::class, 'reset'])->name('learning-paths.ai.reset');
 
 // ─── CHỨNG CHỈ CÔNG KHAI (không cần đăng nhập) ───
 Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertificate'])->name('certificates.public');
@@ -352,6 +355,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'signPart'])->name('courses.s3.multipart.sign-part');
             Route::post('/courses/{course}/s3/multipart/complete', [S3MultipartUploadController::class, 'complete'])->name('courses.s3.multipart.complete');
             Route::post('/courses/{course}/s3/multipart/abort', [S3MultipartUploadController::class, 'abort'])->name('courses.s3.multipart.abort');
+            Route::get('/courses/{course}/hls-status', [InstructorCurriculumController::class, 'getHlsStatus'])->name('courses.hls-status');
             Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
             Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
             Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');

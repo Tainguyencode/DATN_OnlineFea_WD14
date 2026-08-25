@@ -1321,6 +1321,7 @@ function initLessonAi() {
     const askInput = root.querySelector('[data-ai-question-input]');
     const askSubmit = root.querySelector('[data-ai-ask-submit]');
     const askStatus = root.querySelector('[data-ai-ask-status]');
+    const askError = root.querySelector('[data-ai-ask-error]');
     const chatLog = root.querySelector('[data-ai-chat-log]');
 
     let summaryInFlight = false;
@@ -1474,18 +1475,42 @@ function initLessonAi() {
         }
     });
 
+    askInput?.addEventListener('input', () => {
+        if (askError) {
+            askError.textContent = '';
+            askError.classList.add('hidden');
+        }
+        if (askStatus && askStatus.textContent === 'Vui lòng nhập câu hỏi.') {
+            askStatus.textContent = '';
+        }
+    });
+
     askForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!explainUrl || askInFlight || !askInput) return;
 
         const question = askInput.value.trim();
         if (!question) {
-            if (askStatus) askStatus.textContent = 'Vui lòng nhập câu hỏi.';
+            if (askError) {
+                askError.textContent = 'Vui lòng nhập câu hỏi.';
+                askError.classList.remove('hidden');
+            }
+            if (askStatus) askStatus.textContent = '';
+            askInput.focus();
             return;
         }
         if (question.length > 1000) {
-            if (askStatus) askStatus.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+            if (askError) {
+                askError.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+                askError.classList.remove('hidden');
+            }
+            if (askStatus) askStatus.textContent = '';
             return;
+        }
+
+        if (askError) {
+            askError.textContent = '';
+            askError.classList.add('hidden');
         }
 
         askInFlight = true;

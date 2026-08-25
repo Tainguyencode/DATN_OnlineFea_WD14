@@ -19,6 +19,20 @@ class Lesson extends Model
         'attachments', 'subtitles', 'ai_summary', 'content_version',
     ];
 
+    protected $attributes = [
+        'video_size' => 0,
+        'duration_seconds' => 0,
+        'is_preview' => false,
+        'is_required' => true,
+        'sort_order' => 0,
+        'status' => 'draft',
+    ];
+
+    public function setVideoSizeAttribute($value): void
+    {
+        $this->attributes['video_size'] = $value !== null ? (int) $value : 0;
+    }
+
     protected function casts(): array
     {
         return [
