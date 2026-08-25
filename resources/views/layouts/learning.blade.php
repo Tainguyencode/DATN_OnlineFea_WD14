@@ -12,30 +12,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/learning-player.js'])
 </head>
 <body class="learning-player-body min-h-screen bg-white font-sans text-[#1c1d1f] antialiased">
+    <x-toast-container />
+
     @yield('content')
-    
-    @auth
-    <script>
-        setInterval(function() {
-            fetch('/api/session/check', {
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }).then(response => {
-                if (response.status === 401) {
-                    alert('Tài khoản đã được đăng nhập trên thiết bị khác.');
-                    window.location.href = '/login';
-                }
-                return response.json();
-            }).then(data => {
-                if (data && data.active === false) {
-                    alert(data.message || 'Tài khoản đã được đăng nhập trên thiết bị khác.');
-                    window.location.href = '/login';
-                }
-            }).catch(e => console.error(e));
-        }, 15000);
-    </script>
-    @endauth
+
+    <x-session-invalidation-monitor />
 </body>
 </html>

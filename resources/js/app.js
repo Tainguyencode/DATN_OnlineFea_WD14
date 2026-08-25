@@ -114,6 +114,8 @@ function initializeToast(toast) {
     let startedAt = 0;
     let timerId = null;
     let dismissed = false;
+    let isHovered = false;
+    let isFocused = false;
 
     const clearTimer = () => {
         if (timerId === null) return;
@@ -141,7 +143,7 @@ function initializeToast(toast) {
     };
 
     const startTimer = () => {
-        if (dismissed) return;
+        if (dismissed || timerId !== null || isHovered || isFocused) return;
 
         if (remaining <= 0) {
             dismissToast();
@@ -152,11 +154,23 @@ function initializeToast(toast) {
         timerId = window.setTimeout(dismissToast, remaining);
     };
 
-    toast.addEventListener('mouseenter', pauseTimer);
-    toast.addEventListener('mouseleave', startTimer);
-    toast.addEventListener('focusin', pauseTimer);
+    toast.addEventListener('mouseenter', () => {
+        isHovered = true;
+        pauseTimer();
+    });
+    toast.addEventListener('mouseleave', () => {
+        isHovered = false;
+        startTimer();
+    });
+    toast.addEventListener('focusin', () => {
+        isFocused = true;
+        pauseTimer();
+    });
     toast.addEventListener('focusout', (event) => {
-        if (!toast.contains(event.relatedTarget)) startTimer();
+        if (toast.contains(event.relatedTarget)) return;
+
+        isFocused = false;
+        startTimer();
     });
     toast.querySelector('[data-toast-dismiss]')?.addEventListener('click', dismissToast);
 
