@@ -1,4 +1,5 @@
 import './bootstrap';
+import './lesson-import';
 import Alpine from 'alpinejs';
 import Chart from 'chart.js/auto';
 
