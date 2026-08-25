@@ -883,18 +883,23 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             const iconEl = document.getElementById('common-hls-icon');
 
             if (bannerWrapper && messageEl) {
-                messageEl.textContent = commonMessage;
-
-                if (commonState === 'completed') {
-                    bannerWrapper.className = 'rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900 shadow-xs transition-all duration-300';
-                    if (iconEl) iconEl.textContent = '✅';
-                } else if (commonState === 'failed') {
-                    bannerWrapper.className = 'rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-rose-900 shadow-xs transition-all duration-300';
-                    if (iconEl) iconEl.textContent = '⚠️';
+                if (commonState === 'no_videos') {
+                    bannerWrapper.classList.add('hidden');
                 } else {
-                    // processing
-                    bannerWrapper.className = 'rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs transition-all duration-300';
-                    if (iconEl) iconEl.textContent = '⏳';
+                    bannerWrapper.classList.remove('hidden');
+                    messageEl.textContent = commonMessage;
+
+                    if (commonState === 'completed') {
+                        bannerWrapper.className = 'rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900 shadow-xs transition-all duration-300';
+                        if (iconEl) iconEl.textContent = '✅';
+                    } else if (commonState === 'failed') {
+                        bannerWrapper.className = 'rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-rose-900 shadow-xs transition-all duration-300';
+                        if (iconEl) iconEl.textContent = '⚠️';
+                    } else {
+                        // processing
+                        bannerWrapper.className = 'rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs transition-all duration-300';
+                        if (iconEl) iconEl.textContent = '⏳';
+                    }
                 }
             }
 

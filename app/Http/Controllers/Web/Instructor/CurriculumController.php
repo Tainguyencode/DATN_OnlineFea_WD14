@@ -624,6 +624,7 @@ class CurriculumController extends Controller
             ];
         }
 
+        $totalVideos = count($statuses);
         $hasIncompleteHls = $course->hasIncompleteHlsVideos();
         $hasFailed = false;
         $hasProcessing = false;
@@ -636,21 +637,25 @@ class CurriculumController extends Controller
             }
         }
 
-        $commonState = 'completed';
-        $commonMessage = 'Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.';
-
-        if ($hasFailed) {
+        if ($totalVideos === 0) {
+            $commonState = 'no_videos';
+            $commonMessage = '';
+        } elseif ($hasFailed) {
             $commonState = 'failed';
             $commonMessage = 'Video chưa xử lý hoàn tất. Vui lòng chờ quá trình xử lý video hoàn tất trước khi gửi duyệt.';
         } elseif ($hasProcessing || $hasIncompleteHls) {
             $commonState = 'processing';
             $commonMessage = 'Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.';
+        } else {
+            $commonState = 'completed';
+            $commonMessage = 'Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.';
         }
 
         return response()->json([
+            'total_videos' => $totalVideos,
             'statuses' => $statuses,
             'has_incomplete_hls' => $hasIncompleteHls,
-            'can_submit' => ! $hasIncompleteHls && ! $hasFailed && ! $hasProcessing,
+            'can_submit' => $totalVideos > 0 ? (! $hasIncompleteHls && ! $hasFailed && ! $hasProcessing) : true,
             'common_state' => $commonState,
             'common_message' => $commonMessage,
         ]);
