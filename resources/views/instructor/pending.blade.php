@@ -89,21 +89,6 @@
             </form>
         </div>
 
-        {{-- Flash Alerts --}}
-        @if(session('success'))
-            <div class="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-900 shadow-sm dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-200">
-                <svg class="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <div>{{ session('success') }}</div>
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="mb-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-200">
-                <svg class="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <div>{{ session('error') }}</div>
-            </div>
-        @endif
-
         @if($errors->any())
             <div class="mb-6 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-200">
                 <ul class="list-disc list-inside space-y-1">

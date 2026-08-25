@@ -56,23 +56,6 @@
         }
     }" class="space-y-6">
 
-        {{-- Session Flash Notifications --}}
-        @if (session('success'))
-            <div class="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-emerald-800 shadow-sm backdrop-blur-sm">
-                <div class="flex items-center gap-3">
-                    <div class="rounded-xl bg-emerald-500/10 p-2 text-emerald-600">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                    </div>
-                    <span class="text-sm font-semibold">{{ session('success') }}</span>
-                </div>
-                <button type="button" @click="$el.parentElement.remove()" class="text-emerald-500 hover:text-emerald-700">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-        @endif
-
         @if ($errors->any())
             <div class="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-rose-800 shadow-sm">
                 <div class="flex items-start gap-3">

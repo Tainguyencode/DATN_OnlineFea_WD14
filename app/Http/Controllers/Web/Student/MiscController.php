@@ -120,8 +120,22 @@ class MiscController extends Controller
             }
 
             if ($sent > 0) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Email chứng chỉ đã được gửi tới hòm thư của bạn!',
+                    ]);
+                }
+
                 return redirect()->route('student.certificates')
                     ->with('success', 'Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không gửi được email chứng chỉ. Vui lòng thử lại sau.',
+                ], 422);
             }
 
             return redirect()->route('student.certificates')

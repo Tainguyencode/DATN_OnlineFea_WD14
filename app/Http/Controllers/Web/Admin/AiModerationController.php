@@ -9,6 +9,7 @@ use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class AiModerationController extends Controller
 {
@@ -309,7 +310,14 @@ class AiModerationController extends Controller
                 'total' => count($frames),
             ]);
         } catch (\Throwable $e) {
-            return response()->json(['error' => 'Lỗi khi cắt frame: '.$e->getMessage()], 500);
+            Log::error('Admin AI moderation frame extraction failed.', [
+                'exception' => $e,
+                'lesson_id' => (string) $lessonId,
+            ]);
+
+            return response()->json([
+                'error' => 'Không thể trích xuất khung hình lúc này. Vui lòng thử lại.',
+            ], 500);
         }
     }
 
@@ -332,10 +340,21 @@ class AiModerationController extends Controller
 
         $result = $gemini->analyzeImage($framePath);
 
-        if (! isset($result['error'])) {
-            $result['timestamp'] = $timestamp;
-            $result['frame_path'] = $framePath;
+        if (isset($result['error'])) {
+            Log::warning('Admin AI moderation frame analysis failed.', [
+                'frame_name' => basename((string) $framePath),
+                'timestamp' => (float) $timestamp,
+                'technical_error' => (string) $result['error'],
+            ]);
+
+            return response()->json([
+                'error' => 'Không thể phân tích khung hình lúc này. Vui lòng thử lại.',
+            ]);
         }
+
+        unset($result['_model_used'], $result['_raw_text']);
+        $result['timestamp'] = $timestamp;
+        $result['frame_path'] = $framePath;
 
         return response()->json($result);
     }
@@ -353,7 +372,7 @@ class AiModerationController extends Controller
 
         if (count($results) === 0) {
             return response()->json([
-                'error' => 'Không có kết quả phân tích nào. API AI có thể đã hết quota hoặc tất cả frame đều thất bại.',
+                'error' => 'Không có kết quả phân tích nào để lưu. Vui lòng thử quét lại.',
             ], 422);
         }
 

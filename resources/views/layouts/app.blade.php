@@ -144,16 +144,7 @@
         </aside>
     </div>
 
-    @if(session('success'))
-        <div data-flash-message="success" role="status" aria-live="polite" class="ui-alert-success mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
-            {{ session('success') }}
-        </div>
-    @endif
-    @if(session('error'))
-        <div class="ui-alert-error mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
-            {{ session('error') }}
-        </div>
-    @endif
+    <x-toast-container />
 
     <main class="flex-1">
         @yield('content')
@@ -251,29 +242,6 @@
         </div>
     </div>
     
-    @auth
-    <script>
-        // Poll for session validity every 15 seconds
-        setInterval(function() {
-            fetch('/api/session/check', {
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }).then(response => {
-                if (response.status === 401) {
-                    alert('Tài khoản đã được đăng nhập trên thiết bị khác.');
-                    window.location.href = '/login';
-                }
-                return response.json();
-            }).then(data => {
-                if (data && data.active === false) {
-                    alert(data.message || 'Tài khoản đã được đăng nhập trên thiết bị khác.');
-                    window.location.href = '/login';
-                }
-            }).catch(e => console.error(e));
-        }, 15000);
-    </script>
-    @endauth
+    <x-session-invalidation-monitor />
 </body>
 </html>

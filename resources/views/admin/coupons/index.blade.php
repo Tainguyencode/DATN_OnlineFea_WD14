@@ -1,14 +1,6 @@
 <x-admin-layout title="Mã giảm giá" page-title="Mã giảm giá" :breadcrumb="$stats['total'].' mã giảm giá'">
 
 <div class="space-y-5">
-    @if (session('success'))
-        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{{ session('success') }}</div>
-    @endif
-
-    @if (session('error'))
-        <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">{{ session('error') }}</div>
-    @endif
-
     <section class="grid gap-3 sm:grid-cols-3">
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Tổng mã giảm giá</span>
