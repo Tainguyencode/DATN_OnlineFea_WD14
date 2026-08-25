@@ -2,12 +2,85 @@
 
 namespace App\Services;
 
+use App\Exceptions\LessonImportException;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use Illuminate\Support\Str;
 
 class LessonImportValidator
 {
+    /**
+     * Rebuild canonical rows through the same rules used by Preview.
+     *
+     * @return array{
+     *     canonical_rows: array<int, array<string, mixed>>,
+     *     reports: array<int, array{row_number: int, status: string, errors: array<int, string>, warnings: array<int, string>}>,
+     *     valid_count: int,
+     *     warning_count: int,
+     *     error_count: int
+     * }
+     */
+    public function validateCanonicalPayload(mixed $payload, CourseSection $section): array
+    {
+        if (! is_array($payload)
+            || ($payload['schema'] ?? null) !== LessonImportTemplateService::SCHEMA
+            || (int) ($payload['template_version'] ?? 0) !== LessonImportTemplateService::TEMPLATE_VERSION
+            || ! isset($payload['rows'])
+            || ! is_array($payload['rows'])
+            || ! array_is_list($payload['rows'])
+            || $payload['rows'] === []) {
+            throw $this->invalidCanonicalPayload();
+        }
+
+        $orderedRows = [];
+        $relativeOrders = [];
+
+        foreach ($payload['rows'] as $row) {
+            if (! is_array($row)
+                || ! isset($row['row_number'], $row['relative_order'])
+                || ! is_int($row['row_number'])
+                || $row['row_number'] < 2
+                || ! is_int($row['relative_order'])
+                || $row['relative_order'] < 0
+                || isset($relativeOrders[$row['relative_order']])) {
+                throw $this->invalidCanonicalPayload();
+            }
+
+            foreach (['lesson_code', 'title', 'type', 'duration_seconds', 'content', 'assignment_due_days', 'assignment_max_score', 'assignment_passing_score'] as $field) {
+                if (! array_key_exists($field, $row)) {
+                    throw $this->invalidCanonicalPayload();
+                }
+            }
+
+            $relativeOrders[$row['relative_order']] = true;
+            $orderedRows[] = $row;
+        }
+
+        usort(
+            $orderedRows,
+            fn (array $left, array $right): int => $left['relative_order'] <=> $right['relative_order'],
+        );
+
+        $parsedRows = [];
+        foreach ($orderedRows as $index => $row) {
+            if ($row['relative_order'] !== $index) {
+                throw $this->invalidCanonicalPayload();
+            }
+
+            $parsedRows[] = [
+                'row_number' => $row['row_number'],
+                'values' => array_intersect_key($row, array_flip(LessonImportTemplateService::HEADERS)),
+            ];
+        }
+
+        $validated = $this->validate($parsedRows, $section);
+        if ($validated['error_count'] > 0) {
+            throw $this->invalidCanonicalPayload();
+        }
+
+        return $validated;
+    }
+
     /**
      * @param  array<int, array{row_number: int, values: array<string, mixed>}>  $rows
      * @return array{
@@ -279,5 +352,13 @@ class LessonImportValidator
     private function isBlank(mixed $value): bool
     {
         return $value === null || (is_string($value) && trim($value) === '');
+    }
+
+    private function invalidCanonicalPayload(): LessonImportException
+    {
+        return new LessonImportException(
+            'invalid_canonical_payload',
+            'Dữ liệu kiểm tra đã thay đổi hoặc không còn hợp lệ. Vui lòng kiểm tra lại file.',
+        );
     }
 }

@@ -104,6 +104,10 @@ class LessonImportPreviewTest extends TestCase
             'data-preview-url="'.route('instructor.courses.lessons.import.preview', [$course, $section]).'"',
             false,
         );
+        $response->assertSee(
+            'data-confirm-url="'.route('instructor.courses.lessons.import.confirm', [$course, $section]).'"',
+            false,
+        );
         $response->assertSee('Chương 1');
         $response->assertDontSee('Chương 1 — Chương 1');
         $response->assertSee('Chương 2 — Laravel cơ bản');
@@ -114,6 +118,7 @@ class LessonImportPreviewTest extends TestCase
         $response->assertSee('data-lesson-import-step="preview"', false);
         $response->assertSee('Tổng số');
         $response->assertSee('Chọn file khác');
+        $response->assertSee('data-lesson-import-confirm', false);
         $response->assertDontSee('Import 1 bài học');
     }
 
