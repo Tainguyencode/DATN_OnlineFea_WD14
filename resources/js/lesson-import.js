@@ -82,6 +82,8 @@ function initializeLessonImport(root) {
         previewStep: root.querySelector('[data-lesson-import-step="preview"]'),
         section: root.querySelector('[data-lesson-import-section]'),
         file: root.querySelector('[data-lesson-import-file]'),
+        fileTrigger: root.querySelector('[data-lesson-import-file-trigger]'),
+        fileTriggerLabel: root.querySelector('[data-lesson-import-file-trigger-label]'),
         filename: root.querySelector('[data-lesson-import-filename]'),
         submit: root.querySelector('[data-lesson-import-submit]'),
         submitLabel: root.querySelector('[data-lesson-import-submit-label]'),
@@ -95,7 +97,7 @@ function initializeLessonImport(root) {
         live: root.querySelector('[data-lesson-import-live]'),
     };
 
-    if (!elements.panel || !elements.section || !elements.file || !elements.submit || !elements.rows) return;
+    if (!elements.panel || !elements.section || !elements.file || !elements.fileTrigger || !elements.submit || !elements.rows) return;
 
     const triggers = document.querySelectorAll(`[data-lesson-import-open][aria-controls="${root.id}"]`);
     const filterButtons = [...root.querySelectorAll('[data-lesson-import-filter]')];
@@ -139,19 +141,20 @@ function initializeLessonImport(root) {
         elements.submit.disabled = state.isLoading || !state.selectedSection || !state.file;
         elements.section.disabled = state.isLoading || elements.section.options.length <= 1;
         elements.file.disabled = state.isLoading || elements.section.options.length <= 1;
+        elements.fileTrigger.disabled = state.isLoading || elements.section.options.length <= 1;
         elements.submit.setAttribute('aria-busy', String(state.isLoading));
         elements.submitLabel.textContent = state.isLoading ? 'Đang kiểm tra...' : 'Kiểm tra file';
     }
 
     function updateFilename() {
         if (!state.file) {
-            elements.filename.textContent = '';
-            elements.filename.classList.add('hidden');
+            elements.fileTriggerLabel.textContent = 'Chọn file Excel';
+            elements.filename.textContent = 'Chưa chọn file';
             return;
         }
 
-        elements.filename.textContent = `Đã chọn: ${state.file.name}`;
-        elements.filename.classList.remove('hidden');
+        elements.fileTriggerLabel.textContent = 'Đổi file';
+        elements.filename.textContent = state.file.name;
     }
 
     function setStep(step) {
@@ -166,9 +169,8 @@ function initializeLessonImport(root) {
             : 'Nhập nhiều bài học vào một chương bằng file Excel mẫu.';
     }
 
-    function resetPreviewState({ keepSection = false } = {}) {
-        const selectedSection = keepSection ? elements.section.value : '';
-
+    function resetPreviewState({ selectedSection = '' } = {}) {
+        state.isLoading = false;
         state.preview = null;
         state.batchToken = null;
         state.activeFilter = 'all';
@@ -547,10 +549,15 @@ function initializeLessonImport(root) {
         updateFilename();
         updateSubmitAvailability();
     });
+    elements.fileTrigger.addEventListener('click', () => {
+        if (!elements.fileTrigger.disabled) elements.file.click();
+    });
     elements.submit.addEventListener('click', submitPreview);
     chooseAnotherButton?.addEventListener('click', () => {
-        resetPreviewState({ keepSection: true });
-        elements.file.focus();
+        const selectedSection = state.selectedSection;
+        cancelRequest();
+        resetPreviewState({ selectedSection });
+        elements.fileTrigger.focus();
     });
     filterButtons.forEach((button) => {
         button.addEventListener('click', () => {

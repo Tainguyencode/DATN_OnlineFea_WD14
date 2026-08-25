@@ -55,29 +55,55 @@
                             >
                                 <option value="">Chọn chương sẽ nhận bài học</option>
                                 @foreach($course->courseSections as $section)
+                                    @php
+                                        $chapterNumber = $loop->iteration;
+                                        $chapterFallback = 'Chương '.$chapterNumber;
+                                        $chapterTitle = trim((string) $section->title);
+                                        $normalizedChapterTitle = preg_replace('/\s+/u', ' ', mb_strtolower($chapterTitle));
+                                        $normalizedFallback = mb_strtolower($chapterFallback);
+                                        $chapterLabel = $chapterTitle === '' || $normalizedChapterTitle === $normalizedFallback
+                                            ? $chapterFallback
+                                            : $chapterFallback.' — '.$chapterTitle;
+                                    @endphp
                                     <option
                                         value="{{ $section->id }}"
                                         data-preview-url="{{ route('instructor.courses.lessons.import.preview', [$course, $section]) }}"
                                     >
-                                        Chương {{ $loop->iteration }} — {{ $section->title }}
+                                        {{ $chapterLabel }}
                                     </option>
                                 @endforeach
                             </select>
                         </label>
 
-                        <label class="block" for="lesson-import-file">
+                        <div>
                             <span class="mb-1.5 block text-sm font-bold text-slate-700">File Excel <span class="text-rose-600" aria-hidden="true">*</span></span>
                             <input
                                 id="lesson-import-file"
                                 data-lesson-import-file
                                 type="file"
                                 accept=".xlsx"
-                                class="block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-slate-700 file:mr-4 file:cursor-pointer file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-70"
+                                class="sr-only"
+                                tabindex="-1"
+                                aria-describedby="lesson-import-file-help lesson-import-filename"
                                 @disabled($course->courseSections->isEmpty())
                             >
-                            <span class="mt-1.5 block text-xs text-slate-500">.xlsx • tối đa 5MB • tối đa 100 bài học</span>
-                            <span data-lesson-import-filename class="mt-2 hidden break-all text-xs font-semibold text-slate-700" aria-live="polite"></span>
-                        </label>
+                            <div class="flex min-h-11 flex-col gap-2 rounded-lg border border-slate-300 bg-white p-2 sm:flex-row sm:items-center">
+                                <button
+                                    type="button"
+                                    data-lesson-import-file-trigger
+                                    aria-controls="lesson-import-file"
+                                    class="inline-flex min-h-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                    @disabled($course->courseSections->isEmpty())
+                                >
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L8 8m4-4 4 4M5 20h14" />
+                                    </svg>
+                                    <span data-lesson-import-file-trigger-label>Chọn file Excel</span>
+                                </button>
+                                <span id="lesson-import-filename" data-lesson-import-filename class="min-w-0 break-all px-1 text-sm font-semibold text-slate-600" aria-live="polite">Chưa chọn file</span>
+                            </div>
+                            <span id="lesson-import-file-help" class="mt-1.5 block text-xs text-slate-500">.xlsx • tối đa 5MB • tối đa 100 bài học</span>
+                        </div>
                     </div>
 
                     <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
