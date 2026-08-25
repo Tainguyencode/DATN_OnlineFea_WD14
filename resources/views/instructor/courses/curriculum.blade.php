@@ -97,7 +97,7 @@
             </div>
             <div class="rounded-lg bg-slate-50 p-4">
                 <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Bài học</span>
-                <strong class="mt-1 block text-2xl text-slate-950">{{ $course->courseSections->sum(fn ($section) => $section->lessons->count()) }}</strong>
+                <strong id="overview-total-lessons" class="mt-1 block text-2xl text-slate-950">{{ $course->courseSections->sum(fn ($section) => $section->lessons->count()) }}</strong>
             </div>
             <div class="rounded-lg bg-slate-50 p-4">
                 <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Bài xem thử</span>
@@ -259,7 +259,7 @@
                     </div>
                 </div>
 
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-slate-100" id="section-lessons-{{ $section->id }}" data-section-lessons-container="{{ $section->id }}">
                     @forelse($section->lessons as $lesson)
                         @php
                             $typeClass = $typeStyles[$lesson->type] ?? $typeStyles['video'];
@@ -463,7 +463,7 @@
                             </div>
                         </div>
                     @empty
-                        <div class="px-5 py-6 text-sm text-slate-500">Chương này chưa có bài học.</div>
+                        <div class="px-5 py-6 text-sm text-slate-500" data-empty-lessons-notice>Chương này chưa có bài học.</div>
                     @endforelse
                 </div>
 
