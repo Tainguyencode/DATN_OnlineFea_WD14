@@ -3,41 +3,41 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Instructor\StoreQuizRequest;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
-use App\Http\Requests\Instructor\StoreQuizRequest;
+use App\Services\QuizContentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class QuizController extends Controller
 {
+    public function __construct(
+        private readonly QuizContentService $quizContent,
+    ) {}
+
     public function show(Course $course, Lesson $lesson): View
     {
         $this->authorizeLesson($course, $lesson);
 
-        if ($lesson->type === 'quiz' && ! $lesson->quiz()->exists()) {
-            $lesson->quiz()->create([
-                'title' => $lesson->title,
-                'pass_score' => 70,
-                'time_limit_minutes' => null,
-                'max_attempts' => null,
-                'is_active' => true,
-            ]);
+        if ($lesson->type === Lesson::TYPE_QUIZ) {
+            $lesson->setRelation('quiz', $this->quizContent->getOrCreateForLesson($lesson));
         }
 
         $lesson->loadMissing(['quiz.questions.options']);
+        $quiz = $lesson->quiz;
 
         return view('instructor.quizzes.show', [
             'course' => $course,
             'lesson' => $lesson,
-            'quiz' => $lesson->quiz,
-            'questionTypes' => $this->questionTypes(),
+            'quiz' => $quiz,
+            'quizValidation' => $quiz ? $this->quizContent->validateQuiz($quiz) : null,
+            'questionTypes' => $this->quizContent->questionTypes(),
         ]);
     }
 
@@ -45,21 +45,7 @@ class QuizController extends Controller
     {
         $this->authorizeLesson($course, $lesson);
 
-        $validated = $request->validated();
-
-        DB::transaction(function () use ($lesson, $validated, $request) {
-            Quiz::updateOrCreate(
-                ['lesson_id' => $lesson->id],
-                [
-                    ...$validated,
-                    'is_active' => $request->boolean('is_active'),
-                ]
-            );
-
-            if ($lesson->type !== 'quiz') {
-                $lesson->update(['type' => 'quiz']);
-            }
-        });
+        $this->quizContent->saveMetadata($lesson, $request->validated(), $request->boolean('is_active'));
 
         return redirect()
             ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
@@ -71,19 +57,7 @@ class QuizController extends Controller
         $this->authorizeQuiz($quiz);
         $validated = $this->validatedQuestion($request);
 
-        DB::transaction(function () use ($quiz, $validated) {
-            $question = $quiz->questions()->create([
-                'question' => $validated['question_text'],
-                'type' => QuizQuestion::storageTypeFromRequest($validated['question_type']),
-                'points' => $validated['score'],
-                'explanation' => $validated['explanation'] ?? null,
-                'sort_order' => $validated['sort_order'] ?? $quiz->questions()->count(),
-            ]);
-
-            if ($question->type === QuizQuestion::TYPE_TRUE_FALSE) {
-                $this->ensureTrueFalseOptions($question);
-            }
-        });
+        $this->quizContent->createQuestion($quiz, $validated);
 
         return back()->with('success', 'Da them cau hoi.');
     }
@@ -93,23 +67,7 @@ class QuizController extends Controller
         $this->authorizeQuestion($question);
         $validated = $this->validatedQuestion($request);
 
-        DB::transaction(function () use ($question, $validated) {
-            $question->update([
-                'question' => $validated['question_text'],
-                'type' => QuizQuestion::storageTypeFromRequest($validated['question_type']),
-                'points' => $validated['score'],
-                'explanation' => $validated['explanation'] ?? null,
-                'sort_order' => $validated['sort_order'] ?? $question->sort_order,
-            ]);
-
-            if ($question->type === QuizQuestion::TYPE_TRUE_FALSE) {
-                $this->ensureTrueFalseOptions($question);
-            }
-
-            if (in_array($question->type, [QuizQuestion::TYPE_SINGLE, QuizQuestion::TYPE_TRUE_FALSE], true)) {
-                $this->enforceSingleCorrectAnswer($question);
-            }
-        });
+        $this->quizContent->updateQuestion($question, $validated);
 
         return back()->with('success', 'Da cap nhat cau hoi.');
     }
@@ -117,7 +75,7 @@ class QuizController extends Controller
     public function destroyQuestion(QuizQuestion $question): RedirectResponse
     {
         $this->authorizeQuestion($question);
-        $question->delete();
+        $this->quizContent->deleteQuestion($question);
 
         return back()->with('success', 'Da xoa cau hoi.');
     }
@@ -127,21 +85,7 @@ class QuizController extends Controller
         $this->authorizeQuestion($question);
         $validated = $this->validatedAnswer($request);
 
-        if ($question->type === QuizQuestion::TYPE_TRUE_FALSE && $question->options()->count() >= 2) {
-            return back()->with('error', 'Cau hoi dung/sai chi can 2 dap an.');
-        }
-
-        DB::transaction(function () use ($question, $validated) {
-            if ($validated['is_correct'] && $question->type !== QuizQuestion::TYPE_MULTIPLE) {
-                $question->options()->update(['is_correct' => false]);
-            }
-
-            $question->options()->create([
-                'option_text' => $validated['answer_text'],
-                'is_correct' => $validated['is_correct'],
-                'sort_order' => $validated['sort_order'] ?? $question->options()->count(),
-            ]);
-        });
+        $this->quizContent->createOption($question, $validated);
 
         return back()->with('success', 'Da them dap an.');
     }
@@ -162,60 +106,16 @@ class QuizController extends Controller
             'delete_answers.*' => ['integer'],
         ]);
 
-        $answerIds = $question->options->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $deleteIds = collect($request->input('delete_answers', []))
-            ->map(fn ($id) => (int) $id)
-            ->intersect($answerIds)
-            ->values()
-            ->all();
-        $remainingIds = array_values(array_diff($answerIds, $deleteIds));
-
-        if ($remainingIds === []) {
-            return back()
-                ->withErrors(['answers' => 'Cau hoi can giu lai it nhat 1 dap an.'])
-                ->withInput();
-        }
-
         $selectedCorrectIds = $question->type === QuizQuestion::TYPE_MULTIPLE
             ? collect($request->input('correct_answers', []))->map(fn ($id) => (int) $id)
             : collect([$request->input('correct_answer')])->map(fn ($id) => (int) $id);
 
-        $selectedCorrectIds = $selectedCorrectIds
-            ->intersect($remainingIds)
-            ->values()
-            ->all();
-
-        if ($selectedCorrectIds === []) {
-            return back()
-                ->withErrors(['answers' => 'Hay chon it nhat 1 dap an dung cho cau hoi nay.'])
-                ->withInput();
-        }
-
-        if ($question->type !== QuizQuestion::TYPE_MULTIPLE && count($selectedCorrectIds) !== 1) {
-            return back()
-                ->withErrors(['answers' => 'Cau hoi mot lua chon chi duoc co 1 dap an dung.'])
-                ->withInput();
-        }
-
-        DB::transaction(function () use ($question, $validated, $deleteIds, $remainingIds, $selectedCorrectIds) {
-            if ($deleteIds !== []) {
-                $question->options()->whereIn('id', $deleteIds)->delete();
-            }
-
-            foreach ($validated['answers'] as $answerId => $answerData) {
-                $answerId = (int) $answerId;
-
-                if (! in_array($answerId, $remainingIds, true)) {
-                    continue;
-                }
-
-                $question->options()->whereKey($answerId)->update([
-                    'option_text' => $answerData['answer_text'],
-                    'sort_order' => $answerData['sort_order'] ?? 0,
-                    'is_correct' => in_array($answerId, $selectedCorrectIds, true),
-                ]);
-            }
-        });
+        $this->quizContent->updateOptions(
+            $question,
+            $validated['answers'],
+            $request->input('delete_answers', []),
+            $selectedCorrectIds->filter()->values()->all(),
+        );
 
         return back()->with('success', 'Da luu dap an cho cau hoi.');
     }
@@ -225,19 +125,7 @@ class QuizController extends Controller
         $this->authorizeAnswer($answer);
         $validated = $this->validatedAnswer($request);
 
-        DB::transaction(function () use ($answer, $validated) {
-            $answer->loadMissing('question');
-
-            if ($validated['is_correct'] && $answer->question->type !== QuizQuestion::TYPE_MULTIPLE) {
-                $answer->question->options()->whereKeyNot($answer->id)->update(['is_correct' => false]);
-            }
-
-            $answer->update([
-                'option_text' => $validated['answer_text'],
-                'is_correct' => $validated['is_correct'],
-                'sort_order' => $validated['sort_order'] ?? $answer->sort_order,
-            ]);
-        });
+        $this->quizContent->updateOption($answer, $validated);
 
         return back()->with('success', 'Da cap nhat dap an.');
     }
@@ -245,7 +133,7 @@ class QuizController extends Controller
     public function destroyAnswer(QuizOption $answer): RedirectResponse
     {
         $this->authorizeAnswer($answer);
-        $answer->delete();
+        $this->quizContent->deleteOption($answer);
 
         return back()->with('success', 'Da xoa dap an.');
     }
@@ -254,7 +142,7 @@ class QuizController extends Controller
     {
         return $request->validate([
             'question_text' => ['required', 'string', 'max:10000'],
-            'question_type' => ['required', Rule::in(array_keys($this->questionTypes()))],
+            'question_type' => ['required', Rule::in(array_keys($this->quizContent->questionTypes()))],
             'score' => ['required', 'integer', 'min:1', 'max:1000'],
             'explanation' => ['nullable', 'string', 'max:10000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
@@ -326,56 +214,5 @@ class QuizController extends Controller
         }
 
         return $lesson->chapter_id && $lesson->chapter()->where('course_id', $course->id)->exists();
-    }
-
-    private function ensureTrueFalseOptions(QuizQuestion $question): void
-    {
-        if ($question->options()->exists()) {
-            return;
-        }
-
-        $question->options()->createMany([
-            ['option_text' => 'Đúng', 'is_correct' => true, 'sort_order' => 0],
-            ['option_text' => 'Sai', 'is_correct' => false, 'sort_order' => 1],
-        ]);
-    }
-
-    private function enforceSingleCorrectAnswer(QuizQuestion $question): void
-    {
-        $correctAnswer = $question->options()
-            ->where('is_correct', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->first();
-
-        if (! $correctAnswer) {
-            return;
-        }
-
-        $question->options()
-            ->where('id', '!=', $correctAnswer->id)
-            ->update(['is_correct' => false]);
-    }
-
-    private function quizHasCorrectAnswers(Quiz $quiz): bool
-    {
-        $quiz->loadMissing('questions.options');
-
-        if ($quiz->questions->isEmpty()) {
-            return false;
-        }
-
-        return $quiz->questions->every(
-            fn (QuizQuestion $question) => $question->options->where('is_correct', true)->isNotEmpty()
-        );
-    }
-
-    private function questionTypes(): array
-    {
-        return [
-            'single_choice' => 'single_choice',
-            'multiple_choice' => 'multiple_choice',
-            'true_false' => 'true_false',
-        ];
     }
 }

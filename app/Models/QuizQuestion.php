@@ -54,13 +54,4 @@ class QuizQuestion extends Model
             default => 'single_choice',
         };
     }
-
-    public static function storageTypeFromRequest(string $type): string
-    {
-        return match ($type) {
-            'multiple_choice', self::TYPE_MULTIPLE => self::TYPE_MULTIPLE,
-            'true_false', self::TYPE_TRUE_FALSE => self::TYPE_TRUE_FALSE,
-            default => self::TYPE_SINGLE,
-        };
-    }
 }
