@@ -75,6 +75,61 @@ class LessonImportPreviewTest extends TestCase
         $workbook->disconnectWorksheets();
     }
 
+    public function test_curriculum_renders_lesson_import_trigger_dialog_and_section_routes_for_owner(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+
+        $response = $this->get(route('instructor.courses.curriculum', $course));
+
+        $response->assertOk();
+        $response->assertSee('Nhập từ Excel');
+        $response->assertSee('data-lesson-import-open', false);
+        $response->assertSee('data-lesson-import', false);
+        $response->assertSee('role="dialog"', false);
+        $response->assertSee(route('instructor.courses.lessons.import.template', $course), false);
+        $response->assertSee('value="'.$section->id.'"', false);
+        $response->assertSee(
+            'data-preview-url="'.route('instructor.courses.lessons.import.preview', [$course, $section]).'"',
+            false,
+        );
+        $response->assertSee('Chương 1 — Section 1');
+        $response->assertSee('data-lesson-import-step="preview"', false);
+        $response->assertSee('Tổng số');
+        $response->assertSee('Chọn file khác');
+        $response->assertDontSee('Import 1 bài học');
+    }
+
+    public function test_curriculum_import_dialog_explains_that_a_section_is_required(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+        $section->delete();
+
+        $this->get(route('instructor.courses.curriculum', $course))
+            ->assertOk()
+            ->assertSee('Nhập từ Excel')
+            ->assertSee('Bạn cần tạo ít nhất một chương trước khi nhập bài học.')
+            ->assertSee('id="lesson-import-section"', false)
+            ->assertSee('data-lesson-import-submit', false);
+    }
+
+    public function test_other_instructor_cannot_access_curriculum_import_ui(): void
+    {
+        $owner = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'email_verified_at' => now(),
+        ]);
+        [$course] = $this->courseWithSection($owner);
+        $other = $this->signInInstructor();
+
+        $this->actingAs($other)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('instructor.courses.curriculum', $course))
+            ->assertForbidden();
+    }
+
     public function test_import_routes_enforce_guest_student_owner_and_section_authorization(): void
     {
         $owner = User::factory()->create([
