@@ -10,6 +10,7 @@ class QuizOption extends Model
 {
     protected $fillable = [
         'quiz_question_id',
+        'question_version_id',
         'option_text',
         'is_correct',
         'sort_order',
@@ -26,6 +27,11 @@ class QuizOption extends Model
     public function question(): BelongsTo
     {
         return $this->belongsTo(QuizQuestion::class, 'quiz_question_id');
+    }
+
+    public function questionVersion(): BelongsTo
+    {
+        return $this->belongsTo(QuestionVersion::class);
     }
 
     public function attemptAnswers(): HasMany

@@ -11,6 +11,8 @@ class QuizAttempt extends Model
     protected $fillable = [
         'user_id',
         'quiz_id',
+        'quiz_version_id',
+        'status',
         'score',
         'total_score',
         'percent',
@@ -41,6 +43,11 @@ class QuizAttempt extends Model
     public function quiz(): BelongsTo
     {
         return $this->belongsTo(Quiz::class);
+    }
+
+    public function quizVersion(): BelongsTo
+    {
+        return $this->belongsTo(QuizVersion::class);
     }
 
     public function attemptAnswers(): HasMany
