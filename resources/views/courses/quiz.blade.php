@@ -31,12 +31,6 @@
             @endif
         </div>
 
-        @if(session('error'))
-            <div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-                {{ session('error') }}
-            </div>
-        @endif
-
         @if ($errors->any())
             <div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
                 <p class="font-bold">Vui long kiem tra lai bai lam.</p>

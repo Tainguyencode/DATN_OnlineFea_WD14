@@ -69,7 +69,7 @@ class PaymentGatewayService
             Log::error('Lỗi khi tạo link thanh toán thật: ' . $e->getMessage());
             // Fallback sang mock để trải nghiệm người dùng không bị gián đoạn khi dev
             if ($mode === 'sandbox') {
-                session()->flash('warning', 'Không kết nối được cổng thanh toán thật, chuyển hướng sang cổng giả lập: ' . $e->getMessage());
+                session()->flash('warning', 'Không thể kết nối cổng thanh toán. Hệ thống đã chuyển sang cổng thanh toán giả lập.');
                 return route('student.checkout.mock_gateway', [
                     'order_code' => $order->order_code,
                     'gateway' => $order->payment_method,

@@ -71,19 +71,6 @@
                             </div>
                         </div>
 
-                        <!-- Thông báo nếu có -->
-                        @if(session('success'))
-                            <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm font-semibold text-emerald-400">
-                                {{ session('success') }}
-                            </div>
-                        @endif
-
-                        @if(session('error'))
-                            <div class="rounded-xl bg-rose-500/10 border border-rose-500/20 p-4 text-sm font-semibold text-rose-400">
-                                {{ session('error') }}
-                            </div>
-                        @endif
-
                         <!-- Giao diện bài làm và chấm điểm -->
                         @if($submission)
                             <div class="bg-white/5 rounded-xl p-5 space-y-4">

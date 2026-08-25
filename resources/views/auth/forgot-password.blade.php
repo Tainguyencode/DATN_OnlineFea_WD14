@@ -14,12 +14,6 @@
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Nhập email để nhận liên kết đặt lại mật khẩu an toàn.</p>
             </div>
 
-            @if(session('success'))
-                <div class="ui-alert-success mb-6">
-                    {{ session('success') }}
-                </div>
-            @endif
-
             @if($errors->any())
                 <div class="ui-alert-error mb-6">
                     @foreach($errors->all() as $error)

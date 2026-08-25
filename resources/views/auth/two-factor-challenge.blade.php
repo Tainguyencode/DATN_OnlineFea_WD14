@@ -12,9 +12,6 @@
             <h1 class="text-3xl font-bold text-slate-950 dark:text-white">Nhập mã xác thực</h1>
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Mã 6 số đã được gửi tới {{ auth()->user()->email }}.</p>
 
-            @if(session('success'))
-                <div class="ui-alert-success mt-6">{{ session('success') }}</div>
-            @endif
             @if($errors->any())
                 <div class="ui-alert-error mt-6">
                     @foreach($errors->all() as $error)

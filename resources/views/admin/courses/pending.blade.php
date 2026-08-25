@@ -4,12 +4,6 @@
     $formatPrice = fn ($value) => (float) $value <= 0 ? 'Miễn phí' : number_format((float) $value, 0, ',', '.').'đ';
 @endphp
 
-@if(session('error'))
-    <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-        {{ session('error') }}
-    </div>
-@endif
-
 @if($courses->isEmpty())
     <div class="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
