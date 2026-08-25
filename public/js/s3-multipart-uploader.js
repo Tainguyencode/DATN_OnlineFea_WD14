@@ -714,7 +714,8 @@ function createLessonFormState(config) {
             const form = event.target;
             const isCreateForm = !this.lessonId;
 
-            if (isCreateForm && window.fetch) {
+            // Submit qua AJAX cho cả Create và Edit để trang không reload làm đứt kết nối upload video
+            if (window.fetch) {
                 event.preventDefault();
 
                 const submitBtn = form.querySelector('button[type="submit"]');
@@ -749,33 +750,42 @@ function createLessonFormState(config) {
                     });
 
                     if (response.ok) {
-                        const titleInput = form.querySelector('input[name="title"]');
-                        if (titleInput) titleInput.value = '';
+                        const resData = await response.json();
 
-                        const durationInput = form.querySelector('input[name="duration"]');
-                        if (durationInput) durationInput.value = '';
+                        if (isCreateForm) {
+                            // Reset các ô nhập liệu của form tạo mới
+                            const titleInput = form.querySelector('input[name="title"]');
+                            if (titleInput) titleInput.value = '';
 
-                        const contentInput = form.querySelector('textarea[name="content"]');
-                        if (contentInput) contentInput.value = '';
+                            const durationInput = form.querySelector('input[name="duration"]');
+                            if (durationInput) durationInput.value = '';
 
-                        const fileInput = this.$refs.s3FileInput;
-                        if (fileInput) fileInput.value = '';
+                            const contentInput = form.querySelector('textarea[name="content"]');
+                            if (contentInput) contentInput.value = '';
 
-                        this.s3Key = '';
-                        this.videoOriginalName = '';
-                        this.videoSize = '';
-                        this.videoMime = '';
-                        this.isUploading = false;
-                        this.uploadProgress = 0;
-                        this.uploadStatus = 'idle';
-                        this.uploadStatusMessage = '';
+                            const fileInput = this.$refs.s3FileInput;
+                            if (fileInput) fileInput.value = '';
+
+                            this.s3Key = '';
+                            this.videoOriginalName = '';
+                            this.videoSize = '';
+                            this.videoMime = '';
+                            this.isUploading = false;
+                            this.uploadProgress = 0;
+                            this.uploadStatus = 'idle';
+                            this.uploadStatusMessage = '';
+                        }
 
                         if (window.triggerHlsPolling) {
                             window.triggerHlsPolling();
                         }
 
+                        // Hiển thị thông báo thành công
                         if (window.showCurriculumToast) {
-                            window.showCurriculumToast('Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.');
+                            const msg = isCreateForm
+                                ? 'Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.'
+                                : 'Đã cập nhật bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.';
+                            window.showCurriculumToast(msg);
                         }
                     } else {
                         form.submit();
@@ -954,7 +964,17 @@ if (typeof window !== 'undefined') {
     window.CourseUploadQueue = CourseUploadQueue;
     window.createLessonFormState = createLessonFormState;
     window.initCurriculumHlsPolling = initCurriculumHlsPolling;
+    window.showCurriculumToast = showCurriculumToast;
+
+    // Cảnh báo người dùng nếu reload hoặc thoát trang trong lúc video đang upload
+    window.addEventListener('beforeunload', function (e) {
+        if (window.CourseUploadQueue && window.CourseUploadQueue.queue) {
+            const hasActive = window.CourseUploadQueue.queue.some(i => i.status === 'uploading' || i.status === 'queued');
+            if (hasActive) {
+                e.preventDefault();
+                e.returnValue = 'Video bài học vẫn đang được tải lên nền. Nếu bạn rời khỏi hoặc tải lại trang, tiến trình tải video sẽ bị gián đoạn.';
+                return e.returnValue;
+            }
+        }
+    });
 }
-
-
-
