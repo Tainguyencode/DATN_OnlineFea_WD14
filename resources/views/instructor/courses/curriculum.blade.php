@@ -111,12 +111,13 @@
 
     {{-- THÔNG BÁO BẢO MẬT HLS CHUNG DUY NHẤT VÀ NÚT GỬI DUYỆT (Requirement 7, 8, 14, 15, 16, 18) --}}
     @php
+        $totalVideoLessons = $course->lessons()->where('type', 'video')->count();
         $hasIncompleteHls = $course->hasIncompleteHlsVideos();
         $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasIncompleteHls;
     @endphp
 
     <div id="common-hls-banner-wrapper"
-         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $hasIncompleteHls ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900' }}">
+         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasIncompleteHls ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900') }}">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-3">
                 <span id="common-hls-icon" class="text-xl shrink-0">
@@ -126,7 +127,7 @@
                     <p id="common-hls-message" class="text-sm font-bold">
                         @if($hasIncompleteHls)
                             Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.
-                        @else
+                        @elseif($totalVideoLessons > 0)
                             Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.
                         @endif
                     </p>
