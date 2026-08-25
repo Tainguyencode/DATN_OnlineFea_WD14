@@ -169,15 +169,36 @@
                        class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('description', 'storeSection') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">
                 @error('description', 'storeSection') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
-            <button type="submit"
-                    class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
-                + Thêm chương
-            </button>
+            <div class="flex flex-col gap-2 sm:flex-row">
+                <button type="submit"
+                        class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer sm:w-auto">
+                    + Thêm chương
+                </button>
+                <button
+                    type="button"
+                    data-lesson-import-open
+                    aria-controls="lesson-import-dialog"
+                    aria-haspopup="dialog"
+                    class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 sm:w-auto"
+                >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10M18 15v6m-3-3h6" />
+                    </svg>
+                    Nhập từ Excel
+                </button>
+            </div>
         </div>
     </form>
 
+    @include('instructor.courses.partials.lesson-import-modal', ['course' => $course])
+
     <div class="space-y-5">
         @forelse($curriculumSections as $section)
+            @php
+                $hasInvalidSectionDescription = filled($section->description)
+                    && \App\Models\CourseSection::descriptionContainsMarkup($section->description);
+                $safeSectionDescription = $hasInvalidSectionDescription ? null : $section->description;
+            @endphp
             <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-100 bg-slate-50 px-5 py-4">
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -196,8 +217,8 @@
                                 @endif
                             </div>
                             <h3 class="mt-2 text-lg font-bold text-slate-950">{{ $section->title }}</h3>
-                            @if($section->description)
-                                <p class="mt-1 text-sm leading-6 text-slate-500">{{ $section->description }}</p>
+                            @if(filled($safeSectionDescription))
+                                <p class="mt-1 text-sm leading-6 text-slate-500">{{ $safeSectionDescription }}</p>
                             @endif
                         </div>
                         <div class="flex shrink-0 flex-wrap gap-2">
@@ -216,7 +237,10 @@
                                         </label>
                                         <label class="block">
                                             <span class="mb-1 block text-xs font-bold text-slate-600">Mô tả</span>
-                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $section->description }}</textarea>
+                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $safeSectionDescription }}</textarea>
+                                            @if($hasInvalidSectionDescription)
+                                                <p class="mt-1 text-xs font-semibold text-amber-700">Mô tả cũ chứa dữ liệu không hợp lệ. Hãy nhập lại mô tả bằng văn bản thuần.</p>
+                                            @endif
                                             @error('description', 'updateSection_'.$section->id) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                         </label>
                                         <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 cursor-pointer">Lưu chương</button>

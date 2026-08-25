@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Instructor;
 
 use App\Models\Course;
+use App\Models\CourseSection;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreChapterRequest extends FormRequest
@@ -17,8 +18,22 @@ class StoreChapterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->route('section')) {
-            $this->errorBag = 'updateSection_'.$this->route('section')->id;
+        $title = $this->input('title');
+        $description = $this->input('description');
+
+        $this->merge([
+            'title' => is_string($title) ? trim($title) : $title,
+            'description' => is_string($description)
+                ? (trim($description) !== '' ? trim($description) : null)
+                : $description,
+        ]);
+
+        $section = $this->route('section');
+        if ($section) {
+            $sectionId = $section instanceof CourseSection
+                ? $section->id
+                : (is_object($section) ? ($section->id ?? '') : $section);
+            $this->errorBag = 'updateSection_'.$sectionId;
         } else {
             $this->errorBag = 'storeSection';
         }
@@ -31,7 +46,16 @@ class StoreChapterRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
+            'description' => [
+                'nullable',
+                'string',
+                'max:1000',
+                static function (string $attribute, mixed $value, callable $fail): void {
+                    if (CourseSection::descriptionContainsMarkup($value)) {
+                        $fail('Mô tả chương chỉ được chứa văn bản thuần, không chứa HTML hoặc mã Blade.');
+                    }
+                },
+            ],
         ];
     }
 
