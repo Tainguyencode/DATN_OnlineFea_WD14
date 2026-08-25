@@ -12,6 +12,7 @@
         "laravel/socialite": "*",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.35",
+        "maatwebsite/excel": "^4.0",
         "php-ffmpeg/php-ffmpeg": "^1.4",
         "socialiteproviders/microsoft": "*",
         "stripe/stripe-php": "^21.0"

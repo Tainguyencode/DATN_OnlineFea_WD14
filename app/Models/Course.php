@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Data\CourseSubmissionCheckResult;
 use App\Enums\CourseStatus;
+use App\Services\ContentUpdateService;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Model Quản lý Khóa học Trực tuyến (Course Model)
- * 
+ *
  * Đại diện cho một khóa học trên hệ thống LMS với đầy đủ thông tin:
  * - Thông tin cơ bản: Tên khóa học, mô tả, ảnh thumbnail, video preview, danh mục, giảng viên tạo.
  * - Tài chính & Giá bán: Giá gốc (`price`), giá khuyến mãi (`discount_price`), giá hiệu lực (`effective_price`).
@@ -59,8 +60,6 @@ class Course extends Model
         'pending_update',
         'rejected_update',
     ];
-
-
 
     /** Nhãn tiếng Việt cho từng trạng thái */
     public const STATUS_LABELS = [
@@ -238,7 +237,7 @@ class Course extends Model
         }
 
         if (Storage::disk('public')->exists($this->thumbnail)) {
-            return asset('storage/' . $this->thumbnail);
+            return asset('storage/'.$this->thumbnail);
         }
 
         return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80';
@@ -307,12 +306,12 @@ class Course extends Model
     {
         return $query->where(function ($q) {
             $q->where('courses.is_published', true)
-              ->orWhereIn('courses.status', [
-                  self::STATUS_PUBLISHED,
-                  self::STATUS_APPROVED,
-                  self::STATUS_PENDING_UPDATE,
-                  self::STATUS_REJECTED_UPDATE,
-              ]);
+                ->orWhereIn('courses.status', [
+                    self::STATUS_PUBLISHED,
+                    self::STATUS_APPROVED,
+                    self::STATUS_PENDING_UPDATE,
+                    self::STATUS_REJECTED_UPDATE,
+                ]);
         })->whereNotIn('courses.status', [
             self::STATUS_DRAFT,
             self::STATUS_SUBMITTED,
@@ -321,11 +320,11 @@ class Course extends Model
             self::STATUS_ARCHIVED,
         ])->whereHas('instructor', function ($iq) {
             $iq->where('instructor_status', 'approved')
-               ->where('is_active', true)
-               ->where(function ($aq) {
-                   $aq->whereNull('account_status')
-                      ->orWhereNotIn('account_status', ['locked', 'suspended']);
-               });
+                ->where('is_active', true)
+                ->where(function ($aq) {
+                    $aq->whereNull('account_status')
+                        ->orWhereNotIn('account_status', ['locked', 'suspended']);
+                });
         });
     }
 
@@ -370,6 +369,7 @@ class Course extends Model
             if ($instructor && $instructor->instructor_status !== 'approved') {
                 return 'Đã duyệt nội dung (Chờ duyệt GV)';
             }
+
             return 'Đã duyệt';
         }
 
@@ -397,16 +397,20 @@ class Course extends Model
     /** Tính tổng thời lượng video (giây) của tất cả bài học */
     public function totalVideoDurationSeconds(): int
     {
-        $sections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
-        
+        $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+
         $totalSeconds = 0;
         foreach ($sections as $section) {
             foreach ($section->lessons as $lesson) {
-                if (!empty($lesson->is_pending_deletion)) {
+                if (! empty($lesson->is_pending_deletion)) {
                     continue;
                 }
-                $dur = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
-                $totalSeconds += $dur;
+
+                if (! $lesson->hasVideoSource()) {
+                    continue;
+                }
+
+                $totalSeconds += $lesson->effectiveDurationSeconds();
             }
         }
 
@@ -422,12 +426,12 @@ class Course extends Model
     /** Tổng số bài học */
     public function lessonCount(): int
     {
-        $sections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
-        
+        $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+
         $count = 0;
         foreach ($sections as $section) {
             foreach ($section->lessons as $lesson) {
-                if (!empty($lesson->is_pending_deletion)) {
+                if (! empty($lesson->is_pending_deletion)) {
                     continue;
                 }
                 $count++;
@@ -454,12 +458,12 @@ class Course extends Model
      */
     public function hasIncompleteHlsVideos(): bool
     {
-        $sections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+        $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
         $checkedLessonIds = [];
 
         foreach ($sections as $section) {
             foreach ($section->lessons as $lesson) {
-                if (!empty($lesson->is_pending_deletion)) {
+                if (! empty($lesson->is_pending_deletion)) {
                     continue;
                 }
                 if ($lesson->id) {
@@ -547,6 +551,6 @@ class Course extends Model
             return $this->chapters->flatMap(fn ($c) => $c->lessons ?? collect())->count();
         }
 
-        return \App\Models\Lesson::where('course_id', $this->id)->count();
+        return Lesson::where('course_id', $this->id)->count();
     }
 }
