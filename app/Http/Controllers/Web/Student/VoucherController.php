@@ -37,7 +37,7 @@ class VoucherController extends Controller
 
         // Wrap các public coupon thành UserCoupon giả lập để thống nhất định dạng hiển thị
         $publicUserCoupons = $publicCoupons->map(function (Coupon $coupon) use ($userId) {
-            $userCoupon = new UserCoupon();
+            $userCoupon = new UserCoupon;
             $userCoupon->user_id = $userId;
             $userCoupon->coupon_id = $coupon->id;
             $userCoupon->source = $coupon->creator_type === 'instructor' ? 'instructor' : 'system';
@@ -60,6 +60,7 @@ class VoucherController extends Controller
                 $item->status_label = 'Không khả dụng';
                 $item->scope_label = 'Không khả dụng';
                 $item->creator_tag = 'Không khả dụng';
+
                 return $item;
             }
 
@@ -105,7 +106,7 @@ class VoucherController extends Controller
                 if ($coupon->course) {
                     $item->scope_label = "Khóa học {$coupon->course->title}";
                 } else {
-                    $item->scope_label = "Tất cả khóa học trên hệ thống";
+                    $item->scope_label = 'Tất cả khóa học trên hệ thống';
                 }
             }
 

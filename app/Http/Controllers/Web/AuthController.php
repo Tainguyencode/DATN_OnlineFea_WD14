@@ -10,12 +10,12 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\VerifyEmailCodeRequest;
 use App\Models\Cart;
+use App\Models\Category;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\EmailVerificationCode;
 use App\Models\Enrollment;
 use App\Models\Order;
-use App\Models\StudyGroup;
 use App\Models\User;
 use App\Models\Wishlist;
 use App\Services\ActivityLogService;
@@ -91,7 +91,7 @@ class AuthController extends Controller
         abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
 
         $categories = $role === 'instructor'
-            ? \App\Models\Category::whereNull('parent_id')->with('children')->orderBy('name')->get()
+            ? Category::whereNull('parent_id')->with('children')->orderBy('name')->get()
             : collect();
 
         return view('auth.register-role', [

@@ -9,6 +9,7 @@ use App\Models\InstructorProfile;
 use App\Models\User;
 use App\Services\InstructorRequirementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -28,7 +29,7 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
     {
         return Category::create([
             'name' => $name,
-            'slug' => Str::slug($name) . '-' . Str::random(5),
+            'slug' => Str::slug($name).'-'.Str::random(5),
             'parent_id' => $parentId,
             'is_active' => true,
         ]);
@@ -304,7 +305,7 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
         [$user, $profile] = $this->createInstructor([], ['category_id' => $cat->id]);
 
         // Giả lập dữ liệu cũ chưa có trong pivot table
-        \Illuminate\Support\Facades\DB::table('instructor_profile_teaching_fields')->where('instructor_profile_id', $profile->id)->delete();
+        DB::table('instructor_profile_teaching_fields')->where('instructor_profile_id', $profile->id)->delete();
 
         $service = app(InstructorRequirementService::class);
         $requirementData = $service->getRequirementsForInstructor($user);

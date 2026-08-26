@@ -23,7 +23,7 @@ class InstructorRequirementService
         if ($categories->isEmpty()) {
             return [
                 'category' => null,
-                'categories' => new Collection(),
+                'categories' => new Collection,
                 'requirements' => [],
                 'categories_requirements' => [],
                 'summary' => [
@@ -85,7 +85,7 @@ class InstructorRequirementService
 
             foreach ($catRequirements as $req) {
                 // Đảm bảo không trùng ID nếu 2 category cùng kế thừa từ 1 category cha
-                $uniqueKey = $cat->id . '_' . $req->id;
+                $uniqueKey = $cat->id.'_'.$req->id;
 
                 // Tìm tài liệu nộp cho requirement này
                 $reqCerts = $certificates->filter(function ($cert) use ($req) {

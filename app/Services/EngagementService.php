@@ -156,7 +156,7 @@ class EngagementService
                 $message = "Bài học tiếp theo của bạn là: {$nextLesson->title}.";
                 $url = route('courses.lessons.show', [$course, $nextLesson]);
             } else {
-                $message = "Bài học tiếp theo của bạn đang chờ đón trong khóa học.";
+                $message = 'Bài học tiếp theo của bạn đang chờ đón trong khóa học.';
                 $url = $course->learningEntryUrl() ?? route('courses.show', $course->slug);
             }
         }

@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\EmailVerificationService;
 use App\Services\RoleSyncService;
+use Carbon\Carbon;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -17,7 +19,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 #[Fillable([
     'name', 'username', 'email', 'password', 'role', 'avatar', 'bio', 'phone',
@@ -65,6 +69,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
     }
 
     public function wishlists(): HasMany
@@ -186,7 +195,6 @@ class User extends Authenticatable implements MustVerifyEmail
             ->withPivot('earned_at');
     }
 
-
     public function emailVerificationCodes(): HasMany
     {
         return $this->hasMany(EmailVerificationCode::class);
@@ -299,7 +307,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->account_status === 'locked' || $this->account_status === 'suspended';
     }
 
-    public function getInstructorDeadlineAtAttribute(): ?\Carbon\Carbon
+    public function getInstructorDeadlineAtAttribute(): ?Carbon
     {
         if ($this->profile_deadline_at) {
             return $this->profile_deadline_at;
@@ -480,7 +488,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getTotalEarningsAttribute(): float
     {
-        return (float) \Illuminate\Support\Facades\DB::table('order_items')
+        return (float) DB::table('order_items')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('courses', 'courses.id', '=', 'order_items.course_id')
             ->where('courses.instructor_id', $this->id)
@@ -510,13 +518,13 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * Lấy toàn bộ danh sách các ngành/lĩnh vực giảng dạy đã đăng ký của Giảng viên
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Category>
+     * @return Collection<int, Category>
      */
-    public function getTeachingCategories(): \Illuminate\Database\Eloquent\Collection
+    public function getTeachingCategories(): Collection
     {
         $profile = $this->relationLoaded('instructorProfile') ? $this->instructorProfile : $this->instructorProfile()->first();
         if (! $profile) {
-            return new \Illuminate\Database\Eloquent\Collection();
+            return new Collection;
         }
 
         $categories = $profile->teachingCategories()->get();
@@ -527,10 +535,10 @@ class User extends Authenticatable implements MustVerifyEmail
         // Fallback cho legacy category_id hoặc teaching_field
         $singleCat = $this->getTeachingCategory();
         if ($singleCat) {
-            return new \Illuminate\Database\Eloquent\Collection([$singleCat]);
+            return new Collection([$singleCat]);
         }
 
-        return new \Illuminate\Database\Eloquent\Collection();
+        return new Collection;
     }
 
     public function getTeachingCategory(): ?Category
@@ -557,14 +565,14 @@ class User extends Authenticatable implements MustVerifyEmail
 
         // Fallback: match by teaching_field or specialty string
         if ($profile->teaching_field) {
-            $cat = Category::where('name', $profile->teaching_field)->orWhere('slug', \Illuminate\Support\Str::slug($profile->teaching_field))->first();
+            $cat = Category::where('name', $profile->teaching_field)->orWhere('slug', Str::slug($profile->teaching_field))->first();
             if ($cat) {
                 return $cat;
             }
         }
 
         if ($profile->specialty) {
-            $cat = Category::where('name', $profile->specialty)->orWhere('slug', \Illuminate\Support\Str::slug($profile->specialty))->first();
+            $cat = Category::where('name', $profile->specialty)->orWhere('slug', Str::slug($profile->specialty))->first();
             if ($cat) {
                 return $cat;
             }

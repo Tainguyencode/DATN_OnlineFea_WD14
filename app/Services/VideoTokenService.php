@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 class VideoTokenService
 {
     private const TOKEN_PREFIX = 'video_token_';
+
     private const TOKEN_LIFETIME = 600; // 10 phút
 
     /**
@@ -16,7 +17,7 @@ class VideoTokenService
     public function generateToken(int $userId, int $lessonId): string
     {
         $token = Str::random(60);
-        $cacheKey = self::TOKEN_PREFIX . $token;
+        $cacheKey = self::TOKEN_PREFIX.$token;
 
         $data = [
             'user_id' => $userId,
@@ -33,11 +34,11 @@ class VideoTokenService
      */
     public function verifyToken(string $token, int $lessonId): bool
     {
-        $cacheKey = self::TOKEN_PREFIX . $token;
-        
+        $cacheKey = self::TOKEN_PREFIX.$token;
+
         $data = Cache::get($cacheKey);
 
-        if (!$data) {
+        if (! $data) {
             return false;
         }
 
@@ -49,9 +50,9 @@ class VideoTokenService
      */
     public function getUserIdFromToken(string $token): ?int
     {
-        $cacheKey = self::TOKEN_PREFIX . $token;
+        $cacheKey = self::TOKEN_PREFIX.$token;
         $data = Cache::get($cacheKey);
-        
+
         return $data['user_id'] ?? null;
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminCourseReviewRequest;
 use App\Models\ActivityLog;
 use App\Models\Category;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseReview;
 use App\Models\CourseReviewItem;
@@ -14,9 +15,11 @@ use App\Models\Enrollment;
 use App\Models\HomepageSetting;
 use App\Models\Lesson;
 use App\Models\Order;
-use App\Models\User;
 use App\Models\Review;
+use App\Models\SystemSetting;
+use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -169,12 +172,12 @@ class ManageController extends Controller
         ]);
 
         $instructorPendingCoursesCount = Course::where('instructor_id', $course->instructor_id)
-            ->whereIn('status', [\App\Enums\CourseStatus::PendingReview->value, \App\Enums\CourseStatus::PendingUpdate->value])
+            ->whereIn('status', [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value])
             ->count();
 
         $instructorTotalCoursesCount = Course::where('instructor_id', $course->instructor_id)->count();
 
-        $curriculumSections = app(\App\Services\ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
+        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
 
         $allLessons = $curriculumSections->flatMap(fn ($section) => $section->lessons);
         $totalLessons = $allLessons->count();
@@ -182,22 +185,9 @@ class ManageController extends Controller
         $totalVideoDurationMinutes = $course->totalVideoDurationMinutes();
 
         $videoLessons = $allLessons
-            ->filter(function ($lesson) {
-                if ($lesson->type !== 'video') {
-                    return false;
-                }
-
-                $payload = isset($lesson->draft_update) ? ($lesson->draft_update->payload ?? []) : [];
-
-                return filled($payload['original_video_key'] ?? null)
-                    || filled($payload['hls_manifest_key'] ?? null)
-                    || filled($payload['video_path'] ?? null)
-                    || filled($lesson->original_video_key)
-                    || filled($lesson->hls_manifest_key)
-                    || filled($lesson->video_path);
-            })
+            ->filter(fn ($lesson) => $lesson->type === 'video' && filled($lesson->video_path))
             ->map(fn ($lesson) => [
-                'id' => isset($lesson->draft_update) ? 'update_les_'.$lesson->draft_update->id : $lesson->id,
+                'id' => $lesson->id,
                 'title' => $lesson->title,
             ])
             ->values();
@@ -373,23 +363,23 @@ class ManageController extends Controller
             $update = null;
             if (str_starts_with((string) $lessonId, 'update_les_')) {
                 $updateId = str_replace('update_les_', '', $lessonId);
-                $update = \App\Models\ContentUpdate::find($updateId);
+                $update = ContentUpdate::find($updateId);
             } else {
-                $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+                $update = ContentUpdate::where('course_id', $course->id)
                     ->where('entity_id', $lessonId)
-                    ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                    ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
                     ->first();
 
                 if (! $update) {
                     $lesson = Lesson::find($lessonId);
                     if ($lesson) {
-                        $update = \App\Models\ContentUpdate::create([
+                        $update = ContentUpdate::create([
                             'course_id' => $course->id,
                             'created_by' => $course->instructor_id ?? $course->user_id ?? 1,
-                            'type' => \App\Models\ContentUpdate::TYPE_LESSON,
-                            'action' => \App\Models\ContentUpdate::ACTION_UPDATE,
+                            'type' => ContentUpdate::TYPE_LESSON,
+                            'action' => ContentUpdate::ACTION_UPDATE,
                             'entity_id' => $lesson->id,
-                            'status' => \App\Models\ContentUpdate::STATUS_PENDING,
+                            'status' => ContentUpdate::STATUS_PENDING,
                             'payload' => [
                                 'title' => $lesson->title,
                                 'type' => $lesson->type,
@@ -410,17 +400,17 @@ class ManageController extends Controller
 
                 if ($action === CourseReview::ACTION_REJECTED || $action === CourseReview::ACTION_NEED_REVISION) {
                     if ($lessonStatus === 'fail' || $lessonStatus === 'need_revision') {
-                        $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
+                        $update->status = ContentUpdate::STATUS_REJECTED;
                         $update->rejection_reason = $adminNote ?: $comment;
                         $update->reviewed_by = $request->user()?->id ?? auth()->id();
                         $update->reviewed_at = now();
                     } elseif ($lessonStatus === 'pass') {
-                        $update->status = \App\Models\ContentUpdate::STATUS_PENDING;
+                        $update->status = ContentUpdate::STATUS_PENDING;
                         $update->rejection_reason = null;
                     }
                 } elseif ($action === CourseReview::ACTION_APPROVED) {
                     if ($lessonStatus === 'pass') {
-                        $update->status = \App\Models\ContentUpdate::STATUS_APPROVED;
+                        $update->status = ContentUpdate::STATUS_APPROVED;
                         $update->rejection_reason = null;
                     }
                 }
@@ -468,30 +458,30 @@ class ManageController extends Controller
         $update = null;
         if (str_starts_with((string) $lessonId, 'update_les_')) {
             $updateId = str_replace('update_les_', '', $lessonId);
-            $update = \App\Models\ContentUpdate::find($updateId);
+            $update = ContentUpdate::find($updateId);
         } else {
             // First check if lessonId matches a ContentUpdate primary key directly
-            $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+            $update = ContentUpdate::where('course_id', $course->id)
                 ->where('id', $lessonId)
                 ->first();
 
             if (! $update) {
-                $update = \App\Models\ContentUpdate::where('course_id', $course->id)
+                $update = ContentUpdate::where('course_id', $course->id)
                     ->where('entity_id', $lessonId)
-                    ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+                    ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
                     ->first();
             }
 
             if (! $update) {
                 $lesson = Lesson::find($lessonId);
                 if ($lesson) {
-                    $update = \App\Models\ContentUpdate::create([
+                    $update = ContentUpdate::create([
                         'course_id' => $course->id,
                         'created_by' => $course->instructor_id ?? $course->user_id ?? 1,
-                        'type' => \App\Models\ContentUpdate::TYPE_LESSON,
-                        'action' => \App\Models\ContentUpdate::ACTION_UPDATE,
+                        'type' => ContentUpdate::TYPE_LESSON,
+                        'action' => ContentUpdate::ACTION_UPDATE,
                         'entity_id' => $lesson->id,
-                        'status' => \App\Models\ContentUpdate::STATUS_PENDING,
+                        'status' => ContentUpdate::STATUS_PENDING,
                         'payload' => [
                             'title' => $lesson->title,
                             'type' => $lesson->type,
@@ -511,10 +501,10 @@ class ManageController extends Controller
             $update->payload = $payload;
 
             if ($reviewStatus === 'pass') {
-                $update->status = \App\Models\ContentUpdate::STATUS_APPROVED;
+                $update->status = ContentUpdate::STATUS_APPROVED;
                 $update->rejection_reason = null;
             } else {
-                $update->status = \App\Models\ContentUpdate::STATUS_REJECTED;
+                $update->status = ContentUpdate::STATUS_REJECTED;
                 $update->rejection_reason = $adminNote;
             }
 
@@ -617,19 +607,26 @@ class ManageController extends Controller
 
     public function revenue(Request $request): View
     {
+        $filters = $request->validate([
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'month' => ['nullable', 'integer', 'between:1,12'],
+            'year' => ['nullable', 'integer', 'between:2000,'.(now()->year + 1)],
+        ]);
+
         $query = Order::where('status', 'paid');
 
-        if ($request->filled('start_date')) {
-            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        if (! empty($filters['start_date'])) {
+            $query->whereDate('created_at', '>=', $filters['start_date']);
         }
-        if ($request->filled('end_date')) {
-            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        if (! empty($filters['end_date'])) {
+            $query->whereDate('created_at', '<=', $filters['end_date']);
         }
-        if ($request->filled('month')) {
-            $query->whereMonth('created_at', $request->input('month'));
+        if (! empty($filters['month'])) {
+            $query->whereMonth('created_at', $filters['month']);
         }
-        if ($request->filled('year')) {
-            $query->whereYear('created_at', $request->input('year'));
+        if (! empty($filters['year'])) {
+            $query->whereYear('created_at', $filters['year']);
         }
 
         $totalGross = (float) $query->sum('total_amount');
@@ -637,40 +634,40 @@ class ManageController extends Controller
 
         $orderIds = (clone $query)->pluck('id');
 
-        $hasItems = DB::table('order_items')
+        $totalCommission = (float) DB::table('order_items')
             ->whereIn('order_id', $orderIds)
-            ->exists();
+            ->sum('commission_amount');
+        $totalInstructorEarning = (float) DB::table('order_items')
+            ->whereIn('order_id', $orderIds)
+            ->sum('instructor_earning');
 
-        if ($hasItems) {
-            $totalCommission = (float) DB::table('order_items')
-                ->whereIn('order_id', $orderIds)
-                ->sum('commission_amount');
-
-            $totalInstructorEarning = (float) DB::table('order_items')
-                ->whereIn('order_id', $orderIds)
-                ->sum('instructor_earning');
-        } else {
-            // Fallback tạm tính 20% / 80% cho các đơn hàng cũ chưa có thông tin order_items
-            $totalCommission = $totalGross * 0.2;
-            $totalInstructorEarning = $totalGross * 0.8;
-        }
+        // Legacy orders without order_items still need to reconcile with gross revenue.
+        $legacyGross = (float) (clone $query)
+            ->whereDoesntHave('items')
+            ->sum('total_amount');
+        $defaultCommissionRate = (float) SystemSetting::get(
+            'default_commission_rate',
+            config('course.default_commission_rate', 20.00)
+        );
+        $totalCommission += $legacyGross * ($defaultCommissionRate / 100);
+        $totalInstructorEarning += $legacyGross * (1 - ($defaultCommissionRate / 100));
 
         $monthExpr = DB::connection()->getDriverName() === 'sqlite'
             ? "strftime('%Y-%m', orders.created_at)"
             : "DATE_FORMAT(orders.created_at, '%Y-%m')";
 
         $monthlyQuery = Order::where('status', 'paid');
-        if ($request->filled('start_date')) {
-            $monthlyQuery->whereDate('created_at', '>=', $request->input('start_date'));
+        if (! empty($filters['start_date'])) {
+            $monthlyQuery->whereDate('created_at', '>=', $filters['start_date']);
         }
-        if ($request->filled('end_date')) {
-            $monthlyQuery->whereDate('created_at', '<=', $request->input('end_date'));
+        if (! empty($filters['end_date'])) {
+            $monthlyQuery->whereDate('created_at', '<=', $filters['end_date']);
         }
-        if ($request->filled('month')) {
-            $monthlyQuery->whereMonth('created_at', $request->input('month'));
+        if (! empty($filters['month'])) {
+            $monthlyQuery->whereMonth('created_at', $filters['month']);
         }
-        if ($request->filled('year')) {
-            $monthlyQuery->whereYear('created_at', $request->input('year'));
+        if (! empty($filters['year'])) {
+            $monthlyQuery->whereYear('created_at', $filters['year']);
         }
 
         $monthly = $monthlyQuery
@@ -681,24 +678,41 @@ class ManageController extends Controller
             ->get();
 
         // Single query aggregation for monthly financials
-        $monthlyFinancials = DB::table('order_items')
+        $monthlyFinancialsQuery = DB::table('order_items')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.status', 'paid')
+            ->where('orders.status', 'paid');
+        if (! empty($filters['start_date'])) {
+            $monthlyFinancialsQuery->whereDate('orders.created_at', '>=', $filters['start_date']);
+        }
+        if (! empty($filters['end_date'])) {
+            $monthlyFinancialsQuery->whereDate('orders.created_at', '<=', $filters['end_date']);
+        }
+        if (! empty($filters['month'])) {
+            $monthlyFinancialsQuery->whereMonth('orders.created_at', $filters['month']);
+        }
+        if (! empty($filters['year'])) {
+            $monthlyFinancialsQuery->whereYear('orders.created_at', $filters['year']);
+        }
+        $monthlyFinancials = $monthlyFinancialsQuery
             ->selectRaw("{$monthExpr} as month, SUM(order_items.commission_amount) as commission, SUM(order_items.instructor_earning) as instructor_earning")
+            ->groupBy('month')
+            ->get()
+            ->keyBy('month');
+
+        $monthlyLegacy = (clone $monthlyQuery)
+            ->whereDoesntHave('items')
+            ->selectRaw("{$monthExpr} as month, SUM(total_amount) as total")
             ->groupBy('month')
             ->get()
             ->keyBy('month');
 
         foreach ($monthly as $row) {
             $monthData = $monthlyFinancials->get($row->month);
-            if ($monthData) {
-                $row->commission = (float) $monthData->commission;
-                $row->instructor_earning = (float) $monthData->instructor_earning;
-            } else {
-                // Fallback dữ liệu cũ
-                $row->commission = $row->total * 0.2;
-                $row->instructor_earning = $row->total * 0.8;
-            }
+            $legacyMonthGross = (float) ($monthlyLegacy->get($row->month)?->total ?? 0);
+            $legacyCommission = $legacyMonthGross * ($defaultCommissionRate / 100);
+            $row->commission = (float) ($monthData?->commission ?? 0) + $legacyCommission;
+            $row->instructor_earning = (float) ($monthData?->instructor_earning ?? 0)
+                + ($legacyMonthGross - $legacyCommission);
         }
 
         $courseRevenue = DB::table('order_items')
@@ -711,7 +725,7 @@ class ManageController extends Controller
                 'courses.title as course_title',
                 'instructors.name as instructor_name',
                 DB::raw('COUNT(DISTINCT order_items.order_id) as sales_count'),
-                DB::raw('SUM(order_items.price) as gross_amount'),
+                DB::raw('SUM(order_items.commission_amount + order_items.instructor_earning) as gross_amount'),
                 DB::raw('SUM(order_items.commission_amount) as commission_amount'),
                 DB::raw('SUM(order_items.instructor_earning) as instructor_earning')
             )
@@ -719,12 +733,12 @@ class ManageController extends Controller
             ->orderByDesc('gross_amount')
             ->get();
 
-        $filters = [
-            'start_date' => $request->input('start_date'),
-            'end_date' => $request->input('end_date'),
-            'month' => $request->input('month'),
-            'year' => $request->input('year'),
-        ];
+        $filters = array_merge([
+            'start_date' => null,
+            'end_date' => null,
+            'month' => null,
+            'year' => null,
+        ], $filters);
 
         return view('admin.revenue', compact('totalGross', 'totalCommission', 'totalInstructorEarning', 'totalOrders', 'monthly', 'courseRevenue', 'filters'));
     }
@@ -812,10 +826,11 @@ class ManageController extends Controller
         abort_unless($review->isReply(), 404);
 
         $review->update([
-            'is_hidden' => !$review->is_hidden,
+            'is_hidden' => ! $review->is_hidden,
         ]);
 
         $statusMsg = $review->is_hidden ? 'Đã ẩn phản hồi.' : 'Đã hiển thị phản hồi.';
+
         return back()->with('success', $statusMsg);
     }
 }

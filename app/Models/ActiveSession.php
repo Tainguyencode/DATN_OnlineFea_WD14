@@ -17,12 +17,12 @@ class ActiveSession extends Model
         'platform',
         'device_name',
         'is_active',
-        'last_activity'
+        'last_activity',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
-        'last_activity' => 'datetime'
+        'last_activity' => 'datetime',
     ];
 
     public function user(): BelongsTo

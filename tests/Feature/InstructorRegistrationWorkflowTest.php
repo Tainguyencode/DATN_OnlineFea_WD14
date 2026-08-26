@@ -4,10 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Course;
-use App\Models\InstructorCertificate;
-use App\Models\Role;
 use App\Models\User;
-use App\Services\CaptchaService;
 use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -231,6 +228,9 @@ class InstructorRegistrationWorkflowTest extends TestCase
             'account_status' => 'active',
             'email_verified_at' => now(),
         ]);
+        $category = Category::create(['name' => 'Lập trình', 'slug' => 'lap-trinh-c8', 'status' => true]);
+        $profile = $instructor->instructorProfile()->create(['category_id' => $category->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
 
         $this->actingAs($admin)
             ->post(route('admin.instructors.applications.approve', $instructor))

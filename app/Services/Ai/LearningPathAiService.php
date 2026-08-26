@@ -104,11 +104,11 @@ class LearningPathAiService
         }
 
         // 2. Xử lý phản hồi xác nhận đổi chủ đề từ người dùng
-        $isConfirmingSwitch = str_contains(mb_strtolower($cleanPrompt), 'đồng ý') || 
+        $isConfirmingSwitch = str_contains(mb_strtolower($cleanPrompt), 'đồng ý') ||
                               str_contains(mb_strtolower($cleanPrompt), 'tạo lộ trình mới') ||
                               str_starts_with(mb_strtolower($cleanPrompt), 'có,');
-        
-        $isDismissingSwitch = str_contains(mb_strtolower($cleanPrompt), 'giữ lộ trình cũ') || 
+
+        $isDismissingSwitch = str_contains(mb_strtolower($cleanPrompt), 'giữ lộ trình cũ') ||
                               str_contains(mb_strtolower($cleanPrompt), 'tiếp tục lộ trình hiện tại');
 
         if ($pendingTopicChange && ($isConfirmingSwitch || $isDismissingSwitch)) {
@@ -120,7 +120,7 @@ class LearningPathAiService
 
             if ($isDismissingSwitch) {
                 $dismissMsg = 'Đã giữ nguyên lộ trình hiện tại của bạn. Bạn muốn tìm hiểu thêm thông tin gì về lộ trình này?';
-                
+
                 AiChatMessage::create([
                     'conversation_id' => $conversation->id,
                     'user_id' => $conversation->user_id,
@@ -155,7 +155,7 @@ class LearningPathAiService
             $profile['target_role'] = $newTopic;
             $contextData['current_roadmap'] = null;
             $contextData['profile'] = $profile;
-            $conversation->title = 'Lộ trình: ' . $newTopic;
+            $conversation->title = 'Lộ trình: '.$newTopic;
             $conversation->current_topic = $newTopic;
             $cleanPrompt = "Hãy xây dựng một lộ trình học tập chi tiết, bài bản từ đầu cho {$newTopic}.";
         }

@@ -30,7 +30,7 @@ class TestSmtpMail extends Command
         $this->info("Mailer: {$mailer}");
         $this->info("Host: {$host}:{$port}");
         $this->info("Scheme: {$scheme}");
-        $this->info('Username: '.($username !== '' ? $this->maskEmail($username) : '(trống)'));
+        $this->info('Username: '.($username !== '' ? $username : '(trống)'));
 
         if ($mailer !== 'smtp') {
             $this->error('MAIL_MAILER hiện không phải smtp.');
@@ -58,16 +58,5 @@ class TestSmtpMail extends Command
 
             return self::FAILURE;
         }
-    }
-
-    private function maskEmail(string $email): string
-    {
-        if (! str_contains($email, '@')) {
-            return '***';
-        }
-
-        [$local, $domain] = explode('@', $email, 2);
-
-        return substr($local, 0, 2).'***@'.$domain;
     }
 }

@@ -33,7 +33,7 @@ return new class extends Migration
         });
 
         Schema::table('ai_chat_messages', function (Blueprint $table) {
-            if (!Schema::hasColumn('ai_chat_messages', 'metadata')) {
+            if (! Schema::hasColumn('ai_chat_messages', 'metadata')) {
                 $table->json('metadata')->nullable()->after('content');
             }
         });

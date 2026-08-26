@@ -3,17 +3,18 @@
 namespace App\Http\Controllers\Web\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Assignment;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Submission;
-use App\Models\LessonProgress;
+use App\Services\LearningProgressService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 /**
  * Controller Xử lý Nộp bài tập dành cho Học viên (Student)
- * 
+ *
  * Chức năng chính:
  * 1. Đăng tải bài làm tự luận (Text phản hồi hoặc File bài làm đính kèm: PDF, ZIP, RAR, DOCX, Ảnh).
  * 2. Cập nhật tiến độ bài học (Lesson Progress) khi nộp bài thành công.
@@ -23,7 +24,7 @@ class AssignmentController extends Controller
 {
     /**
      * Xử lý nộp bài tập tự luận cho bài học.
-     * 
+     *
      * Quy trình xử lý:
      * 1. Kiểm tra học viên đã đăng ký khóa học (Enrollment active/completed) chưa.
      * 2. Kiểm tra bài học có gắn Assignment tự luận hay không.
@@ -31,13 +32,13 @@ class AssignmentController extends Controller
      * 4. Validate file upload (mimes: pdf, zip, rar, docx, png, jpg; max: 10MB) hoặc văn bản câu trả lời.
      * 5. Lưu file vào storage/app/public/assignment-submissions và cập nhật DB (updateOrCreate).
      * 6. Đánh dấu bài học này là Hoàn thành (is_completed = true).
-     * 
-     * @param Request $request Chứa 'content' (văn bản) hoặc 'file' (tệp đính kèm)
-     * @param Course $course Khóa học hiện tại
-     * @param Lesson $lesson Bài học hiện tại
+     *
+     * @param  Request  $request  Chứa 'content' (văn bản) hoặc 'file' (tệp đính kèm)
+     * @param  Course  $course  Khóa học hiện tại
+     * @param  Lesson  $lesson  Bài học hiện tại
      * @return RedirectResponse Quay lại trang bài học kèm thông báo kết quả
      */
-    public function submit(Request $request, Course $course, Lesson $lesson, \App\Services\LearningProgressService $progressService): RedirectResponse
+    public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): RedirectResponse
     {
         // 1. Kiểm tra xem học viên đã ghi danh vào khóa học này chưa
         $isEnrolled = $course->enrollments()
@@ -49,8 +50,8 @@ class AssignmentController extends Controller
 
         // 2. Đảm bảo bài học hiện tại có bài tập tự luận (tự động tạo nếu thiếu để tránh lỗi 404)
         $assignment = $lesson->assignment;
-        if (!$assignment) {
-            $assignment = \App\Models\Assignment::create([
+        if (! $assignment) {
+            $assignment = Assignment::create([
                 'course_id' => $course->id,
                 'lesson_id' => $lesson->id,
                 'title' => $lesson->title ?? 'Bài tập thực hành',

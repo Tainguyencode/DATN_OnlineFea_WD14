@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ConvertContentUpdateVideoToHLS;
+use App\Jobs\ConvertVideoToHLS;
+use App\Models\ContentUpdate;
 use App\Models\Course;
+use App\Models\Lesson;
 use App\Services\AwsS3UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,18 +40,18 @@ class S3MultipartUploadController extends Controller
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         $allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
 
-        if (!in_array($extension, $allowedExtensions, true)) {
+        if (! in_array($extension, $allowedExtensions, true)) {
             return response()->json([
                 'message' => 'Định dạng video không được hỗ trợ. Vui lòng chọn tệp MP4, MOV, AVI, WEBM, hoặc MKV.',
             ], 422);
         }
 
-        $contentType = $validated['content_type'] ?: 'video/' . ($extension === 'mov' ? 'quicktime' : $extension);
+        $contentType = $validated['content_type'] ?: 'video/'.($extension === 'mov' ? 'quicktime' : $extension);
         $lessonId = $validated['lesson_id'] ?? null;
 
         // Sinh hoặc sử dụng S3 object key bảo mật theo cấu trúc quy định
         $key = $validated['key'] ?? $this->s3Service->generateVideoObjectKey($course->id, $lessonId, $filename);
-        if (!empty($validated['key'])) {
+        if (! empty($validated['key'])) {
             $this->validateKeyPrefix($course, $key);
         }
 
@@ -173,7 +177,7 @@ class S3MultipartUploadController extends Controller
             $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
 
             // Kích hoạt ConvertVideoToHLS nếu lesson đã được tạo/lưu trong DB
-            $lesson = \App\Models\Lesson::where('original_video_key', $key)->first();
+            $lesson = Lesson::where('original_video_key', $key)->first();
             if ($lesson && ! $lesson->isHlsReady()) {
                 $lessonUpdateData = [
                     'upload_status' => 'uploaded',
@@ -184,21 +188,21 @@ class S3MultipartUploadController extends Controller
                     $lessonUpdateData['duration_seconds'] = $duration;
                 }
                 $lesson->update($lessonUpdateData);
-                \Illuminate\Support\Facades\Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key, 'duration' => $duration]);
-                \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key, 'duration' => $duration]);
+                ConvertVideoToHLS::dispatch($lesson);
             }
 
             // Kích hoạt ConvertContentUpdateVideoToHLS nếu có ContentUpdate draft tương ứng
-            $contentUpdate = \App\Models\ContentUpdate::where('type', \App\Models\ContentUpdate::TYPE_LESSON)
+            $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
                 ->where('course_id', $course->id)
-                ->where('status', \App\Models\ContentUpdate::STATUS_DRAFT)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
                 ->whereJsonContains('payload->original_video_key', $key)
                 ->latest()
                 ->first();
 
             if ($contentUpdate) {
-                \Illuminate\Support\Facades\Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
-                \App\Jobs\ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
+                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
 
             return response()->json([
@@ -249,7 +253,7 @@ class S3MultipartUploadController extends Controller
     private function validateKeyPrefix(Course $course, string $key): void
     {
         $expectedPrefix = "originals/courses/{$course->id}/";
-        if (!Str::startsWith($key, $expectedPrefix)) {
+        if (! Str::startsWith($key, $expectedPrefix)) {
             abort(403, 'Đường dẫn S3 không hợp lệ hoặc không thuộc khóa học này.');
         }
     }

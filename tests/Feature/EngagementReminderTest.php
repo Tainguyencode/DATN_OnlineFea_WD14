@@ -2,18 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Mail\LearningReminderMail;
 use App\Models\Category;
 use App\Models\Course;
-use App\Models\CourseSection;
 use App\Models\Enrollment;
-use App\Models\Lesson;
-use App\Models\PushNotification;
 use App\Models\User;
 use App\Services\EngagementService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\LearningReminderMail;
 use Tests\TestCase;
 
 class EngagementReminderTest extends TestCase
@@ -114,13 +111,13 @@ class EngagementReminderTest extends TestCase
     private function createCourse(): Course
     {
         $instructor = User::factory()->create(['role' => 'instructor']);
-        $category = Category::create(['name' => 'Cat ' . uniqid(), 'slug' => 'cat-' . uniqid()]);
+        $category = Category::create(['name' => 'Cat '.uniqid(), 'slug' => 'cat-'.uniqid()]);
 
         return Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,
-            'title' => 'Khóa học Test ' . uniqid(),
-            'slug' => 'khoa-hoc-test-' . uniqid(),
+            'title' => 'Khóa học Test '.uniqid(),
+            'slug' => 'khoa-hoc-test-'.uniqid(),
             'status' => 'published',
             'is_published' => true,
         ]);

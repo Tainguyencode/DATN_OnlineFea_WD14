@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Category;
 use App\Models\AiChatMessage;
 use App\Models\AiConversation;
+use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;

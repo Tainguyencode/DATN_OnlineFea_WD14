@@ -10,6 +10,7 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -253,7 +254,7 @@ class CartCheckoutTest extends TestCase
 
     public function test_payment_simulation_is_blocked_in_production(): void
     {
-        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+        $this->withoutMiddleware(PreventRequestForgery::class);
 
         $order = Order::create([
             'order_code' => 'ORD-PRODUCTION-GUARD',
@@ -731,5 +732,3 @@ class CartCheckoutTest extends TestCase
         $this->assertEquals(100000, $order->total_amount);
     }
 }
-
-

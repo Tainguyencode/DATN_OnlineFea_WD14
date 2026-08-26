@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Service Quản lý Rút tiền Giảng viên & Danh sách Ngân hàng VietQR (PayoutService)
- * 
+ *
  * Chức năng chính:
  * 1. Lấy danh sách 50+ Ngân hàng thương mại tại Việt Nam (MBBank, Vietcombank, Techcombank, Agribank, VPBank...) từ VietQR API v2.
  * 2. Lưu Cache 24 giờ (`vietnam_banks_list`) tránh quá tải API bên thứ ba.
@@ -31,7 +31,7 @@ class PayoutService
         ['code' => 'TPB', 'shortName' => 'TPBank', 'name' => 'Ngân hàng TMCP Tiên Phong', 'bin' => '970423', 'logo' => 'https://api.vietqr.io/img/TPB.png'],
         ['code' => 'STB', 'shortName' => 'Sacombank', 'name' => 'Ngân hàng TMCP Sài Gòn Thương Tín', 'bin' => '970403', 'logo' => 'https://api.vietqr.io/img/STB.png'],
         ['code' => 'VAB', 'shortName' => 'VietABank', 'name' => 'Ngân hàng TMCP Việt Á', 'bin' => '970427', 'logo' => 'https://api.vietqr.io/img/VAB.png'],
-        ['code' => 'VAB', 'shortName' => 'Agribank', 'name' => 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam', 'bin' => '970405', 'logo' => 'https://api.vietqr.io/img/VBA.png'],
+        ['code' => 'VBA', 'shortName' => 'Agribank', 'name' => 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam', 'bin' => '970405', 'logo' => 'https://api.vietqr.io/img/VBA.png'],
         ['code' => 'HDB', 'shortName' => 'HDBank', 'name' => 'Ngân hàng TMCP Phát triển TP. HCM', 'bin' => '970437', 'logo' => 'https://api.vietqr.io/img/HDB.png'],
         ['code' => 'MSB', 'shortName' => 'MSB', 'name' => 'Ngân hàng TMCP Hàng Hải Việt Nam', 'bin' => '970426', 'logo' => 'https://api.vietqr.io/img/MSB.png'],
         ['code' => 'SHB', 'shortName' => 'SHB', 'name' => 'Ngân hàng TMCP Sài Gòn - Hà Nội', 'bin' => '970443', 'logo' => 'https://api.vietqr.io/img/SHB.png'],
@@ -45,14 +45,14 @@ class PayoutService
 
     /**
      * Lấy danh sách ngân hàng Việt Nam từ VietQR API có caching 24 giờ.
-     * 
+     *
      * @return array Danh sách ngân hàng [code, shortName, name, bin, logo]
      */
     public function getVietNamBanks(): array
     {
         return Cache::remember('vietnam_banks_list', 86400, function () {
             try {
-                $response = Http::timeout(5)->withoutVerifying()->get('https://api.vietqr.io/v2/banks');
+                $response = $this->secureHttpClient(5)->get('https://api.vietqr.io/v2/banks');
                 if ($response->successful() && $response->json('code') === '00') {
                     $banks = $response->json('data', []);
                     if (! empty($banks)) {
@@ -68,7 +68,7 @@ class PayoutService
                     }
                 }
             } catch (\Exception $e) {
-                Log::warning('Không thể kết nối VietQR Bank API, dùng danh sách ngân hàng mặc định: ' . $e->getMessage());
+                Log::warning('Không thể kết nối VietQR Bank API, dùng danh sách ngân hàng mặc định: '.$e->getMessage());
             }
 
             return static::$fallbackBanks;
@@ -77,8 +77,8 @@ class PayoutService
 
     /**
      * Sinh URL ảnh mã QR Chuyển khoản VietQR (Napas247) động chứa sẵn số tiền, nội dung rút tiền và tên tài khoản.
-     * 
-     * @param Withdrawal $withdrawal Yêu cầu rút tiền
+     *
+     * @param  Withdrawal  $withdrawal  Yêu cầu rút tiền
      * @return string URL ảnh QR Code VietQR
      */
     public function generateVietQrUrl(Withdrawal $withdrawal): string
@@ -87,22 +87,22 @@ class PayoutService
         $accNo = urlencode($withdrawal->bank_account_number);
         $amount = (int) $withdrawal->amount;
         $accountName = urlencode($withdrawal->bank_account_name);
-        $addInfo = urlencode("RUT TIEN MAGV " . $withdrawal->user_id . " REQ" . $withdrawal->id);
+        $addInfo = urlencode('RUT TIEN MAGV '.$withdrawal->user_id.' REQ'.$withdrawal->id);
 
         return "https://img.vietqr.io/image/{$bankCode}-{$accNo}-compact2.png?amount={$amount}&addInfo={$addInfo}&accountName={$accountName}";
     }
 
     /**
      * Tự động chi tiền cho Giảng viên qua PayOS Payout API
-     * 
-     * @param Withdrawal $withdrawal Yêu cầu rút tiền
+     *
+     * @param  Withdrawal  $withdrawal  Yêu cầu rút tiền
      * @return array Kết quả trả về từ PayOS
      */
-    public function processAutoPayout(Withdrawal $withdrawal): array
+    public function processAutoPayout(Withdrawal $withdrawal, ?string $idempotencyKey = null): array
     {
-        $clientId = env('PAYOS_PAYOUT_CLIENT_ID', env('PAYOS_CLIENT_ID'));
-        $apiKey = env('PAYOS_PAYOUT_API_KEY', env('PAYOS_API_KEY'));
-        $checksumKey = env('PAYOS_PAYOUT_CHECKSUM_KEY', env('PAYOS_CHECKSUM_KEY'));
+        $clientId = config('services.payos.payout_client_id');
+        $apiKey = config('services.payos.payout_api_key');
+        $checksumKey = config('services.payos.payout_checksum_key');
 
         if (empty($clientId) || empty($apiKey) || empty($checksumKey)) {
             throw new \Exception('Chưa cấu hình API Keys Chi hộ (PayOS Payout) trong file .env');
@@ -111,17 +111,22 @@ class PayoutService
         $banks = $this->getVietNamBanks();
         $bankInfo = collect($banks)->first(function ($b) use ($withdrawal) {
             $code = strtolower($withdrawal->bank_code ?? '');
+
             return strtolower($b['code'] ?? '') === $code || strtolower($b['shortName'] ?? '') === $code;
         });
 
-        $bin = $bankInfo['bin'] ?? '970422'; // Mặc định BIN MBBank nếu không khớp
+        if (! $bankInfo || empty($bankInfo['bin'])) {
+            throw new \Exception('Không xác định được ngân hàng nhận tiền; đã dừng payout để tránh chuyển nhầm ngân hàng.');
+        }
+
+        $bin = $bankInfo['bin'];
 
         $amount = (int) $withdrawal->amount;
-        $description = 'RUT TIEN REQ ' . $withdrawal->id;
+        $description = 'RUT TIEN REQ '.$withdrawal->id;
         $description = preg_replace('/[^a-zA-Z0-9 ]/', '', $description);
         $description = substr($description, 0, 25);
 
-        $referenceId = 'PO' . $withdrawal->id . 'T' . time();
+        $referenceId = 'PO-'.$withdrawal->id;
 
         $params = [
             'amount' => $amount,
@@ -134,16 +139,14 @@ class PayoutService
         // Sắp xếp các tham số theo bảng chữ cái và mã hóa URI (rawurlencode) theo chuẩn PayOS SDK
         ksort($params);
         $stringToSign = collect($params)
-            ->map(fn($v, $k) => rawurlencode((string) $k) . '=' . rawurlencode((string) $v))
+            ->map(fn ($v, $k) => rawurlencode((string) $k).'='.rawurlencode((string) $v))
             ->implode('&');
 
         $signature = hash_hmac('sha256', $stringToSign, $checksumKey);
 
-        $params['signature'] = $signature;
+        $idempotencyKey ??= 'PAYOUT-'.$withdrawal->id;
 
-        $idempotencyKey = 'PO-REQ-' . $withdrawal->id . '-' . time();
-
-        $response = Http::withoutVerifying()->withHeaders([
+        $response = $this->secureHttpClient(15)->retry(2, 250)->withHeaders([
             'x-client-id' => $clientId,
             'x-api-key' => $apiKey,
             'x-idempotency-key' => $idempotencyKey,
@@ -156,9 +159,19 @@ class PayoutService
 
         if ($response->failed() || ($code !== '' && $code !== '00' && $code !== '0')) {
             $msg = $resData['desc'] ?? $resData['message'] ?? $response->body();
-            throw new \Exception('Lỗi từ PayOS Payout API (' . ($code ?: 'HTTP ' . $response->status()) . '): ' . $msg);
+            throw new \Exception('Lỗi từ PayOS Payout API ('.($code ?: 'HTTP '.$response->status()).'): '.$msg);
         }
 
         return $resData['data'] ?? $resData;
+    }
+
+    private function secureHttpClient(int $timeout)
+    {
+        $request = Http::timeout($timeout);
+        $caBundle = config('services.payos.ca_bundle');
+
+        return is_string($caBundle) && $caBundle !== ''
+            ? $request->withOptions(['verify' => $caBundle])
+            : $request;
     }
 }

@@ -9,18 +9,20 @@ use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
-use App\Models\Submission;
 use App\Models\Category;
 use App\Models\Certificate;
 use App\Models\Chapter;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
-use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\Submission;
 use App\Models\User;
+use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
 use App\Services\NotificationService;
@@ -124,9 +126,9 @@ class CourseController extends Controller
         }
 
         if ($course->isPublished()) {
-            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
-                \App\Models\ContentUpdate::TYPE_COURSE,
-                \App\Models\ContentUpdate::ACTION_UPDATE,
+            app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_COURSE,
+                ContentUpdate::ACTION_UPDATE,
                 $course->id,
                 $course->id,
                 array_merge($validated, ['sale_price' => $validated['discount_price'] ?? null]),
@@ -394,7 +396,7 @@ class CourseController extends Controller
         $activities = collect();
 
         // Enrollment event
-        $activities->push((object)[
+        $activities->push((object) [
             'type' => 'enrollment',
             'title' => 'Ghi danh khóa học',
             'description' => 'Đã tham gia và kích hoạt học tập trong khóa học.',
@@ -405,7 +407,7 @@ class CourseController extends Controller
         foreach ($lessonProgress as $progress) {
             if ($progress->is_completed && $progress->completed_at) {
                 $lesson = $lessons->firstWhere('id', $progress->lesson_id);
-                $activities->push((object)[
+                $activities->push((object) [
                     'type' => 'lesson_completed',
                     'title' => 'Hoàn thành bài học',
                     'description' => $lesson ? "Đã hoàn thành bài học: \"{$lesson->title}\"" : 'Đã hoàn thành bài học',
@@ -420,11 +422,11 @@ class CourseController extends Controller
             foreach ($attempts as $attempt) {
                 if ($attempt->completed_at) {
                     $statusStr = $attempt->passed ? 'Đạt' : 'Không đạt';
-                    $activities->push((object)[
+                    $activities->push((object) [
                         'type' => 'quiz_attempt',
                         'title' => 'Làm bài trắc nghiệm',
-                        'description' => $quiz 
-                            ? "Làm bài trắc nghiệm: \"{$quiz->title}\" - Kết quả: {$attempt->score}/{$attempt->total_score} ({$attempt->percent}%) - {$statusStr}" 
+                        'description' => $quiz
+                            ? "Làm bài trắc nghiệm: \"{$quiz->title}\" - Kết quả: {$attempt->score}/{$attempt->total_score} ({$attempt->percent}%) - {$statusStr}"
                             : "Làm bài trắc nghiệm - Kết quả: {$attempt->percent}% - {$statusStr}",
                         'time' => $attempt->completed_at,
                     ]);
@@ -436,7 +438,7 @@ class CourseController extends Controller
         foreach ($submissions as $assignmentId => $submission) {
             $assignment = $assignments->firstWhere('id', $assignmentId);
             if ($submission->submitted_at) {
-                $activities->push((object)[
+                $activities->push((object) [
                     'type' => 'assignment_submission',
                     'title' => 'Nộp bài thực hành',
                     'description' => $assignment ? "Đã nộp bài thực hành: \"{$assignment->title}\"" : 'Đã nộp bài thực hành',
@@ -444,11 +446,11 @@ class CourseController extends Controller
                 ]);
             }
             if ($submission->status === 'graded' && $submission->graded_at) {
-                $activities->push((object)[
+                $activities->push((object) [
                     'type' => 'assignment_graded',
                     'title' => 'Bài thực hành được chấm điểm',
-                    'description' => $assignment 
-                        ? "Bài thực hành \"{$assignment->title}\" đã được chấm: {$submission->score}/{$assignment->max_score} điểm" 
+                    'description' => $assignment
+                        ? "Bài thực hành \"{$assignment->title}\" đã được chấm: {$submission->score}/{$assignment->max_score} điểm"
                         : "Bài thực hành đã được chấm: {$submission->score} điểm",
                     'time' => $submission->graded_at,
                 ]);
@@ -457,7 +459,7 @@ class CourseController extends Controller
 
         // Certificate event
         if ($certificate && $certificate->issued_at) {
-            $activities->push((object)[
+            $activities->push((object) [
                 'type' => 'certificate',
                 'title' => 'Nhận chứng chỉ',
                 'description' => "Được cấp chứng chỉ hoàn thành khóa học (Mã số: {$certificate->certificate_code})",
@@ -473,7 +475,7 @@ class CourseController extends Controller
 
         // Warning: Chưa bắt đầu học
         $hasStarted = $lessonProgress->isNotEmpty() || $quizAttempts->isNotEmpty() || $submissions->isNotEmpty();
-        if ($enrollment->progress_percent == 0 && !$hasStarted) {
+        if ($enrollment->progress_percent == 0 && ! $hasStarted) {
             $alerts->push('Học viên chưa bắt đầu học khóa học này.');
         }
 
@@ -488,7 +490,7 @@ class CourseController extends Controller
             $attempts = $quizAttempts->get($quiz->id, collect());
             if ($attempts->isNotEmpty()) {
                 $hasPassed = $attempts->where('passed', true)->isNotEmpty();
-                if (!$hasPassed) {
+                if (! $hasPassed) {
                     $alerts->push("Bài trắc nghiệm \"{$quiz->title}\" chưa đạt điểm yêu cầu (Điểm đạt yêu cầu: {$quiz->pass_score}%).");
                 }
             }
@@ -497,7 +499,7 @@ class CourseController extends Controller
         // Warning: Bài thực hành chưa nộp hoặc chưa đạt
         foreach ($assignments as $assignment) {
             $submission = $submissions->get($assignment->id);
-            if (!$submission) {
+            if (! $submission) {
                 if ($assignment->is_required) {
                     $alerts->push("Học viên chưa nộp bài thực hành bắt buộc: \"{$assignment->title}\".");
                 }
@@ -619,12 +621,19 @@ class CourseController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã gửi thông báo thành công cho học viên ' . $student->name . '.',
+            'message' => 'Đã gửi thông báo thành công cho học viên '.$student->name.'.',
         ]);
     }
 
     public function revenue(Request $request): View
     {
+        $filters = $request->validate([
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'month' => ['nullable', 'integer', 'between:1,12'],
+            'year' => ['nullable', 'integer', 'between:2000,'.(now()->year + 1)],
+        ]);
+
         $user = auth()->user();
         $instructorCourses = Course::where('instructor_id', $user->id)->get()->keyBy('id');
         $courseIds = $instructorCourses->keys()->toArray();
@@ -640,94 +649,77 @@ class CourseController extends Controller
             ]);
         }
 
-        $query = Order::where('status', 'paid')
-            ->whereHas('items', function ($q) use ($courseIds) {
-                $q->whereIn('course_id', $courseIds);
+        $applyOrderFilters = static function ($query) use ($filters): void {
+            $query->where('status', 'paid');
+            if (! empty($filters['start_date'])) {
+                $query->whereDate('created_at', '>=', $filters['start_date']);
+            }
+            if (! empty($filters['end_date'])) {
+                $query->whereDate('created_at', '<=', $filters['end_date']);
+            }
+            if (! empty($filters['month'])) {
+                $query->whereMonth('created_at', $filters['month']);
+            }
+            if (! empty($filters['year'])) {
+                $query->whereYear('created_at', $filters['year']);
+            }
+        };
+
+        $itemQuery = OrderItem::query()
+            ->whereIn('course_id', $courseIds)
+            ->whereHas('order', $applyOrderFilters);
+
+        $totals = (clone $itemQuery)
+            ->selectRaw('COALESCE(SUM(commission_amount + instructor_earning), 0) as gross')
+            ->selectRaw('COALESCE(SUM(commission_amount), 0) as commission')
+            ->selectRaw('COALESCE(SUM(instructor_earning), 0) as earning')
+            ->first();
+
+        $totalGross = (float) $totals->gross;
+        $totalCommission = (float) $totals->commission;
+        $totalRevenue = (float) $totals->earning;
+
+        $courseRevenue = (clone $itemQuery)
+            ->select('course_id')
+            ->selectRaw('COUNT(DISTINCT order_id) as sales')
+            ->selectRaw('SUM(commission_amount + instructor_earning) as gross')
+            ->selectRaw('SUM(commission_amount) as commission')
+            ->selectRaw('SUM(instructor_earning) as total')
+            ->groupBy('course_id')
+            ->orderByDesc('gross')
+            ->get()
+            ->each(function (OrderItem $item) use ($instructorCourses): void {
+                $item->setRelation('course', $instructorCourses->get($item->course_id));
             });
 
-        if ($request->filled('start_date')) {
-            $query->whereDate('created_at', '>=', $request->input('start_date'));
-        }
-        if ($request->filled('end_date')) {
-            $query->whereDate('created_at', '<=', $request->input('end_date'));
-        }
-        if ($request->filled('month')) {
-            $query->whereMonth('created_at', $request->input('month'));
-        }
-        if ($request->filled('year')) {
-            $query->whereYear('created_at', $request->input('year'));
-        }
+        $studentPurchases = (clone $itemQuery)
+            ->with(['order.user:id,name,email,avatar', 'course:id,title'])
+            ->get()
+            ->sortByDesc(fn (OrderItem $item) => $item->order?->created_at)
+            ->map(function (OrderItem $item): object {
+                $commission = (float) $item->commission_amount;
+                $earning = (float) $item->instructor_earning;
 
-        $orders = $query->with(['items' => function ($q) use ($courseIds) {
-            $q->whereIn('course_id', $courseIds);
-        }, 'user:id,name,email,avatar'])->get();
-
-        $totalGross = 0;
-        $totalCommission = 0;
-        $totalRevenue = 0; // Thu nhập thực nhận
-        $courseSales = [];
-        $studentPurchases = [];
-
-        foreach ($orders as $order) {
-            $items = $order->items;
-            if (! is_iterable($items)) {
-                continue;
-            }
-
-            foreach ($items as $item) {
-                $cid = $item['course_id'] ?? null;
-                if (! in_array($cid, $courseIds, true)) {
-                    continue;
-                }
-
-                $price = (float) ($item['price'] ?? 0);
-                $commRate = (float) ($item['commission_rate'] ?? $user->getCommissionRate());
-                $commAmount = (float) ($item['commission_amount'] ?? (($price * $commRate) / 100));
-                $earning = (float) ($item['instructor_earning'] ?? ($price - $commAmount));
-
-                $totalGross += $price;
-                $totalCommission += $commAmount;
-                $totalRevenue += $earning;
-
-                if (! isset($courseSales[$cid])) {
-                    $courseSales[$cid] = [
-                        'course_id' => $cid,
-                        'gross' => 0,
-                        'commission' => 0,
-                        'total' => 0, // Net earning
-                        'sales' => 0,
-                        'course' => $instructorCourses->get($cid),
-                    ];
-                }
-
-                $courseSales[$cid]['gross'] += $price;
-                $courseSales[$cid]['commission'] += $commAmount;
-                $courseSales[$cid]['total'] += $earning;
-                $courseSales[$cid]['sales'] += 1;
-
-                $studentPurchases[] = (object) [
-                    'order_id' => $order->id,
-                    'order_code' => $order->order_code ?? ('ORD-' . $order->id),
-                    'user' => $order->user,
-                    'course_title' => $item['course_title'] ?? ($courseSales[$cid]['course']?->title ?? 'Khóa học'),
-                    'price' => $price,
-                    'commission_amount' => $commAmount,
+                return (object) [
+                    'order_id' => $item->order_id,
+                    'order_code' => $item->order?->order_code ?? ('ORD-'.$item->order_id),
+                    'user' => $item->order?->user,
+                    'course_title' => $item->course?->title ?? 'Khóa học',
+                    'price' => $commission + $earning,
+                    'commission_amount' => $commission,
                     'instructor_earning' => $earning,
-                    'payment_method' => strtoupper($order->payment_method ?? 'ONLINE'),
-                    'purchased_at' => $order->created_at,
+                    'payment_method' => strtoupper($item->order?->payment_method ?? 'ONLINE'),
+                    'purchased_at' => $item->order?->created_at,
                 ];
-            }
-        }
+            })
+            ->values();
 
-        $courseRevenue = collect($courseSales)->map(fn ($item) => (object) $item)->values();
-        $studentPurchases = collect($studentPurchases)->sortByDesc('purchased_at')->values();
-
-        $filters = [
-            'start_date' => $request->input('start_date'),
-            'end_date' => $request->input('end_date'),
-            'month' => $request->input('month'),
-            'year' => $request->input('year'),
-        ];
+        $filters = array_merge([
+            'start_date' => null,
+            'end_date' => null,
+            'month' => null,
+            'year' => null,
+        ], $filters);
 
         return view('instructor.revenue', compact('totalGross', 'totalCommission', 'totalRevenue', 'courseRevenue', 'studentPurchases', 'filters'));
     }
@@ -796,6 +788,7 @@ class CourseController extends Controller
                 $userAttempts = $attempts->get($userId, collect());
                 if ($userAttempts->isEmpty()) {
                     $quizStats[$userId] = null;
+
                     continue;
                 }
 
@@ -824,6 +817,7 @@ class CourseController extends Controller
                 $userSubmissions = $submissions->get($userId, collect());
                 if ($userSubmissions->isEmpty()) {
                     $labStats[$userId] = null;
+
                     continue;
                 }
 

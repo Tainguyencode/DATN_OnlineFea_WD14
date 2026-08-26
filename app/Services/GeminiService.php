@@ -2,13 +2,12 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Service Tương tác với Trí tuệ nhân tạo Google Gemini API (GeminiService)
- * 
+ *
  * Chức năng chính:
  * 1. `generateText`: Sinh văn bản tóm tắt bài học, trả lời câu hỏi AI Trợ lý học tập (Learning AI Assistant).
  * 2. `analyzeImage`: Phân tích hình ảnh / khung hình cắt từ video bài giảng bằng Gemini Multimodal Vision để phát hiện dấu hiệu vi phạm nội dung:
@@ -20,7 +19,7 @@ class GeminiService
 {
     /** URL API Google Generative AI */
     private const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
-    
+
     /** Danh sách các Model Gemini hỗ trợ thử lại khi model chính quá tải / 503 */
     private const CANDIDATE_MODELS = [
         'gemini-3.5-flash-lite',
@@ -32,8 +31,8 @@ class GeminiService
     /**
      * Sinh phản hồi văn bản từ Gemini cho trợ lý AI bài học (Tóm tắt, Giải đáp thắc mắc).
      *
-     * @param string $prompt Câu lệnh yêu cầu truyền tới AI
-     * @param array{max_tokens?: int, temperature?: float, timeout?: int} $options Cấu hình tùy chọn
+     * @param  string  $prompt  Câu lệnh yêu cầu truyền tới AI
+     * @param  array{max_tokens?: int, temperature?: float, timeout?: int}  $options  Cấu hình tùy chọn
      * @return array{text?: string, error?: string, _model_used?: string} Mảng chứa kết quả văn bản hoặc thông báo lỗi
      */
     public function generateText(string $prompt, array $options = []): array
@@ -68,7 +67,7 @@ class GeminiService
 
         foreach (self::CANDIDATE_MODELS as $model) {
             try {
-                $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
+                $url = self::API_URL.$model.':generateContent?key='.$apiKey;
 
                 $response = Http::withoutVerifying()
                     ->timeout($timeout)
@@ -97,7 +96,7 @@ class GeminiService
                 Log::warning("Google Gemini text skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
 
             } catch (\Throwable $e) {
-                $lastError = "[{$model}] Connection error: " . $e->getMessage();
+                $lastError = "[{$model}] Connection error: ".$e->getMessage();
                 Log::warning("Google Gemini text connection error [{$model}]", ['error' => $e->getMessage()]);
             }
         }
@@ -107,8 +106,8 @@ class GeminiService
 
     /**
      * Phân tích khung hình ảnh cắt từ Video bài giảng bằng AI Gemini Multimodal Vision để tự động kiểm duyệt nội dung.
-     * 
-     * @param string $imagePath Đường dẫn file ảnh thực tế trên ổ đĩa
+     *
+     * @param  string  $imagePath  Đường dẫn file ảnh thực tế trên ổ đĩa
      * @return array Kết quả dạng mảng JSON [violence, adult, weapon, tiktok_logo, youtube_logo, copyright_risk, summary, reason, confidence]
      */
     public function analyzeImage(string $imagePath): array
@@ -242,7 +241,7 @@ PROMPT;
 
         foreach (self::CANDIDATE_MODELS as $model) {
             try {
-                $url = self::API_URL . $model . ':generateContent?key=' . $apiKey;
+                $url = self::API_URL.$model.':generateContent?key='.$apiKey;
 
                 $response = Http::withoutVerifying()
                     ->timeout(25)
@@ -285,7 +284,7 @@ PROMPT;
                 Log::warning("Google Gemini image skip [{$model}]", ['status' => $response->status(), 'msg' => $msg]);
 
             } catch (\Throwable $e) {
-                $lastError = "[{$model}] Connection error: " . $e->getMessage();
+                $lastError = "[{$model}] Connection error: ".$e->getMessage();
                 Log::warning("Google Gemini image connection error [{$model}]", ['error' => $e->getMessage()]);
             }
         }
@@ -343,7 +342,7 @@ PROMPT;
 
     /**
      * Trích xuất API Key hợp lệ từ cấu hình `config/services.php`.
-     * 
+     *
      * @return string|null Chuỗi API Key hoặc null nếu chưa cài đặt
      */
     private function apiKey(): ?string

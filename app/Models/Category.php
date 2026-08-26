@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -60,7 +61,7 @@ class Category extends Model
         return $this->hasMany(InstructorDocumentRequirement::class, 'category_id')->orderBy('sort_order');
     }
 
-    public function instructorProfiles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function instructorProfiles(): BelongsToMany
     {
         return $this->belongsToMany(
             InstructorProfile::class,

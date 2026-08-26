@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ResubmitInstructorApplicationRequest;
-use App\Http\Requests\Instructor\UploadCertificateRequest;
+use App\Models\Category;
 use App\Models\InstructorApplication;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\InstructorRequirementService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -79,8 +80,8 @@ class InstructorPendingController extends Controller
         $deadlineAt = $user->instructor_deadline_at;
         $daysRemaining = $user->instructor_deadline_days_remaining;
 
-        $requirementData = app(\App\Services\InstructorRequirementService::class)->getRequirementsForInstructor($user);
-        $categories = \App\Models\Category::query()
+        $requirementData = app(InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $categories = Category::query()
             ->whereNull('parent_id')
             ->with(['children' => fn ($q) => $q->orderBy('name')])
             ->orderBy('name')
@@ -141,7 +142,7 @@ class InstructorPendingController extends Controller
         $requirement = null;
 
         if ($requirementId) {
-            $requirement = app(\App\Services\InstructorRequirementService::class)
+            $requirement = app(InstructorRequirementService::class)
                 ->validateRequirementForInstructor($user, (int) $requirementId);
             $documentType = $requirement->document_type;
             $defaultTitle = $requirement->document_title;
@@ -164,7 +165,7 @@ class InstructorPendingController extends Controller
 
             $storedPath = $file->storeAs(
                 "instructor-certificates/{$user->id}",
-                Str::uuid() . '.' . $extension,
+                Str::uuid().'.'.$extension,
                 'local'
             );
 
@@ -239,7 +240,7 @@ class InstructorPendingController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($certificate->original_name) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($certificate->original_name).'"',
             ]);
         }
 
@@ -249,7 +250,7 @@ class InstructorPendingController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($certificate->original_name) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($certificate->original_name).'"',
             ]);
         }
 
@@ -267,9 +268,10 @@ class InstructorPendingController extends Controller
                 ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ. Tài khoản đã chuyển về Học viên.');
         }
 
-        $completeness = app(\App\Services\InstructorRequirementService::class)->checkCanApproveInstructor($user);
+        $completeness = app(InstructorRequirementService::class)->checkCanApproveInstructor($user);
         if (! $completeness['can_approve']) {
             $missingList = implode(', ', $completeness['missing_titles']);
+
             return back()->with('error', "Hồ sơ của bạn còn thiếu tài liệu bắt buộc: {$missingList}. Vui lòng bổ sung đầy đủ trước khi nộp xét duyệt.");
         }
 
@@ -306,7 +308,7 @@ class InstructorPendingController extends Controller
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
         return redirect()->route('instructor.pending')
@@ -342,7 +344,7 @@ class InstructorPendingController extends Controller
                 $extension = $file->getClientOriginalExtension() ?: 'pdf';
                 $storedPath = $file->storeAs(
                     "instructor-certificates/{$user->id}",
-                    Str::uuid() . '.' . $extension,
+                    Str::uuid().'.'.$extension,
                     'local'
                 );
 
@@ -410,7 +412,7 @@ class InstructorPendingController extends Controller
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo gửi lại hồ sơ giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo gửi lại hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
         return redirect()->route('instructor.pending')

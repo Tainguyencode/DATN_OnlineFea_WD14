@@ -16,6 +16,7 @@ use App\Notifications\CertificateIssuedNotification;
 use App\Services\CourseCompletionService;
 use App\Services\LearningProgressService;
 use App\Services\RoleSyncService;
+use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -334,7 +335,7 @@ class CertificateEligibilityTest extends TestCase
             'completed_at' => now(),
         ]);
 
-        $this->mock(\Illuminate\Contracts\Notifications\Dispatcher::class, function ($mock) {
+        $this->mock(Dispatcher::class, function ($mock) {
             $mock->shouldReceive('send')->andThrow(new \RuntimeException('SMTP down'));
         });
 

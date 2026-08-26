@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Web\Instructor;
 
+use App\Enums\ReviewStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Review;
 use App\Services\NotificationService;
-use App\Enums\ReviewStatus;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class ReviewReplyController extends Controller
 {

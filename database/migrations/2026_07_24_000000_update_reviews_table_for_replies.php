@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -20,9 +20,9 @@ return new class extends Migration
                 // Drop foreign keys first to allow dropping unique index
                 $table->dropForeign('reviews_user_id_foreign');
                 $table->dropForeign('reviews_course_id_foreign');
-                
+
                 $table->dropUnique('reviews_user_id_course_id_unique');
-                
+
                 // Recreate foreign keys
                 $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
                 $table->foreign('course_id')->references('id')->on('courses')->cascadeOnDelete();
@@ -30,7 +30,8 @@ return new class extends Migration
                 // SQLite handles unique index drops differently
                 try {
                     $table->dropUnique(['user_id', 'course_id']);
-                } catch (\Exception $e) {}
+                } catch (Exception $e) {
+                }
             }
         });
 
@@ -67,7 +68,8 @@ return new class extends Migration
                 } else {
                     DB::statement('ALTER TABLE reviews DROP CONSTRAINT reviews_rating_between_1_and_5');
                 }
-            } catch (\Exception $e) {}
+            } catch (Exception $e) {
+            }
         }
 
         Schema::table('reviews', function (Blueprint $table) {
@@ -86,7 +88,8 @@ return new class extends Migration
             } else {
                 try {
                     $table->unique(['user_id', 'course_id']);
-                } catch (\Exception $e) {}
+                } catch (Exception $e) {
+                }
             }
         });
     }

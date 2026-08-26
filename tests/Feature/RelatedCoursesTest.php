@@ -588,9 +588,16 @@ class RelatedCoursesTest extends TestCase
         $categoryId = array_key_exists('category_id', $overrides)
             ? $overrides['category_id']
             : $this->category('Category '.$this->courseSequence)->id;
-        $instructorId = array_key_exists('instructor_id', $overrides)
-            ? $overrides['instructor_id']
-            : User::factory()->create(['role' => 'instructor'])->id;
+        if (array_key_exists('instructor_id', $overrides)) {
+            $instructorId = $overrides['instructor_id'];
+            User::query()->where('id', $instructorId)->update(['instructor_status' => 'approved', 'is_active' => true]);
+        } else {
+            $instructorId = User::factory()->create([
+                'role' => 'instructor',
+                'instructor_status' => 'approved',
+                'is_active' => true,
+            ])->id;
+        }
 
         $sequence = $this->courseSequence++;
 
