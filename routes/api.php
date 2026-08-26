@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\StudyGroupController;
+use App\Http\Controllers\Web\Student\VideoPlayerController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -83,16 +86,16 @@ Route::middleware(['web', 'auth'])->group(function () {
 
     // HLS Token API (Requires Auth & Enrolled)
     // Rate limit: 20 tokens per minute
-    Route::middleware('throttle:20,1')->get('/video/{lesson}/token', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'getToken'])
+    Route::middleware('throttle:20,1')->get('/video/{lesson}/token', [VideoPlayerController::class, 'getToken'])
         ->name('video.token');
 
     // Update Progress API (Called every 10s by frontend)
     // Rate limit: 20 requests per minute
-    Route::middleware('throttle:20,1')->post('/video/{lesson}/progress', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'updateProgress'])
+    Route::middleware('throttle:20,1')->post('/video/{lesson}/progress', [VideoPlayerController::class, 'updateProgress'])
         ->name('video.progress');
 
     // Get Progress API
-    Route::get('/video/{lesson}/progress', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'getProgress'])
+    Route::get('/video/{lesson}/progress', [VideoPlayerController::class, 'getProgress'])
         ->name('video.progress.get');
 
     // ============================================
@@ -119,10 +122,11 @@ Route::middleware(['web', 'auth'])->group(function () {
 
 // Session check endpoint (Called every 10-15s by frontend)
 // Bọc trong middleware web để SingleSessionMiddleware có thể bắt được session id.
-Route::middleware(['web'])->get('/session/check', function (Illuminate\Http\Request $request) {
-    if (!Illuminate\Support\Facades\Auth::check()) {
+Route::middleware(['web'])->get('/session/check', function (Request $request) {
+    if (! Auth::check()) {
         return response()->json(['active' => false, 'message' => 'Chưa đăng nhập.']);
     }
+
     // SingleSessionMiddleware will intercept and return active=false if invalid.
     // If it reaches here, the session is active.
     return response()->json(['active' => true]);
@@ -131,16 +135,16 @@ Route::middleware(['web'])->get('/session/check', function (Illuminate\Http\Requ
 // HLS Streaming API (No auth:sanctum required, protected by ?token=)
 // Rate limit: 300 requests per minute to allow downloading many .ts segments
 Route::middleware('throttle:300,1')->group(function () {
-    Route::get('/video/hls/{lesson}/master.m3u8', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'playlist'])
+    Route::get('/video/hls/{lesson}/master.m3u8', [VideoPlayerController::class, 'playlist'])
         ->name('video.hls.master');
 
-    Route::get('/video/hls/{lesson}/playlist.m3u8', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'playlist'])
+    Route::get('/video/hls/{lesson}/playlist.m3u8', [VideoPlayerController::class, 'playlist'])
         ->name('video.hls.playlist');
 
-    Route::get('/video/hls/{lesson}/enc.key', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'key'])
+    Route::get('/video/hls/{lesson}/enc.key', [VideoPlayerController::class, 'key'])
         ->name('video.hls.key');
-        
-    Route::get('/video/hls/{lesson}/{segment}', [\App\Http\Controllers\Web\Student\VideoPlayerController::class, 'segment'])
+
+    Route::get('/video/hls/{lesson}/{segment}', [VideoPlayerController::class, 'segment'])
         ->where('segment', '.*\.ts$')
         ->name('video.hls.segment');
 });

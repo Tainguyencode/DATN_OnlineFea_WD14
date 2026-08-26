@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Lesson;
 use App\Models\PushNotification;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -123,7 +124,7 @@ class NotificationService
     /**
      * Bắn thông báo khi khóa học có bài học / video mới được phê duyệt.
      */
-    public function notifyCourseLessonCreated(Course $course, \App\Models\Lesson $lesson): int
+    public function notifyCourseLessonCreated(Course $course, Lesson $lesson): int
     {
         $title = 'Khóa học có bài học mới';
         $message = "Khóa học {$course->title} vừa có bài học mới: {$lesson->title}.";
@@ -135,7 +136,7 @@ class NotificationService
     /**
      * Bắn thông báo khi bài học / video được cập nhật nội dung và được phê duyệt.
      */
-    public function notifyCourseLessonUpdated(Course $course, \App\Models\Lesson $lesson, bool $isVideoUpdated = false): int
+    public function notifyCourseLessonUpdated(Course $course, Lesson $lesson, bool $isVideoUpdated = false): int
     {
         $title = 'Bài học vừa được cập nhật';
         $message = $isVideoUpdated

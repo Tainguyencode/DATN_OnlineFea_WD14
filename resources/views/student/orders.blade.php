@@ -3,6 +3,7 @@
 @section('title', 'Lịch sử giao dịch & Đơn hàng - Website học online FEA')
 
 @section('content')
+@include('partials.financial-clean-icons')
 <div class="bg-slate-50 py-8 dark:bg-slate-950 min-h-[calc(100vh-16rem)]">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
         
@@ -51,6 +52,7 @@
                     'paid' => 'Đã thanh toán',
                     'pending' => 'Chờ thanh toán',
                     'cancelled' => 'Đã hủy / Thất bại',
+                    'refunded' => 'Đã hoàn tiền',
                 ];
             @endphp
 
@@ -135,13 +137,7 @@
 
                                     <td class="px-6 py-4">
                                         <span class="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                            @if(str_contains(strtolower($order->payment_method ?? ''), 'momo'))
-                                                <span class="rounded bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-700">MoMo</span>
-                                            @elseif(str_contains(strtolower($order->payment_method ?? ''), 'vnpay'))
-                                                <span class="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">VNPay</span>
-                                            @else
-                                                <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">Chuyển khoản</span>
-                                            @endif
+                                            <span class="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">PayOS VietQR</span>
                                         </span>
                                     </td>
 
@@ -153,6 +149,10 @@
                                         @elseif($order->status === 'pending')
                                             <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200">
                                                 <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Chờ thanh toán
+                                            </span>
+                                        @elseif($order->status === 'refunded')
+                                            <span class="inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700 border border-purple-200">
+                                                Đã hoàn tiền
                                             </span>
                                         @else
                                             <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 border border-rose-200">

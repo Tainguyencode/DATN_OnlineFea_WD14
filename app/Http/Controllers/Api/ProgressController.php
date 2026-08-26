@@ -6,6 +6,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
+use App\Services\PointService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -79,7 +80,7 @@ class ProgressController
         );
 
         // Cộng điểm hoàn thành bài giảng và kiểm tra hoàn thành chương/streak
-        app(\App\Services\PointService::class)->awardLessonCompletionPoints($user->id, $lessonId);
+        app(PointService::class)->awardLessonCompletionPoints($user->id, $lessonId);
 
         // 5. Kiểm tra xem user đã hoàn thành tất cả lessons của course này chưa
         $course = $lesson->course;

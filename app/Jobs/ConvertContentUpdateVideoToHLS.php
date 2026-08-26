@@ -3,6 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\ContentUpdate;
+use Aws\Command;
+use Aws\S3\S3Client;
+use Aws\S3\Transfer;
 use FFMpeg\FFMpeg;
 use FFMpeg\Format\Video\X264;
 use Illuminate\Bus\Queueable;
@@ -10,6 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +25,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $timeout = 3600;
 
     public function __construct(
@@ -43,8 +48,9 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             'queue_attempts' => $this->attempts(),
         ]);
 
-        if (!$s3OriginalKey && !$videoPath) {
+        if (! $s3OriginalKey && ! $videoPath) {
             Log::warning("[ConvertContentUpdateVideoToHLS] Skipped: ContentUpdate {$updateId} has no video source.");
+
             return;
         }
 
@@ -52,7 +58,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
         $payload['processing_status'] = 'processing';
         $this->contentUpdate->update(['payload' => $payload]);
 
-        $tmpDir = storage_path('app/tmp_ffmpeg/update_' . $updateId . '_' . Str::random(8));
+        $tmpDir = storage_path('app/tmp_ffmpeg/update_'.$updateId.'_'.Str::random(8));
         File::makeDirectory($tmpDir, 0755, true, true);
 
         $localInputPath = null;
@@ -61,13 +67,13 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             // ─── [BƯỚC 2] DOWNLOAD ORIGINAL ───
             if ($s3OriginalKey && Storage::disk('s3')->exists($s3OriginalKey)) {
                 $ext = pathinfo($s3OriginalKey, PATHINFO_EXTENSION) ?: 'mp4';
-                $localInputPath = $tmpDir . '/source_video.' . $ext;
+                $localInputPath = $tmpDir.'/source_video.'.$ext;
 
                 Log::info("[ConvertContentUpdateVideoToHLS] [DOWNLOAD ORIGINAL] Downloading from S3: {$s3OriginalKey} to {$localInputPath}");
 
                 $s3Stream = Storage::disk('s3')->readStream($s3OriginalKey);
-                if (!$s3Stream) {
-                    throw new \RuntimeException("Cannot read stream from S3: " . $s3OriginalKey);
+                if (! $s3Stream) {
+                    throw new \RuntimeException('Cannot read stream from S3: '.$s3OriginalKey);
                 }
 
                 $localFile = fopen($localInputPath, 'wb');
@@ -78,7 +84,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                 }
 
                 $sourceSize = file_exists($localInputPath) ? filesize($localInputPath) : 0;
-                Log::info("[ConvertContentUpdateVideoToHLS] [DOWNLOAD ORIGINAL] S3 download completed", [
+                Log::info('[ConvertContentUpdateVideoToHLS] [DOWNLOAD ORIGINAL] S3 download completed', [
                     'local_path' => $localInputPath,
                     'file_size_bytes' => $sourceSize,
                 ]);
@@ -90,17 +96,17 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                 Log::info("[ConvertContentUpdateVideoToHLS] [DOWNLOAD ORIGINAL] Using local source video: {$localInputPath}");
             }
 
-            if (!$localInputPath || !file_exists($localInputPath)) {
+            if (! $localInputPath || ! file_exists($localInputPath)) {
                 throw new \RuntimeException("Source video not found for ContentUpdate ID {$updateId}");
             }
 
             // ─── [BƯỚC 3] FFMPEG START ───
-            $hlsOutDir = $tmpDir . '/hls_out';
+            $hlsOutDir = $tmpDir.'/hls_out';
             File::makeDirectory($hlsOutDir, 0755, true, true);
-            $playlistPath = $hlsOutDir . '/playlist.m3u8';
+            $playlistPath = $hlsOutDir.'/playlist.m3u8';
 
             $ffmpegConfig = $this->getFfmpegConfig();
-            Log::info("[ConvertContentUpdateVideoToHLS] [FFMPEG START] Starting HLS conversion", [
+            Log::info('[ConvertContentUpdateVideoToHLS] [FFMPEG START] Starting HLS conversion', [
                 'update_id' => $updateId,
                 'input' => $localInputPath,
                 'output_playlist' => $playlistPath,
@@ -124,21 +130,21 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
 
             // Master manifest
             $masterContent = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720\nplaylist.m3u8\n";
-            file_put_contents($hlsOutDir . '/master.m3u8', $masterContent);
+            file_put_contents($hlsOutDir.'/master.m3u8', $masterContent);
 
             $hlsFiles = File::files($hlsOutDir);
             $segmentCount = count($hlsFiles);
 
             // ─── [BƯỚC 4] FFMPEG SUCCESS ───
-            Log::info("[ConvertContentUpdateVideoToHLS] [FFMPEG SUCCESS] Conversion completed successfully", [
+            Log::info('[ConvertContentUpdateVideoToHLS] [FFMPEG SUCCESS] Conversion completed successfully', [
                 'update_id' => $updateId,
                 'total_files_generated' => $segmentCount,
                 'playlist_size_bytes' => file_exists($playlistPath) ? filesize($playlistPath) : 0,
             ]);
 
             // ─── [BƯỚC 5] UPLOAD HLS ───
-            $s3HlsDir = 'hls/updates/' . $updateId;
-            $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+            $s3HlsDir = 'hls/updates/'.$updateId;
+            $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
 
             Log::info("[ConvertContentUpdateVideoToHLS] [UPLOAD HLS] Uploading {$segmentCount} files to destination", [
                 'use_s3' => $useS3,
@@ -149,33 +155,33 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                 try {
                     $s3Config = [
                         'version' => 'latest',
-                        'region'  => config('filesystems.disks.s3.region', 'ap-southeast-1'),
+                        'region' => config('filesystems.disks.s3.region', 'ap-southeast-1'),
                         'credentials' => [
-                            'key'    => config('filesystems.disks.s3.key'),
+                            'key' => config('filesystems.disks.s3.key'),
                             'secret' => config('filesystems.disks.s3.secret'),
                         ],
                     ];
-                    $s3Client = new \Aws\S3\S3Client($s3Config);
+                    $s3Client = new S3Client($s3Config);
                     $bucket = config('filesystems.disks.s3.bucket');
 
-                    $manager = new \Aws\S3\Transfer($s3Client, $hlsOutDir, 's3://' . $bucket . '/' . $s3HlsDir, [
+                    $manager = new Transfer($s3Client, $hlsOutDir, 's3://'.$bucket.'/'.$s3HlsDir, [
                         'concurrency' => 20,
-                        'before' => function (\Aws\Command $command) {
+                        'before' => function (Command $command) {
                             $key = $command['Key'] ?? '';
                             $mimeType = str_ends_with($key, '.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t';
                             $command['ContentType'] = $mimeType;
                         },
                     ]);
                     $manager->transfer();
-                } catch (\Throwable $e) {
-                    Log::warning("[ConvertContentUpdateVideoToHLS] S3 Transfer pool fallback: " . $e->getMessage());
+                } catch (Throwable $e) {
+                    Log::warning('[ConvertContentUpdateVideoToHLS] S3 Transfer pool fallback: '.$e->getMessage());
                     foreach ($hlsFiles as $file) {
                         $filename = $file->getFilename();
                         $filePath = $file->getRealPath();
                         $fileContent = file_get_contents($filePath);
                         $mimeType = str_ends_with($filename, '.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t';
 
-                        Storage::disk('s3')->put($s3HlsDir . '/' . $filename, $fileContent, [
+                        Storage::disk('s3')->put($s3HlsDir.'/'.$filename, $fileContent, [
                             'ContentType' => $mimeType,
                         ]);
                     }
@@ -183,11 +189,11 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             }
 
             // Sync sang local storage mirror
-            $localMirrorDir = Storage::disk('local')->path('lesson-hls/update_' . $updateId);
+            $localMirrorDir = Storage::disk('local')->path('lesson-hls/update_'.$updateId);
             File::makeDirectory($localMirrorDir, 0755, true, true);
             File::copyDirectory($hlsOutDir, $localMirrorDir);
 
-            Log::info("[ConvertContentUpdateVideoToHLS] [UPLOAD HLS] Upload completed", [
+            Log::info('[ConvertContentUpdateVideoToHLS] [UPLOAD HLS] Upload completed', [
                 'update_id' => $updateId,
                 'files_uploaded' => $segmentCount,
             ]);
@@ -195,7 +201,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             // ─── [BƯỚC 6] SAVE DATABASE ───
             $payload['processing_status'] = 'completed';
             $payload['upload_status'] = 'uploaded';
-            $payload['video_path'] = 'lesson-hls/update_' . $updateId . '/playlist.m3u8';
+            $payload['video_path'] = 'lesson-hls/update_'.$updateId.'/playlist.m3u8';
 
             // Trích xuất thời lượng video
             try {
@@ -206,18 +212,17 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                     $payload['duration'] = $extractedDuration;
                 }
             } catch (\Throwable $probeEx) {
-                Log::warning("[ConvertContentUpdateVideoToHLS] Could not probe video duration: " . $probeEx->getMessage());
+                Log::warning('[ConvertContentUpdateVideoToHLS] Could not probe video duration: '.$probeEx->getMessage());
             }
-
             if ($useS3) {
-                $payload['hls_manifest_key'] = $s3HlsDir . '/master.m3u8';
+                $payload['hls_manifest_key'] = $s3HlsDir.'/master.m3u8';
             }
 
             $this->contentUpdate->update([
                 'payload' => $payload,
             ]);
 
-            Log::info("[ConvertContentUpdateVideoToHLS] [SAVE DATABASE] Database payload updated successfully", [
+            Log::info('[ConvertContentUpdateVideoToHLS] [SAVE DATABASE] Database payload updated successfully', [
                 'update_id' => $updateId,
                 'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
                 'video_path' => $payload['video_path'],
@@ -229,7 +234,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             Log::info("[ConvertContentUpdateVideoToHLS] [JOB COMPLETED] Full pipeline finished in {$durationSeconds}s for ContentUpdate ID {$updateId}");
 
         } catch (Throwable $e) {
-            Log::error("[ConvertContentUpdateVideoToHLS] Video conversion failed for ContentUpdate ID {$updateId}: " . $e->getMessage(), [
+            Log::error("[ConvertContentUpdateVideoToHLS] Video conversion failed for ContentUpdate ID {$updateId}: ".$e->getMessage(), [
                 'update_id' => $updateId,
                 'error_message' => $e->getMessage(),
                 'error_file' => $e->getFile(),
@@ -246,7 +251,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                 File::deleteDirectory($tmpDir);
             }
 
-            \Illuminate\Support\Facades\Cache::forget('video_processing_update_' . $updateId);
+            Cache::forget('video_processing_update_'.$updateId);
         }
     }
 
@@ -258,7 +263,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
         $ffmpegBin = env('FFMPEG_BINARIES') ?: env('FFMPEG_BIN');
         $ffprobeBin = env('FFPROBE_BINARIES') ?: env('FFPROBE_BIN');
 
-        if (!$ffmpegBin) {
+        if (! $ffmpegBin) {
             if (file_exists('C:/laragon/bin/ffmpeg/bin/ffmpeg.exe')) {
                 $ffmpegBin = 'C:/laragon/bin/ffmpeg/bin/ffmpeg.exe';
             } elseif (file_exists('C:/ffmpeg/bin/ffmpeg.exe')) {
@@ -268,7 +273,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             }
         }
 
-        if (!$ffprobeBin) {
+        if (! $ffprobeBin) {
             if (file_exists('C:/laragon/bin/ffmpeg/bin/ffprobe.exe')) {
                 $ffprobeBin = 'C:/laragon/bin/ffmpeg/bin/ffprobe.exe';
             } elseif (file_exists('C:/ffmpeg/bin/ffprobe.exe')) {
@@ -279,10 +284,10 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
         }
 
         return [
-            'ffmpeg.binaries'  => $ffmpegBin,
+            'ffmpeg.binaries' => $ffmpegBin,
             'ffprobe.binaries' => $ffprobeBin,
-            'timeout'          => 3600,
-            'ffmpeg.threads'   => (int) env('FFMPEG_THREADS', 12),
+            'timeout' => 3600,
+            'ffmpeg.threads' => (int) env('FFMPEG_THREADS', 12),
         ];
     }
 }

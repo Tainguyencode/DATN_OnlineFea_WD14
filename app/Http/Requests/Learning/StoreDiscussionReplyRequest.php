@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Learning;
 
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\ValidationException;
 
 class StoreDiscussionReplyRequest extends FormRequest
 {
@@ -17,14 +20,14 @@ class StoreDiscussionReplyRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
             'content' => ['nullable', 'string', 'required_without:attachment'],
             'reply_to_message_id' => ['nullable', 'integer'],
-            'attachment' => ['nullable', 'file', 'max:51200', 'required_without:content'], // Max 50MB
+            'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,mkv,pdf,doc,docx,xls,xlsx,zip,rar,txt', 'max:51200', 'required_without:content'], // Max 50MB
         ];
     }
 
@@ -38,6 +41,7 @@ class StoreDiscussionReplyRequest extends FormRequest
             'content.string' => 'Nội dung phản hồi phải là chuỗi văn bản.',
             'attachment.required_without' => 'Vui lòng đính kèm tệp hoặc nhập nội dung phản hồi.',
             'attachment.file' => 'Tệp đính kèm không hợp lệ.',
+            'attachment.mimes' => 'Tệp đính kèm phải thuộc định dạng hình ảnh, video, PDF, Word, Excel, ZIP, RAR hoặc TXT.',
             'attachment.max' => 'Tệp đính kèm không được vượt quá 50MB.',
         ];
     }
@@ -45,12 +49,11 @@ class StoreDiscussionReplyRequest extends FormRequest
     /**
      * Handle a failed validation attempt.
      *
-     * @param  \Illuminate\Contracts\Validation\Validator  $validator
      * @return void
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
-    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator)
+    protected function failedValidation(Validator $validator)
     {
         $discussion = $this->route('discussion');
 
@@ -64,7 +67,7 @@ class StoreDiscussionReplyRequest extends FormRequest
             ]);
         }
 
-        throw (new \Illuminate\Validation\ValidationException($validator))
+        throw (new ValidationException($validator))
             ->errorBag($this->errorBag)
             ->redirectTo($redirectUrl);
     }

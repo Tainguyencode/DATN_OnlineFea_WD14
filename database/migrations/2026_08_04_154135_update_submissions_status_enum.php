@@ -17,7 +17,7 @@ return new class extends Migration
                 'submitted',
                 'graded',
                 'resubmit_required',
-                'returned'
+                'returned',
             ])->default('submitted')->change();
         });
     }
@@ -31,7 +31,7 @@ return new class extends Migration
             $table->enum('status', [
                 'submitted',
                 'graded',
-                'returned'
+                'returned',
             ])->default('submitted')->change();
         });
     }

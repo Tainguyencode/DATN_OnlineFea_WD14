@@ -13,15 +13,15 @@ return new class extends Migration
     {
         Schema::create('study_group_messages', function (Blueprint $table) {
             $table->id();
-            
+
             $table->foreignId('study_group_id')
                 ->constrained('study_groups')
                 ->cascadeOnDelete();
-                
+
             $table->foreignId('user_id')
                 ->constrained('users')
                 ->cascadeOnDelete();
-                
+
             $table->text('message');
             $table->timestamps();
         });

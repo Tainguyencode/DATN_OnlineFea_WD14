@@ -3,17 +3,18 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Instructor\StoreQuizRequest;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
-use App\Http\Requests\Instructor\StoreQuizRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class QuizController extends Controller
 {
@@ -64,6 +65,249 @@ class QuizController extends Controller
         return redirect()
             ->route('instructor.courses.lessons.quiz.show', [$course, $lesson])
             ->with('success', 'Da luu thong tin quiz cho bai hoc.');
+    }
+
+    public function downloadSampleTemplate(): StreamedResponse
+    {
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="mau_cau_hoi_quiz.csv"',
+        ];
+
+        return response()->stream(function () {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, [
+                'Nội dung câu hỏi',
+                'Loại câu hỏi (single_choice / multiple_choice / true_false)',
+                'Điểm',
+                'Giải thích đáp án',
+                'Đáp án 1',
+                'Đáp án 2',
+                'Đáp án 3',
+                'Đáp án 4',
+                'Đáp án đúng (ví dụ: 1 hoặc 1,2 hoặc 1,3)',
+            ]);
+
+            fputcsv($handle, [
+                'Lập trình Python là gì?',
+                'single_choice',
+                '1',
+                'Python là ngôn ngữ lập trình bậc cao phổ biến.',
+                'Ngôn ngữ lập trình',
+                'Hệ điều hành',
+                'Cơ sở dữ liệu',
+                'Trình duyệt web',
+                '1',
+            ]);
+
+            fputcsv($handle, [
+                'Các kiểu dữ liệu cơ bản trong Python bao gồm những gì?',
+                'multiple_choice',
+                '2',
+                'int, float và str là các kiểu dữ liệu tích hợp sẵn trong Python.',
+                'int',
+                'float',
+                'str',
+                'HTML',
+                '1,2,3',
+            ]);
+
+            fputcsv($handle, [
+                'HTML có phải là một ngôn ngữ lập trình không?',
+                'true_false',
+                '1',
+                'HTML là ngôn ngữ đánh dấu siêu văn bản, không phải ngôn ngữ lập trình.',
+                'Đúng',
+                'Sai',
+                '',
+                '',
+                '2',
+            ]);
+
+            fclose($handle);
+        }, 200, $headers);
+    }
+
+    public function importQuestions(Request $request, Quiz $quiz): RedirectResponse
+    {
+        $this->authorizeQuiz($quiz);
+
+        $request->validate([
+            'import_file' => ['required', 'file', 'max:5120'],
+        ], [
+            'import_file.required' => 'Vui lòng chọn tệp Excel hoặc CSV để tải lên.',
+            'import_file.file' => 'Tệp nhập không hợp lệ.',
+            'import_file.max' => 'Dung lượng tệp tối đa là 5MB.',
+        ]);
+
+        $file = $request->file('import_file');
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        if (! in_array($extension, ['csv', 'txt', 'xlsx', 'xls'], true)) {
+            return back()->with('error', 'Tệp phải có định dạng .csv hoặc .xlsx / .xls.')->withInput();
+        }
+
+        $rows = $this->readRowsFromFile($file->getPathname());
+
+        if (empty($rows)) {
+            return back()->with('error', 'Không thể đọc nội dung tệp hoặc tệp rỗng. Vui lòng kiểm tra lại.')->withInput();
+        }
+
+        $importedCount = 0;
+
+        DB::transaction(function () use ($quiz, $rows, &$importedCount) {
+            $existingCount = $quiz->questions()->count();
+
+            foreach ($rows as $index => $row) {
+                if ($index === 0 && (str_contains(mb_strtolower($row[0] ?? ''), 'nội dung') || str_contains(mb_strtolower($row[0] ?? ''), 'câu hỏi'))) {
+                    continue;
+                }
+
+                $questionText = trim($row[0] ?? '');
+                if ($questionText === '') {
+                    continue;
+                }
+
+                $rawType = trim($row[1] ?? 'single_choice');
+                $type = $this->normalizeQuestionType($rawType);
+                $score = max(1, (int) ($row[2] ?? 1));
+                $explanation = trim($row[3] ?? '') ?: null;
+
+                $options = [];
+                for ($col = 4; $col <= 7; $col++) {
+                    if (isset($row[$col])) {
+                        $optText = trim($row[$col]);
+                        if ($optText !== '') {
+                            $options[] = $optText;
+                        }
+                    }
+                }
+
+                $rawCorrect = trim($row[8] ?? '');
+                $correctIndexes = $this->parseCorrectAnswers($rawCorrect, count($options), $type);
+
+                if ($type === QuizQuestion::TYPE_TRUE_FALSE && empty($options)) {
+                    $options = ['Đúng', 'Sai'];
+                }
+
+                if (empty($options)) {
+                    continue;
+                }
+
+                $question = $quiz->questions()->create([
+                    'question' => $questionText,
+                    'type' => $type,
+                    'points' => $score,
+                    'explanation' => $explanation,
+                    'sort_order' => $existingCount + $importedCount,
+                ]);
+
+                foreach ($options as $optIdx => $optText) {
+                    $isCorrect = in_array($optIdx + 1, $correctIndexes, true);
+
+                    if (empty($correctIndexes) && $optIdx === 0) {
+                        $isCorrect = true;
+                    }
+
+                    $question->options()->create([
+                        'option_text' => $optText,
+                        'is_correct' => $isCorrect,
+                        'sort_order' => $optIdx,
+                    ]);
+                }
+
+                if (in_array($question->type, [QuizQuestion::TYPE_SINGLE, QuizQuestion::TYPE_TRUE_FALSE], true)) {
+                    $this->enforceSingleCorrectAnswer($question);
+                }
+
+                $importedCount++;
+            }
+        });
+
+        if ($importedCount === 0) {
+            return back()->with('error', 'Không tìm thấy câu hỏi hợp lệ trong tệp. Vui lòng sử dụng đúng định dạng file mẫu.')->withInput();
+        }
+
+        return back()->with('success', "Đã nhập thành công {$importedCount} câu hỏi từ tệp vào Quiz!");
+    }
+
+    private function readRowsFromFile(string $filePath): array
+    {
+        $rows = [];
+        $handle = fopen($filePath, 'r');
+        if (! $handle) {
+            return [];
+        }
+
+        $firstLine = fgets($handle);
+        rewind($handle);
+
+        $delimiter = ',';
+        if ($firstLine !== false) {
+            if (substr_count($firstLine, ';') > substr_count($firstLine, ',')) {
+                $delimiter = ';';
+            } elseif (substr_count($firstLine, "\t") > substr_count($firstLine, ',')) {
+                $delimiter = "\t";
+            }
+        }
+
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        }
+
+        while (($data = fgetcsv($handle, 10000, $delimiter)) !== false) {
+            if (array_filter($data, fn ($cell) => trim((string) $cell) !== '') !== []) {
+                $rows[] = array_map(fn ($val) => trim((string) $val), $data);
+            }
+        }
+
+        fclose($handle);
+
+        return $rows;
+    }
+
+    private function normalizeQuestionType(string $raw): string
+    {
+        $lower = mb_strtolower(trim($raw));
+
+        if (str_contains($lower, 'multiple') || str_contains($lower, 'nhiều') || $lower === 'multiple_choice' || $lower === '2') {
+            return QuizQuestion::TYPE_MULTIPLE;
+        }
+
+        if (str_contains($lower, 'true') || str_contains($lower, 'đúng') || str_contains($lower, 'sai') || $lower === 'true_false' || $lower === '3') {
+            return QuizQuestion::TYPE_TRUE_FALSE;
+        }
+
+        return QuizQuestion::TYPE_SINGLE;
+    }
+
+    private function parseCorrectAnswers(string $raw, int $optionsCount, string $type): array
+    {
+        if ($raw === '') {
+            return [1];
+        }
+
+        $parts = preg_split('/[;,\s]+/', $raw);
+        $result = [];
+
+        foreach ($parts as $p) {
+            $p = trim($p);
+            if (is_numeric($p)) {
+                $idx = (int) $p;
+                if ($idx >= 1 && $idx <= 20) {
+                    $result[] = $idx;
+                }
+            } elseif (mb_strtolower($p) === 'đúng' || mb_strtolower($p) === 'true') {
+                $result[] = 1;
+            } elseif (mb_strtolower($p) === 'sai' || mb_strtolower($p) === 'false') {
+                $result[] = 2;
+            }
+        }
+
+        return array_unique($result);
     }
 
     public function storeQuestion(Request $request, Quiz $quiz): RedirectResponse

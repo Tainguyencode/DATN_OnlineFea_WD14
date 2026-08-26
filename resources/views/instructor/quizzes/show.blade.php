@@ -106,13 +106,22 @@
             <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-950">Danh sach cau hoi</h3>
-                        <p class="mt-1 text-sm text-slate-500">{{ $questions->count() }} cau hoi</p>
+                        <h3 class="text-lg font-bold text-slate-950">Danh sách câu hỏi</h3>
+                        <p class="mt-1 text-sm text-slate-500">{{ $questions->count() }} câu hỏi trong quiz</p>
                     </div>
-                    <span
-                        class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        Tong diem: {{ $questions->sum('points') }}
-                    </span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" data-open-import-modal
+                            class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-emerald-700">
+                            <svg class="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            Nhập từ Excel / CSV
+                        </button>
+                        <span
+                            class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                            Tổng điểm: {{ $questions->sum('points') }}
+                        </span>
+                    </div>
                 </div>
             </section>
 
@@ -375,6 +384,59 @@
                         </button>
                     </form>
                 </aside>
+            <!-- Modal Import câu hỏi bằng Excel / CSV -->
+            <div data-import-modal class="fixed inset-0 z-50 {{ $errors->has('import_file') ? '' : 'hidden' }}">
+                <button type="button" data-close-import-modal class="absolute inset-0 bg-slate-950/45"></button>
+                <div class="absolute left-1/2 top-1/2 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-950">Nhập câu hỏi từ Excel / CSV</h3>
+                            <p class="mt-1 text-sm text-slate-500">Tải lên tệp chứa câu hỏi để thêm tự động vào bài học này.</p>
+                        </div>
+                        <button type="button" data-close-import-modal
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-lg font-bold text-slate-500 hover:bg-slate-50">
+                            ✕
+                        </button>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs leading-relaxed text-emerald-950">
+                        <div class="flex items-center justify-between font-bold">
+                            <span class="flex items-center gap-1.5 text-emerald-800">
+                                💡 File mẫu định dạng Excel / CSV chuẩn
+                            </span>
+                            <a href="{{ route('instructor.quizzes.questions.sample-template') }}"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-emerald-700">
+                                ⬇ Tải file mẫu
+                            </a>
+                        </div>
+                        <p class="mt-2 text-emerald-800">
+                            File mẫu chứa đầy đủ cấu trúc: <strong>Nội dung câu hỏi, Loại câu hỏi, Điểm, Giải thích, Đáp án 1..4, Đáp án đúng</strong>.
+                        </p>
+                    </div>
+
+                    <form method="POST" action="{{ route('instructor.quizzes.questions.import', $quiz) }}" enctype="multipart/form-data" class="mt-5 space-y-4">
+                        @csrf
+                        <div>
+                            <label class="mb-1.5 block text-sm font-bold text-slate-700">Chọn tệp Excel / CSV (.csv, .xlsx, .xls)</label>
+                            <input type="file" name="import_file" accept=".csv, .xlsx, .xls, .txt" required
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-emerald-700">
+                            @error('import_file')
+                                <p class="mt-1.5 text-xs font-semibold text-rose-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="flex items-center justify-end gap-3 pt-2">
+                            <button type="button" data-close-import-modal
+                                class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                                Hủy bỏ
+                            </button>
+                            <button type="submit"
+                                class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-emerald-700">
+                                Tải lên & Nhập câu hỏi
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         @endif
     </div>
@@ -413,6 +475,25 @@
                 closeButtons.forEach(function(button) {
                     button.addEventListener('click', function() {
                         panel.classList.add('hidden');
+                        document.body.classList.remove('overflow-hidden');
+                    });
+                });
+            }
+
+            // Handling Excel / CSV Import Modal
+            const importModal = document.querySelector('[data-import-modal]');
+            const openImportBtn = document.querySelector('[data-open-import-modal]');
+            const closeImportBtns = document.querySelectorAll('[data-close-import-modal]');
+
+            if (importModal && openImportBtn) {
+                openImportBtn.addEventListener('click', function() {
+                    importModal.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+                });
+
+                closeImportBtns.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        importModal.classList.add('hidden');
                         document.body.classList.remove('overflow-hidden');
                     });
                 });

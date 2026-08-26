@@ -502,7 +502,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             const prompt = `Tôi muốn học ngành ${this.survey.field}, mục tiêu là ${this.survey.goal}, trình độ hiện tại là ${this.survey.level}${this.survey.duration ? ', thời gian học dự kiến là ' + this.survey.duration : ''}. Hãy xây dựng lộ trình học tập phù hợp cho tôi.`;
-            
+
             const onboardingPayload = {
                 field: this.survey.field,
                 goal: this.survey.goal,

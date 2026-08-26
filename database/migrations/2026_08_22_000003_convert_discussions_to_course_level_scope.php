@@ -15,7 +15,7 @@ return new class extends Migration
         // 1. Thêm cột course_id vào bảng discussions nếu chưa có
         if (Schema::hasTable('discussions')) {
             Schema::table('discussions', function (Blueprint $table) {
-                if (!Schema::hasColumn('discussions', 'course_id')) {
+                if (! Schema::hasColumn('discussions', 'course_id')) {
                     $table->foreignId('course_id')
                         ->nullable()
                         ->after('id')
@@ -33,7 +33,7 @@ return new class extends Migration
         // 2. Thêm cột lesson_id vào bảng discussion_replies nếu chưa có
         if (Schema::hasTable('discussion_replies')) {
             Schema::table('discussion_replies', function (Blueprint $table) {
-                if (!Schema::hasColumn('discussion_replies', 'lesson_id')) {
+                if (! Schema::hasColumn('discussion_replies', 'lesson_id')) {
                     $table->foreignId('lesson_id')
                         ->nullable()
                         ->after('reply_to_message_id')
@@ -47,7 +47,7 @@ return new class extends Migration
         if (Schema::hasTable('discussions') && Schema::hasTable('lessons')) {
             $discussions = DB::table('discussions')->get();
             foreach ($discussions as $disc) {
-                if (!$disc->course_id && $disc->lesson_id) {
+                if (! $disc->course_id && $disc->lesson_id) {
                     $courseId = DB::table('lessons')->where('id', $disc->lesson_id)->value('course_id');
                     if ($courseId) {
                         DB::table('discussions')->where('id', $disc->id)->update(['course_id' => $courseId]);
@@ -59,7 +59,7 @@ return new class extends Migration
         if (Schema::hasTable('discussion_replies') && Schema::hasTable('discussions')) {
             $replies = DB::table('discussion_replies')->get();
             foreach ($replies as $reply) {
-                if (!$reply->lesson_id && $reply->discussion_id) {
+                if (! $reply->lesson_id && $reply->discussion_id) {
                     $lessonId = DB::table('discussions')->where('id', $reply->discussion_id)->value('lesson_id');
                     if ($lessonId) {
                         DB::table('discussion_replies')->where('id', $reply->id)->update(['lesson_id' => $lessonId]);

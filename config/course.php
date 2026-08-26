@@ -4,7 +4,7 @@ return [
     'minimum_sections' => (int) env('COURSE_MIN_SECTIONS', 1),
     'minimum_lessons' => (int) env('COURSE_MIN_LESSONS', 3),
     'minimum_video_lessons' => (int) env('COURSE_MIN_VIDEO_LESSONS', 1),
-    
+
     // Tỷ lệ chiết khấu mặc định của nền tảng (Platform Commission Rate - %)
     'default_commission_rate' => (float) env('COURSE_DEFAULT_COMMISSION_RATE', 20.00),
 

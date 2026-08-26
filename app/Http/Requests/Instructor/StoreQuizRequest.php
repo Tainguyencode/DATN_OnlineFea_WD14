@@ -5,7 +5,9 @@ namespace App\Http\Requests\Instructor;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\QuizQuestion;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreQuizRequest extends FormRequest
 {
@@ -16,13 +18,14 @@ class StoreQuizRequest extends FormRequest
     {
         /** @var Course $course */
         $course = $this->route('course');
+
         return $course && $course->isOwnedBy($this->user());
     }
 
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -47,23 +50,23 @@ class StoreQuizRequest extends FormRequest
             'title.required' => 'Vui lòng nhập tên bài trắc nghiệm.',
             'title.string' => 'Tên bài trắc nghiệm phải là chuỗi ký tự.',
             'title.max' => 'Tên bài trắc nghiệm không được vượt quá 255 ký tự.',
-            
+
             'description.string' => 'Mô tả phải là chuỗi ký tự.',
             'description.max' => 'Mô tả không được vượt quá 5000 ký tự.',
-            
+
             'pass_score.required' => 'Vui lòng nhập điểm đạt.',
             'pass_score.integer' => 'Điểm đạt phải là số nguyên.',
             'pass_score.min' => 'Điểm đạt không được nhỏ hơn 0.',
             'pass_score.max' => 'Điểm đạt không được lớn hơn 100.',
-            
+
             'time_limit_minutes.integer' => 'Thời gian làm bài phải là số nguyên.',
             'time_limit_minutes.min' => 'Thời gian làm bài tối thiểu là 1 phút.',
             'time_limit_minutes.max' => 'Thời gian làm bài tối đa là 1440 phút.',
-            
+
             'max_attempts.integer' => 'Số lần làm tối đa phải là số nguyên.',
             'max_attempts.min' => 'Số lần làm tối đa tối thiểu là 1.',
             'max_attempts.max' => 'Số lần làm tối đa không được vượt quá 100.',
-            
+
             'is_active.boolean' => 'Trạng thái hoạt động không hợp lệ.',
         ];
     }
@@ -71,7 +74,7 @@ class StoreQuizRequest extends FormRequest
     /**
      * Configure the validator instance.
      *
-     * @param  \Illuminate\Validation\Validator  $validator
+     * @param  Validator  $validator
      * @return void
      */
     public function withValidator($validator)
@@ -79,15 +82,16 @@ class StoreQuizRequest extends FormRequest
         $validator->after(function ($validator) {
             /** @var Lesson $lesson */
             $lesson = $this->route('lesson');
-            
-            if (!$lesson) {
+
+            if (! $lesson) {
                 return;
             }
 
             $quiz = $lesson->quiz()->with('questions.options')->first();
-            
+
             if (! $quiz) {
                 $validator->errors()->add('quiz', 'Vui lòng thêm câu hỏi trước khi lưu quiz.');
+
                 return;
             }
 

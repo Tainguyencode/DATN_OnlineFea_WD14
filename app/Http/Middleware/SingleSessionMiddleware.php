@@ -47,7 +47,7 @@ class SingleSessionMiddleware
                 if ($request->is('api/session/check')) {
                     return response()->json([
                         'active' => false,
-                        'message' => 'Tài khoản đã được đăng nhập trên thiết bị khác.'
+                        'message' => 'Tài khoản đã được đăng nhập trên thiết bị khác.',
                     ], 200);
                 }
 
@@ -63,7 +63,7 @@ class SingleSessionMiddleware
                 $activeSession->update(['last_activity' => now()]);
             }
         } catch (\Throwable $e) {
-            Log::error('[SingleSession] Middleware error: ' . $e->getMessage());
+            Log::error('[SingleSession] Middleware error: '.$e->getMessage());
             // Don't block the user if the session check itself fails
         }
 

@@ -2,12 +2,10 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\User;
-use App\Models\UserPoint;
 use App\Models\ActivityLog;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class SnapshotLeaderboard extends Command
 {
@@ -51,7 +49,7 @@ class SnapshotLeaderboard extends Command
     {
         $startOfWeek = $targetDate->copy()->startOfWeek();
         $endOfWeek = $targetDate->copy()->endOfWeek();
-        $periodKey = $startOfWeek->format('o') . '-W' . sprintf('%02d', $startOfWeek->weekOfYear);
+        $periodKey = $startOfWeek->format('o').'-W'.sprintf('%02d', $startOfWeek->weekOfYear);
 
         $this->info("Calculating Weekly Leaderboard TOP for {$periodKey} ({$startOfWeek->toDateString()} to {$endOfWeek->toDateString()})...");
 
@@ -69,7 +67,7 @@ class SnapshotLeaderboard extends Command
         $rank = 1;
         foreach ($rankings as $row) {
             $this->line("Rank #{$rank}: {$row->name} (User ID: {$row->user_id}) - {$row->total_points} XP");
-            
+
             // Log to activity_logs if table exists
             try {
                 ActivityLog::create([
@@ -84,7 +82,7 @@ class SnapshotLeaderboard extends Command
             $rank++;
         }
 
-        $this->info("Weekly snapshot calculation complete. Top count: " . count($rankings));
+        $this->info('Weekly snapshot calculation complete. Top count: '.count($rankings));
     }
 
     protected function snapshotMonth(Carbon $targetDate): void
@@ -123,6 +121,6 @@ class SnapshotLeaderboard extends Command
             $rank++;
         }
 
-        $this->info("Monthly snapshot calculation complete. Top count: " . count($rankings));
+        $this->info('Monthly snapshot calculation complete. Top count: '.count($rankings));
     }
 }

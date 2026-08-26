@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\CaptchaService;
 use App\Services\RoleSyncService;
+use Illuminate\Contracts\Auth\PasswordBroker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -109,7 +110,7 @@ class PasswordResetTest extends TestCase
 
         $user = $this->createResettableUser(['email' => 'smtp-fail@example.com']);
 
-        $broker = Mockery::mock(\Illuminate\Contracts\Auth\PasswordBroker::class);
+        $broker = Mockery::mock(PasswordBroker::class);
         $broker->shouldReceive('sendResetLink')
             ->once()
             ->andThrow(new TransportException('Connection timed out'));

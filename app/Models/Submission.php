@@ -48,9 +48,10 @@ class Submission extends Model
 
     public function isLate(): bool
     {
-        if (!$this->submitted_at || !$this->assignment?->due_date) {
+        if (! $this->submitted_at || ! $this->assignment?->due_date) {
             return false;
         }
+
         return $this->submitted_at->gt($this->assignment->due_date);
     }
 }

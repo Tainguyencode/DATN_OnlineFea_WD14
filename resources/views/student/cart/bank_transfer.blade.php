@@ -169,7 +169,7 @@
                 </div>
                 
                 <p class="text-[11px] text-slate-400 mt-4 leading-relaxed">
-                    Hỗ trợ quét qua ứng dụng Internet Banking của mọi ngân hàng Việt Nam và các ví điện tử (MoMo, ZaloPay, ShopeePay...).
+                    Hỗ trợ quét qua ứng dụng Internet Banking của các ngân hàng Việt Nam.
                 </p>
                 <div class="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex justify-between text-xs text-slate-500 dark:text-slate-400">
                     <span>Mã đơn hàng:</span>

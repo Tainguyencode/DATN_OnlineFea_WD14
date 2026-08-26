@@ -12,14 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('study_group_messages', function (Blueprint $table) {
-            if (!Schema::hasColumn('study_group_messages', 'reply_to_message_id')) {
+            if (! Schema::hasColumn('study_group_messages', 'reply_to_message_id')) {
                 $table->foreignId('reply_to_message_id')
                     ->nullable()
                     ->after('user_id')
                     ->constrained('study_group_messages')
                     ->nullOnDelete();
             }
-            if (!Schema::hasColumn('study_group_messages', 'is_recalled')) {
+            if (! Schema::hasColumn('study_group_messages', 'is_recalled')) {
                 $table->boolean('is_recalled')->default(false)->after('message');
             }
         });

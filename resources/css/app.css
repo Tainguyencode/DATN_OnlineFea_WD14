@@ -1708,3 +1708,9 @@ html {
 .custom-modal-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(156, 163, 175, 0.7);
 }
+
+/* Status is communicated by its text label; omit decorative colored dots. */
+span[class~="rounded-full"][class~="h-1.5"][class~="w-1.5"],
+span[class~="rounded-full"][class~="h-2"][class~="w-2"] {
+    display: none !important;
+}

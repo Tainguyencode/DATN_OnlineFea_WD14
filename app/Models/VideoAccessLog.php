@@ -17,13 +17,13 @@ class VideoAccessLog extends Model
         'device',
         'watch_started_at',
         'watch_ended_at',
-        'watch_duration'
+        'watch_duration',
     ];
 
     protected $casts = [
         'watch_started_at' => 'datetime',
         'watch_ended_at' => 'datetime',
-        'watch_duration' => 'integer'
+        'watch_duration' => 'integer',
     ];
 
     public function user(): BelongsTo

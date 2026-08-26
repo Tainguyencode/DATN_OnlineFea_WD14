@@ -65,6 +65,7 @@ class VideoModeration extends Model
         }
 
         $risk = strtolower((string) ($this->copyright_risk ?? 'none'));
+
         return in_array($risk, ['low', 'medium', 'high'], true);
     }
 
@@ -76,24 +77,24 @@ class VideoModeration extends Model
         $risk = strtolower((string) ($this->copyright_risk ?? 'none'));
 
         return match ($risk) {
-            'high'   => [
+            'high' => [
                 'label' => 'AI đánh giá mức nghi ngờ cao – cần admin xác minh',
-                'tone'  => 'red',
+                'tone' => 'red',
                 'emoji' => '🔴',
             ],
             'medium' => [
                 'label' => 'Nên xem lại video',
-                'tone'  => 'orange',
+                'tone' => 'orange',
                 'emoji' => '🟠',
             ],
-            'low'    => [
+            'low' => [
                 'label' => 'Có dấu hiệu cần kiểm tra',
-                'tone'  => 'yellow',
+                'tone' => 'yellow',
                 'emoji' => '🟡',
             ],
-            default  => [
+            default => [
                 'label' => 'Không phát hiện dấu hiệu',
-                'tone'  => 'green',
+                'tone' => 'green',
                 'emoji' => '🟢',
             ],
         };
@@ -167,8 +168,8 @@ class VideoModeration extends Model
 
             $frames[] = [
                 'timestamp' => self::formatTimestamp($detail['timestamp'] ?? 0),
-                'labels'    => $labels,
-                'reason'    => trim((string) ($detail['reason'] ?? '')),
+                'labels' => $labels,
+                'reason' => trim((string) ($detail['reason'] ?? '')),
             ];
         }
 

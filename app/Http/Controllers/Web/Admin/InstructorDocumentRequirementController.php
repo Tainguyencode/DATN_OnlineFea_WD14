@@ -73,7 +73,7 @@ class InstructorDocumentRequirementController extends Controller
             'title' => $requirement->document_title,
         ], $request);
 
-        return back()->with('success', 'Đã thêm yêu cầu hồ sơ "' . $requirement->document_title . '" cho ngành thành công.');
+        return back()->with('success', 'Đã thêm yêu cầu hồ sơ "'.$requirement->document_title.'" cho ngành thành công.');
     }
 
     public function update(Request $request, InstructorDocumentRequirement $requirement): RedirectResponse
@@ -101,7 +101,7 @@ class InstructorDocumentRequirementController extends Controller
 
         ActivityLogService::log($request->user()->id, 'update_instructor_requirement', InstructorDocumentRequirement::class, $requirement->id, [], $request);
 
-        return back()->with('success', 'Đã cập nhật yêu cầu hồ sơ "' . $requirement->document_title . '" thành công.');
+        return back()->with('success', 'Đã cập nhật yêu cầu hồ sơ "'.$requirement->document_title.'" thành công.');
     }
 
     public function toggleStatus(Request $request, InstructorDocumentRequirement $requirement): RedirectResponse
@@ -127,6 +127,6 @@ class InstructorDocumentRequirementController extends Controller
             'title' => $title,
         ], $request);
 
-        return back()->with('success', 'Đã xóa yêu cầu hồ sơ "' . $title . '".');
+        return back()->with('success', 'Đã xóa yêu cầu hồ sơ "'.$title.'".');
     }
 }
