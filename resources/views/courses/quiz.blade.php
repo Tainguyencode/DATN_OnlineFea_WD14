@@ -72,6 +72,7 @@
         @if($canSubmit)
             <form method="POST" action="{{ route('learn.lessons.quiz.submit', [$course->slug, $lesson]) }}" class="mt-6 space-y-5">
                 @csrf
+                <input type="hidden" name="attempt_id" value="{{ $attempt->id }}">
         @else
             <div class="mt-6 space-y-5">
         @endif
