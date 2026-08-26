@@ -39,12 +39,34 @@
             </dl>
             @if($quizContext['can_take'])
                 <button type="button" data-quiz-start class="mt-6 inline-flex h-11 items-center justify-center rounded bg-[#0056D2] px-6 text-sm font-bold text-white transition hover:bg-[#0046B8]">
-                    Bắt đầu làm bài
+                    {{ !empty($quizContext['previous_attempts']) ? 'Làm lại bài quiz' : 'Bắt đầu làm bài' }}
                 </button>
             @elseif($quizContext['attempt_limit_reached'])
                 <p class="mt-6 rounded border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">Bạn đã hết số lần làm quiz này.</p>
             @else
                 <p class="mt-6 rounded border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">Đăng nhập và đăng ký khóa học để làm quiz.</p>
+            @endif
+
+            @if(!empty($quizContext['previous_attempts']))
+                <div class="mt-6 border-t border-white/10 pt-5">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-white/70">Lịch sử làm bài</h3>
+                    <div class="mt-3 space-y-2">
+                        @foreach($quizContext['previous_attempts'] as $att)
+                            <div class="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-xs">
+                                <div class="flex items-center gap-3">
+                                    <span class="font-bold text-white">Lần {{ $att['attempt_number'] }}</span>
+                                    <span class="rounded px-2 py-0.5 font-bold {{ $att['passed'] ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300' }}">
+                                        {{ number_format($att['percent'], 0) }}% - {{ $att['passed'] ? 'Đạt' : 'Chưa đạt' }}
+                                    </span>
+                                    <span class="text-white/50">{{ $att['completed_at'] }}</span>
+                                </div>
+                                <a href="{{ $att['review_url'] }}" class="inline-flex items-center gap-1 font-bold text-sky-400 hover:text-sky-300 hover:underline">
+                                    Xem lại bài làm →
+                                </a>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
             @endif
         </div>
 

@@ -374,6 +374,23 @@ class LearningPlayerService
             ])->values()->all(),
         ])->values()->all();
 
+        $userAttempts = $user
+            ? $quiz->attempts()->where('user_id', $user->id)->orderBy('id', 'asc')->get()
+            : collect();
+
+        $previousAttempts = $userAttempts->values()->map(function ($att, $idx) use ($course, $lesson) {
+            return [
+                'id' => $att->id,
+                'attempt_number' => $idx + 1,
+                'score' => $att->score,
+                'total_score' => $att->total_score,
+                'percent' => (float) $att->percent,
+                'passed' => (bool) $att->passed,
+                'completed_at' => $att->completed_at?->format('d/m/Y H:i') ?? $att->created_at?->format('d/m/Y H:i'),
+                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $att]),
+            ];
+        })->all();
+
         return [
             'id' => $quiz->id,
             'title' => $quiz->title,
@@ -390,6 +407,7 @@ class LearningPlayerService
             'total_points' => $quiz->questions->sum('points'),
             'questions' => $questions,
             'best_percent' => $bestAttempt ? (float) $bestAttempt->percent : null,
+            'previous_attempts' => $previousAttempts,
             'remaining_attempts' => $quiz->max_attempts !== null
                 ? max(0, $quiz->max_attempts - $attemptsCount)
                 : null,

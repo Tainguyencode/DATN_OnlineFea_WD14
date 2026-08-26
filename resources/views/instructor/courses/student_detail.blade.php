@@ -506,70 +506,125 @@
                             <thead class="bg-slate-50/70 text-slate-500 font-black uppercase tracking-wider border-b border-slate-200">
                                 <tr>
                                     <th class="px-5 py-3.5">Bài kiểm tra</th>
-                                    <th class="px-5 py-3.5 text-center w-36">Số lần làm</th>
-                                    <th class="px-5 py-3.5 text-center w-36">Điểm đạt tối thiểu</th>
-                                    <th class="px-5 py-3.5 text-center w-36">Điểm cao nhất</th>
-                                    <th class="px-5 py-3.5 text-center w-36">Điểm gần nhất</th>
-                                    <th class="px-5 py-3.5 text-center w-36">Trạng thái</th>
+                                    <th class="px-5 py-3.5 text-center w-28">Số lần làm</th>
+                                    <th class="px-5 py-3.5 text-center w-32">Điểm đạt yêu cầu</th>
+                                    <th class="px-5 py-3.5 text-center w-28">Điểm cao nhất</th>
+                                    <th class="px-5 py-3.5 text-center w-28">Điểm gần nhất</th>
+                                    <th class="px-5 py-3.5 text-center w-28">Trạng thái</th>
+                                    <th class="px-5 py-3.5 text-center w-36">Chi tiết bài làm</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 @forelse($quizzes as $quiz)
                                     @php
-                                        $attempts = $quizAttempts->get($quiz->id, collect());
+                                        $attempts = $quizAttempts->get($quiz->id, collect())->sortBy('id')->values();
                                         $attemptsCount = $attempts->count();
                                         $highestScore = $attemptsCount > 0 ? $attempts->max('percent') : null;
-                                        $latestAttempt = $attemptsCount > 0 ? $attempts->first() : null;
+                                        $latestAttempt = $attemptsCount > 0 ? $attempts->last() : null;
                                         $hasPassed = $attempts->where('passed', true)->isNotEmpty();
                                     @endphp
-                                    <tr class="hover:bg-slate-50/40 transition">
-                                        <td class="px-5 py-4 font-bold text-slate-900">
-                                            {{ $quiz->title }}
-                                        </td>
-                                        <td class="px-5 py-4 text-center font-bold text-slate-700 font-mono">
-                                            {{ $attemptsCount }}
-                                        </td>
-                                        <td class="px-5 py-4 text-center font-semibold text-slate-500 font-mono">
-                                            {{ $quiz->pass_score }}%
-                                        </td>
-                                        <td class="px-5 py-4 text-center font-bold font-mono">
-                                            @if($highestScore !== null)
-                                                <span class="text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{{ number_format($highestScore, 0) }}%</span>
-                                            @else
-                                                <span class="text-slate-400">--</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-5 py-4 text-center font-semibold font-mono">
-                                            @if($latestAttempt !== null)
-                                                <span class="text-slate-600">{{ number_format($latestAttempt->percent, 0) }}%</span>
-                                            @else
-                                                <span class="text-slate-400">--</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-5 py-4 text-center">
-                                            @if($attemptsCount > 0)
-                                                @if($hasPassed)
-                                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
-                                                        Đạt
-                                                    </span>
+                                    <tbody x-data="{ expanded: {{ $attemptsCount > 0 ? 'true' : 'false' }} }" class="border-b border-slate-100 last:border-b-0">
+                                        <tr class="hover:bg-slate-50/40 transition">
+                                            <td class="px-5 py-4 font-bold text-slate-900">
+                                                <div class="flex items-center gap-2">
+                                                    @if($attemptsCount > 0)
+                                                        <button type="button" @click="expanded = !expanded" class="text-slate-400 hover:text-slate-700 p-0.5 rounded transition">
+                                                            <svg class="w-4 h-4 transform transition-transform" :class="expanded ? 'rotate-90 text-indigo-600' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                                        </button>
+                                                    @endif
+                                                    <span>{{ $quiz->title }}</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-5 py-4 text-center font-bold text-slate-700 font-mono">
+                                                {{ $attemptsCount }}
+                                            </td>
+                                            <td class="px-5 py-4 text-center font-semibold text-slate-500 font-mono">
+                                                {{ $quiz->pass_score }}%
+                                            </td>
+                                            <td class="px-5 py-4 text-center font-bold font-mono">
+                                                @if($highestScore !== null)
+                                                    <span class="text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{{ number_format($highestScore, 0) }}%</span>
                                                 @else
-                                                    <span class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-800">
-                                                        Chưa đạt
+                                                    <span class="text-slate-400">--</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-5 py-4 text-center font-semibold font-mono">
+                                                @if($latestAttempt !== null)
+                                                    <span class="text-slate-600">{{ number_format($latestAttempt->percent, 0) }}%</span>
+                                                @else
+                                                    <span class="text-slate-400">--</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-5 py-4 text-center">
+                                                @if($attemptsCount > 0)
+                                                    @if($hasPassed)
+                                                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                                                            Đạt
+                                                        </span>
+                                                    @else
+                                                        <span class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-800">
+                                                            Chưa đạt
+                                                        </span>
+                                                    @endif
+                                                @else
+                                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500">
+                                                        Chưa làm
                                                     </span>
                                                 @endif
-                                            @else
-                                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500">
-                                                    Chưa làm
-                                                </span>
-                                            @endif
-                                        </td>
-                                    </tr>
+                                            </td>
+                                            <td class="px-5 py-4 text-center">
+                                                @if($attemptsCount > 0)
+                                                    @if($attemptsCount === 1 && $latestAttempt)
+                                                        <a href="{{ route('instructor.courses.students.quiz-attempt', [$course, $student, $quiz, $latestAttempt]) }}" class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline">
+                                                            Xem bài làm →
+                                                        </a>
+                                                    @else
+                                                        <button type="button" @click="expanded = !expanded" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline">
+                                                            <span x-text="expanded ? 'Thu gọn' : 'Xem các lần làm (' + {{ $attemptsCount }} + ')'"></span>
+                                                        </button>
+                                                    @endif
+                                                @else
+                                                    <span class="text-slate-400">--</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+
+                                        @if($attemptsCount > 0)
+                                            <tr x-show="expanded" class="bg-slate-50/70 border-t border-slate-100">
+                                                <td colspan="7" class="px-8 py-3">
+                                                    <div class="space-y-1.5 py-1">
+                                                        <span class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                                            Danh sách các lần làm bài:
+                                                        </span>
+                                                        <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                                            @foreach($attempts as $idx => $att)
+                                                                <div class="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200 shadow-2xs text-xs">
+                                                                    <div class="flex items-center gap-2">
+                                                                        <span class="font-bold text-slate-800">Lần {{ $idx + 1 }}</span>
+                                                                        <span class="px-1.5 py-0.5 rounded text-[11px] font-bold {{ $att->passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                                                                            {{ number_format($att->percent, 0) }}% ({{ $att->score }}/{{ $att->total_score }}đ)
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="flex items-center gap-3">
+                                                                        <time class="text-[11px] text-slate-400">{{ $att->completed_at?->format('d/m/Y H:i') ?? $att->created_at?->format('d/m/Y H:i') }}</time>
+                                                                        <a href="{{ route('instructor.courses.students.quiz-attempt', [$course, $student, $quiz, $att]) }}" class="inline-flex items-center gap-1 font-bold text-indigo-600 hover:text-indigo-800 hover:underline">
+                                                                            Xem bài làm →
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @endif
+                                    </tbody>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-5 py-12 text-center text-slate-500">
+                                        <td colspan="7" class="px-5 py-12 text-center text-slate-500">
                                             <div class="flex flex-col items-center justify-center p-6 space-y-2">
                                                 <span class="text-3xl">📝</span>
-                                                <p class="font-semibold text-slate-700">Học viên chưa thực hiện bài kiểm tra nào.</p>
+                                                <p class="font-semibold text-slate-700">Khóa học này chưa có bài trắc nghiệm nào.</p>
                                             </div>
                                         </td>
                                     </tr>
