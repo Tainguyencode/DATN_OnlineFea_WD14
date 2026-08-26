@@ -11,8 +11,10 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
 use App\Services\CurriculumLessonService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -154,7 +156,7 @@ class CurriculumController extends Controller
         Course $course,
         $section,
         CurriculumLessonService $lessonService
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
         $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
 
@@ -174,6 +176,17 @@ class CurriculumController extends Controller
         );
 
         if ($result instanceof ContentUpdate) {
+            Log::info('[UPLOAD TRACE] RETURN RESPONSE (ContentUpdate)');
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'lesson_id' => $result->id,
+                    'title' => $result->payload['title'] ?? 'Bài học',
+                    'message' => 'Đã lưu bản nháp bài học mới.',
+                ]);
+            }
+
             return back()->with('success', 'Đã lưu bản nháp bài học mới. Video đang được xử lý HLS ngầm.');
         }
 
@@ -189,7 +202,44 @@ class CurriculumController extends Controller
 
         Log::info('[UPLOAD TRACE] RETURN RESPONSE (Success)');
 
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'lesson_id' => $lesson->id,
+                'lesson' => [
+                    'id' => $lesson->id,
+                    'section_id' => $sectionId,
+                    'title' => $lesson->title,
+                    'type' => $lesson->type,
+                    'sort_order' => $lesson->sort_order,
+                    'duration' => (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0),
+                    'duration_formatted' => $this->formatDuration((int) ($lesson->duration ?? $lesson->duration_seconds ?? 0)),
+                    'is_preview' => (bool) $lesson->is_preview,
+                    'status' => $lesson->status,
+                    'original_video_key' => $lesson->original_video_key,
+                    'upload_status' => $lesson->upload_status,
+                    'processing_status' => $lesson->processing_status,
+                    'content' => $lesson->content,
+                    'destroy_url' => route('instructor.courses.lessons.destroy', [$course, $lesson->id]),
+                ],
+                'title' => $lesson->title,
+                'message' => 'Đã thêm bài học.',
+            ]);
+        }
+
         return back()->with('success', 'Đã thêm bài học. Video đang được xử lý ngầm, vui lòng đợi trong giây lát.');
+    }
+
+    private function formatDuration(int $seconds): string
+    {
+        if ($seconds <= 0) {
+            return 'Chưa đặt';
+        }
+
+        $minutes = intdiv($seconds, 60);
+        $remaining = $seconds % 60;
+
+        return $minutes > 0 ? $minutes.' phút'.($remaining ? ' '.$remaining.' giây' : '') : $remaining.' giây';
     }
 
     public function updateLesson(StoreLessonRequest $request, Course $course, Lesson $lesson): RedirectResponse
@@ -226,12 +276,32 @@ class CurriculumController extends Controller
                 $request->user()
             );
 
-            if (($request->hasFile('video_file') || $request->filled('s3_key')) && ($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
-                Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate)', ['content_update_id' => $contentUpdate->id]);
-                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
+                if ($request->hasFile('video_file')) {
+                    Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate Update Local)', ['content_update_id' => $contentUpdate->id]);
+                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                } elseif ($request->filled('s3_key')) {
+                    $s3Key = (string) $request->input('s3_key');
+                    if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
+                        Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate Update S3 Object exists)', ['content_update_id' => $contentUpdate->id, 'key' => $s3Key]);
+                        ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                    } else {
+                        Log::info('[UPLOAD TRACE] S3 Object still uploading in background. HLS will be dispatched on S3 complete.', ['content_update_id' => $contentUpdate->id, 'key' => $s3Key]);
+                    }
+                }
             }
 
             Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update ContentUpdate)');
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'content_update_id' => $contentUpdate->id,
+                    'lesson_id' => $lesson->id,
+                    'title' => $payload['title'] ?? $lesson->title,
+                    'message' => 'Đã lưu bản cập nhật nội dung bài học.',
+                ]);
+            }
 
             return back()->with('success', 'Đã lưu bản cập nhật nội dung bài học. Video đang được xử lý HLS ngầm.');
         }
@@ -245,9 +315,19 @@ class CurriculumController extends Controller
             'status' => $lessonData['status'] ?? Lesson::STATUS_DRAFT,
         ]);
 
-        if (($request->hasFile('video_file') || $request->filled('s3_key')) && $lesson->type === Lesson::TYPE_VIDEO) {
-            Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update Lesson)', ['lesson_id' => $lesson->id]);
-            ConvertVideoToHLS::dispatch($lesson);
+        if ($lesson->type === Lesson::TYPE_VIDEO) {
+            if ($request->hasFile('video_file')) {
+                Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update Local video_file)', ['lesson_id' => $lesson->id]);
+                ConvertVideoToHLS::dispatch($lesson);
+            } elseif ($request->filled('s3_key')) {
+                $s3Key = (string) $request->input('s3_key');
+                if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
+                    Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update S3 Object exists)', ['lesson_id' => $lesson->id, 'key' => $s3Key]);
+                    ConvertVideoToHLS::dispatch($lesson);
+                } else {
+                    Log::info('[UPLOAD TRACE] S3 Object still uploading in background. HLS will be dispatched on S3 complete.', ['lesson_id' => $lesson->id, 'key' => $s3Key]);
+                }
+            }
         }
 
         $lesson->refresh();
@@ -262,6 +342,15 @@ class CurriculumController extends Controller
         }
 
         Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update Success)');
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'lesson_id' => $lesson->id,
+                'title' => $lesson->title,
+                'message' => 'Đã cập nhật bài học.',
+            ]);
+        }
 
         return back()->with('success', 'Đã cập nhật bài học. Nếu có video mới, video đang được xử lý ngầm.');
     }
@@ -289,7 +378,7 @@ class CurriculumController extends Controller
         return back()->with('success', 'Đã xóa bài học.');
     }
 
-    public function updateContentUpdate(StoreLessonRequest $request, Course $course, ContentUpdate $contentUpdate): RedirectResponse
+    public function updateContentUpdate(StoreLessonRequest $request, Course $course, ContentUpdate $contentUpdate): RedirectResponse|JsonResponse
     {
         $this->authorizeCourse($course);
         abort_unless((int) $contentUpdate->course_id === (int) $course->id, 403);
@@ -308,16 +397,31 @@ class CurriculumController extends Controller
             'duration_seconds' => $lessonData['duration'] ?? ($existingPayload['duration'] ?? 0),
             'is_preview' => $request->boolean('is_preview'),
             'sort_order' => $lessonData['sort_order'] ?? ($existingPayload['sort_order'] ?? 0),
-            'status' => $lessonData['status'] ?? Lesson::STATUS_DRAFT,
+            'status' => $lessonData['status'] ?? ($existingPayload['status'] ?? Lesson::STATUS_DRAFT),
         ]);
 
         $contentUpdate->update([
             'payload' => $newPayload,
-            'status' => ContentUpdate::STATUS_DRAFT,
+            'summary' => $this->buildLessonUpdateSummary($existingPayload, $newPayload),
         ]);
 
-        if (($request->hasFile('video_file') || $request->filled('s3_key')) && ($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
-            ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+        if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
+            if ($request->hasFile('video_file')) {
+                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            } elseif ($request->filled('s3_key')) {
+                $s3Key = (string) $request->input('s3_key');
+                if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
+                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                }
+            }
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'content_update_id' => $contentUpdate->id,
+                'message' => 'Đã cập nhật bản nháp bài học.',
+            ]);
         }
 
         return back()->with('success', 'Đã cập nhật bản nháp bài học. Nếu có video mới, video đang được xử lý HLS ngầm.');
@@ -369,7 +473,17 @@ class CurriculumController extends Controller
         );
 
         if (($validated['type'] ?? null) !== Lesson::TYPE_VIDEO) {
-            unset($validated['video_url'], $validated['original_video_key'], $validated['hls_manifest_key']);
+            unset(
+                $validated['video_url'],
+                $validated['video_path'],
+                $validated['original_video_key'],
+                $validated['hls_manifest_key'],
+                $validated['video_original_name'],
+                $validated['video_mime'],
+                $validated['video_size']
+            );
+        } else {
+            $validated['video_size'] = (int) ($validated['video_size'] ?? 0);
         }
 
         if (! in_array($validated['type'] ?? null, [Lesson::TYPE_VIDEO, Lesson::TYPE_DOCUMENT, Lesson::TYPE_ASSIGNMENT], true)) {
@@ -410,7 +524,8 @@ class CurriculumController extends Controller
             $s3Key = (string) $request->input('s3_key');
             $originalName = (string) ($request->input('video_original_name') ?: basename($s3Key));
             $mime = (string) ($request->input('video_mime') ?: 'video/mp4');
-            $size = $request->input('video_size') ? (int) $request->input('video_size') : null;
+            $size = $request->input('video_size') ? (int) $request->input('video_size') : 0;
+            $s3Exists = app(AwsS3UploadService::class)->doesObjectExist($s3Key);
 
             return [
                 ...$validated,
@@ -418,7 +533,7 @@ class CurriculumController extends Controller
                 'video_original_name' => $originalName,
                 'video_mime' => $mime,
                 'video_size' => $size,
-                'upload_status' => 'uploaded',
+                'upload_status' => $s3Exists ? 'uploaded' : 'pending',
                 'processing_status' => 'pending',
             ];
         }
@@ -481,5 +596,112 @@ class CurriculumController extends Controller
             Lesson::STATUS_DRAFT => 'Nháp',
             Lesson::STATUS_PUBLISHED => 'Đã sẵn sàng',
         ];
+    }
+
+    public function getHlsStatus(Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+
+        $lessons = Lesson::where('course_id', $course->id)
+            ->where('type', 'video')
+            ->select(['id', 'processing_status', 'upload_status', 'hls_manifest_key', 'video_path', 'original_video_key', 'duration', 'duration_seconds'])
+            ->get();
+
+        $updates = ContentUpdate::where('course_id', $course->id)
+            ->where('type', ContentUpdate::TYPE_LESSON)
+            ->get();
+
+        $statuses = [];
+        foreach ($lessons as $lesson) {
+            $isReady = $lesson->isHlsReady();
+            $isProcessing = $lesson->isProcessing();
+            $isFailed = $lesson->hasFailedProcessing();
+            $durationSec = (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0);
+
+            $statuses['lesson_'.$lesson->id] = [
+                'id' => $lesson->id,
+                'processing_status' => $lesson->processing_status,
+                'is_ready' => $isReady,
+                'is_processing' => $isProcessing,
+                'is_failed' => $isFailed,
+                'duration' => $durationSec,
+                'duration_formatted' => $this->formatDuration($durationSec),
+                'status_message' => $isReady
+                    ? 'Video đã được xử lý bảo mật thành công.'
+                    : ($isFailed
+                        ? 'Video xử lý bảo mật thất bại.'
+                        : ($isProcessing
+                            ? 'Video đang trong quá trình xử lý bảo mật. Vui lòng chờ trong giây lát.'
+                            : 'Đang chờ xử lý')),
+            ];
+        }
+
+        foreach ($updates as $update) {
+            $payload = $update->payload ?? [];
+            $pStatus = $payload['processing_status'] ?? 'pending';
+            $pManifest = $payload['hls_manifest_key'] ?? null;
+            $isReady = $pStatus === 'completed' || filled($pManifest);
+            $isFailed = $pStatus === 'failed' && ! $isReady;
+            $isProcessing = in_array($pStatus, ['processing', 'pending'], true) && ! $isReady;
+            $durationSec = (int) ($payload['duration'] ?? $payload['duration_seconds'] ?? 0);
+
+            $key = $update->action === ContentUpdate::ACTION_CREATE
+                ? 'update_'.$update->id
+                : 'lesson_'.($update->entity_id ?? $update->id);
+
+            $statuses[$key] = [
+                'id' => $update->entity_id ?? $update->id,
+                'update_id' => $update->id,
+                'processing_status' => $pStatus,
+                'is_ready' => $isReady,
+                'is_processing' => $isProcessing,
+                'is_failed' => $isFailed,
+                'duration' => $durationSec,
+                'duration_formatted' => $this->formatDuration($durationSec),
+                'status_message' => $isReady
+                    ? 'Video đã được xử lý bảo mật thành công.'
+                    : ($isFailed
+                        ? 'Video xử lý bảo mật thất bại.'
+                        : ($isProcessing
+                            ? 'Video đang trong quá trình xử lý bảo mật. Vui lòng chờ trong giây lát.'
+                            : 'Đang chờ xử lý')),
+            ];
+        }
+
+        $totalVideos = count($statuses);
+        $hasIncompleteHls = $course->hasIncompleteHlsVideos();
+        $hasFailed = false;
+        $hasProcessing = false;
+
+        foreach ($statuses as $st) {
+            if ($st['is_failed']) {
+                $hasFailed = true;
+            } elseif ($st['is_processing'] || ! $st['is_ready']) {
+                $hasProcessing = true;
+            }
+        }
+
+        if ($totalVideos === 0) {
+            $commonState = 'no_videos';
+            $commonMessage = '';
+        } elseif ($hasFailed) {
+            $commonState = 'failed';
+            $commonMessage = 'Video chưa xử lý hoàn tất. Vui lòng chờ quá trình xử lý video hoàn tất trước khi gửi duyệt.';
+        } elseif ($hasProcessing || $hasIncompleteHls) {
+            $commonState = 'processing';
+            $commonMessage = 'Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.';
+        } else {
+            $commonState = 'completed';
+            $commonMessage = 'Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.';
+        }
+
+        return response()->json([
+            'total_videos' => $totalVideos,
+            'statuses' => $statuses,
+            'has_incomplete_hls' => $hasIncompleteHls,
+            'can_submit' => $totalVideos > 0 ? (! $hasIncompleteHls && ! $hasFailed && ! $hasProcessing) : true,
+            'common_state' => $commonState,
+            'common_message' => $commonMessage,
+        ]);
     }
 }
