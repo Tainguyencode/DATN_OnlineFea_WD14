@@ -102,3 +102,6 @@
 ### Commit 34: feat: nang cap he thong tro ly AI ho tro giai dap bai hoc (2026-08-22 09:30:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 35: refactor: dong bo tinh nang va chuan hoa giao dien nguoi dung (2026-08-26 15:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
