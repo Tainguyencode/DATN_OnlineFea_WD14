@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Learning\StoreDiscussionRequest;
 use App\Http\Requests\Learning\StoreDiscussionReplyRequest;
+use App\Http\Requests\Learning\StoreDiscussionRequest;
 use App\Models\Course;
-use App\Models\Lesson;
 use App\Models\Discussion;
 use App\Models\DiscussionReply;
+use App\Models\Lesson;
+use App\Models\UserPoint;
 use App\Services\NotificationService;
+use App\Services\PointService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class DiscussionController extends Controller
@@ -47,8 +50,8 @@ class DiscussionController extends Controller
         }
 
         $content = $request->validated('content');
-        $discussionTitle = $request->validated('title') 
-            ?: ($content ? Str::limit(strip_tags((string) $content), 80) : ($attachmentName ? "Đính kèm: {$attachmentName}" : "Tệp đính kèm"));
+        $discussionTitle = $request->validated('title')
+            ?: ($content ? Str::limit(strip_tags((string) $content), 80) : ($attachmentName ? "Đính kèm: {$attachmentName}" : 'Tệp đính kèm'));
 
         // Tìm conversation Course-level đã có giữa Học viên và Giảng viên
         $discussion = Discussion::where('course_id', $course->id)
@@ -83,7 +86,7 @@ class DiscussionController extends Controller
             ]);
 
             // Cộng +2 XP cho học viên tạo thảo luận (tối đa 10 XP/ngày)
-            app(\App\Services\PointService::class)->awardDiscussionPoints(
+            app(PointService::class)->awardDiscussionPoints(
                 auth()->id(),
                 $course->id,
                 $discussion->id
@@ -95,7 +98,7 @@ class DiscussionController extends Controller
         if ($instructor && (int) $instructor->id !== (int) auth()->id()) {
             $title = 'Học viên gửi câu hỏi mới';
             $previewText = $content ? Str::limit($content, 60) : ($attachmentName ? "[Đính kèm: {$attachmentName}]" : '[Tệp đính kèm]');
-            $message = auth()->user()->name . ' vừa hỏi trong khóa học "' . $course->title . '" (Bài: ' . $lesson->title . '): "' . $previewText . '"';
+            $message = auth()->user()->name.' vừa hỏi trong khóa học "'.$course->title.'" (Bài: '.$lesson->title.'): "'.$previewText.'"';
             $url = route('instructor.discussions.show', $discussion);
 
             $this->notificationService->send(
@@ -110,7 +113,7 @@ class DiscussionController extends Controller
         return redirect()->route('courses.lessons.show', [
             'course' => $course,
             'lesson' => $lesson,
-            'open_chat' => 1
+            'open_chat' => 1,
         ])->with('success', 'Đã gửi câu hỏi trao đổi thành công.');
     }
 
@@ -175,13 +178,13 @@ class DiscussionController extends Controller
             $title = 'Giảng viên đã trả lời câu hỏi của bạn';
             if ($replyToReply && (int) $replyToReply->user_id === (int) $discussion->user_id) {
                 $quotedText = $replyToReply->content ? Str::limit($replyToReply->content, 40) : '[Tệp đính kèm]';
-                $message = auth()->user()->name . ' đã trả lời tin nhắn của bạn: "' . $quotedText . '"';
+                $message = auth()->user()->name.' đã trả lời tin nhắn của bạn: "'.$quotedText.'"';
             } else {
-                $message = auth()->user()->name . ' đã trả lời câu hỏi trong khóa học: "' . Str::limit($course?->title ?? $discussion->title, 40) . '"';
+                $message = auth()->user()->name.' đã trả lời câu hỏi trong khóa học: "'.Str::limit($course?->title ?? $discussion->title, 40).'"';
             }
-            
+
             $targetLesson = $lessonId ? Lesson::find($lessonId) : ($discussion->lesson ?: $course?->lessons()->first());
-            $url = $targetLesson 
+            $url = $targetLesson
                 ? route('courses.lessons.show', ['course' => $course, 'lesson' => $targetLesson, 'open_chat' => 1])
                 : route('courses.show', $course);
 
@@ -197,9 +200,9 @@ class DiscussionController extends Controller
             $title = 'Học viên gửi phản hồi mới';
             if ($replyToReply && (int) $replyToReply->user_id === (int) $instructor->id) {
                 $quotedText = $replyToReply->content ? Str::limit($replyToReply->content, 40) : '[Tệp đính kèm]';
-                $message = auth()->user()->name . ' đã trả lời tin nhắn của bạn: "' . $quotedText . '"';
+                $message = auth()->user()->name.' đã trả lời tin nhắn của bạn: "'.$quotedText.'"';
             } else {
-                $message = auth()->user()->name . ' vừa phản hồi trong khóa học "' . ($course?->title ?? '') . '": "' . Str::limit($discussion->title, 40) . '"';
+                $message = auth()->user()->name.' vừa phản hồi trong khóa học "'.($course?->title ?? '').'": "'.Str::limit($discussion->title, 40).'"';
             }
             $url = route('instructor.discussions.show', $discussion);
 
@@ -222,36 +225,36 @@ class DiscussionController extends Controller
     {
         $discussion = $reply->discussion;
         $user = auth()->user();
-        
+
         $course = $discussion->course ?: $discussion->lesson?->course;
         $isOwner = (int) $discussion->user_id === (int) $user->id;
         $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && $course && (int) $course->instructor_id === (int) $user->id);
-        
+
         abort_unless($isOwner || $isInstructor, 403);
-        
-        $reply->is_helpful = !$reply->is_helpful;
+
+        $reply->is_helpful = ! $reply->is_helpful;
         $reply->save();
-        
-        $pointService = app(\App\Services\PointService::class);
+
+        $pointService = app(PointService::class);
         $replyTag = "reply_id:{$reply->id}";
-        
+
         if ($reply->is_helpful) {
             // Cộng +20 điểm cho người viết câu trả lời hữu ích
             $pointService->awardPoints(
-                $reply->user_id, 
-                20, 
-                'reply_marked_helpful', 
-                "Câu trả lời được đánh dấu hữu ích trong thảo luận: {$discussion->title} ({$replyTag})", 
+                $reply->user_id,
+                20,
+                'reply_marked_helpful',
+                "Câu trả lời được đánh dấu hữu ích trong thảo luận: {$discussion->title} ({$replyTag})",
                 $course?->id
             );
         } else {
             // Thu hồi điểm khi hủy đánh dấu
-            \App\Models\UserPoint::where('user_id', $reply->user_id)
+            UserPoint::where('user_id', $reply->user_id)
                 ->where('source', 'reply_marked_helpful')
                 ->where('description', 'like', "%{$replyTag}%")
                 ->delete();
         }
-        
+
         return redirect()->back()->with('success', 'Cập nhật trạng thái câu trả lời thành công.');
     }
 
@@ -270,12 +273,12 @@ class DiscussionController extends Controller
         }
 
         // Backend validation: Chỉ được thu hồi trong vòng 24 giờ
-        if (!$isAdmin && $reply->created_at < now()->subHours(24)) {
+        if (! $isAdmin && $reply->created_at < now()->subHours(24)) {
             return back()->withErrors(['recall' => 'Tin nhắn đã quá 24 giờ và không thể thu hồi.']);
         }
 
-        if ($reply->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($reply->attachment_path)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($reply->attachment_path);
+        if ($reply->attachment_path && Storage::disk('public')->exists($reply->attachment_path)) {
+            Storage::disk('public')->delete($reply->attachment_path);
         }
 
         $reply->update([
@@ -300,8 +303,8 @@ class DiscussionController extends Controller
         $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && $course && (int) $course->instructor_id === (int) $user->id);
         abort_unless($isOwner || $isInstructor, 403, 'Bạn không có quyền xóa tin nhắn này.');
 
-        if ($reply->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($reply->attachment_path)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($reply->attachment_path);
+        if ($reply->attachment_path && Storage::disk('public')->exists($reply->attachment_path)) {
+            Storage::disk('public')->delete($reply->attachment_path);
         }
 
         $reply->delete();
@@ -324,12 +327,12 @@ class DiscussionController extends Controller
         }
 
         // Backend validation: Chỉ được thu hồi trong vòng 24 giờ
-        if (!$isAdmin && $discussion->created_at < now()->subHours(24)) {
+        if (! $isAdmin && $discussion->created_at < now()->subHours(24)) {
             return back()->withErrors(['recall' => 'Tin nhắn đã quá 24 giờ và không thể thu hồi.']);
         }
 
-        if ($discussion->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($discussion->attachment_path)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($discussion->attachment_path);
+        if ($discussion->attachment_path && Storage::disk('public')->exists($discussion->attachment_path)) {
+            Storage::disk('public')->delete($discussion->attachment_path);
         }
 
         $discussion->update([
@@ -354,13 +357,13 @@ class DiscussionController extends Controller
         $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && $course && (int) $course->instructor_id === (int) $user->id);
         abort_unless($isOwner || $isInstructor, 403, 'Bạn không có quyền xóa cuộc trao đổi này.');
 
-        if ($discussion->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($discussion->attachment_path)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($discussion->attachment_path);
+        if ($discussion->attachment_path && Storage::disk('public')->exists($discussion->attachment_path)) {
+            Storage::disk('public')->delete($discussion->attachment_path);
         }
 
         foreach ($discussion->replies as $r) {
-            if ($r->attachment_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($r->attachment_path)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($r->attachment_path);
+            if ($r->attachment_path && Storage::disk('public')->exists($r->attachment_path)) {
+                Storage::disk('public')->delete($r->attachment_path);
             }
         }
 

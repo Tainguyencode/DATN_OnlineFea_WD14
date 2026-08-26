@@ -3,393 +3,238 @@
 namespace App\Services;
 
 use App\Models\Cart;
+use App\Models\Coupon;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Refund;
+use App\Models\Withdrawal;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use RuntimeException;
 
-/**
- * Service Quản lý Cổng Thanh toán & Xử lý Giao dịch Đơn hàng (PaymentGatewayService)
- * 
- * Chức năng chính:
- * 1. Khởi tạo liên kết thanh toán (VNPay, MoMo, PayOS VietQR, Giả lập Mock).
- * 2. Xác thực tính hợp lệ của đơn hàng, mã giảm giá (Coupon), kiểm tra chống trùng lặp giao dịch (Replay attack).
- * 3. Đánh dấu trạng thái đơn hàng (paid / failed) an toàn với DB Transaction & Row Locking (`lockForUpdate`).
- * 4. Tự động ghi danh học viên (`Enrollment`), xóa sản phẩm đã mua khỏi Giỏ hàng (`Cart`).
- * 5. Bắn thông báo `NotificationService` tới Giảng viên khi có học viên mới đăng ký khóa học.
- */
 class PaymentGatewayService
 {
-    /**
-     * Lấy URL chuyển hướng thanh toán tương ứng cho đơn hàng theo phương thức thanh toán được chọn.
-     * 
-     * @param Order $order Model đơn hàng cần thanh toán
-     * @return string URL chuyển hướng tới Cổng thanh toán hoặc Trang chuyển khoản QR
-     */
     public function getPaymentUrl(Order $order): string
     {
-        $mode = env('PAYMENT_MODE', 'mock');
-
-        // Nếu chọn PayOS, thử gọi PayOS API v2 để tạo checkoutUrl
-        if ($order->payment_method === 'payos') {
-            try {
-                return $this->createPayOSUrl($order);
-            } catch (\Exception $e) {
-                Log::warning('PayOS API creation fallback to mock: ' . $e->getMessage());
-                return route('student.checkout.mock_gateway', [
-                    'order_code' => $order->order_code,
-                    'gateway' => 'payos',
-                ]);
-            }
+        if (! in_array($order->payment_method, ['payos', 'bank_transfer'], true)) {
+            throw new RuntimeException('Cổng thanh toán không được hỗ trợ.');
         }
 
-        if ($mode === 'mock') {
-            if ($order->payment_method === 'bank_transfer') {
-                return route('student.checkout.pay', $order->order_code);
-            }
-
-            // Đối với VNPay hoặc MoMo, dẫn tới trang cổng thanh toán giả lập (Mock Gateway)
-            return route('student.checkout.mock_gateway', [
-                'order_code' => $order->order_code,
-                'gateway' => $order->payment_method,
-            ]);
+        if (config('services.payos.mode') === 'mock') {
+            return $order->payment_method === 'bank_transfer'
+                ? route('student.checkout.pay', $order->order_code)
+                : route('student.checkout.mock_gateway', $order->order_code);
         }
 
-        try {
-            return match ($order->payment_method) {
-                'payos', 'bank_transfer' => $this->createPayOSUrl($order),
-                'momo' => $this->createMoMoUrl($order),
-                'vnpay' => $this->createVNPayUrl($order),
-                default => throw new \Exception('Cổng thanh toán không được hỗ trợ.'),
-            };
-        } catch (\Exception $e) {
-            Log::error('Lỗi khi tạo link thanh toán thật: ' . $e->getMessage());
-            // Fallback sang mock để trải nghiệm người dùng không bị gián đoạn khi dev
-            if ($mode === 'sandbox') {
-                session()->flash('warning', 'Không thể kết nối cổng thanh toán. Hệ thống đã chuyển sang cổng thanh toán giả lập.');
-                return route('student.checkout.mock_gateway', [
-                    'order_code' => $order->order_code,
-                    'gateway' => $order->payment_method,
-                ]);
-            }
-            throw $e;
-        }
+        return $this->createPayOSUrl($order);
     }
 
-    /**
-     * Sinh URL tạo link thanh toán VietQR qua PayOS API v2.
-     * 
-     * @param Order $order Đơn hàng cần tạo mã QR thanh toán
-     * @return string URL link thanh toán PayOS Checkout
-     */
     protected function createPayOSUrl(Order $order): string
     {
-        $clientId = env('PAYOS_CLIENT_ID');
-        $apiKey = env('PAYOS_API_KEY');
-        $checksumKey = env('PAYOS_CHECKSUM_KEY');
+        $clientId = (string) config('services.payos.client_id');
+        $apiKey = (string) config('services.payos.api_key');
+        $checksumKey = (string) config('services.payos.checksum_key');
 
-        if (empty($clientId) || empty($apiKey) || empty($checksumKey)) {
-            throw new \Exception('Chưa cấu hình tài khoản PayOS trong file .env');
+        if ($clientId === '' || $apiKey === '' || $checksumKey === '') {
+            throw new RuntimeException('Chưa cấu hình tài khoản PayOS.');
         }
 
-        // Tạo orderCode dạng số nguyên duy nhất cho PayOS
-        $orderCode = (int) (time() % 10000000 . $order->id);
-        $amount = (int) $order->total_amount;
-        $description = 'Nap tien don hang ' . $order->order_code;
-        // Loại bỏ ký tự đặc biệt theo yêu cầu mô tả của PayOS (chỉ chữ thường, chữ hoa, số và dấu cách)
-        $description = preg_replace('/[^a-zA-Z0-9 ]/', '', $description);
-        $description = substr($description, 0, 25); // Giới hạn 25 ký tự
-
-        // Lưu orderCode duy nhất vào bản ghi Payment để tra cứu API khi redirect về
-        if ($order->payment) {
-            $order->payment->update(['transaction_id' => (string) $orderCode]);
+        $gatewayOrderCode = $order->id;
+        $amount = (int) round((float) $order->total_amount);
+        if ($amount <= 0) {
+            throw new RuntimeException('Số tiền thanh toán PayOS phải lớn hơn 0.');
         }
 
-        $cancelUrl = route('student.checkout.failed', $order->order_code);
-        $returnUrl = route('student.checkout.success', $order->order_code);
-
+        $description = substr(preg_replace('/[^a-zA-Z0-9 ]/', '', 'Thanh toan '.$order->order_code), 0, 25);
         $params = [
-            'orderCode' => $orderCode,
             'amount' => $amount,
+            'cancelUrl' => route('student.checkout.failed', $order->order_code),
             'description' => $description,
-            'cancelUrl' => $cancelUrl,
-            'returnUrl' => $returnUrl,
+            'orderCode' => $gatewayOrderCode,
+            'returnUrl' => route('student.checkout.success', $order->order_code),
         ];
-
-        // Sắp xếp các tham số theo bảng chữ cái để tạo chữ ký
         ksort($params);
-        $stringToSign = collect($params)->map(fn($v, $k) => "{$k}={$v}")->implode('&');
-        $signature = hash_hmac('sha256', $stringToSign, $checksumKey);
-        $params['signature'] = $signature;
+        $params['signature'] = hash_hmac(
+            'sha256',
+            collect($params)->map(fn ($value, $key) => $key.'='.$value)->implode('&'),
+            $checksumKey
+        );
 
-        $response = Http::withoutVerifying()->withHeaders([
-            'x-client-id' => $clientId,
-            'x-api-key' => $apiKey,
-            'Content-Type' => 'application/json',
-        ])->post('https://api-merchant.payos.vn/v2/payment-requests', $params);
+        $payment = $order->payment()->firstOrCreate(
+            ['order_id' => $order->id],
+            ['gateway' => 'bank_transfer', 'amount' => $order->total_amount, 'status' => 'pending']
+        );
+        $payment->update([
+            'gateway' => 'bank_transfer',
+            'gateway_order_code' => (string) $gatewayOrderCode,
+            'amount' => $order->total_amount,
+        ]);
+
+        $response = $this->payOSHttpClient(15)
+            ->withHeaders([
+                'x-client-id' => $clientId,
+                'x-api-key' => $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+            ->post('https://api-merchant.payos.vn/v2/payment-requests', $params);
 
         if ($response->failed()) {
-            throw new \Exception('Lỗi từ PayOS API: ' . ($response->json('desc') ?? $response->body()));
+            throw new RuntimeException('Lỗi từ PayOS API: '.($response->json('desc') ?? 'Không thể tạo liên kết thanh toán.'));
         }
 
         $checkoutUrl = $response->json('data.checkoutUrl');
-        if (empty($checkoutUrl)) {
-            throw new \Exception('Không nhận được checkoutUrl từ PayOS');
+        if (! is_string($checkoutUrl) || ! str_starts_with($checkoutUrl, 'https://')) {
+            throw new RuntimeException('PayOS không trả về liên kết thanh toán hợp lệ.');
         }
 
         return $checkoutUrl;
     }
 
-    /**
-     * Kiểm tra trạng thái thanh toán trực tiếp từ PayOS API hoặc URL callback nếu đơn hàng chưa xác nhận paid.
-     * 
-     * @param Order $order Đơn hàng cần đối soát
-     * @return bool True nếu thanh toán thành công, False nếu chưa hoặc thất bại
-     */
     public function checkAndUpdatePayOSStatus(Order $order): bool
     {
         if ($order->status === 'paid') {
             return true;
         }
 
-        if ($order->payment_method !== 'bank_transfer') {
+        if (! in_array($order->payment_method, ['payos', 'bank_transfer'], true)) {
             return false;
         }
 
-        // 1. Nhận diện kết quả thành công trực tiếp từ query params của PayOS redirect URL
-        $returnCode = request('code');
-        $returnStatus = request('status');
-        $returnOrderCode = request('orderCode');
-
-        if (($returnCode === '00' || $returnStatus === 'PAID') && ($returnOrderCode || request('id'))) {
-            $ref = request('id') ?? ('PAYOS-' . ($returnOrderCode ?? $order->id));
-            $this->processMockPayment($order, 'success', $ref);
-            return true;
-        }
-
-        // 2. Tra cứu trực tiếp PayOS API
-        $clientId = env('PAYOS_CLIENT_ID');
-        $apiKey = env('PAYOS_API_KEY');
-
-        if (empty($clientId) || empty($apiKey)) {
+        $payment = $order->payment;
+        $gatewayOrderCode = $payment?->gateway_order_code;
+        $clientId = (string) config('services.payos.client_id');
+        $apiKey = (string) config('services.payos.api_key');
+        if (! $gatewayOrderCode || $clientId === '' || $apiKey === '') {
             return false;
         }
-
-        $payOSOrderCode = $returnOrderCode 
-            ?? $order->payment?->transaction_id 
-            ?? $order->transaction_id 
-            ?? $order->id;
 
         try {
-            $response = Http::withoutVerifying()->withHeaders([
-                'x-client-id' => $clientId,
-                'x-api-key' => $apiKey,
-            ])->get("https://api-merchant.payos.vn/v2/payment-requests/{$payOSOrderCode}");
+            $response = $this->payOSHttpClient(10)
+                ->withHeaders(['x-client-id' => $clientId, 'x-api-key' => $apiKey])
+                ->get("https://api-merchant.payos.vn/v2/payment-requests/{$gatewayOrderCode}");
 
-            if ($response->successful()) {
-                $status = $response->json('data.status');
-                if ($status === 'PAID') {
-                    $transactions = $response->json('data.transactions', []);
-                    $ref = $transactions[0]['reference'] ?? ('PAYOS-' . $payOSOrderCode);
-                    $this->processMockPayment($order, 'success', $ref);
-                    return true;
-                }
+            if (! $response->successful() || $response->json('data.status') !== 'PAID') {
+                return false;
             }
-        } catch (\Exception $e) {
-            Log::error('Lỗi kiểm tra trạng thái PayOS API: ' . $e->getMessage());
-        }
 
-        return false;
-    }
+            $responseData = (array) $response->json('data', []);
+            $responseSignature = (string) $response->json('signature', '');
+            $checksumKey = (string) config('services.payos.checksum_key');
+            if ($responseSignature !== '' && ! hash_equals($this->signPayOSData($responseData, $checksumKey), $responseSignature)) {
+                Log::warning('PayOS status response has an invalid signature', compact('gatewayOrderCode'));
 
-
-    /**
-     * Sinh URL chuyển hướng đến Cổng thanh toán Ví MoMo.
-     * 
-     * @param Order $order Đơn hàng
-     * @return string URL MoMo PayUrl
-     */
-    protected function createMoMoUrl(Order $order): string
-    {
-        $partnerCode = env('MOMO_PARTNER_CODE');
-        $accessKey = env('MOMO_ACCESS_KEY');
-        $secretKey = env('MOMO_SECRET_KEY');
-        $momoUrl = env('MOMO_URL', 'https://test-payment.momo.vn/v2/gateway/api/create');
-
-        if (empty($partnerCode) || empty($accessKey) || empty($secretKey)) {
-            throw new \Exception('Chưa cấu hình tài khoản MoMo trong file .env');
-        }
-
-        $requestId = (string) Str::uuid();
-        $amount = (int) $order->total_amount;
-        $orderId = $order->order_code;
-        $orderInfo = 'Thanh toan don hang ' . $order->order_code;
-        $redirectUrl = route('payments.momo.callback');
-        $ipnUrl = route('payments.momo.ipn');
-        $extraData = '';
-        $requestType = 'captureWallet';
-
-        $rawHash = "accessKey=" . $accessKey .
-            "&amount=" . $amount .
-            "&extraData=" . $extraData .
-            "&ipnUrl=" . $ipnUrl .
-            "&orderId=" . $orderId .
-            "&orderInfo=" . $orderInfo .
-            "&partnerCode=" . $partnerCode .
-            "&redirectUrl=" . $redirectUrl .
-            "&requestId=" . $requestId .
-            "&requestType=" . $requestType;
-
-        $signature = hash_hmac('sha256', $rawHash, $secretKey);
-
-        $params = [
-            'partnerCode' => $partnerCode,
-            'partnerName' => 'OnlineFEA',
-            'storeId' => 'OnlineFEA',
-            'requestId' => $requestId,
-            'amount' => $amount,
-            'orderId' => $orderId,
-            'orderInfo' => $orderInfo,
-            'redirectUrl' => $redirectUrl,
-            'ipnUrl' => $ipnUrl,
-            'extraData' => $extraData,
-            'requestType' => $requestType,
-            'signature' => $signature,
-            'lang' => 'vi',
-        ];
-
-        $response = Http::withoutVerifying()->timeout(10)->post($momoUrl, $params);
-
-        if ($response->failed()) {
-            throw new \Exception('Lỗi từ MoMo API: ' . ($response->json('message') ?? $response->body()));
-        }
-
-        $payUrl = $response->json('payUrl');
-        if (empty($payUrl)) {
-            throw new \Exception('Không nhận được payUrl từ MoMo: ' . ($response->json('localMessage') ?? $response->body()));
-        }
-
-        return $payUrl;
-    }
-
-    /**
-     * Sinh URL chuyển hướng đến Cổng thanh toán VNPay (v2.1.0).
-     * 
-     * @param Order $order Đơn hàng
-     * @return string URL VNPay Payment
-     */
-    protected function createVNPayUrl(Order $order): string
-    {
-        $vnp_TmnCode = env('VNP_TMN_CODE');
-        $vnp_HashSecret = env('VNP_HASH_SECRET');
-        $vnp_Url = env('VNP_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
-        $vnp_Returnurl = route('payments.vnpay.return');
-
-        if (empty($vnp_TmnCode) || empty($vnp_HashSecret)) {
-            throw new \Exception('Chưa cấu hình tài khoản VNPay trong file .env');
-        }
-
-        $vnp_TxnRef = $order->order_code;
-        $vnp_OrderInfo = 'Thanh toan don hang ' . $order->order_code;
-        $vnp_OrderType = 'billpayment';
-        $vnp_Amount = (int) ($order->total_amount * 100);
-        $vnp_Locale = 'vn';
-        $vnp_IpAddr = request()->ip() ?? '127.0.0.1';
-
-        $inputData = [
-            "vnp_Version" => "2.1.0",
-            "vnp_TmnCode" => $vnp_TmnCode,
-            "vnp_Amount" => $vnp_Amount,
-            "vnp_Command" => "pay",
-            "vnp_CreateDate" => date('YmdHis'),
-            "vnp_CurrCode" => "VND",
-            "vnp_IpAddr" => $vnp_IpAddr,
-            "vnp_Locale" => $vnp_Locale,
-            "vnp_OrderInfo" => $vnp_OrderInfo,
-            "vnp_OrderType" => $vnp_OrderType,
-            "vnp_ReturnUrl" => $vnp_Returnurl,
-            "vnp_TxnRef" => $vnp_TxnRef,
-        ];
-
-        ksort($inputData);
-        $query = "";
-        $i = 0;
-        $hashdata = "";
-
-        foreach ($inputData as $key => $value) {
-            if ($i == 1) {
-                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
-            } else {
-                $hashdata .= urlencode($key) . "=" . urlencode($value);
-                $i = 1;
+                return false;
             }
-            $query .= urlencode($key) . "=" . urlencode($value) . '&';
+
+            $receivedAmount = (int) ($responseData['amountPaid'] ?? $responseData['amount'] ?? -1);
+            $expectedAmount = (int) round((float) $order->total_amount);
+            if ($receivedAmount !== $expectedAmount) {
+                Log::warning('PayOS status amount mismatch', compact('gatewayOrderCode', 'receivedAmount', 'expectedAmount'));
+
+                return false;
+            }
+
+            $transactions = $response->json('data.transactions', []);
+            $reference = (string) ($transactions[0]['reference'] ?? 'PAYOS-'.$gatewayOrderCode);
+
+            return $this->completePayOSPayment($order, $reference, $responseData);
+        } catch (\Throwable $exception) {
+            Log::error('Không thể đối soát PayOS: '.$exception->getMessage());
+
+            return false;
         }
-
-        $vnp_Url = $vnp_Url . "?" . $query;
-        $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnp_HashSecret);
-        $vnp_Url .= 'vnp_SecureHash=' . $vnpSecureHash;
-
-        return $vnp_Url;
     }
 
-    /**
-     * Xử lý xác nhận kết quả giao dịch Đơn hàng (Thành công / Thất bại).
-     * Áp dụng khóa hàng DB Transaction & LockForUpdate để chống tình trạng ghi đè trùng lặp.
-     *
-     * @param Order $order Đơn hàng
-     * @param string $status Trạng thái ('success' hoặc 'failed')
-     * @param string|null $transactionId Mã giao dịch thực tế hoặc giả lập
-     * @return bool Thành công hay thất bại
-     */
+    public function completePayOSPayment(Order $order, string $transactionId, array $gatewayResponse = []): bool
+    {
+        return $this->finalizePayment($order, $transactionId, $gatewayResponse, false);
+    }
+
+    public function completeFreeOrder(Order $order): bool
+    {
+        if ((float) $order->total_amount !== 0.0) {
+            return false;
+        }
+
+        return $this->finalizePayment(
+            $order,
+            'FREE-'.$order->id,
+            ['message' => 'Đơn hàng miễn phí hoặc được giảm giá 100%.'],
+            false
+        );
+    }
+
     public function processMockPayment(Order $order, string $status, ?string $transactionId = null): bool
     {
-        return DB::transaction(function () use ($order, $status, $transactionId): bool {
-            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+        abort_unless(
+            app()->environment(['local', 'testing']) && config('services.payos.mode') === 'mock',
+            404
+        );
 
-            // Nếu đơn hàng đã được xác nhận paid trước đó thì giữ nguyên
+        if ($status !== 'success') {
+            return DB::transaction(function () use ($order): bool {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                if ($lockedOrder->status === 'paid') {
+                    return true;
+                }
+                $lockedOrder->update(['status' => 'failed']);
+                $lockedOrder->payment()->update([
+                    'status' => 'failed',
+                    'gateway_response' => ['message' => 'Giao dịch giả lập thất bại.'],
+                ]);
+
+                return false;
+            });
+        }
+
+        return $this->finalizePayment(
+            $order,
+            $transactionId ?? 'MOCK-'.strtoupper(Str::random(12)),
+            ['message' => 'Thanh toán giả lập thành công.'],
+            true
+        );
+    }
+
+    private function finalizePayment(Order $order, string $transactionId, array $gatewayResponse, bool $mock): bool
+    {
+        return DB::transaction(function () use ($order, $transactionId, $gatewayResponse, $mock): bool {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status === 'paid') {
                 return true;
             }
 
             $payment = $lockedOrder->payment()->lockForUpdate()->first();
+            if (! $payment || (int) round((float) $payment->amount) !== (int) round((float) $lockedOrder->total_amount)) {
+                return false;
+            }
 
-            if ($status !== 'success') {
-                $this->markPaymentFailed($lockedOrder, $payment, 'Giao dịch bị hủy hoặc thất bại.');
+            if (Payment::query()
+                ->where('transaction_id', $transactionId)
+                ->where('order_id', '!=', $lockedOrder->id)
+                ->exists()) {
+                Log::warning('Rejected reused payment transaction', ['transaction_id' => $transactionId]);
 
                 return false;
             }
 
-            $coupon = null;
-            if ($lockedOrder->coupon_id) {
-                $coupon = $lockedOrder->coupon()->lockForUpdate()->first();
+            $coupon = $this->lockAndValidateCoupon($lockedOrder);
+            if ($lockedOrder->coupon_id && ! $coupon) {
+                $lockedOrder->update(['status' => 'failed']);
+                $payment->update(['status' => 'failed']);
 
-                if (! $coupon || ! $coupon->isValid() || $coupon->isUsedByUser($lockedOrder->user_id)) {
-                    $this->markPaymentFailed($lockedOrder, $payment, 'Mã giảm giá đã hết hiệu lực hoặc hết lượt sử dụng.');
-
-                    return false;
-                }
+                return false;
             }
 
-            $txn = $transactionId ?? 'TXN-'.strtoupper(Str::random(10));
-
-            $lockedOrder->update([
-                'status' => 'paid',
-                'transaction_id' => $txn,
-            ]);
-
-            $payment?->update([
+            $lockedOrder->update(['status' => 'paid', 'transaction_id' => $transactionId]);
+            $payment->update([
                 'status' => 'success',
-                'transaction_id' => $txn,
+                'transaction_id' => $transactionId,
                 'paid_at' => now(),
-                'gateway_response' => [
-                    'message' => 'Thanh toán giả lập thành công.',
-                    'simulated_at' => now()->toDateTimeString(),
-                    'gateway' => $lockedOrder->payment_method,
-                ],
+                'gateway_response' => $gatewayResponse + ['mock' => $mock],
             ]);
 
             $this->enrollStudent($lockedOrder);
@@ -400,86 +245,173 @@ class PaymentGatewayService
         });
     }
 
-    /**
-     * Đánh dấu giao dịch đơn hàng thất bại.
-     * 
-     * @param Order $order
-     * @param Payment|null $payment
-     * @param string $message Lý do thất bại
-     */
-    protected function markPaymentFailed(Order $order, ?Payment $payment, string $message): void
+    private function lockAndValidateCoupon(Order $order): ?Coupon
     {
-        $order->update(['status' => 'failed']);
+        if (! $order->coupon_id) {
+            return null;
+        }
 
-        $payment?->update([
-            'status' => 'failed',
-            'gateway_response' => [
-                'message' => $message,
-                'simulated_at' => now()->toDateTimeString(),
-                'gateway' => $order->payment_method,
-            ],
-        ]);
+        $coupon = Coupon::query()->lockForUpdate()->find($order->coupon_id);
+
+        return $coupon && $coupon->isValid() && ! $coupon->isUsedByUser($order->user_id)
+            ? $coupon
+            : null;
     }
 
-    /**
-     * Tự động đăng ký Ghi danh (Enrollment) cho học viên khi thanh toán thành công và bắn thông báo tới Giảng viên.
-     * 
-     * @param Order $order
-     */
+    private function signPayOSData(array $data, string $checksumKey): string
+    {
+        ksort($data);
+
+        return hash_hmac('sha256', collect($data)->map(function ($value, $key): string {
+            if (is_array($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            } elseif (is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            } elseif ($value === null) {
+                $value = '';
+            }
+
+            return $key.'='.$value;
+        })->implode('&'), $checksumKey);
+    }
+
+    private function payOSHttpClient(int $timeout)
+    {
+        $request = Http::timeout($timeout);
+        $caBundle = config('services.payos.ca_bundle');
+
+        return is_string($caBundle) && $caBundle !== ''
+            ? $request->withOptions(['verify' => $caBundle])
+            : $request;
+    }
+
     protected function enrollStudent(Order $order): void
     {
-        // Lấy chi tiết các mục trong đơn hàng từ quan hệ Eloquent kèm thông tin khóa học và giảng viên
-        $items = $order->items()->with(['course.instructor'])->get();
         $student = $order->user;
+        $items = $order->items()->with(['course.instructor'])->get();
+        $existingEnrollments = Enrollment::query()
+            ->where('user_id', $order->user_id)
+            ->whereIn('course_id', $items->pluck('course_id'))
+            ->get()
+            ->keyBy('course_id');
 
         foreach ($items as $item) {
-            $course = $item->course;
+            $enrollment = $existingEnrollments->get($item->course_id)
+                ?? new Enrollment(['user_id' => $order->user_id, 'course_id' => $item->course_id]);
+            $isNewOrCancelled = ! $enrollment->exists || $enrollment->status === 'cancelled';
 
-            // Tìm hoặc tạo mới bản ghi ghi danh (status: active)
-            $enrollment = Enrollment::firstOrCreate(
-                [
-                    'user_id' => $order->user_id,
-                    'course_id' => $item->course_id,
-                ],
-                [
+            if ($isNewOrCancelled) {
+                $enrollment->fill([
                     'order_id' => $order->id,
-                    'status' => 'active',
+                    'status' => Enrollment::STATUS_ACTIVE,
                     'progress_percent' => 0,
+                    'completed_lessons' => 0,
+                    'completed_at' => null,
                     'enrolled_at' => now(),
-                ]
-            );
+                ])->save();
+                $item->course?->increment('enrollment_count');
+            }
 
-            // Tăng số lượng học viên đăng ký của khóa học nếu đây là lượt ghi danh mới
-            if ($enrollment->wasRecentlyCreated) {
-                $course?->increment('enrollment_count');
-
-                // Gửi thông báo cho giảng viên tạo khóa học
-                if ($course && $course->instructor) {
-                    $studentName = $student?->name ?? 'Một học viên';
-                    app(NotificationService::class)->send(
-                        $course->instructor,
-                        'Học viên mới mua khóa học',
-                        "Học viên {$studentName} đã đăng ký mua khóa học \"{$course->title}\".",
-                        'new_enrollment',
-                        route('instructor.courses.students', $course)
-                    );
-                }
+            if ($isNewOrCancelled && $item->course?->instructor) {
+                app(NotificationService::class)->send(
+                    $item->course->instructor,
+                    'Học viên mới mua khóa học',
+                    'Học viên '.($student?->name ?? 'Một học viên').' đã đăng ký mua khóa học "'.$item->course->title.'".',
+                    'new_enrollment',
+                    route('instructor.courses.students', $item->course)
+                );
             }
         }
     }
 
-    /**
-     * Tự động xóa các khóa học đã mua khỏi giỏ hàng của học viên.
-     * 
-     * @param Order $order
-     */
     protected function clearCart(Order $order): void
     {
         $cart = Cart::where('user_id', $order->user_id)->first();
-        if ($cart) {
-            // Lấy danh sách ID khóa học trong đơn hàng để loại bỏ khỏi giỏ hàng từ quan hệ Eloquent
-            $courseIds = $order->items()->pluck('course_id')->toArray();
-            $cart->courses()->detach($courseIds);
+        $cart?->courses()->detach($order->items()->pluck('course_id')->all());
+    }
+
+    public function processRefund(Refund $refund, string $method, ?string $adminNote = null, ?string $manualReference = null): bool
+    {
+        if ($method === 'manual' && blank($manualReference)) {
+            throw new RuntimeException('Hoàn tiền thủ công cần có mã giao dịch/đối soát.');
         }
+
+        $prepared = DB::transaction(function () use ($refund, $method, $adminNote): Refund {
+            $lockedRefund = Refund::query()->lockForUpdate()->findOrFail($refund->id);
+            $order = Order::query()->lockForUpdate()->findOrFail($lockedRefund->order_id);
+
+            if ($lockedRefund->status === 'approved') {
+                return $lockedRefund;
+            }
+            if (! in_array($lockedRefund->status, ['pending', 'processing'], true) || $order->status !== 'paid') {
+                throw new RuntimeException('Đơn hàng hoặc yêu cầu hoàn tiền không còn hợp lệ.');
+            }
+
+            $lockedRefund->update([
+                'status' => 'processing',
+                'refund_method' => $method,
+                'admin_note' => $adminNote,
+            ]);
+
+            return $lockedRefund->fresh();
+        });
+
+        if ($prepared->status === 'approved') {
+            return true;
+        }
+
+        $transactionReference = $method === 'manual' ? trim((string) $manualReference) : null;
+        if ($method === 'payos_payout') {
+            $withdrawal = new Withdrawal([
+                'id' => $prepared->id,
+                'user_id' => $prepared->user_id,
+                'amount' => $prepared->amount,
+                'bank_code' => $prepared->bank_code,
+                'bank_account_number' => $prepared->bank_account_number,
+                'bank_account_name' => $prepared->bank_account_name,
+            ]);
+            $result = app(PayoutService::class)->processAutoPayout($withdrawal, 'REFUND-'.$prepared->id);
+            $transactionReference = (string) ($result['referenceId'] ?? $result['id'] ?? 'PAYOS-REFUND-'.$prepared->id);
+        }
+
+        return DB::transaction(function () use ($prepared, $transactionReference): bool {
+            $lockedRefund = Refund::query()->lockForUpdate()->findOrFail($prepared->id);
+            $order = Order::query()->lockForUpdate()->findOrFail($lockedRefund->order_id);
+            if ($lockedRefund->status === 'approved') {
+                return true;
+            }
+            if ($lockedRefund->status !== 'processing' || $order->status !== 'paid') {
+                throw new RuntimeException('Trạng thái hoàn tiền đã thay đổi.');
+            }
+
+            $lockedRefund->update([
+                'status' => 'approved',
+                'transaction_reference' => $transactionReference,
+                'processed_at' => now(),
+            ]);
+            $order->update(['status' => 'refunded']);
+
+            $items = $order->items()->with('course')->get();
+            Enrollment::where('user_id', $order->user_id)
+                ->whereIn('course_id', $items->pluck('course_id'))
+                ->where('status', '!=', 'cancelled')
+                ->update(['status' => 'cancelled']);
+            Course::query()
+                ->whereIn('id', $items->pluck('course_id'))
+                ->where('enrollment_count', '>', 0)
+                ->decrement('enrollment_count');
+
+            if ($order->user) {
+                app(NotificationService::class)->send(
+                    $order->user,
+                    'Yêu cầu hoàn tiền đã được duyệt',
+                    'Yêu cầu hoàn tiền cho đơn hàng #'.$order->order_code.' đã được xử lý.',
+                    'refund_approved',
+                    route('student.orders.show', $order)
+                );
+            }
+
+            return true;
+        });
     }
 }

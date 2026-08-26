@@ -198,7 +198,7 @@ class S3MultipartUploadTest extends TestCase
             'is_preview' => true,
         ]);
 
-        Storage::disk('local')->put('lesson-hls/' . $lesson->id . '/playlist.m3u8', "#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n");
+        Storage::disk('local')->put('lesson-hls/'.$lesson->id.'/playlist.m3u8', "#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n");
 
         $tokenResponse = $this->getJson("/api/video/{$lesson->id}/token");
         $tokenResponse->assertOk();
@@ -206,7 +206,7 @@ class S3MultipartUploadTest extends TestCase
 
         $playlistResponse = $this->get("/api/video/hls/{$lesson->id}/playlist.m3u8?token={$token}");
         $playlistResponse->assertOk()
-            ->assertSee('segment0.ts?token=' . $token);
+            ->assertSee('segment0.ts?token='.$token);
     }
 
     public function test_instructor_can_fetch_hls_status_for_course_lessons(): void
@@ -232,7 +232,7 @@ class S3MultipartUploadTest extends TestCase
             'title' => 'Bài đã hoàn tất',
             'type' => 'video',
             'original_video_key' => "originals/courses/{$course->id}/lessons/2/video2.mp4",
-            'hls_manifest_key' => "hls/lessons/2/master.m3u8",
+            'hls_manifest_key' => 'hls/lessons/2/master.m3u8',
             'upload_status' => 'uploaded',
             'processing_status' => 'completed',
             'sort_order' => 2,

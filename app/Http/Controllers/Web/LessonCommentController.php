@@ -21,7 +21,7 @@ class LessonCommentController extends Controller
         if ($parentId) {
             $parentComment = LessonComment::findOrFail($parentId);
             Gate::authorize('reply', $parentComment);
-            
+
             // Đảm bảo parent_id thuộc về lesson này
             abort_unless((int) $parentComment->lesson_id === (int) $lesson->id, 400, 'Invalid parent comment for this lesson.');
         } else {
@@ -68,7 +68,7 @@ class LessonCommentController extends Controller
     {
         Gate::authorize('toggleHide', $comment);
 
-        $comment->is_hidden = !$comment->is_hidden;
+        $comment->is_hidden = ! $comment->is_hidden;
         $comment->save();
 
         $message = $comment->is_hidden ? 'Đã ẩn bình luận.' : 'Đã bỏ ẩn bình luận.';

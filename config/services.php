@@ -86,4 +86,16 @@ return [
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
+    'payos' => [
+        // Fail closed: mock payments must always be enabled explicitly.
+        'mode' => env('PAYMENT_MODE', 'live'),
+        'client_id' => env('PAYOS_CLIENT_ID'),
+        'api_key' => env('PAYOS_API_KEY'),
+        'checksum_key' => env('PAYOS_CHECKSUM_KEY'),
+        'payout_client_id' => env('PAYOS_PAYOUT_CLIENT_ID', env('PAYOS_CLIENT_ID')),
+        'payout_api_key' => env('PAYOS_PAYOUT_API_KEY', env('PAYOS_API_KEY')),
+        'payout_checksum_key' => env('PAYOS_PAYOUT_CHECKSUM_KEY', env('PAYOS_CHECKSUM_KEY')),
+        'ca_bundle' => env('PAYMENT_CA_BUNDLE'),
+    ],
+
 ];

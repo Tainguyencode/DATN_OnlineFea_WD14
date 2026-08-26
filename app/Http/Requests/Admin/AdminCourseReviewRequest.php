@@ -94,4 +94,3 @@ class AdminCourseReviewRequest extends FormRequest
         });
     }
 }
-

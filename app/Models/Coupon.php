@@ -73,6 +73,7 @@ class Coupon extends Model
             if ($this->course_id && (int) $this->course_id !== (int) $course->id) {
                 return false;
             }
+
             return true;
         }
 
@@ -83,6 +84,7 @@ class Coupon extends Model
             if ($this->course_id && (int) $this->course_id !== (int) $course->id) {
                 return false;
             }
+
             return true;
         }
 

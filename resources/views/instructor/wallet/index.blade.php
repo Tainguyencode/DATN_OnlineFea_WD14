@@ -1,6 +1,12 @@
 
 <x-instructor-layout title="Ví tiền & Rút tiền" page-title="Ví tiền & Quản lý rút tiền">
 
+    @php
+        $canWithdraw = $user->bank_account_number
+            && $user->bank_name
+            && $stats['available_balance'] >= 10000;
+    @endphp
+
     <div x-data="{
         showBankModal: false,
         showWithdrawModal: false,
@@ -11,6 +17,8 @@
         bankName: '{{ old('bank_name', $user->bank_name ?? '') }}',
         accountNumber: '{{ old('bank_account_number', $user->bank_account_number ?? '') }}',
         accountName: '{{ old('bank_account_name', $user->bank_account_name ?? '') }}',
+        accountNumberError: '',
+        accountNameError: '',
         withdrawAmount: '{{ old('amount', '') }}',
         maxAmount: {{ floor($stats['available_balance']) }},
         
@@ -29,6 +37,38 @@
             const selectedOption = event.target.options[event.target.selectedIndex];
             this.bankName = selectedOption.getAttribute('data-name') || selectedOption.value;
             this.bankCode = selectedOption.value;
+        },
+        validateAccountNumber() {
+            this.accountNumber = (this.accountNumber || '').replace(/\D/g, '').slice(0, 20);
+            this.accountNumberError = /^[0-9]{6,20}$/.test(this.accountNumber)
+                ? ''
+                : 'Số tài khoản phải gồm từ 6 đến 20 chữ số.';
+        },
+        normalizeAccountName() {
+            this.accountName = (this.accountName || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/Đ/g, 'D')
+                .replace(/[^a-zA-Z\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .toUpperCase()
+                .slice(0, 100);
+            this.accountNameError = /^[A-Z ]{3,100}$/.test(this.accountName.trim())
+                ? ''
+                : 'Tên chủ tài khoản phải có ít nhất 3 chữ cái.';
+        },
+        get bankFormValid() {
+            return Boolean(this.bankCode)
+                && /^[0-9]{6,20}$/.test(this.accountNumber || '')
+                && /^[A-Z ]{3,100}$/.test((this.accountName || '').trim());
+        },
+        get bankPreviewUrl() {
+            if (!this.bankFormValid) return '';
+            const code = encodeURIComponent(this.bankCode);
+            const account = encodeURIComponent(this.accountNumber);
+            const owner = encodeURIComponent(this.accountName.trim());
+            return `https://img.vietqr.io/image/${code}-${account}-compact2.png?addInfo=XAC%20THUC%20TAI%20KHOAN&accountName=${owner}`;
         },
         setAmountPercent(percent) {
             this.withdrawAmount = Math.floor(this.maxAmount * (percent / 100));
@@ -74,8 +114,9 @@
                 <div class="mt-5">
                     <button
                         type="button"
-                        @click="showWithdrawModal = true"
-                        class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-white/50 active:scale-[0.98] cursor-pointer"
+                        @click="{{ $canWithdraw ? 'showWithdrawModal = true' : '' }}"
+                        @disabled(! $canWithdraw)
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 shadow-md transition focus:outline-none focus:ring-2 focus:ring-white/50 {{ $canWithdraw ? 'cursor-pointer hover:bg-emerald-50 active:scale-[0.98]' : 'cursor-not-allowed opacity-60' }}"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                         Rút tiền
@@ -179,7 +220,7 @@
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 bg-white border border-slate-200 px-3.5 py-2 rounded-xl">
-                            <span class="text-emerald-600 font-bold">✓ Đã xác thực thông tin</span>
+                            <span class="font-bold text-emerald-600">✓ Đã kiểm tra định dạng</span>
                         </div>
                     </div>
                 @else
@@ -344,7 +385,7 @@
                     x-transition:leave="ease-in duration-150"
                     x-transition:leave-start="opacity-100 scale-100"
                     x-transition:leave-end="opacity-0 scale-95"
-                    class="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-6"
+                    class="relative max-h-[92vh] transform overflow-y-auto rounded-3xl bg-white p-6 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl"
                 >
                     <div class="flex items-center justify-between border-b border-slate-100 pb-4">
                         <h3 class="text-base font-bold text-slate-900" id="bank-modal-title">
@@ -355,12 +396,12 @@
                         </button>
                     </div>
 
-                    <form action="{{ route('instructor.wallet.bank-details.update') }}" method="POST" class="mt-4 space-y-4">
+                    <form action="{{ route('instructor.wallet.bank-details.update') }}" method="POST" class="mt-5">
                         @csrf
                         @method('PUT')
 
-                        <input type="hidden" name="bank_name" :value="bankName">
-
+                        <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] md:items-start">
+                            <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Ngân hàng thụ hưởng (VietQR Napas247)</label>
                             <select
@@ -388,10 +429,16 @@
                                 type="text"
                                 name="bank_account_number"
                                 x-model="accountNumber"
+                                @input="validateAccountNumber"
+                                inputmode="numeric"
+                                autocomplete="off"
+                                maxlength="20"
                                 placeholder="Ví dụ: 0387043899"
                                 required
-                                class="w-full font-mono rounded-xl border-slate-300 py-2.5 px-4 text-sm font-bold text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                :class="accountNumberError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-500'"
+                                class="w-full rounded-xl px-4 py-2.5 font-mono text-sm font-bold text-slate-900 shadow-sm"
                             />
+                            <p x-show="accountNumberError" x-text="accountNumberError" class="mt-1 text-xs font-semibold text-rose-600"></p>
                         </div>
 
                         <div>
@@ -400,13 +447,32 @@
                                 type="text"
                                 name="bank_account_name"
                                 x-model="accountName"
+                                @input="normalizeAccountName"
+                                autocomplete="off"
                                 placeholder="Ví dụ: NGUYEN VAN A"
                                 required
-                                class="w-full rounded-xl border-slate-300 py-2.5 px-4 text-sm font-bold uppercase text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                :class="accountNameError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-500'"
+                                class="w-full rounded-xl px-4 py-2.5 text-sm font-bold uppercase text-slate-900 shadow-sm"
                             />
+                            <p x-show="accountNameError" x-text="accountNameError" class="mt-1 text-xs font-semibold text-rose-600"></p>
+                        </div>
+                            </div>
+
+                        <div class="flex min-h-96 items-center justify-center rounded-2xl border p-4" :class="bankFormValid ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-slate-50'">
+                            <div class="flex flex-col items-center text-center">
+                                <div class="flex aspect-square w-full max-w-80 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:max-w-88">
+                                    <template x-if="bankFormValid">
+                                        <img :src="bankPreviewUrl" alt="Xem trước mã VietQR tài khoản nhận tiền" class="h-full w-full object-contain">
+                                    </template>
+                                    <template x-if="!bankFormValid">
+                                        <span class="px-6 text-sm font-semibold text-slate-400">QR xuất hiện khi thông tin hợp lệ</span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                         </div>
 
-                        <div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 mt-6">
+                        <div class="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
                             <button
                                 type="button"
                                 @click="showBankModal = false"
@@ -416,7 +482,8 @@
                             </button>
                             <button
                                 type="submit"
-                                class="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition cursor-pointer"
+                                :disabled="!bankFormValid"
+                                class="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-sm transition enabled:cursor-pointer enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Lưu tài khoản
                             </button>

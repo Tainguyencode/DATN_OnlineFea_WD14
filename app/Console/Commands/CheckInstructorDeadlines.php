@@ -70,7 +70,7 @@ class CheckInstructorDeadlines extends Command
                         route('instructor.profile')
                     );
                 } catch (\Throwable $e) {
-                    Log::error("Gửi thông báo khóa tài khoản cho user {$user->id} thất bại: " . $e->getMessage());
+                    Log::error("Gửi thông báo khóa tài khoản cho user {$user->id} thất bại: ".$e->getMessage());
                 }
 
                 $this->warn("Đã khóa tài khoản giảng viên: {$user->email} (ID: {$user->id}) do quá hạn 7 ngày.");
@@ -95,7 +95,7 @@ class CheckInstructorDeadlines extends Command
                         );
                         $notifiedCount++;
                     } catch (\Throwable $e) {
-                        Log::error("Gửi nhắc nhở deadline cho user {$user->id} thất bại: " . $e->getMessage());
+                        Log::error("Gửi nhắc nhở deadline cho user {$user->id} thất bại: ".$e->getMessage());
                     }
                 }
             }
@@ -122,7 +122,7 @@ class CheckInstructorDeadlines extends Command
                     );
                     $cooldownNotifiedCount++;
                 } catch (\Throwable $e) {
-                    Log::error("Gửi thông báo mở đơn cấp lại cho user {$user->id} thất bại: " . $e->getMessage());
+                    Log::error("Gửi thông báo mở đơn cấp lại cho user {$user->id} thất bại: ".$e->getMessage());
                 }
             }
         }

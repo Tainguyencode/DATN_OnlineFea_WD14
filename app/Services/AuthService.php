@@ -3,11 +3,16 @@
 namespace App\Services;
 
 use App\Models\ActiveSession;
+use App\Models\Category;
+use App\Models\InstructorApplication;
+use App\Models\InstructorCertificate;
+use App\Models\InstructorProfile;
 use App\Models\User;
-use App\Services\SecurityAlertService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -89,12 +94,12 @@ class AuthService
                 $extension = $file->getClientOriginalExtension() ?: 'pdf';
                 $storedPath = $file->storeAs(
                     "instructor-certificates/{$user->id}",
-                    \Illuminate\Support\Str::uuid() . '.' . $extension,
+                    Str::uuid().'.'.$extension,
                     'local'
                 );
                 $certificatePath = $storedPath;
 
-                \App\Models\InstructorCertificate::create([
+                InstructorCertificate::create([
                     'user_id' => $user->id,
                     'file_path' => $storedPath,
                     'original_name' => $file->getClientOriginalName(),
@@ -106,13 +111,13 @@ class AuthService
                 ]);
             }
 
-            $categoryId = !empty($validated['category_id']) ? (int) $validated['category_id'] : null;
+            $categoryId = ! empty($validated['category_id']) ? (int) $validated['category_id'] : null;
             $teachingField = $validated['teaching_field'] ?? null;
             if ($categoryId && ! $teachingField) {
-                $teachingField = \App\Models\Category::find($categoryId)?->name;
+                $teachingField = Category::find($categoryId)?->name;
             }
 
-            \App\Models\InstructorProfile::create([
+            InstructorProfile::create([
                 'user_id' => $user->id,
                 'category_id' => $categoryId,
                 'teaching_field' => $teachingField,
@@ -128,7 +133,7 @@ class AuthService
                 'agree_terms' => true,
             ]);
 
-            \App\Models\InstructorApplication::create([
+            InstructorApplication::create([
                 'user_id' => $user->id,
                 'expertise' => $validated['specialty'],
                 'experience' => $validated['experience'],
@@ -139,14 +144,14 @@ class AuthService
             ]);
 
             try {
-                app(\App\Services\NotificationService::class)->notifyAdmins(
+                app(NotificationService::class)->notifyAdmins(
                     'Đăng ký Giảng viên mới',
                     "Giảng viên {$user->name} ({$user->email}) vừa đăng ký tài khoản và đang chờ xét duyệt.",
                     'instructor_registered',
                     route('admin.instructors.applications.show', $user)
                 );
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Gửi thông báo đăng ký giảng viên cho admin thất bại: ' . $e->getMessage());
+                Log::error('Gửi thông báo đăng ký giảng viên cho admin thất bại: '.$e->getMessage());
             }
         }
 
@@ -191,14 +196,14 @@ class AuthService
     public function registerActiveSession(User $user, Request $request): void
     {
         try {
-            if (! \Illuminate\Support\Facades\Schema::hasTable('active_sessions')) {
+            if (! Schema::hasTable('active_sessions')) {
                 return;
             }
 
             $sessionId = $request->session()->getId();
-            $ip        = $request->ip();
-            $ua        = $request->userAgent() ?? '';
-            $deviceId  = md5($ip . $ua);
+            $ip = $request->ip();
+            $ua = $request->userAgent() ?? '';
+            $deviceId = md5($ip.$ua);
 
             $alertService = app(SecurityAlertService::class);
 
@@ -236,45 +241,70 @@ class AuthService
             ActiveSession::updateOrCreate(
                 ['user_id' => $user->id, 'device_id' => $deviceId],
                 [
-                    'session_id'    => $sessionId,
-                    'ip_address'    => $ip,
-                    'user_agent'    => $ua,
-                    'browser'       => $this->detectBrowser($ua),
-                    'platform'      => $this->detectPlatform($ua),
-                    'device_name'   => $this->detectDevice($ua),
-                    'is_active'     => true,
+                    'session_id' => $sessionId,
+                    'ip_address' => $ip,
+                    'user_agent' => $ua,
+                    'browser' => $this->detectBrowser($ua),
+                    'platform' => $this->detectPlatform($ua),
+                    'device_name' => $this->detectDevice($ua),
+                    'is_active' => true,
                     'last_activity' => now(),
                 ]
             );
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('[AuthService] registerActiveSession error: ' . $e->getMessage());
+            Log::error('[AuthService] registerActiveSession error: '.$e->getMessage());
         }
     }
 
     private function detectBrowser(string $ua): string
     {
-        if (str_contains($ua, 'Edg'))     return 'Edge';
-        if (str_contains($ua, 'Firefox')) return 'Firefox';
-        if (str_contains($ua, 'Chrome'))  return 'Chrome';
-        if (str_contains($ua, 'Safari'))  return 'Safari';
+        if (str_contains($ua, 'Edg')) {
+            return 'Edge';
+        }
+        if (str_contains($ua, 'Firefox')) {
+            return 'Firefox';
+        }
+        if (str_contains($ua, 'Chrome')) {
+            return 'Chrome';
+        }
+        if (str_contains($ua, 'Safari')) {
+            return 'Safari';
+        }
+
         return 'Unknown';
     }
 
     private function detectPlatform(string $ua): string
     {
-        if (str_contains($ua, 'Windows')) return 'Windows';
-        if (str_contains($ua, 'Android')) return 'Android';
-        if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) return 'iOS';
-        if (str_contains($ua, 'Mac'))     return 'macOS';
-        if (str_contains($ua, 'Linux'))   return 'Linux';
+        if (str_contains($ua, 'Windows')) {
+            return 'Windows';
+        }
+        if (str_contains($ua, 'Android')) {
+            return 'Android';
+        }
+        if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) {
+            return 'iOS';
+        }
+        if (str_contains($ua, 'Mac')) {
+            return 'macOS';
+        }
+        if (str_contains($ua, 'Linux')) {
+            return 'Linux';
+        }
+
         return 'Unknown';
     }
 
     private function detectDevice(string $ua): string
     {
         $lower = strtolower($ua);
-        if (preg_match('/(tablet|ipad|playbook)|(android(?!.*(mobi|opera mini)))/i', $lower)) return 'Tablet';
-        if (preg_match('/(mobile|android|iphone)/i', $lower)) return 'Mobile';
+        if (preg_match('/(tablet|ipad|playbook)|(android(?!.*(mobi|opera mini)))/i', $lower)) {
+            return 'Tablet';
+        }
+        if (preg_match('/(mobile|android|iphone)/i', $lower)) {
+            return 'Mobile';
+        }
+
         return 'Desktop';
     }
 }

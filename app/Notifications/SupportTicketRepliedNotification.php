@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Str;
 
 class SupportTicketRepliedNotification extends Notification
 {
@@ -34,7 +35,7 @@ class SupportTicketRepliedNotification extends Notification
             ->subject('Phản hồi mới cho ticket '.$this->ticket->code)
             ->greeting('Xin chào '.$notifiable->name.'!')
             ->line($this->actor->name.' đã phản hồi ticket '.$this->ticket->code.'.')
-            ->line(\Illuminate\Support\Str::limit($this->reply->message, 200))
+            ->line(Str::limit($this->reply->message, 200))
             ->action('Xem trao đổi', $url);
     }
 }

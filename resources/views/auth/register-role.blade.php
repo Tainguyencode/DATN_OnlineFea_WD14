@@ -25,7 +25,7 @@
             phoneMessage: '',
             phoneOk: null,
             termsModalOpen: false,
-            availabilityUrl: @js(route('auth.availability')),
+            availabilityUrl: '{{ route('auth.availability') }}',
             get strength() {
                 let score = 0;
                 let pwd = this.passwordVal || '';
@@ -285,13 +285,6 @@
                                 Xem chi tiết điều khoản đăng ký
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/></svg>
                             </button>
-                        </div>
-                    </div>
-                    @error('terms')
-                        <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
-                    @enderror
-                </div>
-
                         </div>
                     </div>
                     @error('terms')

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\CourseStatus;
 use App\Models\Category;
+use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
@@ -302,7 +303,7 @@ class CourseReviewWorkflowTest extends TestCase
     {
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
         $course = $this->makeDraftCourse($instructor);
-        $chapter = \App\Models\Chapter::create([
+        $chapter = Chapter::create([
             'course_id' => $course->id,
             'title' => 'Chương 1',
             'sort_order' => 1,

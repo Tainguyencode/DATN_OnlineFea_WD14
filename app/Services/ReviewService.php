@@ -51,7 +51,7 @@ class ReviewService
                 $this->syncCourseRating($course->id);
 
                 // Cộng +5 XP cho đánh giá khóa học (1 lần / khóa)
-                app(\App\Services\PointService::class)->awardReviewPoints($user->id, $course->id, $review->id);
+                app(PointService::class)->awardReviewPoints($user->id, $course->id, $review->id);
 
                 $course->loadMissing('instructor');
                 if ($course->instructor && (int) $course->instructor->id !== (int) $user->id) {

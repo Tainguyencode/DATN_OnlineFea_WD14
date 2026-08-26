@@ -24,7 +24,7 @@ class HandleUserLogin
     {
         $user = $event->user;
         $sessionId = session()->getId();
-        
+
         $ipAddress = Request::ip();
         $userAgent = Request::userAgent();
         $deviceId = $this->generateDeviceId($ipAddress, $userAgent);
@@ -34,13 +34,13 @@ class HandleUserLogin
             ->where('is_active', true)
             ->where('session_id', '!=', $sessionId)
             ->count();
-            
+
         if ($activeSessionsCount > 0) {
             $this->alertService->logAlert('MULTIPLE_LOGIN', $user->id, [
                 'ip_address' => $ipAddress,
-                'user_agent' => $userAgent
+                'user_agent' => $userAgent,
             ]);
-            
+
             // Deactivate old sessions
             ActiveSession::where('user_id', $user->id)
                 ->where('session_id', '!=', $sessionId)
@@ -51,11 +51,11 @@ class HandleUserLogin
         $hasUsedDeviceBefore = ActiveSession::where('user_id', $user->id)
             ->where('device_id', $deviceId)
             ->exists();
-            
-        if (!$hasUsedDeviceBefore && ActiveSession::where('user_id', $user->id)->exists()) {
+
+        if (! $hasUsedDeviceBefore && ActiveSession::where('user_id', $user->id)->exists()) {
             $this->alertService->logAlert('NEW_DEVICE', $user->id, [
                 'ip_address' => $ipAddress,
-                'user_agent' => $userAgent
+                'user_agent' => $userAgent,
             ]);
         }
 
@@ -75,28 +75,48 @@ class HandleUserLogin
             ]
         );
     }
-    
+
     private function generateDeviceId($ip, $ua)
     {
-        return md5($ip . $ua);
+        return md5($ip.$ua);
     }
-    
+
     private function getBrowserName($userAgent)
     {
-        if (strpos($userAgent, 'Firefox') !== false) return 'Firefox';
-        if (strpos($userAgent, 'Chrome') !== false) return 'Chrome';
-        if (strpos($userAgent, 'Safari') !== false) return 'Safari';
-        if (strpos($userAgent, 'Edge') !== false) return 'Edge';
+        if (strpos($userAgent, 'Firefox') !== false) {
+            return 'Firefox';
+        }
+        if (strpos($userAgent, 'Chrome') !== false) {
+            return 'Chrome';
+        }
+        if (strpos($userAgent, 'Safari') !== false) {
+            return 'Safari';
+        }
+        if (strpos($userAgent, 'Edge') !== false) {
+            return 'Edge';
+        }
+
         return 'Unknown';
     }
 
     private function getPlatformName($userAgent)
     {
-        if (strpos($userAgent, 'Windows') !== false) return 'Windows';
-        if (strpos($userAgent, 'Mac') !== false) return 'macOS';
-        if (strpos($userAgent, 'Linux') !== false) return 'Linux';
-        if (strpos($userAgent, 'Android') !== false) return 'Android';
-        if (strpos($userAgent, 'iPhone') !== false || strpos($userAgent, 'iPad') !== false) return 'iOS';
+        if (strpos($userAgent, 'Windows') !== false) {
+            return 'Windows';
+        }
+        if (strpos($userAgent, 'Mac') !== false) {
+            return 'macOS';
+        }
+        if (strpos($userAgent, 'Linux') !== false) {
+            return 'Linux';
+        }
+        if (strpos($userAgent, 'Android') !== false) {
+            return 'Android';
+        }
+        if (strpos($userAgent, 'iPhone') !== false || strpos($userAgent, 'iPad') !== false) {
+            return 'iOS';
+        }
+
         return 'Unknown';
     }
 
@@ -108,6 +128,7 @@ class HandleUserLogin
         if (preg_match('/(up.browser|up.link|mmp|symbian|smartphone|midp|wap|phone|android|iemobile)/i', strtolower($userAgent))) {
             return 'Mobile';
         }
+
         return 'Desktop';
     }
 }

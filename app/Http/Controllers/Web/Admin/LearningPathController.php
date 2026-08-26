@@ -90,7 +90,6 @@ class LearningPathController extends Controller
         return view('admin.learning-paths.edit', compact('learningPath', 'courses'));
     }
 
-
     public function update(UpdateLearningPathRequest $request, LearningPath $learningPath): RedirectResponse
     {
         $validated = $request->validated();

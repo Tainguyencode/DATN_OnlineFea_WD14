@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class CourseRecommendationService
 {
@@ -479,6 +478,11 @@ class CourseRecommendationService
                 $hasSignals = $this->addCurrentCourseCandidateSignals($query, $currentCourse, $sourceTags) || $hasSignals;
                 $hasSignals = $this->addProfileCandidateSignals($query, $profile) || $hasSignals;
 
+                // Keep strong quality candidates in the hybrid pool even when they
+                // do not share metadata with the current course.
+                $query->orWhere('courses.rating_avg', '>=', 4);
+                $hasSignals = true;
+
                 if (! $hasSignals) {
                     $query->whereRaw('1 = 1');
                 }
@@ -613,6 +617,7 @@ class CourseRecommendationService
     private function baseCandidateQuery(?User $viewer, array $excludeIds): Builder
     {
         $query = Course::published()
+            ->where('courses.is_published', true)
             ->select($this->candidateCourseColumns())
             ->when($excludeIds !== [], fn (Builder $query) => $query->whereNotIn('courses.id', $excludeIds))
             ->with([

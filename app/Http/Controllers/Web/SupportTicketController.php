@@ -13,8 +13,9 @@ use App\Models\SupportTicketAttachment;
 use App\Services\SupportTicketService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SupportTicketController extends Controller
 {
@@ -120,7 +121,7 @@ class SupportTicketController extends Controller
         return back()->with('success', 'Đã mở lại ticket.');
     }
 
-    public function downloadAttachment(SupportTicket $ticket, SupportTicketAttachment $attachment): BinaryFileResponse|\Illuminate\Http\Response
+    public function downloadAttachment(SupportTicket $ticket, SupportTicketAttachment $attachment): BinaryFileResponse|Response
     {
         $this->authorize('downloadAttachment', [$ticket, $attachment]);
 

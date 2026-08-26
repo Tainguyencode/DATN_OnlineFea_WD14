@@ -11,6 +11,7 @@ use App\Models\Faq;
 use App\Models\LearningPath;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class HomeController extends Controller
@@ -101,8 +102,8 @@ class HomeController extends Controller
         $weeklyLeaderboard = User::query()
             ->where('role', 'student')
             ->joinSub(
-                \Illuminate\Support\Facades\DB::table('user_points')
-                    ->select('user_id', \Illuminate\Support\Facades\DB::raw('SUM(points) as total_points'))
+                DB::table('user_points')
+                    ->select('user_id', DB::raw('SUM(points) as total_points'))
                     ->where('created_at', '>=', $startOfWeek)
                     ->groupBy('user_id'),
                 'points_table',
