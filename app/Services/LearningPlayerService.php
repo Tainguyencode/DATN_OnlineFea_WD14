@@ -354,10 +354,16 @@ class LearningPlayerService
         }
 
         $versioning = app(QuizVersioningService::class);
-        $quiz = $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
+        $attemptService = app(QuizAttemptService::class);
+        $attempt = $user?->isStudent() && $isEnrolled
+            ? $attemptService->findInProgress($course, $lesson, $user)
+            : null;
+        $quiz = $attempt
+            ? $attemptService->projectQuiz($attempt)
+            : $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
 
         $attemptsCount = $user
-            ? $quiz->attempts()->where('user_id', $user->id)->count()
+            ? $attemptService->completedAttemptsCount($quiz, $user)
             : 0;
 
         $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
@@ -388,6 +394,11 @@ class LearningPlayerService
             'attempt_limit_reached' => $attemptLimitReached,
             'can_take' => $user?->isStudent() && $isEnrolled && ! $attemptLimitReached,
             'quiz_status' => $quizStatus,
+            'attempt_id' => $attempt?->id,
+            'quiz_version_id' => $attempt?->quiz_version_id,
+            'started_at' => $attempt?->started_at?->toIso8601String(),
+            'remaining_seconds' => $attempt ? $attemptService->remainingTime($attempt) : null,
+            'start_url' => route('courses.lessons.quiz.start', [$course, $lesson]),
             'submit_url' => route('courses.lessons.quiz.submit', [$course, $lesson]),
             'total_questions' => count($questions),
             'total_points' => $quiz->questions->sum('points'),

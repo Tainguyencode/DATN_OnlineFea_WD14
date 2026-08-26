@@ -134,6 +134,7 @@ Route::middleware(['auth', 'active', 'role:student'])->group(function () {
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
+Route::post('/courses/{course}/lessons/{lesson}/quiz/start', [StudentQuizController::class, 'start'])->middleware('auth')->name('courses.lessons.quiz.start');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
 Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssignmentController::class, 'submit'])->middleware('auth')->name('courses.lessons.assignment.submit');
 
