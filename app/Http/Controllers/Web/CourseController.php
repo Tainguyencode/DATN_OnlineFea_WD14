@@ -4,25 +4,32 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Learning\UpdateLessonProgressRequest;
+use App\Jobs\ConvertVideoToHLS;
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\Discussion;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonComment;
 use App\Models\LessonNote;
 use App\Models\LessonProgress;
 use App\Models\Review;
 use App\Models\ReviewHelpful;
-use App\Models\Discussion;
+use App\Models\Submission;
+use App\Models\User;
 use App\Services\CourseRecommendationService;
+use App\Services\EngagementService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use App\Services\RecentlyViewedCourseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class CourseController extends Controller
@@ -47,8 +54,7 @@ class CourseController extends Controller
         string $slug,
         RecentlyViewedCourseService $recentlyViewedCourseService,
         CourseRecommendationService $courseRecommendations
-    ): View
-    {
+    ): View {
         $course = Course::query()
             ->where(function ($q) use ($slug) {
                 $q->where('slug', $slug);
@@ -76,15 +82,15 @@ class CourseController extends Controller
         $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
 
         $course->load([
-            'instructor:id,name,avatar,bio',
+            'instructor:id,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
             'category:id,parent_id,name,slug',
             'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
-                ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'upload_status', 'processing_status', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->select('id', 'course_id', 'section_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->when(! $canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
             'chapters.lessons' => fn ($q) => $q
-                ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'upload_status', 'processing_status', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
+                ->select('id', 'course_id', 'chapter_id', 'title', 'type', 'video_url', 'video_path', 'video_original_name', 'video_mime', 'video_size', 'content', 'document_file', 'duration', 'duration_seconds', 'is_preview', 'sort_order')
                 ->when(! $canAccessFullCourse, fn ($query) => $query->where('is_preview', true))
                 ->orderBy('sort_order'),
         ]);
@@ -165,9 +171,9 @@ class CourseController extends Controller
 
         $recentlyViewedCourseService->record(auth()->user(), $course);
 
-        $topStudents = \App\Models\User::query()
+        $topStudents = User::query()
             ->join('user_points', 'users.id', '=', 'user_points.user_id')
-            ->select('users.*', \Illuminate\Support\Facades\DB::raw('SUM(user_points.points) as course_points'))
+            ->select('users.*', DB::raw('SUM(user_points.points) as course_points'))
             ->where('user_points.course_id', $course->id)
             ->groupBy('users.id')
             ->orderByDesc('course_points')
@@ -219,12 +225,12 @@ class CourseController extends Controller
 
         $videoSource = null;
         if ($player['canAccessLesson'] && $lesson->type === 'video') {
-            if ($lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')) {
+            if ($lesson->video_path && Str::endsWith($lesson->video_path, '.mp4')) {
                 // Sử dụng Cache để tránh gọi Job nhiều lần vì status DB không hỗ trợ 'processing'
-                $cacheKey = 'video_processing_' . $lesson->id;
-                if (!\Illuminate\Support\Facades\Cache::has($cacheKey)) {
-                    \Illuminate\Support\Facades\Cache::put($cacheKey, true, now()->addMinutes(30));
-                    \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+                $cacheKey = 'video_processing_'.$lesson->id;
+                if (! Cache::has($cacheKey)) {
+                    Cache::put($cacheKey, true, now()->addMinutes(30));
+                    ConvertVideoToHLS::dispatch($lesson);
                 }
             } else {
                 $videoSource = $lesson->video_path
@@ -276,7 +282,7 @@ class CourseController extends Controller
 
         if ($user && ($player['canAccessLesson'] || $player['isEnrolled'])) {
             $recentlyViewedCourseService->record($user, $course);
-            app(\App\Services\EngagementService::class)->recordLearningActivity($user);
+            app(EngagementService::class)->recordLearningActivity($user);
         }
 
         $courseDiscussion = null;
@@ -340,7 +346,7 @@ class CourseController extends Controller
 
         $submission = null;
         if (auth()->check() && $lesson->type === 'assignment' && $lesson->assignment) {
-            $submission = \App\Models\Submission::query()
+            $submission = Submission::query()
                 ->where('assignment_id', $lesson->assignment->id)
                 ->where('user_id', auth()->id())
                 ->first();
@@ -348,7 +354,7 @@ class CourseController extends Controller
 
         $hasNewContentVersion = false;
         if ($user && $player['isEnrolled']) {
-            $progressModel = \App\Models\LessonProgress::where('user_id', $user->id)
+            $progressModel = LessonProgress::where('user_id', $user->id)
                 ->where('lesson_id', $lesson->id)
                 ->first();
 
@@ -364,7 +370,7 @@ class CourseController extends Controller
         $isAdmin = $user && $user->isAdmin();
 
         if ($isOwnerInstructor || $isAdmin) {
-            $lessonComments = \App\Models\LessonComment::where('lesson_id', $lesson->id)
+            $lessonComments = LessonComment::where('lesson_id', $lesson->id)
                 ->whereNull('parent_id')
                 ->with(['user', 'replies' => function ($q) {
                     $q->with('user')->oldest();
@@ -372,7 +378,7 @@ class CourseController extends Controller
                 ->latest()
                 ->get();
         } else {
-            $lessonComments = \App\Models\LessonComment::where('lesson_id', $lesson->id)
+            $lessonComments = LessonComment::where('lesson_id', $lesson->id)
                 ->whereNull('parent_id')
                 ->where('is_hidden', false)
                 ->with(['user', 'replies' => function ($q) {
@@ -433,7 +439,7 @@ class CourseController extends Controller
             ->withLearningAccess()
             ->first();
 
-        if (!$enrollment && $canBypass) {
+        if (! $enrollment && $canBypass) {
             $enrollment = Enrollment::firstOrCreate([
                 'user_id' => $user->id,
                 'course_id' => $course->id,

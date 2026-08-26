@@ -4,6 +4,7 @@ namespace App\Http\Requests\Support;
 
 use App\Enums\SupportTicketCategory;
 use App\Enums\SupportTicketPriority;
+use App\Models\SupportTicket;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -11,7 +12,7 @@ class StoreSupportTicketRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', \App\Models\SupportTicket::class) ?? false;
+        return $this->user()?->can('create', SupportTicket::class) ?? false;
     }
 
     /**

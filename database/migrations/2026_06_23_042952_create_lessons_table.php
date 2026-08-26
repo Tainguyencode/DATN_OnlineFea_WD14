@@ -65,7 +65,7 @@ return new class extends Migration
                 'pending',
                 'processing',
                 'completed',
-                'failed'
+                'failed',
             ])->default('pending');
 
             // Lưu lỗi FFmpeg nếu có

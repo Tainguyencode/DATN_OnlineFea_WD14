@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Discussion;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 
 class DiscussionController extends Controller
@@ -24,9 +25,9 @@ class DiscussionController extends Controller
         // Base query for discussions in these courses (Course-level)
         $baseQuery = Discussion::where(function ($q) use ($courseIds) {
             $q->whereIn('course_id', $courseIds)
-              ->orWhereHas('lesson', function ($lq) use ($courseIds) {
-                  $lq->whereIn('course_id', $courseIds);
-              });
+                ->orWhereHas('lesson', function ($lq) use ($courseIds) {
+                    $lq->whereIn('course_id', $courseIds);
+                });
         });
 
         // Filter by course
@@ -34,21 +35,21 @@ class DiscussionController extends Controller
             $courseId = request()->integer('course_id');
             $baseQuery->where(function ($q) use ($courseId) {
                 $q->where('course_id', $courseId)
-                  ->orWhereHas('lesson', function ($lq) use ($courseId) {
-                      $lq->where('course_id', $courseId);
-                  });
+                    ->orWhereHas('lesson', function ($lq) use ($courseId) {
+                        $lq->where('course_id', $courseId);
+                    });
             });
         }
 
         // Search by student name, title, or content
         if ($request->filled('search')) {
-            $search = '%' . trim($request->string('search')->toString()) . '%';
+            $search = '%'.trim($request->string('search')->toString()).'%';
             $baseQuery->where(function ($q) use ($search) {
                 $q->where('title', 'like', $search)
-                  ->orWhere('content', 'like', $search)
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'like', $search)->orWhere('email', 'like', $search);
-                  });
+                    ->orWhere('content', 'like', $search)
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', $search)->orWhere('email', 'like', $search);
+                    });
             });
         }
 
@@ -72,7 +73,7 @@ class DiscussionController extends Controller
         // Manual pagination from filtered collection
         $page = request()->integer('page', 1);
         $perPage = 15;
-        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+        $paginated = new LengthAwarePaginator(
             $filteredCollection->forPage($page, $perPage)->values(),
             $filteredCollection->count(),
             $perPage,

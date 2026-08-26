@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class InstructorProfile extends Model
 {
@@ -43,7 +44,7 @@ class InstructorProfile extends Model
         return $this->belongsTo(Category::class, 'category_id');
     }
 
-    public function teachingCategories(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function teachingCategories(): BelongsToMany
     {
         return $this->belongsToMany(
             Category::class,
@@ -58,7 +59,7 @@ class InstructorProfile extends Model
     /**
      * Alias cho teachingCategories
      */
-    public function teachingFields(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function teachingFields(): BelongsToMany
     {
         return $this->teachingCategories();
     }

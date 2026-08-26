@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -36,6 +37,8 @@ class InstructorProfileAvatarTest extends TestCase
             'two_factor_enabled' => false,
         ]);
 
+        $category = Category::create(['name' => 'Development', 'slug' => 'development', 'status' => true]);
+
         $response = $this
             ->actingAs($instructor)
             ->from('/instructor/profile')
@@ -44,6 +47,10 @@ class InstructorProfileAvatarTest extends TestCase
                 'username' => 'instructor_avatar',
                 'phone' => '0912345678',
                 'bio' => 'Updated instructor bio',
+                'category_ids' => [$category->id],
+                'teaching_fields' => [
+                    ['category_id' => $category->id],
+                ],
                 'avatar' => UploadedFile::fake()->image('avatar.png', 120, 120),
             ]);
 

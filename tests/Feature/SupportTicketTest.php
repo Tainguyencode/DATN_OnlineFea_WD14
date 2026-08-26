@@ -13,6 +13,7 @@ use App\Notifications\SupportTicketCreatedNotification;
 use App\Notifications\SupportTicketRepliedNotification;
 use App\Services\RoleSyncService;
 use App\Services\SupportTicketService;
+use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -230,7 +231,7 @@ class SupportTicketTest extends TestCase
         $student = $this->makeUser('student');
         $this->makeUser('admin');
 
-        $this->mock(\Illuminate\Contracts\Notifications\Dispatcher::class, function ($mock) {
+        $this->mock(Dispatcher::class, function ($mock) {
             $mock->shouldReceive('send')->andThrow(new \RuntimeException('SMTP down'));
         });
 

@@ -69,7 +69,7 @@ class CommissionController extends Controller
                 ->where('orders.status', 'paid')
                 ->select(
                     'courses.instructor_id',
-                    DB::raw('SUM(order_items.price) as total_sales'),
+                    DB::raw('SUM(order_items.commission_amount + order_items.instructor_earning) as total_sales'),
                     DB::raw('SUM(order_items.commission_amount) as total_commission'),
                     DB::raw('SUM(order_items.instructor_earning) as total_earning'),
                     DB::raw('COUNT(DISTINCT order_items.order_id) as total_orders')
@@ -78,14 +78,14 @@ class CommissionController extends Controller
                 ->get()
                 ->keyBy('instructor_id');
 
-            foreach ($salesStats as $instId => $stat) {
-                $instructorSalesData[$instId] = [
+            $instructorSalesData = $salesStats->mapWithKeys(function ($stat, $instId): array {
+                return [$instId => [
                     'total_sales' => (float) $stat->total_sales,
                     'total_commission' => (float) $stat->total_commission,
                     'total_earning' => (float) $stat->total_earning,
                     'total_orders' => (int) $stat->total_orders,
-                ];
-            }
+                ]];
+            })->all();
         }
 
         $stats = [

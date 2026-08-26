@@ -29,6 +29,7 @@
             <div
                 class="app-toast app-toast--{{ $toast['type'] }}"
                 data-toast
+                data-flash-message="{{ $toast['type'] }}"
                 data-toast-duration="3000"
                 role="{{ $toast['attributes']['role'] }}"
                 @if ($toast['attributes']['live']) aria-live="{{ $toast['attributes']['live'] }}" @endif

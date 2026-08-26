@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\Order;
+use App\Models\Enrollment;
+use App\Services\PayoutService;
 use App\Models\Wishlist;
 use App\Notifications\CertificateIssuedNotification;
 use App\Services\CertificatePdfService;
@@ -152,7 +154,7 @@ class MiscController extends Controller
         $query = Order::where('user_id', auth()->id())
             ->with(['items.course' => fn ($q) => $q->with('instructor:id,name,avatar'), 'payment', 'coupon']);
 
-        if ($status && in_array($status, ['paid', 'pending', 'cancelled', 'failed'], true)) {
+        if ($status && in_array($status, ['paid', 'pending', 'cancelled', 'failed', 'refunded'], true)) {
             $query->where('status', $status);
         }
 
@@ -160,9 +162,9 @@ class MiscController extends Controller
             $search = trim($request->query('search'));
             $query->where(function ($q) use ($search) {
                 $q->where('order_code', 'like', "%{$search}%")
-                  ->orWhereHas('items.course', function ($cq) use ($search) {
-                      $cq->where('title', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('items.course', function ($cq) use ($search) {
+                        $cq->where('title', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -179,9 +181,25 @@ class MiscController extends Controller
             'items.course' => fn ($query) => $query->with('instructor:id,name,avatar')->withCount('lessons'),
             'payment',
             'coupon',
+            'refunds' => fn ($query) => $query->latest(),
         ]);
 
-        return view('student.orders.show', compact('order'));
+        $paidAt = $order->payment?->paid_at ?? $order->created_at;
+        $refundDeadline = $paidAt?->copy()->addDays(7);
+        $maxProgress = (float) Enrollment::query()
+            ->where('user_id', auth()->id())
+            ->whereIn('course_id', $order->items->pluck('course_id'))
+            ->max('progress_percent');
+        $refundEligibility = [
+            'within_window' => $refundDeadline?->isFuture() ?? false,
+            'deadline' => $refundDeadline,
+            'progress_ok' => $maxProgress < 50,
+            'max_progress' => $maxProgress,
+            'has_value' => (float) $order->total_amount > 0,
+        ];
+        $banks = app(PayoutService::class)->getVietNamBanks();
+
+        return view('student.orders.show', compact('order', 'banks', 'refundEligibility'));
     }
 
     public function profile(): View
@@ -285,7 +303,7 @@ class MiscController extends Controller
             ]);
         }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.certificate', [
+        $pdf = Pdf::loadView('pdf.certificate', [
             'certificate' => $certificate,
             'course' => $certificate->course,
             'user' => $certificate->user,

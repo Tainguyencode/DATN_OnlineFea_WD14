@@ -41,6 +41,7 @@ class RewardMonthlyLeaderboard extends Command
                 $targetDate = Carbon::createFromFormat('Y-m', $periodOption)->startOfMonth();
             } catch (\Throwable $e) {
                 $this->error("Invalid period format: {$periodOption}. Expected format: YYYY-MM (e.g. 2026-08).");
+
                 return 1;
             }
         } else {
@@ -58,6 +59,7 @@ class RewardMonthlyLeaderboard extends Command
         $alreadyRewarded = MonthlyRewardLog::where('period_key', $periodKey)->exists();
         if ($alreadyRewarded) {
             $this->warn("[SKIP] Monthly rewards for period {$periodKey} have already been granted previously.");
+
             return 0;
         }
 
@@ -82,6 +84,7 @@ class RewardMonthlyLeaderboard extends Command
 
         if ($topStudents->isEmpty()) {
             $this->warn("No students with points found for period {$periodKey}. Skipped reward generation.");
+
             return 0;
         }
 
@@ -150,16 +153,18 @@ class RewardMonthlyLeaderboard extends Command
                 $cleanUserName = Str::upper(Str::ascii(Str::slug($student->name, '')));
                 $cleanUserName = substr($cleanUserName, 0, 10);
                 if (empty($cleanUserName)) {
-                    $cleanUserName = 'USER' . $student->id;
+                    $cleanUserName = 'USER'.$student->id;
                 }
 
                 $baseCode = "TOP{$rank}-{$cleanPeriod}-{$cleanUserName}";
                 $code = $baseCode;
                 $counter = 1;
                 while (Coupon::where('code', $code)->exists()) {
-                    $code = "TOP{$rank}-{$cleanPeriod}-{$cleanUserName}" . strtoupper(Str::random(3));
+                    $code = "TOP{$rank}-{$cleanPeriod}-{$cleanUserName}".strtoupper(Str::random(3));
                     $counter++;
-                    if ($counter > 10) break;
+                    if ($counter > 10) {
+                        break;
+                    }
                 }
 
                 $expiryDays = max(1, $cfg['expiry_days']);
@@ -206,8 +211,8 @@ class RewardMonthlyLeaderboard extends Command
 
                 // Formatted text for notification
                 $discountText = $cfg['type'] === 'percent'
-                    ? ((int) $cfg['value'] . '%')
-                    : (number_format($cfg['value'], 0, ',', '.') . 'đ');
+                    ? ((int) $cfg['value'].'%')
+                    : (number_format($cfg['value'], 0, ',', '.').'đ');
 
                 $notificationService->send(
                     $student,
@@ -223,6 +228,7 @@ class RewardMonthlyLeaderboard extends Command
         }
 
         $this->info("Successfully processed monthly leaderboard rewards for {$periodKey}. Total granted: {$grantedCount}.");
+
         return 0;
     }
 }

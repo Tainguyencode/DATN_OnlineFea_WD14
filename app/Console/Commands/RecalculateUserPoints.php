@@ -2,17 +2,15 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\User;
-use App\Models\UserPoint;
+use App\Models\Discussion;
 use App\Models\Enrollment;
 use App\Models\LessonProgress;
 use App\Models\QuizAttempt;
-use App\Models\Discussion;
 use App\Models\Review;
+use App\Models\User;
 use App\Services\PointService;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 
 class RecalculateUserPoints extends Command
 {

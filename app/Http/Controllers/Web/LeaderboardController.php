@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Models\Enrollment;
+use App\Models\User;
 use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 
 class LeaderboardController extends Controller
 {
@@ -17,7 +16,7 @@ class LeaderboardController extends Controller
     {
         // 1. Period filter: default to 'week', option for 'month'
         $period = $request->query('period', 'week');
-        if (!in_array($period, ['week', 'month'])) {
+        if (! in_array($period, ['week', 'month'])) {
             $period = 'week';
         }
 
@@ -46,7 +45,7 @@ class LeaderboardController extends Controller
             ->where('role', 'student')
             ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
             ->select('users.*', 'points_table.period_xp')
-            ->when($search, fn($q) => $q->where('users.name', 'like', "%{$search}%"))
+            ->when($search, fn ($q) => $q->where('users.name', 'like', "%{$search}%"))
             ->orderByDesc('points_table.period_xp')
             ->orderBy('users.id')
             ->take(50)
@@ -81,7 +80,7 @@ class LeaderboardController extends Controller
 
         // Top 1, Top 2, Top 3 for podium display (if on page 1)
         $top3 = [];
-        if ($leaderboard->currentPage() === 1 && !$search) {
+        if ($leaderboard->currentPage() === 1 && ! $search) {
             $top3 = $leaderboard->items();
             $top3 = array_slice($top3, 0, 3);
         }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thanh toán Thành công - FEA Online</title>
+    @include('partials.financial-clean-icons')
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +17,7 @@
         }
     </style>
 </head>
-<body class="bg-[#fcfcfc] text-slate-900 min-h-screen flex items-center justify-center p-6">
+<body class="financial-standalone bg-[#fcfcfc] text-slate-900 min-h-screen flex items-center justify-center p-6">
 
     <div class="w-full max-w-xl text-center space-y-6">
         
@@ -51,10 +52,7 @@
 
                 <span class="text-slate-500">Phương thức thanh toán:</span>
                 <strong class="text-slate-900 text-right">
-                    @if($order->payment_method === 'vnpay') VNPay
-                    @elseif($order->payment_method === 'momo') MoMo
-                    @else Chuyển khoản VietQR
-                    @endif
+                    PayOS VietQR
                 </strong>
 
                 <span class="text-slate-500">Mã giao dịch:</span>

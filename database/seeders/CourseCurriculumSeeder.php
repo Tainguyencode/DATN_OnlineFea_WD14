@@ -2,15 +2,15 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Course;
+use App\Models\Assignment;
 use App\Models\Chapter;
+use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Quiz;
-use App\Models\QuizQuestion;
 use App\Models\QuizOption;
-use App\Models\Assignment;
-use Illuminate\Support\Str;
+use App\Models\QuizQuestion;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class CourseCurriculumSeeder extends Seeder
 {
@@ -18,8 +18,9 @@ class CourseCurriculumSeeder extends Seeder
     {
         // 1. Find the target course
         $course = Course::where('title', 'TypeScript thực chiến từ cơ bản đến nâng cao')->first();
-        if (!$course) {
+        if (! $course) {
             $this->command->error("Course 'TypeScript thực chiến từ cơ bản đến nâng cao' not found. Please run the course creator script first.");
+
             return;
         }
 
@@ -31,10 +32,10 @@ class CourseCurriculumSeeder extends Seeder
         $chapter1 = Chapter::updateOrCreate(
             [
                 'course_id' => $course->id,
-                'title' => 'CHƯƠNG 1: TypeScript cơ bản'
+                'title' => 'CHƯƠNG 1: TypeScript cơ bản',
             ],
             [
-                'sort_order' => 1
+                'sort_order' => 1,
             ]
         );
 
@@ -43,7 +44,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter1->id,
-                'title' => 'Bài 1: TypeScript là gì? Cài đặt và thiết lập môi trường'
+                'title' => 'Bài 1: TypeScript là gì? Cài đặt và thiết lập môi trường',
             ],
             [
                 'type' => 'video',
@@ -54,7 +55,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => true,
                 'is_required' => true,
                 'sort_order' => 1,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -63,7 +64,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter1->id,
-                'title' => 'Bài 2: Kiểu dữ liệu cơ bản trong TypeScript'
+                'title' => 'Bài 2: Kiểu dữ liệu cơ bản trong TypeScript',
             ],
             [
                 'type' => 'video',
@@ -74,7 +75,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 2,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -83,7 +84,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter1->id,
-                'title' => 'Bài 3: Interface và Type Alias'
+                'title' => 'Bài 3: Interface và Type Alias',
             ],
             [
                 'type' => 'video',
@@ -94,7 +95,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 3,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -103,7 +104,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter1->id,
-                'title' => 'Bài 4: Bài tập thực hành TypeScript cơ bản'
+                'title' => 'Bài 4: Bài tập thực hành TypeScript cơ bản',
             ],
             [
                 'type' => 'assignment',
@@ -113,7 +114,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 4,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -129,10 +130,9 @@ class CourseCurriculumSeeder extends Seeder
                 'max_score' => 10,
                 'passing_score' => 7,
                 'is_required' => true,
-                'due_days' => 7
+                'due_days' => 7,
             ]
         );
-
 
         // ==========================================
         // CHƯƠNG 2: TypeScript nâng cao
@@ -140,10 +140,10 @@ class CourseCurriculumSeeder extends Seeder
         $chapter2 = Chapter::updateOrCreate(
             [
                 'course_id' => $course->id,
-                'title' => 'CHƯƠNG 2: TypeScript nâng cao'
+                'title' => 'CHƯƠNG 2: TypeScript nâng cao',
             ],
             [
-                'sort_order' => 2
+                'sort_order' => 2,
             ]
         );
 
@@ -152,7 +152,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter2->id,
-                'title' => 'Bài 1: Function và Generic trong TypeScript'
+                'title' => 'Bài 1: Function và Generic trong TypeScript',
             ],
             [
                 'type' => 'video',
@@ -163,7 +163,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 1,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -172,7 +172,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter2->id,
-                'title' => 'Bài 2: Class và OOP với TypeScript'
+                'title' => 'Bài 2: Class và OOP với TypeScript',
             ],
             [
                 'type' => 'video',
@@ -183,7 +183,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 2,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -192,7 +192,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter2->id,
-                'title' => 'Bài 3: Enum, Utility Types và Type Manipulation'
+                'title' => 'Bài 3: Enum, Utility Types và Type Manipulation',
             ],
             [
                 'type' => 'video',
@@ -203,7 +203,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 3,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -212,7 +212,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter2->id,
-                'title' => 'Bài 4: Quiz kiểm tra TypeScript nâng cao'
+                'title' => 'Bài 4: Quiz kiểm tra TypeScript nâng cao',
             ],
             [
                 'type' => 'quiz',
@@ -222,7 +222,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 4,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -236,7 +236,7 @@ class CourseCurriculumSeeder extends Seeder
                 'pass_score' => 80,
                 'time_limit_minutes' => 15,
                 'max_attempts' => 3,
-                'is_active' => true
+                'is_active' => true,
             ]
         );
 
@@ -250,7 +250,7 @@ class CourseCurriculumSeeder extends Seeder
                     ['text' => 'Tăng hiệu năng chạy của code JavaScript sau khi compile.', 'is_correct' => false],
                     ['text' => 'Ép kiểu dữ liệu về kiểu any.', 'is_correct' => false],
                     ['text' => 'Tạo ra các class kế thừa lồng nhau.', 'is_correct' => false],
-                ]
+                ],
             ],
             [
                 'question' => 'Từ khóa nào dùng để giới hạn kiểu dữ liệu nhận vào của một Generic (Generic Constraints)?',
@@ -260,7 +260,7 @@ class CourseCurriculumSeeder extends Seeder
                     ['text' => 'implements', 'is_correct' => false],
                     ['text' => 'instanceof', 'is_correct' => false],
                     ['text' => 'typeof', 'is_correct' => false],
-                ]
+                ],
             ],
             [
                 'question' => 'Utility Type "Omit<User, \'password\'>" có tác dụng gì?',
@@ -270,7 +270,7 @@ class CourseCurriculumSeeder extends Seeder
                     ['text' => 'Tạo ra một kiểu dữ liệu mới chỉ chứa duy nhất thuộc tính "password".', 'is_correct' => false],
                     ['text' => 'Biến thuộc tính "password" thành tùy chọn (optional).', 'is_correct' => false],
                     ['text' => 'Biến thuộc tính "password" thành readonly.', 'is_correct' => false],
-                ]
+                ],
             ],
             [
                 'question' => 'Trong Class của TypeScript, access modifier nào chỉ cho phép truy cập thuộc tính trong nội bộ class và class con kế thừa?',
@@ -280,7 +280,7 @@ class CourseCurriculumSeeder extends Seeder
                     ['text' => 'private', 'is_correct' => false],
                     ['text' => 'public', 'is_correct' => false],
                     ['text' => 'readonly', 'is_correct' => false],
-                ]
+                ],
             ],
             [
                 'question' => 'TypeScript có biên dịch mã nguồn trực tiếp thành mã máy để chạy không?',
@@ -290,8 +290,8 @@ class CourseCurriculumSeeder extends Seeder
                     ['text' => 'Có, nó biên dịch thành mã nhị phân .exe.', 'is_correct' => false],
                     ['text' => 'Có, nó chạy trực tiếp trên trình duyệt mà không cần compile.', 'is_correct' => false],
                     ['text' => 'Không, nó chạy thông qua Python VM.', 'is_correct' => false],
-                ]
-            ]
+                ],
+            ],
         ];
 
         foreach ($questionsData as $qIdx => $qData) {
@@ -304,7 +304,7 @@ class CourseCurriculumSeeder extends Seeder
                     'type' => 'single',
                     'points' => 20,
                     'explanation' => $qData['explanation'],
-                    'sort_order' => $qIdx + 1
+                    'sort_order' => $qIdx + 1,
                 ]
             );
 
@@ -316,12 +316,11 @@ class CourseCurriculumSeeder extends Seeder
                     ],
                     [
                         'is_correct' => $oData['is_correct'],
-                        'sort_order' => $oIdx + 1
+                        'sort_order' => $oIdx + 1,
                     ]
                 );
             }
         }
-
 
         // ==========================================
         // CHƯƠNG 3: TypeScript với React
@@ -329,10 +328,10 @@ class CourseCurriculumSeeder extends Seeder
         $chapter3 = Chapter::updateOrCreate(
             [
                 'course_id' => $course->id,
-                'title' => 'CHƯƠNG 3: TypeScript với React'
+                'title' => 'CHƯƠNG 3: TypeScript với React',
             ],
             [
-                'sort_order' => 3
+                'sort_order' => 3,
             ]
         );
 
@@ -341,7 +340,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter3->id,
-                'title' => 'Bài 1: Cấu hình TypeScript cho React'
+                'title' => 'Bài 1: Cấu hình TypeScript cho React',
             ],
             [
                 'type' => 'video',
@@ -352,7 +351,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 1,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -361,7 +360,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter3->id,
-                'title' => 'Bài 2: Typing Props và State trong React'
+                'title' => 'Bài 2: Typing Props và State trong React',
             ],
             [
                 'type' => 'video',
@@ -372,7 +371,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 2,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -381,7 +380,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter3->id,
-                'title' => 'Bài 3: Custom Hook với TypeScript'
+                'title' => 'Bài 3: Custom Hook với TypeScript',
             ],
             [
                 'type' => 'video',
@@ -392,7 +391,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 3,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -401,7 +400,7 @@ class CourseCurriculumSeeder extends Seeder
             [
                 'course_id' => $course->id,
                 'chapter_id' => $chapter3->id,
-                'title' => 'Bài 4: Xây dựng ứng dụng React + TypeScript'
+                'title' => 'Bài 4: Xây dựng ứng dụng React + TypeScript',
             ],
             [
                 'type' => 'assignment',
@@ -411,7 +410,7 @@ class CourseCurriculumSeeder extends Seeder
                 'is_preview' => false,
                 'is_required' => true,
                 'sort_order' => 4,
-                'status' => 'published'
+                'status' => 'published',
             ]
         );
 
@@ -427,7 +426,7 @@ class CourseCurriculumSeeder extends Seeder
                 'max_score' => 10,
                 'passing_score' => 8,
                 'is_required' => true,
-                'due_days' => 7
+                'due_days' => 7,
             ]
         );
 
@@ -440,18 +439,18 @@ class CourseCurriculumSeeder extends Seeder
             }
         }
 
-        $allSections = \Illuminate\Support\Facades\DB::table('course_sections')->where('course_id', $course->id)->get();
+        $allSections = DB::table('course_sections')->where('course_id', $course->id)->get();
         foreach ($allSections as $section) {
             $lessonsCount = Lesson::where('section_id', $section->id)->count();
             if ($lessonsCount === 0) {
-                \Illuminate\Support\Facades\DB::table('course_sections')->where('id', $section->id)->delete();
+                DB::table('course_sections')->where('id', $section->id)->delete();
             }
         }
 
         // Sync chapters to course_sections and update lessons' section_id
         $chaptersList = Chapter::where('course_id', $course->id)->orderBy('id')->get();
         foreach ($chaptersList as $chapter) {
-            \Illuminate\Support\Facades\DB::table('course_sections')->updateOrInsert(
+            DB::table('course_sections')->updateOrInsert(
                 [
                     'course_id' => $course->id,
                     'title' => $chapter->title,
@@ -463,15 +462,15 @@ class CourseCurriculumSeeder extends Seeder
                     'updated_at' => $chapter->updated_at ?? now(),
                 ]
             );
-            
-            $sectionId = \Illuminate\Support\Facades\DB::table('course_sections')
+
+            $sectionId = DB::table('course_sections')
                 ->where('course_id', $course->id)
                 ->where('title', $chapter->title)
                 ->value('id');
 
             Lesson::where('chapter_id', $chapter->id)->update([
                 'section_id' => $sectionId,
-                'duration' => \Illuminate\Support\Facades\DB::raw('COALESCE(duration, duration_seconds)'),
+                'duration' => DB::raw('COALESCE(duration, duration_seconds)'),
             ]);
         }
 

@@ -95,7 +95,7 @@ class CourseFeedbackReviewTest extends TestCase
         $course = $this->course();
         $this->enroll($student, $course);
         $review = $this->review($student, $course, ReviewStatus::Visible, 5);
-        \App\Models\Review::create([
+        Review::create([
             'user_id' => $course->instructor_id,
             'course_id' => $course->id,
             'parent_id' => $review->id,

@@ -43,7 +43,7 @@ class StudyGroupController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'data' => $studyGroups
+                'data' => $studyGroups,
             ]);
         }
 
@@ -57,7 +57,7 @@ class StudyGroupController extends Controller
         } else {
             $availableCourses = Course::whereHas('enrollments', function ($q) use ($user) {
                 $q->where('user_id', $user->id)
-                  ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED]);
+                    ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED]);
             })->get();
         }
 
@@ -92,7 +92,7 @@ class StudyGroupController extends Controller
         $maxMembers = null;
         if ($limitType === 'custom' || ($limitType !== 'unlimited' && $request->filled('max_members'))) {
             if ($request->filled('max_members')) {
-                if (!is_numeric($rawMaxMembers) || (int) $rawMaxMembers != $rawMaxMembers || (int) $rawMaxMembers <= 0) {
+                if (! is_numeric($rawMaxMembers) || (int) $rawMaxMembers != $rawMaxMembers || (int) $rawMaxMembers <= 0) {
                     $validator->errors()->add('max_members', 'Giới hạn thành viên phải là số nguyên dương.');
                 } else {
                     $maxMembers = (int) $rawMaxMembers;
@@ -105,9 +105,10 @@ class StudyGroupController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => $validator->errors()->first(),
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
+
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
@@ -123,14 +124,15 @@ class StudyGroupController extends Controller
         $course = Course::findOrFail($courseId);
         $isInstructorOrAdmin = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
 
-        if (!$isEnrolled && !$isInstructorOrAdmin) {
+        if (! $isEnrolled && ! $isInstructorOrAdmin) {
             $message = 'Bạn phải đăng ký khóa học này mới có thể lập nhóm học tập.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -151,9 +153,10 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'data' => $studyGroup->load('members')
+                'data' => $studyGroup->load('members'),
             ], 201);
         }
+
         return redirect()->route('study-groups.index')->with('success', $message);
     }
 
@@ -166,19 +169,20 @@ class StudyGroupController extends Controller
 
         $pendingInvitation = null;
         // Phân quyền: Phải là thành viên trong nhóm, Admin hệ thống, hoặc người có lời mời đang chờ
-        if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
+        if (! $studyGroup->hasMember($user->id) && $user->role !== 'admin') {
             $pendingInvitation = $studyGroup->pendingInvitations()
                 ->where('invited_user_id', $user->id)
                 ->first();
 
-            if (!$pendingInvitation) {
+            if (! $pendingInvitation) {
                 $message = 'Bạn không phải là thành viên của nhóm này.';
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([
                         'success' => false,
-                        'message' => $message
+                        'message' => $message,
                     ], 403);
                 }
+
                 return redirect()->route('study-groups.index')->with('error', $message);
             }
         }
@@ -191,14 +195,14 @@ class StudyGroupController extends Controller
                 ->whereIn('type', ['study_group', 'study_group_invitation'])
                 ->where(function ($query) use ($notificationUrl, $studyGroup) {
                     $query->where('url', $notificationUrl)
-                        ->orWhere('url', 'like', '%/study-groups/' . $studyGroup->id . '%');
+                        ->orWhere('url', 'like', '%/study-groups/'.$studyGroup->id.'%');
                 })
                 ->update([
                     'is_read' => true,
                     'read_at' => now(),
                 ]);
         } catch (\Throwable $e) {
-            Log::error("Failed to mark study group notifications as read: " . $e->getMessage());
+            Log::error('Failed to mark study group notifications as read: '.$e->getMessage());
         }
 
         // Tải thông tin người tạo, các thành viên, lời mời đang chờ và lịch sử tin nhắn
@@ -210,15 +214,16 @@ class StudyGroupController extends Controller
             'pendingInvitations.inviter',
             'messages' => function ($query) {
                 $query->with(['user', 'replyTo.user'])->orderBy('created_at', 'asc');
-            }
+            },
         ]);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'data' => $studyGroup
+                'data' => $studyGroup,
             ]);
         }
+
         return view('student.study_groups.show', compact('studyGroup', 'pendingInvitation'));
     }
 
@@ -230,19 +235,20 @@ class StudyGroupController extends Controller
         $user = auth()->user();
 
         // Phân quyền thành viên
-        if (!$studyGroup->hasMember($user->id)) {
+        if (! $studyGroup->hasMember($user->id)) {
             $message = 'Bạn không phải là thành viên của nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
         // Đảm bảo tương thích với input 'image' cũ
-        if (!$request->hasFile('file') && $request->hasFile('image')) {
+        if (! $request->hasFile('file') && $request->hasFile('image')) {
             $request->files->set('file', $request->file('image'));
         }
 
@@ -260,13 +266,13 @@ class StudyGroupController extends Controller
                 ->where('study_group_id', $studyGroup->id)
                 ->first();
 
-            if (!$parentMessage) {
+            if (! $parentMessage) {
                 $validator->errors()->add('reply_to_message_id', 'Tin nhắn được chọn không thuộc nhóm này.');
             }
         }
 
         $validator->after(function ($validator) use ($request) {
-            if (!$request->filled('message') && !$request->hasFile('file')) {
+            if (! $request->filled('message') && ! $request->hasFile('file')) {
                 $validator->errors()->add('file', 'Nội dung tin nhắn hoặc tệp tin đính kèm không được để trống.');
             }
 
@@ -278,7 +284,7 @@ class StudyGroupController extends Controller
                 // Kiểm tra định dạng Ảnh (Max 5MB)
                 if (str_starts_with($mime, 'image/')) {
                     $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                    if (!in_array($mime, $allowedMimes)) {
+                    if (! in_array($mime, $allowedMimes)) {
                         $validator->errors()->add('file', 'Hình ảnh phải có định dạng JPEG, PNG, GIF hoặc WEBP.');
                     }
                     if ($sizeKb > 5120) {
@@ -288,7 +294,7 @@ class StudyGroupController extends Controller
                 // Kiểm tra định dạng Video (Max 100MB)
                 elseif (str_starts_with($mime, 'video/')) {
                     $allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
-                    if (!in_array($mime, $allowedMimes)) {
+                    if (! in_array($mime, $allowedMimes)) {
                         $validator->errors()->add('file', 'Video phải có định dạng MP4, MOV, AVI, MKV hoặc WEBM.');
                     }
                     if ($sizeKb > 102400) {
@@ -298,16 +304,16 @@ class StudyGroupController extends Controller
                 // Kiểm tra tệp tài liệu khác (PDF, Word, Excel, ZIP - Max 20MB)
                 else {
                     $allowedMimes = [
-                        'application/pdf', 
-                        'application/msword', 
-                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-                        'application/vnd.ms-excel', 
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-                        'application/zip', 
+                        'application/pdf',
+                        'application/msword',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'application/vnd.ms-excel',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'application/zip',
                         'application/x-zip-compressed',
-                        'text/plain'
+                        'text/plain',
                     ];
-                    if (!in_array($mime, $allowedMimes)) {
+                    if (! in_array($mime, $allowedMimes)) {
                         $validator->errors()->add('file', 'Định dạng tệp không được hỗ trợ (chỉ nhận PDF, Word, Excel, ZIP, TXT).');
                     }
                     if ($sizeKb > 20480) {
@@ -322,9 +328,10 @@ class StudyGroupController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => $validator->errors()->first(),
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
+
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
@@ -368,11 +375,11 @@ class StudyGroupController extends Controller
         try {
             $otherMembers = $studyGroup->members()->where('users.id', '!=', $user->id)->get();
             if ($otherMembers->isNotEmpty()) {
-                $title = "Tin nhắn mới trong nhóm " . $studyGroup->name;
-                
-                $bodyText = $user->name . ": ";
+                $title = 'Tin nhắn mới trong nhóm '.$studyGroup->name;
+
+                $bodyText = $user->name.': ';
                 if ($parentMessage) {
-                    $bodyText = $user->name . " đã trả lời " . ($parentMessage->user?->name ?? 'thành viên') . ": ";
+                    $bodyText = $user->name.' đã trả lời '.($parentMessage->user?->name ?? 'thành viên').': ';
                 }
 
                 if ($messageType === 'text') {
@@ -396,7 +403,7 @@ class StudyGroupController extends Controller
                 );
             }
         } catch (\Throwable $e) {
-            Log::error("Failed to send study group notification: " . $e->getMessage());
+            Log::error('Failed to send study group notification: '.$e->getMessage());
         }
 
         $studyGroupMessage->load(['user', 'replyTo.user']);
@@ -406,7 +413,7 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $messageText,
-                'data' => $studyGroupMessage
+                'data' => $studyGroupMessage,
             ], 201);
         }
 
@@ -426,9 +433,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $errorMessage
+                    'message' => $errorMessage,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $errorMessage);
         }
 
@@ -438,9 +446,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $errorMessage
+                    'message' => $errorMessage,
                 ], 404);
             }
+
             return redirect()->back()->with('error', $errorMessage);
         }
 
@@ -470,7 +479,7 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $successMessage,
-                'data' => $message
+                'data' => $message,
             ]);
         }
 
@@ -485,7 +494,7 @@ class StudyGroupController extends Controller
         $user = auth()->user();
 
         // Kiểm tra quyền truy cập: Phải là thành viên nhóm hoặc Admin
-        if (!$studyGroup->hasMember($user->id) && $user->role !== 'admin') {
+        if (! $studyGroup->hasMember($user->id) && $user->role !== 'admin') {
             abort(403, 'Bạn không có quyền truy cập tệp tin này.');
         }
 
@@ -500,7 +509,7 @@ class StudyGroupController extends Controller
         }
 
         // Kiểm tra file có thực sự tồn tại trong disk local hay không
-        if (!$message->file_path || !Storage::disk('local')->exists($message->file_path)) {
+        if (! $message->file_path || ! Storage::disk('local')->exists($message->file_path)) {
             abort(404, 'Tệp tin không tồn tại trên hệ thống.');
         }
 
@@ -510,7 +519,7 @@ class StudyGroupController extends Controller
         if (in_array($message->message_type, ['video', 'image'])) {
             return response()->file($fullPath, [
                 'Content-Type' => $message->mime_type,
-                'Content-Disposition' => 'inline; filename="' . $message->file_name . '"'
+                'Content-Disposition' => 'inline; filename="'.$message->file_name.'"',
             ]);
         }
 
@@ -527,14 +536,15 @@ class StudyGroupController extends Controller
         $user = auth()->user();
 
         // Kiểm tra quyền: Trưởng nhóm, Giảng viên khóa học, hoặc Admin
-        if (!$studyGroup->canManage($user)) {
+        if (! $studyGroup->canManage($user)) {
             $message = 'Bạn không có quyền thay đổi giới hạn thành viên của nhóm.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -557,7 +567,7 @@ class StudyGroupController extends Controller
         $maxMembers = null;
         if ($limitType === 'custom' || ($limitType !== 'unlimited' && $request->filled('max_members'))) {
             if ($request->filled('max_members')) {
-                if (!is_numeric($rawMaxMembers) || (int) $rawMaxMembers != $rawMaxMembers || (int) $rawMaxMembers <= 0) {
+                if (! is_numeric($rawMaxMembers) || (int) $rawMaxMembers != $rawMaxMembers || (int) $rawMaxMembers <= 0) {
                     $validator->errors()->add('max_members', 'Giới hạn thành viên phải là số nguyên dương.');
                 } else {
                     $maxMembers = (int) $rawMaxMembers;
@@ -573,9 +583,10 @@ class StudyGroupController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => $validator->errors()->first(),
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
+
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
@@ -590,9 +601,10 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'data' => $studyGroup->load('members')
+                'data' => $studyGroup->load('members'),
             ]);
         }
+
         return redirect()->back()->with('success', $message);
     }
 
@@ -603,14 +615,15 @@ class StudyGroupController extends Controller
     {
         $user = auth()->user();
 
-        if (!$studyGroup->canManage($user)) {
+        if (! $studyGroup->canManage($user)) {
             $message = 'Bạn không có quyền xóa nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -620,9 +633,10 @@ class StudyGroupController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => $message
+                'message' => $message,
             ]);
         }
+
         return redirect()->route('study-groups.index')->with('success', $message);
     }
 
@@ -639,9 +653,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -654,14 +669,15 @@ class StudyGroupController extends Controller
         $course = $studyGroup->course;
         $isInstructorOrAdmin = $user->role === 'admin' || ($user->role === 'instructor' && (int) $course->instructor_id === (int) $user->id);
 
-        if (!$isEnrolled && !$isInstructorOrAdmin) {
+        if (! $isEnrolled && ! $isInstructorOrAdmin) {
             $message = 'Bạn phải đăng ký khóa học này mới có thể tham gia nhóm.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -671,9 +687,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -692,9 +709,10 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'data' => $studyGroup->load('members')
+                'data' => $studyGroup->load('members'),
             ]);
         }
+
         return redirect()->back()->with('success', $message);
     }
 
@@ -705,14 +723,15 @@ class StudyGroupController extends Controller
     {
         $user = auth()->user();
 
-        if (!$studyGroup->hasMember($user->id)) {
+        if (! $studyGroup->hasMember($user->id)) {
             $message = 'Bạn không phải là thành viên của nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -722,9 +741,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -734,9 +754,10 @@ class StudyGroupController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => $message
+                'message' => $message,
             ]);
         }
+
         return redirect()->back()->with('success', $message);
     }
 
@@ -749,7 +770,7 @@ class StudyGroupController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $members
+            'data' => $members,
         ]);
     }
 
@@ -760,14 +781,15 @@ class StudyGroupController extends Controller
     {
         $currentUser = auth()->user();
 
-        if (!$studyGroup->canManage($currentUser)) {
+        if (! $studyGroup->canManage($currentUser)) {
             $message = 'Bạn không có quyền xóa thành viên khỏi nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -777,20 +799,22 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
-        if (!$studyGroup->hasMember($user->id)) {
+        if (! $studyGroup->hasMember($user->id)) {
             $message = 'Người này không phải là thành viên của nhóm.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -800,9 +824,10 @@ class StudyGroupController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => $message
+                'message' => $message,
             ]);
         }
+
         return redirect()->back()->with('success', $message);
     }
 
@@ -813,10 +838,10 @@ class StudyGroupController extends Controller
     {
         $user = auth()->user();
 
-        if (!$studyGroup->canManage($user) && !$studyGroup->hasMember($user->id)) {
+        if (! $studyGroup->canManage($user) && ! $studyGroup->hasMember($user->id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tìm kiếm thành viên cho nhóm này.'
+                'message' => 'Bạn không có quyền tìm kiếm thành viên cho nhóm này.',
             ], 403);
         }
 
@@ -824,17 +849,17 @@ class StudyGroupController extends Controller
         if ($query === '') {
             return response()->json([
                 'success' => true,
-                'data' => []
+                'data' => [],
             ]);
         }
 
         $users = User::query()
             ->where(function ($q) use ($query) {
                 $q->where('email', $query)
-                  ->orWhere('username', $query)
-                  ->orWhere('email', 'like', "%{$query}%")
-                  ->orWhere('username', 'like', "%{$query}%")
-                  ->orWhere('name', 'like', "%{$query}%");
+                    ->orWhere('username', $query)
+                    ->orWhere('email', 'like', "%{$query}%")
+                    ->orWhere('username', 'like', "%{$query}%")
+                    ->orWhere('name', 'like', "%{$query}%");
             })
             ->limit(10)
             ->get();
@@ -858,7 +883,7 @@ class StudyGroupController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $result
+            'data' => $result,
         ]);
     }
 
@@ -870,14 +895,15 @@ class StudyGroupController extends Controller
         $currentUser = auth()->user();
 
         // Kiểm tra quyền mời: Chỉ Trưởng nhóm (Owner), Giảng viên, hoặc Admin
-        if (!$studyGroup->canManage($currentUser)) {
+        if (! $studyGroup->canManage($currentUser)) {
             $message = 'Bạn không có quyền mời thành viên vào nhóm này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -892,14 +918,15 @@ class StudyGroupController extends Controller
                 ->first();
         }
 
-        if (!$targetUser) {
+        if (! $targetUser) {
             $message = 'Người dùng không tồn tại.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 404);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -909,9 +936,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -921,9 +949,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -937,9 +966,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -949,9 +979,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -978,7 +1009,7 @@ class StudyGroupController extends Controller
                 $url
             );
         } catch (\Throwable $e) {
-            Log::error("Failed to send study group invitation notification: " . $e->getMessage());
+            Log::error('Failed to send study group invitation notification: '.$e->getMessage());
         }
 
         // Gửi email mời tham gia nhóm học tập trực tiếp tới hộp thư email của người được mời
@@ -995,7 +1026,7 @@ class StudyGroupController extends Controller
                 );
             }
         } catch (\Throwable $e) {
-            Log::error("Failed to send study group invitation email: " . $e->getMessage());
+            Log::error('Failed to send study group invitation email: '.$e->getMessage());
         }
 
         $successMessage = "Đã gửi lời mời tham gia nhóm tới {$targetUser->name}.";
@@ -1003,7 +1034,7 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $successMessage,
-                'data' => $invitation->load(['invitedUser', 'inviter'])
+                'data' => $invitation->load(['invitedUser', 'inviter']),
             ], 201);
         }
 
@@ -1017,14 +1048,15 @@ class StudyGroupController extends Controller
     {
         $currentUser = auth()->user();
 
-        if (!$studyGroup->canManage($currentUser)) {
+        if (! $studyGroup->canManage($currentUser)) {
             $message = 'Bạn không có quyền hủy lời mời này.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -1040,7 +1072,7 @@ class StudyGroupController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => $successMessage
+                'message' => $successMessage,
             ]);
         }
 
@@ -1059,9 +1091,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
@@ -1070,9 +1103,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
@@ -1084,13 +1118,14 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 400);
             }
+
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
-        if (!$studyGroup->hasMember($user->id)) {
+        if (! $studyGroup->hasMember($user->id)) {
             $studyGroup->members()->attach($user->id, ['role' => 'member']);
         }
 
@@ -1104,7 +1139,7 @@ class StudyGroupController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $successMessage,
-                'data' => $studyGroup->load('members')
+                'data' => $studyGroup->load('members'),
             ]);
         }
 
@@ -1123,9 +1158,10 @@ class StudyGroupController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => $message
+                    'message' => $message,
                 ], 403);
             }
+
             return redirect()->route('study-groups.index')->with('error', $message);
         }
 
@@ -1137,7 +1173,7 @@ class StudyGroupController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => $successMessage
+                'message' => $successMessage,
             ]);
         }
 

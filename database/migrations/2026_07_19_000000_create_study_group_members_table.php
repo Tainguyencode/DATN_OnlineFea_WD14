@@ -13,18 +13,18 @@ return new class extends Migration
     {
         Schema::create('study_group_members', function (Blueprint $table) {
             $table->id();
-            
+
             $table->foreignId('study_group_id')
                 ->constrained('study_groups')
                 ->cascadeOnDelete();
-                
+
             $table->foreignId('user_id')
                 ->constrained('users')
                 ->cascadeOnDelete();
-                
+
             $table->enum('role', ['member', 'moderator'])
                 ->default('member');
-                
+
             $table->timestamps();
 
             $table->unique(['study_group_id', 'user_id']);

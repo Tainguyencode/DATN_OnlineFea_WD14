@@ -76,7 +76,7 @@ class StudentOrderHistoryTest extends TestCase
             'subtotal' => 300000,
             'total_amount' => 300000,
             'status' => 'paid',
-            'payment_method' => 'momo',
+            'payment_method' => 'payos',
         ]);
 
         OrderItem::create([
@@ -92,7 +92,7 @@ class StudentOrderHistoryTest extends TestCase
         $response->assertOk();
         $response->assertSee('ORD-2002');
         $response->assertSee('Khóa học Figma');
-        $response->assertSee('MoMo Wallet');
+        $response->assertSee('PayOS VietQR');
     }
 
     public function test_student_cannot_view_other_students_order_details(): void
@@ -114,5 +114,33 @@ class StudentOrderHistoryTest extends TestCase
             ->get(route('student.orders.show', $order));
 
         $response->assertForbidden();
+    }
+
+    public function test_student_can_filter_refunded_orders(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $refunded = Order::create([
+            'order_code' => 'ORD-REFUNDED-'.uniqid(),
+            'user_id' => $student->id,
+            'subtotal' => 200000,
+            'discount_amount' => 0,
+            'total_amount' => 200000,
+            'status' => 'refunded',
+            'payment_method' => 'payos',
+        ]);
+        Order::create([
+            'order_code' => 'ORD-PAID-'.uniqid(),
+            'user_id' => $student->id,
+            'subtotal' => 200000,
+            'discount_amount' => 0,
+            'total_amount' => 200000,
+            'status' => 'paid',
+            'payment_method' => 'payos',
+        ]);
+
+        $response = $this->actingAs($student)->get(route('student.orders', ['status' => 'refunded']));
+
+        $response->assertOk()->assertSee($refunded->order_code)->assertSee('Đã hoàn tiền');
+        $this->assertCount(1, $response->viewData('orders'));
     }
 }

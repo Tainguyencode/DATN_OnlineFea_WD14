@@ -3,6 +3,7 @@
 @section('title', 'Thanh toán đơn hàng #'.$order->order_code.' - Website học online FEA')
 
 @section('content')
+@include('partials.financial-clean-icons')
 <div class="bg-slate-50 py-8 dark:bg-slate-950 min-h-[calc(100vh-16rem)]" 
      x-data="{
          orderCode: '{{ $order->order_code }}',

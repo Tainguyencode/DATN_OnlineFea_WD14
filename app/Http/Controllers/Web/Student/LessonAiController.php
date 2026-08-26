@@ -130,6 +130,7 @@ class LessonAiController extends Controller
             'response_truncated' => 'Phản hồi AI bị cắt vì quá dài. Hãy hỏi ngắn hơn.',
             'empty_response' => 'AI không trả về nội dung. Vui lòng thử lại.',
             'invalid_response' => 'Phản hồi AI không hợp lệ. Vui lòng thử lại.',
+            'timeout' => 'AI đang phản hồi chậm. Vui lòng thử lại.',
             default => 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
         };
     }

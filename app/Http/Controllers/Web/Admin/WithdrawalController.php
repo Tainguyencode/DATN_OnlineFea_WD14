@@ -56,7 +56,7 @@ class WithdrawalController extends Controller
             'admin_note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $txnRef = trim($validated['transaction_ref'] ?? '') ?: 'FT' . date('YmdHis') . rand(100, 999);
+        $txnRef = trim($validated['transaction_ref'] ?? '') ?: 'FT'.date('YmdHis').rand(100, 999);
 
         $processed = DB::transaction(function () use ($withdrawal, $validated, $txnRef) {
             $lockedWithdrawal = Withdrawal::query()->lockForUpdate()->find($withdrawal->id);
@@ -82,7 +82,7 @@ class WithdrawalController extends Controller
         PushNotification::create([
             'user_id' => $withdrawal->user_id,
             'title' => 'Rút tiền thành công! 💰',
-            'message' => 'Yêu cầu rút ' . number_format($withdrawal->amount, 0, ',', '.') . ' VNĐ đã được Admin chuyển khoản thành công vào tài khoản ' . $withdrawal->bank_name . ' (' . $withdrawal->bank_account_number . '). Mã GD: ' . $txnRef . '.',
+            'message' => 'Yêu cầu rút '.number_format($withdrawal->amount, 0, ',', '.').' VNĐ đã được Admin chuyển khoản thành công vào tài khoản '.$withdrawal->bank_name.' ('.$withdrawal->bank_account_number.'). Mã GD: '.$txnRef.'.',
             'type' => 'order_paid',
             'url' => route('instructor.wallet.index'),
         ]);
@@ -94,10 +94,10 @@ class WithdrawalController extends Controller
             $withdrawal->id,
             ['amount' => $withdrawal->amount, 'ref' => $txnRef, 'instructor_id' => $withdrawal->user_id],
             $request,
-            "Admin đã duyệt và xác nhận chuyển khoản rút tiền #" . $withdrawal->id . " cho " . $withdrawal->user?->name
+            'Admin đã duyệt và xác nhận chuyển khoản rút tiền #'.$withdrawal->id.' cho '.$withdrawal->user?->name
         );
 
-        return back()->with('success', 'Đã duyệt yêu cầu rút tiền #' . $withdrawal->id . ' và thông báo thành công tới giảng viên!');
+        return back()->with('success', 'Đã duyệt yêu cầu rút tiền #'.$withdrawal->id.' và thông báo thành công tới giảng viên!');
     }
 
     public function reject(Request $request, Withdrawal $withdrawal): RedirectResponse
@@ -131,7 +131,7 @@ class WithdrawalController extends Controller
         PushNotification::create([
             'user_id' => $withdrawal->user_id,
             'title' => 'Yêu cầu rút tiền bị từ chối ⚠️',
-            'message' => 'Yêu cầu rút ' . number_format($withdrawal->amount, 0, ',', '.') . ' VNĐ đã bị từ chối. Lý do: ' . $validated['admin_note'] . '. Số tiền đã được hoàn trả lại số dư khả dụng.',
+            'message' => 'Yêu cầu rút '.number_format($withdrawal->amount, 0, ',', '.').' VNĐ đã bị từ chối. Lý do: '.$validated['admin_note'].'. Số tiền đã được hoàn trả lại số dư khả dụng.',
             'type' => 'course_rejected',
             'url' => route('instructor.wallet.index'),
         ]);
@@ -143,9 +143,9 @@ class WithdrawalController extends Controller
             $withdrawal->id,
             ['amount' => $withdrawal->amount, 'reason' => $validated['admin_note']],
             $request,
-            "Admin từ chối yêu cầu rút tiền #" . $withdrawal->id . " của " . $withdrawal->user?->name
+            'Admin từ chối yêu cầu rút tiền #'.$withdrawal->id.' của '.$withdrawal->user?->name
         );
 
-        return back()->with('success', 'Đã từ chối yêu cầu rút tiền #' . $withdrawal->id . '. Số tiền đã được hoàn trả lại số dư khả dụng cho giảng viên.');
+        return back()->with('success', 'Đã từ chối yêu cầu rút tiền #'.$withdrawal->id.'. Số tiền đã được hoàn trả lại số dư khả dụng cho giảng viên.');
     }
 }

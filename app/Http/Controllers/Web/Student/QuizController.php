@@ -11,6 +11,7 @@ use App\Models\QuizAttempt;
 use App\Models\QuizQuestion;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
+use App\Services\PointService;
 use App\Services\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -126,7 +127,7 @@ class QuizController extends Controller
             true,
         );
 
-        app(\App\Services\PointService::class)->awardQuizPoints(
+        app(PointService::class)->awardQuizPoints(
             $request->user()->id,
             $quiz,
             (float) $attempt->percent,
@@ -214,7 +215,7 @@ class QuizController extends Controller
             true,
         );
 
-        app(\App\Services\PointService::class)->awardQuizPoints(
+        app(PointService::class)->awardQuizPoints(
             $request->user()->id,
             $quiz,
             (float) $attempt->percent,
@@ -357,11 +358,11 @@ class QuizController extends Controller
     private function authorizePublishedLesson(Course $course, Lesson $lesson): void
     {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
-        
+
         $user = auth()->user();
         $canBypass = $user && ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user)));
-        
-        if (!$canBypass) {
+
+        if (! $canBypass) {
             abort_unless($course->isPublished(), 404);
         }
     }
@@ -369,7 +370,7 @@ class QuizController extends Controller
     private function isEnrolled(Course $course): bool
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -382,6 +383,7 @@ class QuizController extends Controller
                 'progress_percent' => 0,
                 'enrolled_at' => now(),
             ]);
+
             return true;
         }
 

@@ -2,8 +2,10 @@
 
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureApprovedInstructor;
 use App\Http\Middleware\EnsureEmailIsVerified;
 use App\Http\Middleware\EnsureTwoFactorIsVerified;
+use App\Http\Middleware\SingleSessionMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
-            'payments/*/ipn',
+            'payments/payos/ipn',
             'instructor/courses/*/s3/multipart/*',
         ]);
 
@@ -27,11 +29,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => CheckRole::class,
             'verified' => EnsureEmailIsVerified::class,
             '2fa' => EnsureTwoFactorIsVerified::class,
-            'approved.instructor' => \App\Http\Middleware\EnsureApprovedInstructor::class,
-            'single.session' => \App\Http\Middleware\SingleSessionMiddleware::class,
+            'approved.instructor' => EnsureApprovedInstructor::class,
+            'single.session' => SingleSessionMiddleware::class,
         ]);
-        
-        $middleware->appendToGroup('web', \App\Http\Middleware\SingleSessionMiddleware::class);
+
+        $middleware->appendToGroup('web', SingleSessionMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
