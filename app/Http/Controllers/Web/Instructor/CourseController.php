@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
 use App\Services\NotificationService;
+use App\Services\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -556,6 +557,37 @@ class CourseController extends Controller
             'gradedAssignmentsCount',
             'averageAssignmentScore'
         ));
+    }
+
+    public function studentQuizAttempt(
+        Course $course,
+        User $student,
+        Quiz $quiz,
+        QuizAttempt $attempt,
+        QuizService $quizService,
+    ): View {
+        abort_unless($course->isOwnedBy(auth()->user()) || (auth()->check() && auth()->user()->isAdmin()), 403, 'Bạn không có quyền truy cập thông tin học viên của khóa học này.');
+
+        abort_unless((int) $attempt->user_id === (int) $student->id, 404, 'Lần làm bài không thuộc về học viên này.');
+        abort_unless((int) $attempt->quiz_id === (int) $quiz->id, 404, 'Lần làm bài không thuộc về bài quiz này.');
+
+        $quizLesson = $quiz->lesson;
+        $belongsToCourse = $quizLesson && (
+            (int) $quizLesson->course_id === (int) $course->id ||
+            $quizLesson->section?->course_id === $course->id ||
+            $quizLesson->chapter?->course_id === $course->id
+        );
+        abort_unless($belongsToCourse, 404, 'Bài quiz không thuộc khóa học này.');
+
+        $review = $quizService->buildAttemptReview($attempt);
+
+        return view('instructor.courses.student_quiz_review', [
+            'course' => $course,
+            'student' => $student,
+            'quiz' => $quiz,
+            'attempt' => $attempt,
+            'review' => $review,
+        ]);
     }
 
     public function exportStudents(Course $course, Request $request): StreamedResponse

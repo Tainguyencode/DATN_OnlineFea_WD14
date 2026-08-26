@@ -139,6 +139,7 @@ class QuizController extends Controller
             'quiz' => $quiz,
             'attempt' => $attempt,
             'graded' => $graded,
+            'review' => app(QuizService::class)->buildAttemptReview($attempt),
         ]);
     }
 
@@ -235,6 +236,7 @@ class QuizController extends Controller
                 'correct_count' => $correctCount,
                 'total_questions' => $totalQuestions,
                 'pass_score' => (int) $quiz->pass_score,
+                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]),
             ],
             'graded' => [
                 'questions' => collect($graded['questions'])->map(fn ($result, $questionId) => [
@@ -251,6 +253,39 @@ class QuizController extends Controller
             'remaining_attempts' => $quiz->max_attempts !== null
                 ? max(0, $quiz->max_attempts - $quiz->attempts()->where('user_id', $request->user()->id)->count())
                 : null,
+        ]);
+    }
+
+    public function reviewAttempt(
+        Request $request,
+        Course $course,
+        Lesson $lesson,
+        QuizAttempt $attempt,
+        QuizService $quizService,
+    ): View {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless($lesson->type === 'quiz', 404);
+
+        $quiz = $this->activeQuiz($lesson);
+        abort_unless((int) $attempt->quiz_id === (int) $quiz->id, 404);
+
+        $user = $request->user();
+        $canAccess = $user && (
+            (int) $attempt->user_id === (int) $user->id ||
+            $user->isAdmin() ||
+            ($user->isInstructor() && $course->isOwnedBy($user))
+        );
+
+        abort_unless($canAccess, 403, 'Bạn không có quyền xem lại bài làm này.');
+
+        $review = $quizService->buildAttemptReview($attempt);
+
+        return view('courses.quiz-result', [
+            'course' => $course,
+            'lesson' => $lesson,
+            'quiz' => $quiz,
+            'attempt' => $attempt,
+            'review' => $review,
         ]);
     }
 
