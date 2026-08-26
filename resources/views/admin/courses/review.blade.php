@@ -359,11 +359,13 @@
                                             </div>
                                         @endif
                                             
-                                            {{-- Nút và khu vực hiển thị quét AI --}}
+                                            {{-- Nút và khu vực hiển thị quét AI (Chỉ video mới có nút quét) --}}
                                             <div class="mt-4 max-w-xl ai-moderation-container" data-lesson-id="{{ $videoLessonKey }}">
-                                                <button type="button" class="btn-scan-ai inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
-                                                    <span>Quét nội dung</span>
-                                                </button>
+                                                @if($lesson->type === 'video')
+                                                    <button type="button" class="btn-scan-ai inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                                                        <span>Quét nội dung</span>
+                                                    </button>
+                                                @endif
                                                 
                                                 <div class="ai-progress-area hidden mt-3 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
                                                     <p class="ai-status-text text-sm font-semibold text-indigo-700">Đang khởi tạo...</p>

@@ -365,22 +365,13 @@ class PointService
     }
 
     /**
-     * Calculate continuous learning streak in days for a user across all activity sources.
+     * Calculate user streak days.
+     * Counts the total number of unique days where the user logged in AND studied at least 1 lesson/quiz.
+     * Days without learning activity do not break the streak count; learning on a new day continues to increment it.
      */
     public function getUserStreakDays(int $userId): int
     {
-        $user = DB::table('users')->where('id', $userId)->first(['last_login_at', 'updated_at']);
-
-        $userDates = collect();
-        if ($user) {
-            if ($user->last_login_at) {
-                $userDates->push(Carbon::parse($user->last_login_at)->toDateString());
-            }
-            if ($user->updated_at) {
-                $userDates->push(Carbon::parse($user->updated_at)->toDateString());
-            }
-        }
-
+        // 1. Collect dates where the user actually had lesson/quiz learning activity
         $lessonDates = DB::table('lesson_progress')
             ->where('user_id', $userId)
             ->whereNotNull('updated_at')
@@ -399,57 +390,31 @@ class PointService
             ->selectRaw('DATE(created_at) as activity_date')
             ->pluck('activity_date');
 
-        $userPointsDates = DB::table('user_points')
+        $learningPointDates = DB::table('user_points')
             ->where('user_id', $userId)
+            ->whereIn('source', [
+                'lesson_completed',
+                'lesson_progress',
+                'quiz_completed',
+                'quiz_score_bonus_90',
+                'quiz_score_bonus_80',
+                'course_completed',
+                'assignment_submitted',
+            ])
             ->whereNotNull('created_at')
             ->selectRaw('DATE(created_at) as activity_date')
             ->pluck('activity_date');
 
-        $activityLogDates = DB::table('activity_logs')
-            ->where('user_id', $userId)
-            ->whereNotNull('created_at')
-            ->selectRaw('DATE(created_at) as activity_date')
-            ->pluck('activity_date');
-
-        $dates = $userDates
-            ->concat($lessonDates)
+        // Combine all valid unique learning activity dates
+        $learningDates = $lessonDates
             ->concat($lessonCompletedDates)
             ->concat($quizDates)
-            ->concat($userPointsDates)
-            ->concat($activityLogDates)
+            ->concat($learningPointDates)
             ->filter()
             ->map(fn($d) => Carbon::parse($d)->toDateString())
-            ->unique()
-            ->sortDesc()
-            ->values();
+            ->unique();
 
-        if ($dates->isEmpty()) {
-            return 0;
-        }
-
-        $streak = 0;
-        $prevDate = null;
-
-        foreach ($dates as $dateStr) {
-            $currentDate = Carbon::parse($dateStr);
-
-            if ($prevDate === null) {
-                $streak = 1;
-            } else {
-                $diffInDays = $currentDate->diffInDays($prevDate);
-
-                // Cho phép khoảng nghỉ 1-2 ngày mà không bị reset chuỗi về 0
-                if ($diffInDays <= 2) {
-                    $streak++;
-                } else {
-                    break;
-                }
-            }
-
-            $prevDate = $currentDate;
-        }
-
-        return $streak;
+        return $learningDates->count();
     }
 
     /**

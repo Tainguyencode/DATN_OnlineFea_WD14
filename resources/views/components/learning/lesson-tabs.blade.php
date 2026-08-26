@@ -24,11 +24,13 @@
     $videoDurationSeconds = $videoDurationSeconds ?: (isset($lesson) ? ((int) ($lesson->duration_seconds ?: $lesson->duration ?: 0)) : 0);
     $notesPayload = $notesPayload ?? $lessonNotes;
 
+    $resourceCount = (!empty($lesson->document_file) ? 1 : 0) + (is_array($lesson->attachments) ? count($lesson->attachments) : 0);
+
     $tabsList = [
         'overview' => 'Nội dung',
         'notes' => 'Ghi chú',
         'ai' => 'AI hỗ trợ',
-        'resources' => 'Tài liệu',
+        'resources' => 'Tài liệu' . ($resourceCount > 0 ? " ($resourceCount)" : ''),
     ];
 
     if (!in_array($lesson->type, ['quiz', 'assignment'], true)) {
@@ -126,11 +128,61 @@
                 @endif
 
                 @if($lesson->document_file)
-                    <div class="mt-6">
+                    @php
+                        $overviewExt = strtolower(pathinfo($lesson->document_file, PATHINFO_EXTENSION));
+                        $overviewDownloadName = \Illuminate\Support\Str::slug($lesson->title ?: 'tai-lieu') . ($overviewExt ? '.' . $overviewExt : '');
+                        $overviewFileUrl = asset('storage/'.$lesson->document_file);
+                        $overviewBadgeClass = match($overviewExt) {
+                            'pdf' => 'bg-rose-100 text-rose-700 border-rose-200',
+                            'doc', 'docx' => 'bg-blue-100 text-blue-700 border-blue-200',
+                            'xls', 'xlsx' => 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                            'ppt', 'pptx' => 'bg-amber-100 text-amber-700 border-amber-200',
+                            'zip', 'rar', '7z' => 'bg-purple-100 text-purple-700 border-purple-200',
+                            default => 'bg-slate-100 text-slate-700 border-slate-200',
+                        };
+                        $overviewSizeFormatted = null;
+                        try {
+                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->document_file)) {
+                                $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($lesson->document_file);
+                                if ($bytes >= 1048576) {
+                                    $overviewSizeFormatted = number_format($bytes / 1048576, 2) . ' MB';
+                                } elseif ($bytes >= 1024) {
+                                    $overviewSizeFormatted = number_format($bytes / 1024, 1) . ' KB';
+                                } else {
+                                    $overviewSizeFormatted = $bytes . ' B';
+                                }
+                            }
+                        } catch (\Throwable $e) {}
+                    @endphp
+                    <div class="mt-6 border-t border-[#d1d7dc] pt-5">
                         <h3 class="text-sm font-bold text-[#1c1d1f]">Tài nguyên đính kèm</h3>
-                        <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" rel="noopener" class="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-[#0056D2] hover:underline">
-                            Tải tài liệu bài học
-                        </a>
+                        <div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-[#d1d7dc] bg-[#f7f9fa] p-3.5 transition hover:border-[#0056D2]/50 hover:bg-white hover:shadow-2xs">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border {{ $overviewBadgeClass }} font-black text-xs">
+                                    {{ strtoupper($overviewExt ?: 'FILE') }}
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-bold text-xs sm:text-sm text-[#1c1d1f] truncate">
+                                        {{ $lesson->title . ($overviewExt ? '.' . $overviewExt : '') }}
+                                    </div>
+                                    <div class="mt-0.5 flex items-center gap-2 text-[11px] text-[#6a6f73]">
+                                        <span>Tài liệu bài học</span>
+                                        @if($overviewSizeFormatted)
+                                            <span>•</span>
+                                            <span>{{ $overviewSizeFormatted }}</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <a href="{{ $overviewFileUrl }}" target="_blank" rel="noopener noreferrer" class="inline-flex h-8 items-center gap-1 rounded-md border border-[#d1d7dc] bg-white px-3 text-xs font-semibold text-[#1c1d1f] hover:bg-[#f7f9fa] hover:text-[#0056D2]">
+                                    <span>Xem</span>
+                                </a>
+                                <a href="{{ $overviewFileUrl }}" download="{{ $overviewDownloadName }}" class="inline-flex h-8 items-center gap-1 rounded-md bg-[#0056D2] px-3 text-xs font-bold text-white hover:bg-[#0046B8]">
+                                    <span>Tải về</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 @endif
 
@@ -196,18 +248,20 @@
                             <h2 class="text-base font-bold text-[#1c1d1f]">AI giải thích</h2>
                             <p class="mt-1 text-xs text-[#6a6f73]">Ưu tiên nội dung bài học, đồng thời có thể giải thích thêm bằng kiến thức học tập liên quan. Không tiết lộ đáp án quiz.</p>
 
-                            <form data-ai-ask-form class="mt-3 space-y-3">
+                            <form data-ai-ask-form class="mt-3 space-y-3" novalidate>
                                 <label class="block text-sm font-semibold text-[#1c1d1f]" for="lesson-ai-question">Bạn chưa hiểu phần nào?</label>
-                                <textarea
-                                    id="lesson-ai-question"
-                                    name="question"
-                                    rows="3"
-                                    maxlength="1000"
-                                    required
-                                    data-ai-question-input
-                                    class="w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm text-[#1c1d1f] outline-none ring-[#0056D2] focus:ring-2"
-                                    placeholder="Ví dụ: Phần routing trong bài này hoạt động thế nào?"
-                                ></textarea>
+                                <div>
+                                    <textarea
+                                        id="lesson-ai-question"
+                                        name="question"
+                                        rows="3"
+                                        maxlength="1000"
+                                        data-ai-question-input
+                                        class="w-full rounded border border-[#d1d7dc] px-3 py-2 text-sm text-[#1c1d1f] outline-none ring-[#0056D2] focus:ring-2"
+                                        placeholder="Ví dụ: Phần routing trong bài này hoạt động thế nào?"
+                                    ></textarea>
+                                    <p data-ai-ask-error class="mt-1 hidden text-xs font-semibold text-rose-600"></p>
+                                </div>
                                 <div class="flex flex-wrap items-center justify-between gap-2">
                                     <p data-ai-ask-status class="text-xs text-[#6a6f73]"></p>
                                     <button
@@ -219,6 +273,8 @@
                                     </button>
                                 </div>
                             </form>
+
+                            <div data-ai-chat-log class="mt-4 space-y-3 max-h-[450px] overflow-y-auto rounded-lg border border-[#d1d7dc] bg-white p-3 empty:hidden"></div>
                         </div>
                     </div>
                 @else
@@ -307,11 +363,154 @@
                 @endif
             </div>
 
-            <div x-show="tab === 'resources'" x-cloak>
-                @if($lesson->document_file)
-                    <a href="{{ asset('storage/'.$lesson->document_file) }}" target="_blank" class="inline-flex h-10 items-center rounded border border-[#d1d7dc] px-4 text-sm font-semibold text-[#1c1d1f] hover:bg-[#f7f9fa]">Tải tài liệu</a>
+            <div x-show="tab === 'resources'" x-cloak class="space-y-6">
+                @php
+                    $hasDocumentFile = !empty($lesson->document_file);
+                    $attachments = is_array($lesson->attachments) ? $lesson->attachments : [];
+                    $hasAnyResources = $hasDocumentFile || !empty($attachments);
+                @endphp
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#d1d7dc] pb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-[#1c1d1f]">Tài liệu & Tệp đính kèm</h2>
+                        <p class="mt-1 text-xs text-[#6a6f73]">Danh sách tài liệu học tập, slide bài giảng hoặc bài tập do giảng viên cung cấp cho bài học này.</p>
+                    </div>
+                </div>
+
+                @if($hasAnyResources)
+                    <div class="space-y-3">
+                        {{-- Tài liệu chính (document_file) --}}
+                        @if($hasDocumentFile)
+                            @php
+                                $ext = strtolower(pathinfo($lesson->document_file, PATHINFO_EXTENSION));
+                                $downloadName = \Illuminate\Support\Str::slug($lesson->title ?: 'tai-lieu') . ($ext ? '.' . $ext : '');
+                                $rawFileName = basename($lesson->document_file);
+                                $fileUrl = asset('storage/' . $lesson->document_file);
+
+                                $badgeClass = match($ext) {
+                                    'pdf' => 'bg-rose-100 text-rose-700 border-rose-200',
+                                    'doc', 'docx' => 'bg-blue-100 text-blue-700 border-blue-200',
+                                    'xls', 'xlsx' => 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                                    'ppt', 'pptx' => 'bg-amber-100 text-amber-700 border-amber-200',
+                                    'zip', 'rar', '7z' => 'bg-purple-100 text-purple-700 border-purple-200',
+                                    default => 'bg-slate-100 text-slate-700 border-slate-200',
+                                };
+
+                                $formatLabel = strtoupper($ext ?: 'FILE');
+
+                                $fileSizeFormatted = null;
+                                try {
+                                    if (\Illuminate\Support\Facades\Storage::disk('public')->exists($lesson->document_file)) {
+                                        $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($lesson->document_file);
+                                        if ($bytes >= 1048576) {
+                                            $fileSizeFormatted = number_format($bytes / 1048576, 2) . ' MB';
+                                        } elseif ($bytes >= 1024) {
+                                            $fileSizeFormatted = number_format($bytes / 1024, 1) . ' KB';
+                                        } else {
+                                            $fileSizeFormatted = $bytes . ' B';
+                                        }
+                                    }
+                                } catch (\Throwable $e) {}
+                            @endphp
+
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[#d1d7dc] bg-[#f7f9fa] p-4 transition duration-150 hover:border-[#0056D2]/50 hover:bg-white hover:shadow-sm">
+                                <div class="flex items-start gap-3.5 min-w-0">
+                                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border {{ $badgeClass }} font-black text-xs shadow-2xs">
+                                        {{ $formatLabel }}
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="font-bold text-sm text-[#1c1d1f] truncate" title="{{ $lesson->title ?: $rawFileName }}">
+                                            {{ $lesson->title ? $lesson->title . ($ext ? '.' . $ext : '') : $rawFileName }}
+                                        </h3>
+                                        <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#6a6f73]">
+                                            <span class="inline-flex items-center gap-1 font-semibold text-[#0056D2]">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                Tài liệu bài giảng
+                                            </span>
+                                            <span>•</span>
+                                            <span>Định dạng: {{ $formatLabel }}</span>
+                                            @if($fileSizeFormatted)
+                                                <span>•</span>
+                                                <span>{{ $fileSizeFormatted }}</span>
+                                            @endif
+                                            <span>•</span>
+                                            <span>Cập nhật: {{ $lesson->updated_at?->format('d/m/Y') }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-2 shrink-0 sm:self-center">
+                                    <a
+                                        href="{{ $fileUrl }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#d1d7dc] bg-white px-3.5 text-xs font-bold text-[#1c1d1f] shadow-2xs transition hover:bg-[#f7f9fa] hover:border-[#0056D2] hover:text-[#0056D2]"
+                                    >
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                        <span>Xem tệp</span>
+                                    </a>
+                                    <a
+                                        href="{{ $fileUrl }}"
+                                        download="{{ $downloadName }}"
+                                        class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0056D2] px-3.5 text-xs font-bold text-white shadow-2xs transition hover:bg-[#0046B8]"
+                                    >
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                        <span>Tải về</span>
+                                    </a>
+                                </div>
+                            </div>
+                        @endif
+
+                        {{-- Danh sách attachments bổ sung nếu có --}}
+                        @foreach($attachments as $item)
+                            @php
+                                $itemPath = is_array($item) ? ($item['path'] ?? $item['file'] ?? '') : (string) $item;
+                                $itemTitle = is_array($item) ? ($item['title'] ?? $item['name'] ?? basename($itemPath)) : basename($itemPath);
+                                $itemExt = strtolower(pathinfo($itemPath, PATHINFO_EXTENSION));
+                                $itemDownloadName = \Illuminate\Support\Str::slug($itemTitle) . ($itemExt ? '.' . $itemExt : '');
+                                $itemUrl = asset('storage/' . $itemPath);
+                            @endphp
+                            @if($itemPath)
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[#d1d7dc] bg-[#f7f9fa] p-4 transition hover:bg-white hover:border-[#0056D2]/50 hover:shadow-sm">
+                                    <div class="flex items-start gap-3.5 min-w-0">
+                                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border bg-slate-100 text-slate-700 border-slate-200 font-black text-xs shadow-2xs">
+                                            {{ strtoupper($itemExt ?: 'FILE') }}
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <h3 class="font-bold text-sm text-[#1c1d1f] truncate" title="{{ $itemTitle }}">
+                                                {{ $itemTitle }}
+                                            </h3>
+                                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#6a6f73]">
+                                                <span class="inline-flex items-center gap-1 font-semibold text-slate-600">
+                                                    Tệp đính kèm bổ trợ
+                                                </span>
+                                                <span>•</span>
+                                                <span>{{ strtoupper($itemExt) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0 sm:self-center">
+                                        <a href="{{ $itemUrl }}" target="_blank" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#d1d7dc] bg-white px-3.5 text-xs font-bold text-[#1c1d1f] shadow-2xs hover:bg-[#f7f9fa]">
+                                            <span>Mở tệp</span>
+                                        </a>
+                                        <a href="{{ $itemUrl }}" download="{{ $itemDownloadName }}" class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0056D2] px-3.5 text-xs font-bold text-white shadow-2xs hover:bg-[#0046B8]">
+                                            <span>Tải về</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
                 @else
-                    <p class="text-sm text-[#6a6f73]">Không có tài liệu đính kèm.</p>
+                    <div class="rounded-2xl border border-dashed border-[#d1d7dc] bg-[#f7f9fa]/60 p-8 text-center">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
+                        <h3 class="mt-3 text-sm font-bold text-[#1c1d1f]">Không có tài liệu đính kèm</h3>
+                        <p class="mt-1 text-xs text-[#6a6f73] max-w-sm mx-auto">
+                            Bài học này hiện chưa có tệp tài liệu đính kèm. Giảng viên sẽ bổ sung slide hoặc file tài liệu tham khảo khi cần thiết.
+                        </p>
+                    </div>
                 @endif
             </div>
 

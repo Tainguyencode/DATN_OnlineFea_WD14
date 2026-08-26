@@ -98,6 +98,12 @@ class CourseSubmissionValidator
                 $quizErrors === [],
                 $quizErrors === [] ? null : implode(' ', $quizErrors),
             ),
+            $this->makeItem(
+                'hls_security',
+                'Xử lý bảo mật video (HLS)',
+                ! $course->hasIncompleteHlsVideos(),
+                'Video chưa xử lý hoàn tất. Vui lòng chờ quá trình xử lý video hoàn tất trước khi gửi duyệt.',
+            ),
         ];
 
         return new CourseSubmissionCheckResult($items);

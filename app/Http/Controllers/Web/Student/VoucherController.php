@@ -82,7 +82,9 @@ class VoucherController extends Controller
             }
 
             // Gắn Creator Tag
-            if ($item->source === 'admin') {
+            if ($item->source === 'leaderboard') {
+                $item->creator_tag = '🏆 Thưởng TOP tháng';
+            } elseif ($item->source === 'admin') {
                 $item->creator_tag = '🎁 Admin tặng';
             } elseif ($coupon->creator_type === 'instructor') {
                 $item->creator_tag = '👨‍🏫 Giảng viên';
