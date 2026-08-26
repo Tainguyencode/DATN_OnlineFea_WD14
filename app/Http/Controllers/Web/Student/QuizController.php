@@ -13,12 +13,10 @@ use App\Services\LearningProgressService;
 use App\Services\PointService;
 use App\Services\QuizAttemptService;
 use App\Services\QuizContentService;
-use App\Services\QuizService;
 use App\Services\QuizVersioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class QuizController extends Controller
@@ -76,8 +74,10 @@ class QuizController extends Controller
             return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson])->with('error', 'Enrollment is required to submit this quiz.');
         }
 
-        [$attempt, $quiz, $graded] = $this->gradeBoundAttempt($request, $course, $lesson);
-        $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService);
+        [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
+        if ($completedNow) {
+            $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService);
+        }
 
         return view('courses.quiz-result', compact('course', 'lesson', 'quiz', 'attempt', 'graded'));
     }
@@ -90,8 +90,10 @@ class QuizController extends Controller
             return response()->json(['success' => false, 'message' => 'Enrollment is required to submit this quiz.'], 403);
         }
 
-        [$attempt, $quiz, $graded] = $this->gradeBoundAttempt($request, $course, $lesson);
-        $progress = $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService);
+        [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
+        $progress = $completedNow
+            ? $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService)
+            : [];
         $attemptService = app(QuizAttemptService::class);
         $completedAttempts = $attemptService->completedAttemptsCount($quiz, $request->user());
 
@@ -122,41 +124,25 @@ class QuizController extends Controller
         ]);
     }
 
-    /** @return array{0: QuizAttempt, 1: Quiz, 2: array<string, mixed>} */
+    /** @return array{0: QuizAttempt, 1: Quiz, 2: array<string, mixed>, 3: bool} */
     private function gradeBoundAttempt(Request $request, Course $course, Lesson $lesson): array
     {
-        $validated = $request->validate(['answers' => ['nullable', 'array']]);
+        $validated = $request->validate([
+            'attempt_id' => ['required', 'integer'],
+            'answers' => ['nullable', 'array'],
+        ]);
         $attemptService = app(QuizAttemptService::class);
-        $attempt = $attemptService->startOrResume($course, $lesson, $request->user());
+        $submission = $attemptService->submit(
+            $course,
+            $lesson,
+            $request->user(),
+            (int) $validated['attempt_id'],
+            $validated['answers'] ?? [],
+        );
+        $attempt = $submission['attempt'];
         $quiz = $attemptService->projectQuiz($attempt);
-        $graded = app(QuizService::class)->grade($quiz, $validated['answers'] ?? [], $attempt->quizVersion);
 
-        return [$this->completeAttempt($attempt, $graded), $quiz, $graded];
-    }
-
-    /** @param array<string, mixed> $graded */
-    private function completeAttempt(QuizAttempt $attempt, array $graded): QuizAttempt
-    {
-        return DB::transaction(function () use ($attempt, $graded): QuizAttempt {
-            $attempt = QuizAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
-            abort_unless($attempt->status === 'in_progress', 409, 'Quiz attempt is no longer in progress.');
-            $attempt->update([
-                'status' => 'completed', 'score' => $graded['score'], 'total_score' => $graded['total_score'],
-                'percent' => $graded['percent'], 'passed' => $graded['passed'], 'answers' => $graded['answers'], 'completed_at' => now(),
-            ]);
-            foreach ($graded['questions'] as $questionId => $result) {
-                if ($result['selected_ids'] === []) {
-                    $attempt->attemptAnswers()->create(['question_id' => $questionId, 'answer_id' => null, 'is_correct' => false]);
-
-                    continue;
-                }
-                foreach ($result['selected_ids'] as $answerId) {
-                    $attempt->attemptAnswers()->create(['question_id' => $questionId, 'answer_id' => $answerId, 'is_correct' => in_array($answerId, $result['correct_ids'], true)]);
-                }
-            }
-
-            return $attempt->fresh();
-        });
+        return [$attempt, $quiz, $submission['graded'], $submission['completed_now']];
     }
 
     private function recordCompletion(Request $request, Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt, LearningProgressService $progressService): array

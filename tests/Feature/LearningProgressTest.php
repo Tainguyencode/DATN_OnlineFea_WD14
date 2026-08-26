@@ -8,6 +8,7 @@ use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
+use App\Models\QuizAttempt;
 use App\Models\User;
 use App\Services\LearningProgressService;
 use App\Services\QuizContentService;
@@ -301,9 +302,14 @@ class LearningProgressTest extends TestCase
             app(QuizVersioningService::class)->currentDraft($quiz->fresh()),
         );
         $this->enroll($student, $course);
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.quiz.start', [$course, $lesson]))
+            ->assertOk();
+        $attempt = QuizAttempt::where('user_id', $student->id)->where('quiz_id', $quiz->id)->sole();
 
         $this->actingAs($student)
             ->postJson(route('courses.lessons.quiz.submit', [$course, $lesson]), [
+                'attempt_id' => $attempt->id,
                 'answers' => [$question->id => $wrong->id],
             ])
             ->assertOk()

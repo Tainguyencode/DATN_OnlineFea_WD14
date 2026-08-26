@@ -602,7 +602,7 @@ function initQuizPlayer() {
         prevBtn.disabled = true;
         if (timerId) window.clearInterval(timerId);
 
-        const payload = { answers: {} };
+        const payload = { attempt_id: quiz.attempt_id, answers: {} };
         Object.entries(answers).forEach(([questionId, ids]) => {
             const question = quiz.questions.find((q) => String(q.id) === String(questionId));
             payload.answers[questionId] = question?.type === 'multiple' ? ids : ids[0];
