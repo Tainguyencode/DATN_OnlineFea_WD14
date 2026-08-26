@@ -4,17 +4,20 @@ namespace App\Services;
 
 use App\Models\Quiz;
 use App\Models\QuizQuestion;
+use App\Models\QuizVersion;
 
 class QuizService
 {
-    public function grade(Quiz $quiz, array $submittedAnswers): array
+    public function grade(Quiz $quiz, array $submittedAnswers, ?QuizVersion $version = null): array
     {
         $score = 0;
         $totalScore = 0;
         $answers = [];
         $questions = [];
 
-        if ($quiz->current_published_version_id) {
+        if ($version) {
+            $quiz = app(QuizVersioningService::class)->projectVersion($quiz, $version);
+        } elseif ($quiz->current_published_version_id) {
             $versioning = app(QuizVersioningService::class);
             $quiz = $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
         } else {
