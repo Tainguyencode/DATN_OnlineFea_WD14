@@ -13,6 +13,8 @@ class ContentUpdate extends Model
 
     public const TYPE_LESSON = 'lesson';
 
+    public const TYPE_QUIZ = 'quiz';
+
     public const ACTION_CREATE = 'create';
 
     public const ACTION_UPDATE = 'update';

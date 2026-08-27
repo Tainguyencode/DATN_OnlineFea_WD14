@@ -104,7 +104,11 @@ class PointService
     }
 
     /**
-     * Award points for completing 1 lesson (+10 XP, max once per lesson).
+     * Award points for completing 1 lesson based on video duration:
+     * - Video < 30 mins (< 1800s): +10 XP
+     * - Video 30 - < 60 mins (1800s - 3599s): +15 XP
+     * - Video >= 60 mins (>= 3600s): +20 XP
+     * Max once per lesson.
      */
     public function awardLessonCompletionPoints(int $userId, int $lessonId, mixed $createdAt = null): void
     {
@@ -127,9 +131,19 @@ class PointService
             return;
         }
 
+        $durationSeconds = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
+
+        if ($durationSeconds >= 3600) {
+            $points = 20;
+        } elseif ($durationSeconds >= 1800) {
+            $points = 15;
+        } else {
+            $points = 10;
+        }
+
         $this->awardPoints(
             $userId,
-            10,
+            $points,
             'lesson_completed',
             "Hoàn thành bài học: {$lesson->title} ({$lessonTag})",
             $lesson->course_id,

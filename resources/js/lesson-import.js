@@ -26,6 +26,22 @@ const TYPE_LABELS = {
     assignment: 'Bài tập',
 };
 
+const V2_SHEET_NAMES = ['Lessons', 'Quizzes', 'QuizQuestions', 'QuizOptions'];
+
+const V2_SHEET_LABELS = {
+    Lessons: 'Bài học',
+    Quizzes: 'Quiz',
+    QuizQuestions: 'Câu hỏi',
+    QuizOptions: 'Đáp án',
+};
+
+const V2_SHEET_COLUMN_COUNTS = {
+    Lessons: 6,
+    Quizzes: 8,
+    QuizQuestions: 7,
+    QuizOptions: 6,
+};
+
 const FOCUSABLE_SELECTOR = [
     'a[href]',
     'button:not([disabled])',
@@ -94,6 +110,12 @@ function initializeLessonImport(root) {
         confirmErrorMessage: root.querySelector('[data-lesson-import-confirm-error-message]'),
         confirm: root.querySelector('[data-lesson-import-confirm]'),
         confirmLabel: root.querySelector('[data-lesson-import-confirm-label]'),
+        v1Preview: root.querySelector('[data-lesson-import-v1-preview]'),
+        v2Preview: root.querySelector('[data-lesson-import-v2-preview]'),
+        v2ErrorGuidance: root.querySelector('[data-lesson-import-v2-error-guidance]'),
+        v2Issues: root.querySelector('[data-lesson-import-v2-issues]'),
+        v2IssuesWrap: root.querySelector('[data-lesson-import-v2-issues-wrap]'),
+        v2IssuesEmpty: root.querySelector('[data-lesson-import-v2-issues-empty]'),
         rows: root.querySelector('[data-lesson-import-rows]'),
         tableWrap: root.querySelector('[data-lesson-import-table-wrap]'),
         empty: root.querySelector('[data-lesson-import-empty]'),
@@ -105,6 +127,8 @@ function initializeLessonImport(root) {
 
     const triggers = document.querySelectorAll(`[data-lesson-import-open][aria-controls="${root.id}"]`);
     const filterButtons = [...root.querySelectorAll('[data-lesson-import-filter]')];
+    const v2TabButtons = [...root.querySelectorAll('[data-lesson-import-v2-tab]')];
+    const v2SheetPanels = [...root.querySelectorAll('[data-lesson-import-v2-sheet-panel]')];
     const closeButtons = [...root.querySelectorAll('[data-lesson-import-close]')];
     const chooseAnotherButton = root.querySelector('[data-lesson-import-choose-another]');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -118,6 +142,7 @@ function initializeLessonImport(root) {
         preview: null,
         batchToken: null,
         activeFilter: 'all',
+        activeV2Tab: 'Lessons',
         requestController: null,
         returnFocus: null,
     };
@@ -160,6 +185,40 @@ function initializeLessonImport(root) {
         return elements.section.selectedOptions[0]?.dataset.confirmUrl || '';
     }
 
+    function isRecord(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function numericValue(value, fallback = 0) {
+        const number = Number(value);
+
+        return Number.isFinite(number) ? number : fallback;
+    }
+
+    function isV2PreviewPayload(payload) {
+        return isRecord(payload)
+            && isRecord(payload.summary)
+            && isRecord(payload.sheets)
+            && Array.isArray(payload.issues);
+    }
+
+    function previewImportStats() {
+        if (state.preview?.kind === 'v2') {
+            const summary = state.preview.summary;
+            const errorCount = Number(summary?.errors);
+
+            return {
+                importCount: numericValue(summary?.lessons),
+                errorCount: Number.isFinite(errorCount) ? errorCount : 1,
+            };
+        }
+
+        return {
+            importCount: numericValue(state.preview?.batch?.row_count),
+            errorCount: numericValue(state.preview?.batch?.error_count),
+        };
+    }
+
     function updateSubmitAvailability() {
         const isBusy = state.isLoading || state.isImporting;
         elements.submit.disabled = isBusy || !state.selectedSection || !state.file;
@@ -171,10 +230,9 @@ function initializeLessonImport(root) {
     }
 
     function updateConfirmAvailability() {
-        const rowCount = Number(state.preview?.batch?.row_count || 0);
-        const errorCount = Number(state.preview?.batch?.error_count || 0);
+        const { importCount, errorCount } = previewImportStats();
         const canImport = Boolean(state.batchToken)
-            && rowCount > 0
+            && importCount > 0
             && errorCount === 0
             && !state.confirmUnavailable;
 
@@ -182,7 +240,7 @@ function initializeLessonImport(root) {
         elements.confirm.setAttribute('aria-busy', String(state.isImporting));
         elements.confirmLabel.textContent = state.isImporting
             ? 'Đang import...'
-            : (canImport ? `Import ${rowCount} bài học` : 'Chưa thể import');
+            : (canImport ? `Import ${importCount} bài học` : 'Chưa thể import');
         elements.panel.setAttribute('aria-busy', String(state.isImporting));
 
         if (chooseAnotherButton) chooseAnotherButton.disabled = state.isImporting;
@@ -221,11 +279,15 @@ function initializeLessonImport(root) {
         state.preview = null;
         state.batchToken = null;
         state.activeFilter = 'all';
+        state.activeV2Tab = 'Lessons';
         state.file = null;
         state.selectedSection = selectedSection;
         elements.file.value = '';
         elements.section.value = selectedSection;
         elements.rows.replaceChildren();
+        elements.v1Preview?.classList.remove('hidden');
+        elements.v2Preview?.classList.add('hidden');
+        clearV2Preview();
         elements.empty.classList.add('hidden');
         elements.tableWrap.classList.remove('hidden');
         elements.errorGuidance.classList.add('hidden');
@@ -439,13 +501,16 @@ function initializeLessonImport(root) {
         elements.filterSummary.textContent = `Hiển thị ${visibleCount} dòng`;
     }
 
-    function renderPreview(payload) {
+    function renderV1Preview(payload) {
         const rows = Array.isArray(payload.rows) ? payload.rows : [];
         const batch = payload.batch && typeof payload.batch === 'object' ? payload.batch : {};
 
-        state.preview = { batch, rows };
+        state.preview = { kind: 'v1', batch, rows };
         state.batchToken = typeof batch.token === 'string' ? batch.token : null;
         state.activeFilter = 'all';
+        clearV2Preview();
+        elements.v1Preview?.classList.remove('hidden');
+        elements.v2Preview?.classList.add('hidden');
 
         ['row_count', 'valid_count', 'warning_count', 'error_count'].forEach((key) => {
             const value = Number.isFinite(Number(batch[key])) ? Number(batch[key]) : 0;
@@ -482,6 +547,319 @@ function initializeLessonImport(root) {
                 counts: filterCounts,
             },
         }));
+    }
+
+    function v2SummaryCounts(summary) {
+        return {
+            lessons: numericValue(summary?.lessons),
+            quizzes: numericValue(summary?.quizzes),
+            questions: numericValue(summary?.questions),
+            options: numericValue(summary?.options),
+            errors: numericValue(summary?.errors),
+            warnings: numericValue(summary?.warnings),
+        };
+    }
+
+    function v2SheetRows(sheets, sheetName) {
+        if (!isRecord(sheets)) return [];
+
+        const exact = sheets[sheetName];
+        const key = Object.keys(sheets).find((candidate) => candidate.toLowerCase() === sheetName.toLowerCase());
+        const value = exact ?? (key ? sheets[key] : null);
+
+        if (Array.isArray(value)) return value;
+        if (isRecord(value) && Array.isArray(value.rows)) return value.rows;
+
+        return [];
+    }
+
+    function v2RowData(row) {
+        return isRecord(row?.data) ? row.data : (isRecord(row) ? row : {});
+    }
+
+    function v2Field(row, data, field) {
+        if (isRecord(row) && Object.prototype.hasOwnProperty.call(row, field)) return row[field];
+
+        return data[field];
+    }
+
+    function displayValue(value, fallback = '—') {
+        if (value === null || value === undefined || value === '') return fallback;
+        if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+        if (typeof value === 'string' || typeof value === 'number') return String(value);
+
+        return fallback;
+    }
+
+    function booleanValue(value) {
+        if (value === true || value === 1 || String(value).trim().toUpperCase() === 'TRUE') return 'TRUE';
+        if (value === false || value === 0 || String(value).trim().toUpperCase() === 'FALSE') return 'FALSE';
+
+        return displayValue(value);
+    }
+
+    function valueWithUnit(value, unit) {
+        const text = displayValue(value);
+
+        return text === '—' ? text : `${text} ${unit}`;
+    }
+
+    function v2IssueKey(sheet, rowNumber) {
+        return `${String(sheet).toLowerCase()}::${String(rowNumber)}`;
+    }
+
+    function indexV2Issues(issues) {
+        const index = new Map();
+
+        issues.forEach((issue) => {
+            if (!isRecord(issue) || issue.sheet === null || issue.sheet === undefined
+                || issue.row_number === null || issue.row_number === undefined) {
+                return;
+            }
+
+            const key = v2IssueKey(issue.sheet, issue.row_number);
+            const current = index.get(key) || [];
+            current.push(issue);
+            index.set(key, current);
+        });
+
+        return index;
+    }
+
+    function v2RowStatus(row, data, sheetName, issuesByRow) {
+        const explicitStatus = v2Field(row, data, 'status');
+        if (typeof explicitStatus === 'string' && Object.prototype.hasOwnProperty.call(STATUS_PRESENTATION, explicitStatus)) {
+            return explicitStatus;
+        }
+
+        const rowNumber = v2Field(row, data, 'row_number');
+        const issues = issuesByRow.get(v2IssueKey(sheetName, rowNumber)) || [];
+
+        if (issues.some((issue) => String(issue.severity).toLowerCase() === 'error')) return 'error';
+        if (issues.some((issue) => String(issue.severity).toLowerCase() === 'warning')) return 'warning';
+
+        return 'valid';
+    }
+
+    function v2Cells(sheetName, row, data) {
+        const field = (name) => v2Field(row, data, name);
+
+        switch (sheetName) {
+            case 'Lessons':
+                return [
+                    displayValue(field('row_number')),
+                    displayValue(field('lesson_code')),
+                    displayValue(field('title')),
+                    TYPE_LABELS[field('type')] || displayValue(field('type')),
+                    valueWithUnit(field('duration_seconds') ?? field('duration'), 'giây'),
+                ];
+            case 'Quizzes':
+                return [
+                    displayValue(field('row_number')),
+                    displayValue(field('lesson_code')),
+                    displayValue(field('title')),
+                    valueWithUnit(field('pass_score'), '%'),
+                    valueWithUnit(field('time_limit_minutes'), 'phút'),
+                    displayValue(field('max_attempts')),
+                    booleanValue(field('is_active')),
+                ];
+            case 'QuizQuestions':
+                return [
+                    displayValue(field('row_number')),
+                    displayValue(field('lesson_code')),
+                    displayValue(field('question_code')),
+                    displayValue(field('question')),
+                    displayValue(field('type')),
+                    displayValue(field('points')),
+                ];
+            case 'QuizOptions':
+                return [
+                    displayValue(field('row_number')),
+                    displayValue(field('question_code')),
+                    displayValue(field('option_code')),
+                    displayValue(field('option_text')),
+                    booleanValue(field('is_correct')),
+                ];
+            default:
+                return [];
+        }
+    }
+
+    function v2CellClass(sheetName, index) {
+        const longTextIndexes = {
+            Lessons: [2],
+            Quizzes: [2],
+            QuizQuestions: [3],
+            QuizOptions: [3],
+        };
+        const codeIndexes = {
+            Lessons: [1],
+            Quizzes: [1],
+            QuizQuestions: [1, 2],
+            QuizOptions: [1, 2],
+        };
+
+        if (longTextIndexes[sheetName]?.includes(index)) {
+            return 'max-w-[32rem] break-words px-3 py-3 font-semibold text-slate-900';
+        }
+
+        if (codeIndexes[sheetName]?.includes(index)) {
+            return 'whitespace-nowrap px-3 py-3 font-mono text-xs font-bold text-slate-800';
+        }
+
+        return 'whitespace-nowrap px-3 py-3 text-slate-700';
+    }
+
+    function createV2EntityRows(sheetName, rows, issuesByRow) {
+        const fragment = document.createDocumentFragment();
+
+        if (rows.length === 0) {
+            const emptyRow = createElement('tr');
+            const emptyCell = createElement(
+                'td',
+                'px-4 py-8 text-center text-sm font-semibold text-slate-500',
+                'Sheet này chưa có dữ liệu.',
+            );
+            emptyCell.colSpan = V2_SHEET_COLUMN_COUNTS[sheetName];
+            emptyRow.append(emptyCell);
+            fragment.append(emptyRow);
+
+            return fragment;
+        }
+
+        rows.forEach((row) => {
+            const safeRow = isRecord(row) ? row : {};
+            const data = v2RowData(safeRow);
+            const status = v2RowStatus(safeRow, data, sheetName, issuesByRow);
+            const presentation = STATUS_PRESENTATION[status] || STATUS_PRESENTATION.valid;
+            const mainRow = createElement('tr', presentation.rowClass);
+
+            v2Cells(sheetName, safeRow, data).forEach((value, index) => {
+                mainRow.append(createElement('td', v2CellClass(sheetName, index), value));
+            });
+
+            const statusCell = createElement('td', 'px-3 py-3');
+            statusCell.append(createStatusBadge(status));
+            mainRow.append(statusCell);
+            fragment.append(mainRow);
+        });
+
+        return fragment;
+    }
+
+    function renderV2Issues(issues) {
+        if (!elements.v2Issues || !elements.v2IssuesWrap || !elements.v2IssuesEmpty) return;
+
+        const structuredIssues = issues.filter(isRecord);
+        const fragment = document.createDocumentFragment();
+
+        structuredIssues.forEach((issue) => {
+            const severity = String(issue.severity || '').toLowerCase() === 'error' ? 'error' : 'warning';
+            const row = createElement('tr', STATUS_PRESENTATION[severity].rowClass);
+            const severityCell = createElement('td', 'px-3 py-3');
+            severityCell.append(createStatusBadge(severity));
+            row.append(
+                severityCell,
+                createElement('td', 'px-3 py-3 font-semibold text-slate-700', V2_SHEET_LABELS[issue.sheet] || displayValue(issue.sheet)),
+                createElement('td', 'whitespace-nowrap px-3 py-3 tabular-nums text-slate-700', displayValue(issue.row_number)),
+                createElement('td', 'px-3 py-3 font-mono text-xs font-bold text-slate-800', displayValue(issue.field)),
+                createElement('td', 'max-w-[36rem] break-words px-3 py-3 text-slate-800', displayValue(issue.message)),
+            );
+            fragment.append(row);
+        });
+
+        elements.v2Issues.replaceChildren(fragment);
+        elements.v2IssuesEmpty.classList.toggle('hidden', structuredIssues.length > 0);
+        elements.v2IssuesWrap.classList.toggle('hidden', structuredIssues.length === 0);
+    }
+
+    function setV2ActiveTab(sheetName, shouldFocus = false) {
+        const activeSheet = V2_SHEET_NAMES.includes(sheetName) ? sheetName : 'Lessons';
+        state.activeV2Tab = activeSheet;
+
+        v2TabButtons.forEach((button) => {
+            const isActive = button.dataset.lessonImportV2Tab === activeSheet;
+            button.setAttribute('aria-selected', String(isActive));
+            button.tabIndex = isActive ? 0 : -1;
+            button.classList.toggle('border-slate-900', isActive);
+            button.classList.toggle('bg-slate-900', isActive);
+            button.classList.toggle('text-white', isActive);
+            button.classList.toggle('border-slate-300', !isActive);
+            button.classList.toggle('bg-white', !isActive);
+            button.classList.toggle('text-slate-700', !isActive);
+
+            if (isActive && shouldFocus) button.focus();
+        });
+
+        v2SheetPanels.forEach((panel) => {
+            panel.classList.toggle('hidden', panel.dataset.lessonImportV2SheetPanel !== activeSheet);
+        });
+    }
+
+    function clearV2Preview() {
+        root.querySelectorAll('[data-lesson-import-v2-count]').forEach((counter) => {
+            counter.textContent = '0';
+        });
+        root.querySelectorAll('[data-lesson-import-v2-sheet-rows]').forEach((body) => {
+            body.replaceChildren();
+        });
+        elements.v2Issues?.replaceChildren();
+        elements.v2IssuesEmpty?.classList.remove('hidden');
+        elements.v2IssuesWrap?.classList.add('hidden');
+        elements.v2ErrorGuidance?.classList.add('hidden');
+        setV2ActiveTab('Lessons');
+    }
+
+    function renderV2Preview(payload) {
+        const batch = isRecord(payload.batch) ? payload.batch : {};
+        const summary = payload.summary;
+        const sheets = payload.sheets;
+        const issues = payload.issues.filter(isRecord);
+        const counts = v2SummaryCounts(summary);
+        const issuesByRow = indexV2Issues(issues);
+
+        state.preview = { kind: 'v2', batch, summary, sheets, issues };
+        state.batchToken = typeof batch.token === 'string' ? batch.token : null;
+        state.activeFilter = 'all';
+
+        Object.entries(counts).forEach(([key, value]) => {
+            const counter = root.querySelector(`[data-lesson-import-v2-count="${key}"]`);
+            if (counter) counter.textContent = String(value);
+        });
+
+        V2_SHEET_NAMES.forEach((sheetName) => {
+            const body = root.querySelector(`[data-lesson-import-v2-sheet-rows="${sheetName}"]`);
+            if (body) body.replaceChildren(createV2EntityRows(sheetName, v2SheetRows(sheets, sheetName), issuesByRow));
+        });
+
+        renderV2Issues(issues);
+        elements.v2ErrorGuidance?.classList.toggle('hidden', counts.errors <= 0);
+        elements.v1Preview?.classList.add('hidden');
+        elements.v2Preview?.classList.remove('hidden');
+        setV2ActiveTab('Lessons');
+        clearConfirmError();
+        setStep('preview');
+        updateConfirmAvailability();
+        setLiveMessage(`Đã kiểm tra ${counts.lessons} bài học, ${counts.quizzes} quiz, ${counts.questions} câu hỏi và ${counts.options} đáp án.`);
+        elements.heading.focus();
+
+        root.dispatchEvent(new CustomEvent('lesson-import:previewed', {
+            detail: {
+                batchToken: state.batchToken,
+                selectedSection: state.selectedSection,
+                counts,
+            },
+        }));
+    }
+
+    function renderPreview(payload) {
+        if (isV2PreviewPayload(payload)) {
+            renderV2Preview(payload);
+
+            return;
+        }
+
+        renderV1Preview(payload);
     }
 
     async function submitPreview() {
@@ -527,7 +905,7 @@ function initializeLessonImport(root) {
                 return;
             }
 
-            if (!payload.batch || !Array.isArray(payload.rows)) {
+            if (!payload.batch || (!Array.isArray(payload.rows) && !isV2PreviewPayload(payload))) {
                 showFileError('Phản hồi kiểm tra file không hợp lệ. Vui lòng thử lại.');
                 return;
             }
@@ -549,9 +927,8 @@ function initializeLessonImport(root) {
     }
 
     async function submitConfirm() {
-        const rowCount = Number(state.preview?.batch?.row_count || 0);
-        const errorCount = Number(state.preview?.batch?.error_count || 0);
-        if (state.isImporting || !state.batchToken || rowCount <= 0 || errorCount > 0 || state.confirmUnavailable) return;
+        const { importCount, errorCount } = previewImportStats();
+        if (state.isImporting || !state.batchToken || importCount <= 0 || errorCount > 0 || state.confirmUnavailable) return;
 
         const confirmUrl = selectedConfirmUrl();
         if (!confirmUrl) {
@@ -563,7 +940,7 @@ function initializeLessonImport(root) {
         state.isImporting = true;
         updateSubmitAvailability();
         updateConfirmAvailability();
-        setLiveMessage(`Đang import ${rowCount} bài học. Vui lòng chờ.`);
+        setLiveMessage(`Đang import ${importCount} bài học. Vui lòng chờ.`);
 
         try {
             const response = await fetch(confirmUrl, {
@@ -693,6 +1070,23 @@ function initializeLessonImport(root) {
         button.addEventListener('click', () => {
             state.activeFilter = button.dataset.lessonImportFilter || 'all';
             updateFilter();
+        });
+    });
+    v2TabButtons.forEach((button, index) => {
+        button.addEventListener('click', () => {
+            setV2ActiveTab(button.dataset.lessonImportV2Tab || 'Lessons');
+        });
+        button.addEventListener('keydown', (event) => {
+            let nextIndex = index;
+
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % v2TabButtons.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + v2TabButtons.length) % v2TabButtons.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = v2TabButtons.length - 1;
+            else return;
+
+            event.preventDefault();
+            setV2ActiveTab(v2TabButtons[nextIndex].dataset.lessonImportV2Tab || 'Lessons', true);
         });
     });
 

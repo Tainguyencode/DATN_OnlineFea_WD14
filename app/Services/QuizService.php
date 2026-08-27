@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\QuestionVersion;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizQuestion;
+use App\Models\QuizVersion;
+use Illuminate\Validation\ValidationException;
 
 class QuizService
 {
@@ -24,72 +27,74 @@ class QuizService
         $rawSavedAnswers = is_array($attempt->answers) ? $attempt->answers : [];
 
         $questionsReview = [];
-        $totalQuestions = $quiz->questions->count();
+        $totalQuestions = $quiz ? $quiz->questions->count() : 0;
         $correctQuestionsCount = 0;
 
-        foreach ($quiz->questions as $index => $question) {
-            $selectedIds = [];
-            if ($attemptAnswersGrouped->has($question->id)) {
-                $selectedIds = $attemptAnswersGrouped->get($question->id)
-                    ->whereNotNull('answer_id')
-                    ->pluck('answer_id')
+        if ($quiz) {
+            foreach ($quiz->questions as $index => $question) {
+                $selectedIds = [];
+                if ($attemptAnswersGrouped->has($question->id)) {
+                    $selectedIds = $attemptAnswersGrouped->get($question->id)
+                        ->whereNotNull('answer_id')
+                        ->pluck('answer_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->unique()
+                        ->values()
+                        ->all();
+                }
+
+                if (empty($selectedIds) && isset($rawSavedAnswers[$question->id])) {
+                    $raw = is_array($rawSavedAnswers[$question->id]) ? $rawSavedAnswers[$question->id] : [$rawSavedAnswers[$question->id]];
+                    $selectedIds = collect($raw)
+                        ->filter(fn ($id) => $id !== null && $id !== '')
+                        ->map(fn ($id) => (int) $id)
+                        ->unique()
+                        ->values()
+                        ->all();
+                }
+
+                $correctIds = $question->options
+                    ->where('is_correct', true)
+                    ->pluck('id')
                     ->map(fn ($id) => (int) $id)
-                    ->unique()
                     ->values()
                     ->all();
-            }
 
-            if (empty($selectedIds) && isset($rawSavedAnswers[$question->id])) {
-                $raw = is_array($rawSavedAnswers[$question->id]) ? $rawSavedAnswers[$question->id] : [$rawSavedAnswers[$question->id]];
-                $selectedIds = collect($raw)
-                    ->filter(fn ($id) => $id !== null && $id !== '')
-                    ->map(fn ($id) => (int) $id)
-                    ->unique()
-                    ->values()
-                    ->all();
-            }
+                $isCorrect = $this->questionIsCorrect($question->type, $selectedIds, $correctIds);
+                if ($isCorrect) {
+                    $correctQuestionsCount++;
+                }
 
-            $correctIds = $question->options
-                ->where('is_correct', true)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->values()
-                ->all();
+                $optionsReview = $question->options->map(function ($option) use ($selectedIds, $correctIds) {
+                    $optionId = (int) $option->id;
+                    $isSelected = in_array($optionId, $selectedIds, true);
+                    $isCorrectOption = in_array($optionId, $correctIds, true);
 
-            $isCorrect = $this->questionIsCorrect($question, $selectedIds, $correctIds);
-            if ($isCorrect) {
-                $correctQuestionsCount++;
-            }
+                    return [
+                        'id' => $optionId,
+                        'option_text' => $option->option_text,
+                        'is_selected' => $isSelected,
+                        'is_correct' => $isCorrectOption,
+                    ];
+                })->values()->all();
 
-            $optionsReview = $question->options->map(function ($option) use ($selectedIds, $correctIds) {
-                $optionId = (int) $option->id;
-                $isSelected = in_array($optionId, $selectedIds, true);
-                $isCorrectOption = in_array($optionId, $correctIds, true);
-
-                return [
-                    'id' => $optionId,
-                    'option_text' => $option->option_text,
-                    'is_selected' => $isSelected,
-                    'is_correct' => $isCorrectOption,
+                $questionsReview[] = [
+                    'id' => $question->id,
+                    'question_number' => $index + 1,
+                    'question' => $question->question,
+                    'type' => $question->type,
+                    'form_type' => $question->form_type,
+                    'points' => (int) $question->points,
+                    'explanation' => $question->explanation,
+                    'is_correct' => $isCorrect,
+                    'selected_ids' => $selectedIds,
+                    'correct_ids' => $correctIds,
+                    'options' => $optionsReview,
                 ];
-            })->values()->all();
-
-            $questionsReview[] = [
-                'id' => $question->id,
-                'question_number' => $index + 1,
-                'question' => $question->question,
-                'type' => $question->type,
-                'form_type' => $question->form_type,
-                'points' => (int) $question->points,
-                'explanation' => $question->explanation,
-                'is_correct' => $isCorrect,
-                'selected_ids' => $selectedIds,
-                'correct_ids' => $correctIds,
-                'options' => $optionsReview,
-            ];
+            }
         }
 
-        $allAttempts = QuizAttempt::where('quiz_id', $quiz->id)
+        $allAttempts = $quiz ? QuizAttempt::where('quiz_id', $quiz->id)
             ->where('user_id', $attempt->user_id)
             ->orderBy('id', 'asc')
             ->get()
@@ -106,14 +111,14 @@ class QuizService
                     'is_current' => (int) $att->id === (int) $attempt->id,
                 ];
             })
-            ->all();
+            ->all() : [];
 
         $currentAttemptIndex = collect($allAttempts)->search(fn ($a) => $a['is_current']);
         $attemptNumber = $currentAttemptIndex !== false ? $currentAttemptIndex + 1 : 1;
 
-        $course = $quiz->lesson?->course 
-            ?? $quiz->lesson?->section?->course 
-            ?? $quiz->lesson?->chapter?->course;
+        $course = $quiz?->lesson?->course 
+            ?? $quiz?->lesson?->section?->course 
+            ?? $quiz?->lesson?->chapter?->course;
 
         return [
             'attempt' => $attempt,
@@ -121,7 +126,7 @@ class QuizService
             'quiz' => $quiz,
             'user' => $attempt->user,
             'course' => $course,
-            'lesson' => $quiz->lesson,
+            'lesson' => $quiz?->lesson,
             'questions' => $questionsReview,
             'total_questions' => $totalQuestions,
             'correct_questions_count' => $correctQuestionsCount,
@@ -129,7 +134,98 @@ class QuizService
         ];
     }
 
-    public function grade(Quiz $quiz, array $submittedAnswers): array
+    public function grade(Quiz|QuizAttempt|QuizVersion $subject, array $submittedAnswers, ?QuizVersion $version = null): array
+    {
+        if ($subject instanceof QuizAttempt) {
+            $subject->loadMissing('quizVersion');
+
+            if (! $subject->quizVersion) {
+                throw ValidationException::withMessages([
+                    'attempt' => 'Quiz attempt does not have a bound quiz version.',
+                ]);
+            }
+
+            return $this->gradeVersion($subject->quizVersion, $submittedAnswers);
+        }
+
+        if ($subject instanceof QuizVersion) {
+            return $this->gradeVersion($subject, $submittedAnswers);
+        }
+
+        if ($version) {
+            app(QuizVersioningService::class)->assertVersionBelongsToQuiz($subject, $version);
+
+            return $this->gradeVersion($version, $submittedAnswers);
+        }
+
+        if ($subject->current_published_version_id) {
+            return $this->gradeVersion(
+                app(QuizVersioningService::class)->currentPublished($subject),
+                $submittedAnswers,
+            );
+        }
+
+        return $this->gradeLegacyQuiz($subject, $submittedAnswers);
+    }
+
+    private function gradeVersion(QuizVersion $version, array $submittedAnswers): array
+    {
+        $score = 0;
+        $totalScore = 0;
+        $answers = [];
+        $questions = [];
+
+        $version->loadMissing('questionMappings.questionVersion.options');
+
+        foreach ($version->questionMappings as $mapping) {
+            $questionVersion = $mapping->questionVersion;
+
+            if (! $questionVersion || (int) $questionVersion->question_id !== (int) $mapping->question_id) {
+                throw ValidationException::withMessages([
+                    'quiz' => 'The bound quiz version has an invalid question composition.',
+                ]);
+            }
+
+            $questionId = (int) $mapping->question_id;
+            $points = (int) $questionVersion->points;
+            $totalScore += $points;
+
+            $selectedIds = $this->selectedAnswerIds($submittedAnswers[$questionId] ?? [], $questionVersion);
+            $correctIds = $questionVersion->options
+                ->where('is_correct', true)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            $questionPassed = $this->questionIsCorrect($questionVersion->type, $selectedIds, $correctIds);
+
+            if ($questionPassed) {
+                $score += $points;
+            }
+
+            $answers[$questionId] = $selectedIds;
+            $questions[$questionId] = [
+                'question_version_id' => (int) $questionVersion->id,
+                'selected_ids' => $selectedIds,
+                'correct_ids' => $correctIds,
+                'is_correct' => $questionPassed,
+            ];
+        }
+
+        $percent = $totalScore > 0 ? round(($score / $totalScore) * 100, 2) : 0;
+
+        return [
+            'score' => $score,
+            'total_score' => $totalScore,
+            'percent' => $percent,
+            'passed' => $percent >= (int) $version->pass_score,
+            'answers' => $answers,
+            'questions' => $questions,
+        ];
+    }
+
+    private function gradeLegacyQuiz(Quiz $quiz, array $submittedAnswers): array
     {
         $score = 0;
         $totalScore = 0;
@@ -149,8 +245,7 @@ class QuizService
                 ->map(fn ($id) => (int) $id)
                 ->values()
                 ->all();
-
-            $questionPassed = $this->questionIsCorrect($question, $selectedIds, $correctIds);
+            $questionPassed = $this->questionIsCorrect($question->type, $selectedIds, $correctIds);
 
             if ($questionPassed) {
                 $score += $points;
@@ -176,7 +271,7 @@ class QuizService
         ];
     }
 
-    private function selectedAnswerIds(mixed $rawAnswers, QuizQuestion $question): array
+    private function selectedAnswerIds(mixed $rawAnswers, QuestionVersion|QuizQuestion $question): array
     {
         $rawAnswers = is_array($rawAnswers) ? $rawAnswers : [$rawAnswers];
         $validIds = $question->options->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -190,7 +285,7 @@ class QuizService
             ->all();
     }
 
-    private function questionIsCorrect(QuizQuestion $question, array $selectedIds, array $correctIds): bool
+    private function questionIsCorrect(string $type, array $selectedIds, array $correctIds): bool
     {
         sort($selectedIds);
         sort($correctIds);
@@ -199,7 +294,7 @@ class QuizService
             return false;
         }
 
-        if ($question->type === QuizQuestion::TYPE_MULTIPLE) {
+        if ($type === QuizQuestion::TYPE_MULTIPLE) {
             return $selectedIds === $correctIds;
         }
 

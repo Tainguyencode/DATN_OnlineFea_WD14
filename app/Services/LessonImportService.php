@@ -8,6 +8,7 @@ use App\Models\CourseSection;
 use App\Models\Lesson;
 use App\Models\LessonImportBatch;
 use App\Models\User;
+use App\Support\LessonImportWorkbookSchema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -17,6 +18,8 @@ class LessonImportService
     public function __construct(
         private readonly CurriculumLessonService $lessonService,
         private readonly LessonImportValidator $validator,
+        private readonly LessonImportV2Validator $v2Validator,
+        private readonly LessonImportV2ImportService $v2ImportService,
     ) {}
 
     /**
@@ -113,7 +116,10 @@ class LessonImportService
                 }
 
                 if ($batch->row_count <= 0
-                    || $batch->template_version !== LessonImportTemplateService::TEMPLATE_VERSION
+                    || ! in_array((int) $batch->template_version, [
+                        LessonImportWorkbookSchema::VERSION_V1,
+                        LessonImportWorkbookSchema::VERSION_V2,
+                    ], true)
                     || ! is_array($batch->canonical_payload)) {
                     throw new LessonImportException(
                         'empty_batch',
@@ -136,6 +142,39 @@ class LessonImportService
                         'File này đã được import vào chương này trước đó.',
                         httpStatus: 409,
                     );
+                }
+
+                if ((int) $batch->template_version === LessonImportWorkbookSchema::VERSION_V2) {
+                    $validated = $this->v2Validator->validateCanonicalPayload(
+                        $batch->canonical_payload,
+                        $lockedSection,
+                    );
+                    $payload = $validated['canonical_payload'];
+                    $lessonCount = count($payload['lessons']);
+
+                    if ($lessonCount !== $batch->row_count || $lessonCount === 0) {
+                        throw new LessonImportException(
+                            'canonical_row_count_mismatch',
+                            'Dữ liệu kiểm tra đã thay đổi hoặc không còn hợp lệ. Vui lòng kiểm tra lại file.',
+                        );
+                    }
+
+                    $batch->forceFill(['status' => LessonImportBatch::STATUS_IMPORTING])->save();
+                    $resultPayload = $this->v2ImportService->import(
+                        $payload,
+                        $lockedCourse,
+                        $lockedSection,
+                        $user,
+                    );
+
+                    $batch->forceFill([
+                        'status' => LessonImportBatch::STATUS_COMPLETED,
+                        'imported_count' => $lessonCount,
+                        'result_payload' => $resultPayload,
+                        'completed_at' => now(),
+                    ])->save();
+
+                    return $this->completedResult($batch, $lockedSection);
                 }
 
                 $validated = $this->validator->validateCanonicalPayload(

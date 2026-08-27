@@ -8,7 +8,6 @@ use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\PushNotification;
-use App\Models\QuizAttempt;
 use App\Models\Submission;
 use App\Models\User;
 use App\Notifications\CertificateIssuedNotification;
@@ -68,12 +67,7 @@ class CourseCompletionService
             if (! $quiz) {
                 continue;
             }
-            $submitted = QuizAttempt::query()
-                ->where('user_id', $userId)
-                ->where('quiz_id', $quiz->id)
-                ->whereNotNull('completed_at')
-                ->exists();
-            if (! $submitted) {
+            if (! $quiz->hasPassedAttemptFor($userId)) {
                 $missing[] = "Bài trắc nghiệm \"{$lesson->title}\" chưa đạt điểm yêu cầu.";
             }
         }
