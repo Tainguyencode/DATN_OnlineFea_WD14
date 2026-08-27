@@ -4,7 +4,10 @@
 
 @section('content')
 @php
-    $totalScore = $quiz->questions->sum('points');
+    $totalScore = $quiz->questions
+        ->reject(fn ($question) => $question->versionMapping?->invalidations
+            ?->contains('status', \App\Models\QuizVersionQuestionInvalidation::STATUS_ACTIVE) ?? false)
+        ->sum('points');
     $oldAnswers = old('answers', []);
     $isChecked = function ($question, $answer) use ($oldAnswers) {
         $selected = $oldAnswers[$question->id] ?? [];
@@ -79,6 +82,10 @@
 
             @forelse($quiz->questions as $question)
                 <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-6">
+                    @if ($question->versionMapping?->invalidations
+                        ?->contains('status', \App\Models\QuizVersionQuestionInvalidation::STATUS_ACTIVE) ?? false)
+                        <p role="status" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">Câu hỏi này đã bị hủy và sẽ không được tính điểm.</p>
+                    @endif
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/30">

@@ -57,6 +57,11 @@ class QuizAttempt extends Model
         return $this->hasMany(QuizAttemptAnswer::class);
     }
 
+    public function regrades(): HasMany
+    {
+        return $this->hasMany(QuizAttemptRegrade::class);
+    }
+
     public function getIsPassedAttribute(): bool
     {
         return (bool) $this->passed;

@@ -23,16 +23,44 @@
             </div>
         </article>
 
+        @if(!$result['regrade'] && collect($result['questions'])->contains('is_excluded', true))
+            <aside class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-semibold text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" role="status">
+                Câu hỏi đã bị hủy — không tính điểm. Điểm hiện tại được tính trên các câu hỏi hợp lệ.
+            </aside>
+        @endif
+
+        @if($result['regrade'])
+            @php
+                $regrade = $result['regrade'];
+            @endphp
+            <aside class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" role="status">
+                <div class="flex items-start gap-3">
+                    <svg class="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.3 3.9 2.6 17.1A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.9L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                    <div>
+                        <p class="font-extrabold">Kết quả đã được tính lại vì có câu hỏi bị hủy.</p>
+                        <p class="mt-1">Theo các câu hỏi hợp lệ: {{ $regrade->recalculated_score }}/{{ $regrade->recalculated_total_score }} ({{ number_format((float) $regrade->recalculated_percent, 2) }}%) — {{ $regrade->recalculated_passed ? 'Đạt' : 'Chưa đạt' }}.</p>
+                        @if((int) $regrade->effective_score !== (int) $regrade->recalculated_score || (float) $regrade->effective_percent !== (float) $regrade->recalculated_percent || (bool) $regrade->effective_passed !== (bool) $regrade->recalculated_passed)
+                            <p class="mt-1 font-bold">Kết quả cũ được giữ nguyên để không ảnh hưởng người học: {{ $regrade->effective_score }}/{{ $regrade->effective_total_score }} ({{ number_format((float) $regrade->effective_percent, 2) }}%) — {{ $regrade->effective_passed ? 'Đạt' : 'Chưa đạt' }}.</p>
+                        @endif
+                    </div>
+                </div>
+            </aside>
+        @endif
+
         <div class="mt-6 space-y-5">
             @foreach($result['questions'] as $question)
                 <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-6">
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                            <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{ $question['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">{{ $question['is_correct'] ? 'Dung' : 'Sai' }}</span>
+                            <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{ $question['is_excluded'] ? 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-100 dark:ring-amber-500/30' : ($question['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30') }}">{{ $question['is_excluded'] ? 'Câu hỏi đã bị hủy — không tính điểm' : ($question['is_correct'] ? 'Dung' : 'Sai') }}</span>
                             <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">Cau {{ $question['number'] }}. <span data-math-content>{{ $question['question'] }}</span></h2>
                         </div>
-                        <span class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $question['points'] }} diem</span>
+                        <span class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $question['is_excluded'] ? 'Không tính điểm' : $question['points'].' diem' }}</span>
                     </div>
+
+                    @if($question['is_excluded'])
+                        <p class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">Câu hỏi đã bị hủy — không tính điểm.</p>
+                    @endif
 
                     @if($question['is_unanswered'])
                         <p class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">Chua tra loi.</p>

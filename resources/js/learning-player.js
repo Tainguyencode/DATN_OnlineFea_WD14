@@ -508,6 +508,7 @@ function initQuizPlayer() {
                 <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">${question.form_type || question.type}</p>
                 <h3 class="mt-2 text-lg font-bold"><span data-math-content>${escapeHtml(question.question)}</span></h3>
                 <p class="mt-1 text-xs text-white/60">${question.points} điểm</p>
+                ${question.is_excluded ? '<div role="status" class="mt-4 rounded border border-amber-300/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100">Câu hỏi này đã bị hủy và sẽ không được tính điểm.</div>' : ''}
                 <div class="mt-4 space-y-2">
                     ${question.options.map((option) => {
                         const checked = selected.includes(option.id);
@@ -648,11 +649,13 @@ function initQuizPlayer() {
     const renderQuizResult = (data) => {
         const attempt = data.attempt;
         const passed = attempt.passed;
+        const hasExcludedQuestion = data.graded?.questions?.some((question) => question.is_excluded) ?? false;
         result.innerHTML = `
             <div class="rounded border ${passed ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-rose-400/30 bg-rose-500/10'} p-6">
                 <p class="text-sm font-semibold uppercase tracking-wide ${passed ? 'text-emerald-300' : 'text-rose-300'}">${passed ? 'Đạt' : 'Chưa đạt'}</p>
                 <h3 class="mt-2 text-2xl font-bold">${attempt.percent}%</h3>
                 <p class="mt-2 text-sm text-white/80">${attempt.correct_count}/${attempt.total_questions} câu đúng · Điểm ${attempt.score}/${attempt.total_score} · Yêu cầu ${attempt.pass_score}%</p>
+                ${hasExcludedQuestion ? '<p role="status" class="mt-4 rounded border border-amber-300/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100">Câu hỏi đã bị hủy — không tính điểm. Điểm hiện tại được tính trên các câu hỏi hợp lệ.</p>' : ''}
                 <div class="mt-5 flex flex-wrap gap-3">
                     ${data.remaining_attempts === null || data.remaining_attempts > 0
                         ? '<button type="button" data-quiz-retry class="rounded border border-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/10">Làm lại</button>'
