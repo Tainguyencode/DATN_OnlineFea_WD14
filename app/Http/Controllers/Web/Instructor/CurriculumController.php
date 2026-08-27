@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Instructor;
 
+use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Instructor\StoreChapterRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
@@ -14,6 +15,7 @@ use App\Models\Lesson;
 use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
 use App\Services\CurriculumLessonService;
+use App\Services\HistoricalQuizDeletionGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -144,6 +146,12 @@ class CurriculumController extends Controller
         }
 
         if ($sectionModel) {
+            try {
+                app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($sectionModel);
+            } catch (HistoricalQuizDeletionException $exception) {
+                return back()->withErrors(['section' => $exception->getMessage()]);
+            }
+
             $sectionModel->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
             $sectionModel->delete();
         }
@@ -370,6 +378,12 @@ class CurriculumController extends Controller
             );
 
             return back()->with('success', 'Đã gửi yêu cầu xóa bài học. Yêu cầu sẽ áp dụng sau khi Admin duyệt.');
+        }
+
+        try {
+            app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($lesson);
+        } catch (HistoricalQuizDeletionException $exception) {
+            return back()->withErrors(['lesson' => $exception->getMessage()]);
         }
 
         $this->deleteLessonFiles($lesson);

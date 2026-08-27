@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
+use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Models\ContentUpdate;
 use App\Models\QuizVersion;
@@ -68,7 +69,11 @@ class ContentUpdateController extends Controller
 
     public function approve(ContentUpdate $contentUpdate): RedirectResponse
     {
-        $this->contentUpdateService->applyApprovedUpdate($contentUpdate, auth()->user());
+        try {
+            $this->contentUpdateService->applyApprovedUpdate($contentUpdate, auth()->user());
+        } catch (HistoricalQuizDeletionException $exception) {
+            return back()->withErrors(['content_update' => $exception->getMessage()]);
+        }
 
         return back()->with(
             'success',

@@ -3,16 +3,17 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Data\CourseSubmissionCheckResult;
+use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Instructor\StoreChapterRequest;
 use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
-use App\Models\Submission;
 use App\Models\Category;
 use App\Models\Certificate;
 use App\Models\Chapter;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
@@ -20,9 +21,12 @@ use App\Models\LessonProgress;
 use App\Models\Order;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\Submission;
 use App\Models\User;
+use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
+use App\Services\HistoricalQuizDeletionGuard;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -124,9 +128,9 @@ class CourseController extends Controller
         }
 
         if ($course->isPublished()) {
-            app(\App\Services\ContentUpdateService::class)->recordPendingUpdate(
-                \App\Models\ContentUpdate::TYPE_COURSE,
-                \App\Models\ContentUpdate::ACTION_UPDATE,
+            app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_COURSE,
+                ContentUpdate::ACTION_UPDATE,
                 $course->id,
                 $course->id,
                 array_merge($validated, ['sale_price' => $validated['discount_price'] ?? null]),
@@ -157,6 +161,12 @@ class CourseController extends Controller
 
             return redirect()->route('instructor.courses.index')
                 ->with('success', 'Khóa học đã có dữ liệu học viên hoặc đơn hàng nên được chuyển sang trạng thái lưu trữ.');
+        }
+
+        try {
+            app(HistoricalQuizDeletionGuard::class)->assertCourseCanBeHardDeleted($course);
+        } catch (HistoricalQuizDeletionException $exception) {
+            return back()->withErrors(['course' => $exception->getMessage()]);
         }
 
         $this->deleteThumbnail($course);
@@ -394,7 +404,7 @@ class CourseController extends Controller
         $activities = collect();
 
         // Enrollment event
-        $activities->push((object)[
+        $activities->push((object) [
             'type' => 'enrollment',
             'title' => 'Ghi danh khóa học',
             'description' => 'Đã tham gia và kích hoạt học tập trong khóa học.',
@@ -405,7 +415,7 @@ class CourseController extends Controller
         foreach ($lessonProgress as $progress) {
             if ($progress->is_completed && $progress->completed_at) {
                 $lesson = $lessons->firstWhere('id', $progress->lesson_id);
-                $activities->push((object)[
+                $activities->push((object) [
                     'type' => 'lesson_completed',
                     'title' => 'Hoàn thành bài học',
                     'description' => $lesson ? "Đã hoàn thành bài học: \"{$lesson->title}\"" : 'Đã hoàn thành bài học',
@@ -420,11 +430,11 @@ class CourseController extends Controller
             foreach ($attempts as $attempt) {
                 if ($attempt->completed_at) {
                     $statusStr = $attempt->passed ? 'Đạt' : 'Không đạt';
-                    $activities->push((object)[
+                    $activities->push((object) [
                         'type' => 'quiz_attempt',
                         'title' => 'Làm bài trắc nghiệm',
-                        'description' => $quiz 
-                            ? "Làm bài trắc nghiệm: \"{$quiz->title}\" - Kết quả: {$attempt->score}/{$attempt->total_score} ({$attempt->percent}%) - {$statusStr}" 
+                        'description' => $quiz
+                            ? "Làm bài trắc nghiệm: \"{$quiz->title}\" - Kết quả: {$attempt->score}/{$attempt->total_score} ({$attempt->percent}%) - {$statusStr}"
                             : "Làm bài trắc nghiệm - Kết quả: {$attempt->percent}% - {$statusStr}",
                         'time' => $attempt->completed_at,
                     ]);
@@ -436,7 +446,7 @@ class CourseController extends Controller
         foreach ($submissions as $assignmentId => $submission) {
             $assignment = $assignments->firstWhere('id', $assignmentId);
             if ($submission->submitted_at) {
-                $activities->push((object)[
+                $activities->push((object) [
                     'type' => 'assignment_submission',
                     'title' => 'Nộp bài thực hành',
                     'description' => $assignment ? "Đã nộp bài thực hành: \"{$assignment->title}\"" : 'Đã nộp bài thực hành',
@@ -444,11 +454,11 @@ class CourseController extends Controller
                 ]);
             }
             if ($submission->status === 'graded' && $submission->graded_at) {
-                $activities->push((object)[
+                $activities->push((object) [
                     'type' => 'assignment_graded',
                     'title' => 'Bài thực hành được chấm điểm',
-                    'description' => $assignment 
-                        ? "Bài thực hành \"{$assignment->title}\" đã được chấm: {$submission->score}/{$assignment->max_score} điểm" 
+                    'description' => $assignment
+                        ? "Bài thực hành \"{$assignment->title}\" đã được chấm: {$submission->score}/{$assignment->max_score} điểm"
                         : "Bài thực hành đã được chấm: {$submission->score} điểm",
                     'time' => $submission->graded_at,
                 ]);
@@ -457,7 +467,7 @@ class CourseController extends Controller
 
         // Certificate event
         if ($certificate && $certificate->issued_at) {
-            $activities->push((object)[
+            $activities->push((object) [
                 'type' => 'certificate',
                 'title' => 'Nhận chứng chỉ',
                 'description' => "Được cấp chứng chỉ hoàn thành khóa học (Mã số: {$certificate->certificate_code})",
@@ -473,7 +483,7 @@ class CourseController extends Controller
 
         // Warning: Chưa bắt đầu học
         $hasStarted = $lessonProgress->isNotEmpty() || $quizAttempts->isNotEmpty() || $submissions->isNotEmpty();
-        if ($enrollment->progress_percent == 0 && !$hasStarted) {
+        if ($enrollment->progress_percent == 0 && ! $hasStarted) {
             $alerts->push('Học viên chưa bắt đầu học khóa học này.');
         }
 
@@ -488,7 +498,7 @@ class CourseController extends Controller
             $attempts = $quizAttempts->get($quiz->id, collect());
             if ($attempts->isNotEmpty()) {
                 $hasPassed = $attempts->where('passed', true)->isNotEmpty();
-                if (!$hasPassed) {
+                if (! $hasPassed) {
                     $alerts->push("Bài trắc nghiệm \"{$quiz->title}\" chưa đạt điểm yêu cầu (Điểm đạt yêu cầu: {$quiz->pass_score}%).");
                 }
             }
@@ -497,7 +507,7 @@ class CourseController extends Controller
         // Warning: Bài thực hành chưa nộp hoặc chưa đạt
         foreach ($assignments as $assignment) {
             $submission = $submissions->get($assignment->id);
-            if (!$submission) {
+            if (! $submission) {
                 if ($assignment->is_required) {
                     $alerts->push("Học viên chưa nộp bài thực hành bắt buộc: \"{$assignment->title}\".");
                 }
@@ -619,7 +629,7 @@ class CourseController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã gửi thông báo thành công cho học viên ' . $student->name . '.',
+            'message' => 'Đã gửi thông báo thành công cho học viên '.$student->name.'.',
         ]);
     }
 
@@ -707,7 +717,7 @@ class CourseController extends Controller
 
                 $studentPurchases[] = (object) [
                     'order_id' => $order->id,
-                    'order_code' => $order->order_code ?? ('ORD-' . $order->id),
+                    'order_code' => $order->order_code ?? ('ORD-'.$order->id),
                     'user' => $order->user,
                     'course_title' => $item['course_title'] ?? ($courseSales[$cid]['course']?->title ?? 'Khóa học'),
                     'price' => $price,
@@ -796,6 +806,7 @@ class CourseController extends Controller
                 $userAttempts = $attempts->get($userId, collect());
                 if ($userAttempts->isEmpty()) {
                     $quizStats[$userId] = null;
+
                     continue;
                 }
 
@@ -824,6 +835,7 @@ class CourseController extends Controller
                 $userSubmissions = $submissions->get($userId, collect());
                 if ($userSubmissions->isEmpty()) {
                     $labStats[$userId] = null;
+
                     continue;
                 }
 
