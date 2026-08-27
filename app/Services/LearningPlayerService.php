@@ -19,7 +19,7 @@ class LearningPlayerService
         bool $canBypassVisibility,
     ): array {
         $course->loadMissing([
-            'instructor:id,name,avatar,bio',
+            'instructor:id,name,avatar,bio,instructor_status,is_active,account_status',
             'category:id,name,slug',
             'courseSections' => fn ($q) => $q->orderBy('sort_order'),
             'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order'),

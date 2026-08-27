@@ -51,6 +51,7 @@ class QuizAttemptService
                 'quiz_id' => $quiz->id,
                 'quiz_version_id' => $version->id,
                 'status' => 'in_progress',
+                'presentation_order' => app(QuizAttemptPresentationService::class)->createSnapshot($version),
                 'started_at' => now(),
             ])->load('quizVersion');
         });
@@ -157,7 +158,9 @@ class QuizAttemptService
         $attempt->loadMissing(['quiz', 'quizVersion']);
         abort_unless($attempt->quiz && $attempt->quizVersion, 404);
 
-        return app(QuizVersioningService::class)->projectVersion($attempt->quiz, $attempt->quizVersion);
+        $projected = app(QuizVersioningService::class)->projectVersion($attempt->quiz, $attempt->quizVersion);
+
+        return app(QuizAttemptPresentationService::class)->projectQuiz($projected, $attempt);
     }
 
     public function remainingTime(QuizAttempt $attempt): ?int
