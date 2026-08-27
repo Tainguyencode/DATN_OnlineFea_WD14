@@ -6,9 +6,10 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
+use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 
 class LearningProgressService
 {
@@ -29,7 +30,7 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            \App\Models\User::where('id', $userId)->update([
+            User::where('id', $userId)->update([
                 'last_learning_at' => now(),
                 'engagement_email_stage' => 0,
             ]);
@@ -49,13 +50,19 @@ class LearningProgressService
             $previousWatched = (int) ($existing?->watched_seconds ?? 0);
             $watchedSeconds = max($previousWatched, min($watchedSeconds, $durationSeconds > 0 ? $durationSeconds : $watchedSeconds));
 
-            $progressPercent = $durationSeconds > 0
-                ? min(100, round(($watchedSeconds / $durationSeconds) * 100, 2))
-                : ($forceCompleted ? 100 : (float) ($existing?->progress_percent ?? 0));
+            if ($lesson->type === Lesson::TYPE_QUIZ) {
+                $quizPassed = $lesson->quiz?->hasPassedAttemptFor($userId) ?? false;
+                $progressPercent = $quizPassed ? 100 : 0;
+                $completed = $quizPassed;
+            } else {
+                $progressPercent = $durationSeconds > 0
+                    ? min(100, round(($watchedSeconds / $durationSeconds) * 100, 2))
+                    : ($forceCompleted ? 100 : (float) ($existing?->progress_percent ?? 0));
 
-            $completed = $statusOverride !== null
-                ? $statusOverride
-                : ((bool) ($existing?->is_completed ?? false) || $forceCompleted || $progressPercent >= $threshold);
+                $completed = $statusOverride !== null
+                    ? $statusOverride
+                    : ((bool) ($existing?->is_completed ?? false) || $forceCompleted || $progressPercent >= $threshold);
+            }
 
             if ($completed) {
                 $progressPercent = 100;
@@ -79,7 +86,7 @@ class LearningProgressService
             );
 
             if ($completed && ! ($existing?->is_completed ?? false)) {
-                app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+                app(PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
             }
 
             $requiredLessonIds = $this->requiredLessonIds($course);
@@ -141,7 +148,7 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            \App\Models\User::where('id', $userId)->update([
+            User::where('id', $userId)->update([
                 'last_learning_at' => now(),
                 'engagement_email_stage' => 0,
             ]);
@@ -158,10 +165,10 @@ class LearningProgressService
 
             $durationSeconds = $this->durationSeconds($lesson, $payload);
 
-            if (!empty($payload['completed'])) {
+            if (! empty($payload['completed'])) {
                 $completedAt = $existing?->completed_at ?? now();
                 $watchedSeconds = $durationSeconds > 0 ? $durationSeconds : (int) ($existing?->watched_seconds ?? 0);
-                
+
                 $progress = LessonProgress::updateOrCreate(
                     ['user_id' => $userId, 'lesson_id' => $lesson->id],
                     [
@@ -179,7 +186,7 @@ class LearningProgressService
                 );
 
                 if (! ($existing?->is_completed ?? false)) {
-                    app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+                    app(PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
                 }
 
                 return $this->refreshCourseProgress($enrollment, $userId, $course, $progress);
@@ -207,7 +214,7 @@ class LearningProgressService
 
             $watchedSeconds = $this->normalizeSeconds($previousWatched + $trustedPlayedSeconds, $durationSeconds);
 
-            if (!empty($payload['completed']) || ($durationSeconds > 0 && $lastPosition >= max(1, $durationSeconds - 2))) {
+            if (! empty($payload['completed']) || ($durationSeconds > 0 && $lastPosition >= max(1, $durationSeconds - 2))) {
                 $watchedSeconds = $durationSeconds;
             }
 
@@ -223,9 +230,9 @@ class LearningProgressService
             $threshold = $course->requiredVideoPercent();
             // Đảm bảo học viên xem đủ thời lượng hoặc khi video kết thúc
             $completed = $previousCompleted || $progressPercent >= $threshold;
-            if (!$completed && (!empty($payload['completed']) || ($durationSeconds > 0 && $watchedSeconds >= max(1, $durationSeconds - 2)))) {
+            if (! $completed && (! empty($payload['completed']) || ($durationSeconds > 0 && $watchedSeconds >= max(1, $durationSeconds - 2)))) {
                 $completed = true;
-            }            
+            }
             if ($completed) {
                 $progressPercent = 100;
                 $watchedSeconds = max($watchedSeconds, $durationSeconds);
@@ -253,7 +260,7 @@ class LearningProgressService
             );
 
             if ($completed) {
-                app(\App\Services\PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
+                app(PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
             }
 
             return $this->refreshCourseProgress($enrollment, $userId, $course, $progress);
@@ -384,6 +391,7 @@ class LearningProgressService
                 'duration_seconds' => $clientDuration,
                 'duration' => $clientDuration,
             ]);
+
             return $clientDuration;
         }
 

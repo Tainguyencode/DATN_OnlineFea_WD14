@@ -40,6 +40,15 @@ class Quiz extends Model
         return $this->hasMany(QuizAttempt::class);
     }
 
+    public function hasPassedAttemptFor(int $userId): bool
+    {
+        return $this->attempts()
+            ->where('user_id', $userId)
+            ->where('status', 'completed')
+            ->where('passed', true)
+            ->exists();
+    }
+
     public function questions(): HasMany
     {
         return $this->hasMany(QuizQuestion::class)->orderBy('sort_order')->orderBy('id');
