@@ -1,12 +1,5 @@
 <x-admin-layout title="Cấu hình Yêu cầu Hồ sơ Giảng viên theo Ngành" page-title="Cấu hình hồ sơ theo ngành" breadcrumb="Quản lý giảng viên / Yêu cầu hồ sơ theo ngành">
     <div class="space-y-6" x-data="{ createModal: false, editModal: false, editItem: {} }">
-        {{-- FLASH MESSAGES --}}
-        @if(session('success'))
-            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-900/20 dark:text-emerald-300 shadow-sm">
-                ✔ {{ session('success') }}
-            </div>
-        @endif
-
         @if($errors->any())
             <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800 dark:border-rose-800/40 dark:bg-rose-900/20 dark:text-rose-300 shadow-sm">
                 <ul class="list-disc list-inside space-y-1">

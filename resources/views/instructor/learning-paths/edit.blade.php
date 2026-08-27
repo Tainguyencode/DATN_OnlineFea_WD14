@@ -13,17 +13,7 @@
             </a>
         </div>
 
-        @if($errors->any())
-            <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-bold text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-                <ul class="list-disc pl-4 space-y-1">
-                    @foreach($errors->all() as $err)
-                        <li>{{ $err }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
-        <form method="POST" action="{{ route('instructor.learning-paths.update', $learningPath) }}" class="space-y-6">
+        <form method="POST" action="{{ route('instructor.learning-paths.update', $learningPath) }}" class="space-y-6" novalidate>
             @csrf
             @method('PUT')
 
@@ -37,37 +27,48 @@
                         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                             Tên Lộ trình học tập *
                         </label>
-                        <input type="text" name="title" value="{{ old('title', $learningPath->title) }}" required
-                            class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white">
+                        <input type="text" name="title" value="{{ old('title', $learningPath->title) }}"
+                            class="h-11 w-full rounded-xl border @error('title') border-rose-500 @else border-slate-200 dark:border-slate-800 @enderror bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:bg-slate-900 dark:text-white">
+                        @error('title')
+                            <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div>
                         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                             Cấp độ *
                         </label>
-                        <select name="level" required class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white">
+                        <select name="level" class="h-11 w-full rounded-xl border @error('level') border-rose-500 @else border-slate-200 dark:border-slate-800 @enderror bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:bg-slate-900 dark:text-white">
+                            <option value="">-- Chọn cấp độ --</option>
                             <option value="beginner" {{ old('level', $learningPath->level) === 'beginner' ? 'selected' : '' }}>Cơ bản (Beginner)</option>
                             <option value="intermediate" {{ old('level', $learningPath->level) === 'intermediate' ? 'selected' : '' }}>Trung cấp (Intermediate)</option>
                             <option value="advanced" {{ old('level', $learningPath->level) === 'advanced' ? 'selected' : '' }}>Nâng cao (Advanced)</option>
                         </select>
+                        @error('level')
+                            <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div>
                         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                             Vị trí việc làm mục tiêu
                         </label>
-                        <input type="text" name="target_role" value="{{ old('target_role', $learningPath->target_role) }}"
-                            class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white">
+                        <input type="text" name="target_role" value="{{ old('target_role', $learningPath->target_role) }}" placeholder="Ví dụ: Fullstack Developer / UI UX Designer"
+                            class="h-11 w-full rounded-xl border @error('target_role') border-rose-500 @else border-slate-200 dark:border-slate-800 @enderror bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:bg-slate-900 dark:text-white">
+                        @error('target_role')
+                            <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{{ $message }}</p>
+                        @enderror
                     </div>
-
-
 
                     <div>
                         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                             Thời lượng ước tính
                         </label>
-                        <input type="text" name="estimated_duration" value="{{ old('estimated_duration', $learningPath->estimated_duration) }}"
-                            class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white">
+                        <input type="text" name="estimated_duration" value="{{ old('estimated_duration', $learningPath->estimated_duration) }}" placeholder="Ví dụ: 6 - 8 tháng (180h học)"
+                            class="h-11 w-full rounded-xl border @error('estimated_duration') border-rose-500 @else border-slate-200 dark:border-slate-800 @enderror bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:bg-slate-900 dark:text-white">
+                        @error('estimated_duration')
+                            <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     @php
@@ -77,16 +78,22 @@
                         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                             Bộ kỹ năng đạt được (nhập phân cách bằng dấu phẩy)
                         </label>
-                        <input type="text" name="skills_input" value="{{ old('skills_input', $skillsStr) }}"
-                            class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white">
+                        <input type="text" name="skills_input" value="{{ old('skills_input', $skillsStr) }}" placeholder="HTML5, CSS3, JavaScript, Vue.js, Laravel, RESTful API"
+                            class="h-11 w-full rounded-xl border @error('skills_input') border-rose-500 @else border-slate-200 dark:border-slate-800 @enderror bg-slate-50 px-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:bg-slate-900 dark:text-white">
+                        @error('skills_input')
+                            <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div class="md:col-span-2">
                         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                             Mô tả chi tiết Lộ trình
                         </label>
-                        <textarea name="description" rows="5"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white">{{ old('description', $learningPath->description) }}</textarea>
+                        <textarea name="description" rows="5" placeholder="Mô tả mục tiêu, giá trị đầu ra và lý do học viên nên lựa chọn lộ trình này..."
+                            class="w-full rounded-xl border @error('description') border-rose-500 @else border-slate-200 dark:border-slate-800 @enderror bg-slate-50 p-4 text-xs text-slate-900 focus:border-indigo-500 outline-none dark:bg-slate-900 dark:text-white">{{ old('description', $learningPath->description) }}</textarea>
+                        @error('description')
+                            <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{{ $message }}</p>
+                        @enderror
                     </div>
                 </div>
             </div>

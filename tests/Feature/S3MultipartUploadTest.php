@@ -96,7 +96,7 @@ class S3MultipartUploadTest extends TestCase
             ]);
     }
 
-    public function test_store_lesson_with_s3_key_dispatches_hls_job_without_receiving_binary(): void
+    public function test_store_lesson_with_s3_key_does_not_dispatch_hls_while_uploading(): void
     {
         Queue::fake();
 
@@ -126,13 +126,59 @@ class S3MultipartUploadTest extends TestCase
             'original_video_key' => $s3Key,
             'video_original_name' => 'bai_giang_1.mp4',
             'video_size' => 143654912,
-            'upload_status' => 'uploaded',
+            'upload_status' => 'pending',
             'processing_status' => 'pending',
             'duration_seconds' => 1200,
         ]);
 
-        Queue::assertPushed(ConvertVideoToHLS::class, function ($job) use ($s3Key) {
-            return $job->lesson->original_video_key === $s3Key;
+        // Tuyệt đối không dispatch HLS khi upload chưa complete
+        Queue::assertNotPushed(ConvertVideoToHLS::class);
+    }
+
+    public function test_s3_multipart_complete_dispatches_hls_job_for_lesson(): void
+    {
+        Queue::fake();
+
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+        $s3Key = "originals/courses/{$course->id}/lessons/1/video.mp4";
+
+        $lesson = Lesson::create([
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'title' => 'Bài 1',
+            'type' => 'video',
+            'original_video_key' => $s3Key,
+            'upload_status' => 'pending',
+            'processing_status' => 'pending',
+        ]);
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($s3Key) {
+            $mock->shouldReceive('completeMultipartUpload')
+                ->once()
+                ->andReturn([
+                    'location' => "https://s3.amazonaws.com/test-bucket/{$s3Key}",
+                    'key' => $s3Key,
+                ]);
+        });
+
+        $response = $this->postJson(route('instructor.courses.s3.multipart.complete', $course), [
+            'key' => $s3Key,
+            'uploadId' => 'upl-123',
+            'parts' => [
+                ['PartNumber' => 1, 'ETag' => '"etag-1"'],
+            ],
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('lessons', [
+            'id' => $lesson->id,
+            'upload_status' => 'uploaded',
+        ]);
+
+        Queue::assertPushed(ConvertVideoToHLS::class, function ($job) use ($lesson) {
+            return $job->lesson->id === $lesson->id;
         });
     }
 
@@ -152,7 +198,7 @@ class S3MultipartUploadTest extends TestCase
             'is_preview' => true,
         ]);
 
-        Storage::disk('local')->put('lesson-hls/' . $lesson->id . '/playlist.m3u8', "#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n");
+        Storage::disk('local')->put('lesson-hls/'.$lesson->id.'/playlist.m3u8', "#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n");
 
         $tokenResponse = $this->getJson("/api/video/{$lesson->id}/token");
         $tokenResponse->assertOk();
@@ -160,7 +206,72 @@ class S3MultipartUploadTest extends TestCase
 
         $playlistResponse = $this->get("/api/video/hls/{$lesson->id}/playlist.m3u8?token={$token}");
         $playlistResponse->assertOk()
-            ->assertSee('segment0.ts?token=' . $token);
+            ->assertSee('segment0.ts?token='.$token);
+    }
+
+    public function test_instructor_can_fetch_hls_status_for_course_lessons(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+
+        $lessonProcessing = Lesson::create([
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'title' => 'Bài đang xử lý',
+            'type' => 'video',
+            'original_video_key' => "originals/courses/{$course->id}/lessons/1/video1.mp4",
+            'upload_status' => 'uploaded',
+            'processing_status' => 'processing',
+            'sort_order' => 1,
+            'status' => 'draft',
+        ]);
+
+        $lessonCompleted = Lesson::create([
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'title' => 'Bài đã hoàn tất',
+            'type' => 'video',
+            'original_video_key' => "originals/courses/{$course->id}/lessons/2/video2.mp4",
+            'hls_manifest_key' => 'hls/lessons/2/master.m3u8',
+            'upload_status' => 'uploaded',
+            'processing_status' => 'completed',
+            'sort_order' => 2,
+            'status' => 'draft',
+        ]);
+
+        $response = $this->getJson(route('instructor.courses.hls-status', $course));
+
+        $response->assertOk()
+            ->assertJsonStructure(['statuses', 'can_submit', 'common_state', 'common_message'])
+            ->assertJsonPath('can_submit', false)
+            ->assertJsonPath('common_state', 'processing')
+            ->assertJsonPath('common_message', 'Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.');
+    }
+
+    public function test_course_submit_is_rejected_when_video_hls_is_incomplete(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+
+        Lesson::create([
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'title' => 'Bài đang xử lý',
+            'type' => 'video',
+            'original_video_key' => "originals/courses/{$course->id}/lessons/1/video1.mp4",
+            'upload_status' => 'uploaded',
+            'processing_status' => 'processing',
+            'sort_order' => 1,
+            'status' => 'draft',
+        ]);
+
+        $course->update(['copyright_agreed' => true]);
+
+        $response = $this->post(route('instructor.courses.submit', $course), [
+            'copyright_agreed' => 1,
+        ]);
+
+        $response->assertSessionHas('error', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
     }
 
     private function signInInstructor(?User $user = null): User

@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Category;
 use App\Models\InstructorDocumentRequirement;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class InstructorDocumentRequirementSeeder extends Seeder
 {
@@ -161,7 +162,7 @@ class InstructorDocumentRequirementSeeder extends Seeder
             if (! $category) {
                 $category = Category::create([
                     'name' => $categoryName,
-                    'slug' => \Illuminate\Support\Str::slug($categoryName),
+                    'slug' => Str::slug($categoryName),
                     'status' => true,
                     'sort_order' => 1,
                 ]);

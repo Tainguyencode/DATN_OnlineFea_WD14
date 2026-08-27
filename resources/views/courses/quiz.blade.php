@@ -31,12 +31,6 @@
             @endif
         </div>
 
-        @if(session('error'))
-            <div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-                {{ session('error') }}
-            </div>
-        @endif
-
         @if ($errors->any())
             <div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
                 <p class="font-bold">Vui long kiem tra lai bai lam.</p>
@@ -78,6 +72,7 @@
         @if($canSubmit)
             <form method="POST" action="{{ route('learn.lessons.quiz.submit', [$course->slug, $lesson]) }}" class="mt-6 space-y-5">
                 @csrf
+                <input type="hidden" name="attempt_id" value="{{ $attempt->id }}">
         @else
             <div class="mt-6 space-y-5">
         @endif

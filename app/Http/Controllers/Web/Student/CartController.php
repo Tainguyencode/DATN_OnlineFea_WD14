@@ -10,6 +10,8 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\Wishlist;
+use App\Services\NotificationService;
 use App\Services\PaymentGatewayService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,8 +19,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-
-use App\Models\Wishlist;
 
 class CartController extends Controller
 {
@@ -62,11 +62,19 @@ class CartController extends Controller
      */
     private function createOrderItemsAndEnrollments(Order $order, $courses, ?Coupon $coupon, float $discount, float $eligibleSubtotal, bool $shouldEnroll = false): void
     {
-        foreach ($courses as $course) {
-            if ($course instanceof Course) {
-                $course->loadMissing('instructor');
-            }
+        if (method_exists($courses, 'loadMissing')) {
+            $courses->loadMissing('instructor');
+        }
 
+        $existingEnrollments = $shouldEnroll
+            ? Enrollment::query()
+                ->where('user_id', auth()->id())
+                ->whereIn('course_id', $courses->pluck('id'))
+                ->get()
+                ->keyBy('course_id')
+            : collect();
+
+        foreach ($courses as $course) {
             $price = $this->getEffectivePrice($course);
             $isEligible = $coupon ? $coupon->isEligibleForCourse($course) : false;
             $itemDiscount = ($isEligible && $eligibleSubtotal > 0) ? ($price / $eligibleSubtotal) * $discount : 0;
@@ -84,22 +92,25 @@ class CartController extends Controller
             ]);
 
             if ($shouldEnroll) {
-                $enrollment = Enrollment::firstOrCreate(
-                    ['user_id' => auth()->id(), 'course_id' => $course->id],
-                    [
-                        'order_id' => $order->id,
-                        'status' => 'active',
-                        'progress_percent' => 0,
-                        'enrolled_at' => now(),
-                    ]
-                );
+                $enrollment = $existingEnrollments->get($course->id)
+                    ?? new Enrollment(['user_id' => auth()->id(), 'course_id' => $course->id]);
+                $shouldActivate = ! $enrollment->exists || $enrollment->status === 'cancelled';
 
-                if ($enrollment->wasRecentlyCreated) {
+                if ($shouldActivate) {
+                    $enrollment->fill([
+                        'order_id' => $order->id,
+                        'status' => Enrollment::STATUS_ACTIVE,
+                        'progress_percent' => 0,
+                        'completed_lessons' => 0,
+                        'completed_at' => null,
+                        'enrolled_at' => now(),
+                    ])->save();
+
                     $course->increment('enrollment_count');
 
                     if ($course->instructor) {
                         $studentName = auth()->user()?->name ?? 'Một học viên';
-                        app(\App\Services\NotificationService::class)->send(
+                        app(NotificationService::class)->send(
                             $course->instructor,
                             'Học viên mới đăng ký khóa học',
                             "Học viên {$studentName} đã đăng ký khóa học \"{$course->title}\".",
@@ -209,7 +220,7 @@ class CartController extends Controller
     public function checkout(Request $request, PaymentGatewayService $paymentService): RedirectResponse
     {
         $validated = $request->validate([
-            'payment_method' => 'required|in:payos,momo,bank_transfer',
+            'payment_method' => 'required|in:payos,bank_transfer',
             'coupon_code' => 'nullable|string',
             'course_ids' => 'required|array',
             'course_ids.*' => 'required|integer|exists:courses,id',
@@ -470,7 +481,7 @@ class CartController extends Controller
     /**
      * Áp dụng mã giảm giá trực tiếp vào đơn hàng chờ thanh toán.
      */
-    public function applyCouponToOrder(Request $request, string $orderCode): JsonResponse
+    public function applyCouponToOrder(Request $request, string $orderCode, PaymentGatewayService $paymentService): JsonResponse
     {
         $validated = $request->validate([
             'coupon_code' => 'required|string',
@@ -538,12 +549,20 @@ class CartController extends Controller
             }
         });
 
+        if ($total <= 0 && ! $paymentService->completeFreeOrder($order->fresh())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể hoàn tất đơn hàng miễn phí. Vui lòng thử lại.',
+            ], 409);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Áp dụng mã giảm giá thành công!',
             'discount_amount' => (float) $discount,
             'new_total' => (float) $total,
             'coupon_code' => $coupon->code,
+            'order_status' => $total <= 0 ? 'paid' : 'pending',
         ]);
     }
 
@@ -588,12 +607,12 @@ class CartController extends Controller
     }
 
     /**
-     * Xử lý lựa chọn cổng thanh toán và chuyển hướng đến Cổng thanh toán tương ứng (PayOS, VNPay, MoMo, Bank Transfer).
+     * Xử lý lựa chọn thanh toán PayOS/VietQR.
      */
     public function processPayment(Request $request, string $orderCode, PaymentGatewayService $paymentService): RedirectResponse
     {
         $validated = $request->validate([
-            'payment_method' => 'required|in:payos,vnpay,momo,bank_transfer',
+            'payment_method' => 'required|in:payos,bank_transfer',
         ]);
 
         $order = Order::where('order_code', $orderCode)
@@ -632,13 +651,16 @@ class CartController extends Controller
     }
 
     /**
-     * Hiển thị giao diện giả lập VNPay hoặc MoMo.
+     * Hiển thị giao diện giả lập PayOS trong local/testing.
      *
      * @return View|RedirectResponse
      */
     public function mockGateway(string $orderCode)
     {
-        abort_unless(app()->environment(['local', 'testing']), 404);
+        abort_unless(
+            app()->environment(['local', 'testing']) && config('services.payos.mode') === 'mock',
+            404
+        );
 
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', auth()->id())
@@ -662,7 +684,10 @@ class CartController extends Controller
      */
     public function simulatePayment(Request $request, string $orderCode, PaymentGatewayService $paymentService): RedirectResponse
     {
-        abort_unless(app()->environment(['local', 'testing']), 404);
+        abort_unless(
+            app()->environment(['local', 'testing']) && config('services.payos.mode') === 'mock',
+            404
+        );
 
         $request->validate([
             'status' => 'required|in:success,failed',
@@ -843,5 +868,3 @@ class CartController extends Controller
         ]);
     }
 }
-
-

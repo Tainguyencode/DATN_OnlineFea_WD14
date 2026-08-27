@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (Schema::hasTable('discussions') && !Schema::hasColumn('discussions', 'is_recalled')) {
+        if (Schema::hasTable('discussions') && ! Schema::hasColumn('discussions', 'is_recalled')) {
             Schema::table('discussions', function (Blueprint $table) {
                 $table->boolean('is_recalled')->default(false)->after('is_resolved');
             });
         }
 
-        if (Schema::hasTable('discussion_replies') && !Schema::hasColumn('discussion_replies', 'is_recalled')) {
+        if (Schema::hasTable('discussion_replies') && ! Schema::hasColumn('discussion_replies', 'is_recalled')) {
             Schema::table('discussion_replies', function (Blueprint $table) {
                 $table->boolean('is_recalled')->default(false)->after('is_helpful');
             });

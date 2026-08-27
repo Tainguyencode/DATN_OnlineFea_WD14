@@ -16,7 +16,7 @@ class FaqSeeder extends Seeder
             [
                 'id' => 1,
                 'question' => 'Làm sao để đăng ký khóa học?',
-                'answer' => 'Bạn chỉ cần chọn khóa học yêu thích, bấm "Thêm vào giỏ hàng" hoặc "Mua ngay", sau đó tiến hành chọn phương thức thanh toán Momo, PayOS (VietQR) hoặc Chuyển khoản ngân hàng để hoàn thành.',
+                'answer' => 'Bạn chỉ cần chọn khóa học yêu thích, bấm "Thêm vào giỏ hàng" hoặc "Mua ngay", sau đó thanh toán an toàn qua PayOS (VietQR).',
                 'category' => 'Khóa học',
                 'sort_order' => 1,
                 'is_active' => true,
@@ -46,7 +46,7 @@ class FaqSeeder extends Seeder
             [
                 'id' => 4,
                 'question' => 'Tôi có thể thanh toán qua những hình thức nào?',
-                'answer' => 'Hệ thống hỗ trợ thanh toán đa dạng qua ví điện tử MoMo, cổng thanh toán PayOS (hỗ trợ mã VietQR quét bằng App ngân hàng) và chuyển khoản trực tiếp qua ngân hàng.',
+                'answer' => 'Hệ thống hỗ trợ thanh toán qua PayOS bằng mã VietQR, có thể quét bằng ứng dụng ngân hàng.',
                 'category' => 'Thanh toán',
                 'sort_order' => 4,
                 'is_active' => true,

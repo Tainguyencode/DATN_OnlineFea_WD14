@@ -15,18 +15,31 @@ function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 }
 
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('learning-toast');
-    if (!toast) return;
+function showToast(message, type = 'info') {
+    const normalizedType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
+    const safeMessage = typeof message === 'string' && message.trim() !== ''
+        ? message
+        : 'Đã xảy ra sự cố. Vui lòng thử lại.';
 
-    toast.textContent = message;
-    toast.className = `learning-toast learning-toast--${type}`;
-    toast.hidden = false;
+    if (window.AppToast?.show) {
+        window.AppToast.show({ type: normalizedType, message: safeMessage });
+        return;
+    }
 
-    window.clearTimeout(showToast._timer);
-    showToast._timer = window.setTimeout(() => {
-        toast.hidden = true;
-    }, 2800);
+    console.error('Shared toast API is unavailable.', { type: normalizedType, message: safeMessage });
+}
+
+function createUserFacingError(message) {
+    const error = new Error(message);
+    error.userFacingMessage = typeof message === 'string' && message.trim() !== '' ? message : null;
+
+    return error;
+}
+
+function getUserFacingErrorMessage(error, fallback) {
+    return typeof error?.userFacingMessage === 'string' && error.userFacingMessage.trim() !== ''
+        ? error.userFacingMessage
+        : fallback;
 }
 
 function updateHeaderProgress(percent) {
@@ -474,7 +487,7 @@ function initQuizPlayer() {
     let currentIndex = 0;
     const answers = {};
     let timerId = null;
-    let remainingSeconds = quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : null;
+    let remainingSeconds = quiz.remaining_seconds ?? (quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : null);
 
     const renderQuestion = () => {
         const question = quiz.questions[currentIndex];
@@ -526,9 +539,13 @@ function initQuizPlayer() {
     };
 
     const startTimer = () => {
-        if (!remainingSeconds || !timerEl) return;
+        if (remainingSeconds === null || !timerEl) return;
         timerEl.hidden = false;
         timerEl.textContent = formatTime(remainingSeconds);
+        if (remainingSeconds <= 0) {
+            submitQuiz(true);
+            return;
+        }
 
         timerId = window.setInterval(() => {
             remainingSeconds -= 1;
@@ -540,12 +557,36 @@ function initQuizPlayer() {
         }, 1000);
     };
 
-    const startQuiz = () => {
+    const activateQuiz = () => {
         intro.hidden = true;
         active.hidden = false;
         currentIndex = 0;
         renderQuestion();
         startTimer();
+    };
+
+    const startQuiz = async () => {
+        if (quiz.attempt_id) {
+            activateQuiz();
+            return;
+        }
+
+        const startButton = root.querySelector('[data-quiz-start]');
+        if (!quiz.start_url || !startButton) return;
+        startButton.disabled = true;
+        try {
+            const response = await fetch(quiz.start_url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw createUserFacingError(data.message || 'Khong the bat dau quiz.');
+            window.location.reload();
+        } catch (error) {
+            startButton.disabled = false;
+            showToast(getUserFacingErrorMessage(error, 'Khong the bat dau quiz.'), 'error');
+        }
     };
 
     const submitQuiz = async (auto = false) => {
@@ -561,7 +602,7 @@ function initQuizPlayer() {
         prevBtn.disabled = true;
         if (timerId) window.clearInterval(timerId);
 
-        const payload = { answers: {} };
+        const payload = { attempt_id: quiz.attempt_id, answers: {} };
         Object.entries(answers).forEach(([questionId, ids]) => {
             const question = quiz.questions.find((q) => String(q.id) === String(questionId));
             payload.answers[questionId] = question?.type === 'multiple' ? ids : ids[0];
@@ -581,7 +622,7 @@ function initQuizPlayer() {
 
             const data = await response.json();
             if (!response.ok || !data.success) {
-                throw new Error(data.message || 'submit_failed');
+                throw createUserFacingError(data.message || 'Không thể nộp bài quiz.');
             }
 
             active.hidden = true;
@@ -596,7 +637,7 @@ function initQuizPlayer() {
             nextBtn.disabled = false;
             nextBtn.textContent = 'Nộp bài';
             prevBtn.disabled = currentIndex === 0;
-            showToast(error.message || 'Không thể nộp bài quiz.', 'error');
+            showToast(getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'), 'error');
         }
     };
 
@@ -623,6 +664,8 @@ function initQuizPlayer() {
     };
 
     root.querySelector('[data-quiz-start]')?.addEventListener('click', startQuiz);
+
+    if (quiz.attempt_id) startQuiz();
 
     prevBtn?.addEventListener('click', () => {
         if (currentIndex > 0) {
@@ -1072,14 +1115,14 @@ function initLessonNotes() {
                     });
                     const data = await parseJsonResponse(response);
                     if (!response.ok || !data.success) {
-                        throw new Error(validationMessage(data, 'Không thể cập nhật ghi chú.'));
+                        throw createUserFacingError(validationMessage(data, 'Không thể cập nhật ghi chú.'));
                     }
                     notes = notes.map((itemNote) => Number(itemNote.id) === Number(note.id) ? data.note : itemNote);
                     showToast('Đã cập nhật ghi chú.');
                     render();
                 } catch (error) {
                     editStatus.className = 'text-xs font-semibold text-rose-600';
-                    editStatus.textContent = error.message || 'Không thể cập nhật ghi chú.';
+                    editStatus.textContent = getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.');
                     save.disabled = false;
                 }
             });
@@ -1101,13 +1144,13 @@ function initLessonNotes() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể xóa ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể xóa ghi chú.'));
                 }
                 notes = notes.filter((itemNote) => Number(itemNote.id) !== Number(note.id));
                 showToast('Đã xóa ghi chú.');
                 render();
             } catch (error) {
-                showToast(error.message || 'Không thể xóa ghi chú.', 'error');
+                showToast(getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'), 'error');
             }
         };
 
@@ -1171,7 +1214,7 @@ function initLessonNotes() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể lưu ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể lưu ghi chú.'));
                 }
 
                 notes.push(data.note);
@@ -1183,8 +1226,9 @@ function initLessonNotes() {
                 syncTimestampFromVideo();
             } catch (error) {
                 statusEl.textContent = '';
-                setError(error.message || 'Không thể lưu ghi chú.');
-                showToast(error.message || 'Không thể lưu ghi chú.', 'error');
+                const message = getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.');
+                setError(message);
+                showToast(message, 'error');
             } finally {
                 createInFlight = false;
                 submitButton.disabled = false;
@@ -1256,7 +1300,7 @@ function initStudyNotesPage() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể cập nhật ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể cập nhật ghi chú.'));
                 }
 
                 content.textContent = data.note.content;
@@ -1266,7 +1310,7 @@ function initStudyNotesPage() {
                 status.textContent = '';
                 showToast('Đã cập nhật ghi chú.');
             } catch (error) {
-                status.textContent = error.message || 'Không thể cập nhật ghi chú.';
+                status.textContent = getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.');
             } finally {
                 inFlight = false;
                 saveButton.disabled = false;
@@ -1291,13 +1335,13 @@ function initStudyNotesPage() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(validationMessage(data, 'Không thể xóa ghi chú.'));
+                    throw createUserFacingError(validationMessage(data, 'Không thể xóa ghi chú.'));
                 }
                 card.remove();
                 showToast('Đã xóa ghi chú.');
             } catch (error) {
                 deleteButton.disabled = false;
-                showToast(error.message || 'Không thể xóa ghi chú.', 'error');
+                showToast(getUserFacingErrorMessage(error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'), 'error');
             } finally {
                 inFlight = false;
             }
@@ -1321,29 +1365,28 @@ function initLessonAi() {
     const askInput = root.querySelector('[data-ai-question-input]');
     const askSubmit = root.querySelector('[data-ai-ask-submit]');
     const askStatus = root.querySelector('[data-ai-ask-status]');
+    const askError = root.querySelector('[data-ai-ask-error]');
     const chatLog = root.querySelector('[data-ai-chat-log]');
 
     let summaryInFlight = false;
     let askInFlight = false;
 
     const aiErrorMessage = (data, fallback) => {
-        if (data?.message) return data.message;
-
         const codeMessages = {
-            missing_api_key: 'Chưa cấu hình GEMINI_API_KEY trong .env.',
-            invalid_api_key: 'Khóa API Gemini không hợp lệ. Hãy tạo key mới tại Google AI Studio.',
-            invalid_model: 'Model Gemini không hợp lệ. Hãy kiểm tra GEMINI_MODEL / GEMINI_FALLBACK_MODELS trong .env.',
-            quota_exceeded: 'Gemini đã hết hạn mức trên các model đã thử. Hãy đợi vài phút hoặc đổi API key.',
+            missing_api_key: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            invalid_api_key: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            invalid_model: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            quota_exceeded: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
             timeout: 'Kết nối AI bị quá thời gian chờ. Vui lòng thử lại.',
-            ssl_error: 'Lỗi chứng chỉ SSL khi gọi Gemini. Kiểm tra cấu hình PHP/Laragon.',
-            connection_error: 'Không kết nối được dịch vụ AI. Kiểm tra mạng rồi thử lại.',
+            ssl_error: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+            connection_error: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
             no_source: 'Bài học chưa có đủ nội dung văn bản để dùng AI.',
-            content_blocked: 'Nội dung bị Gemini chặn bởi bộ lọc an toàn.',
+            content_blocked: 'Nội dung này chưa thể được AI xử lý. Vui lòng thử câu hỏi khác.',
             response_truncated: 'Phản hồi AI bị cắt vì quá dài. Hãy hỏi ngắn hơn.',
             empty_response: 'AI không trả về nội dung. Vui lòng thử lại.',
             invalid_response: 'Phản hồi AI không hợp lệ. Vui lòng thử lại.',
             invalid_request: 'Yêu cầu gửi tới AI không hợp lệ.',
-            ai_unavailable: 'Dịch vụ Gemini đang gián đoạn. Vui lòng thử lại sau.',
+            ai_unavailable: 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
             forbidden: 'Bạn không có quyền dùng AI hỗ trợ bài học.',
             lesson_mismatch: 'Bài học không thuộc khóa học này.',
             validation: 'Dữ liệu câu hỏi không hợp lệ.',
@@ -1474,18 +1517,42 @@ function initLessonAi() {
         }
     });
 
+    askInput?.addEventListener('input', () => {
+        if (askError) {
+            askError.textContent = '';
+            askError.classList.add('hidden');
+        }
+        if (askStatus && askStatus.textContent === 'Vui lòng nhập câu hỏi.') {
+            askStatus.textContent = '';
+        }
+    });
+
     askForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!explainUrl || askInFlight || !askInput) return;
 
         const question = askInput.value.trim();
         if (!question) {
-            if (askStatus) askStatus.textContent = 'Vui lòng nhập câu hỏi.';
+            if (askError) {
+                askError.textContent = 'Vui lòng nhập câu hỏi.';
+                askError.classList.remove('hidden');
+            }
+            if (askStatus) askStatus.textContent = '';
+            askInput.focus();
             return;
         }
         if (question.length > 1000) {
-            if (askStatus) askStatus.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+            if (askError) {
+                askError.textContent = 'Câu hỏi tối đa 1000 ký tự.';
+                askError.classList.remove('hidden');
+            }
+            if (askStatus) askStatus.textContent = '';
             return;
+        }
+
+        if (askError) {
+            askError.textContent = '';
+            askError.classList.add('hidden');
         }
 
         askInFlight = true;
@@ -1580,8 +1647,6 @@ function initAiStudyAssistant() {
         if (response?.status === 429) {
             return 'Bạn đang gửi câu hỏi quá nhanh. Vui lòng thử lại sau.';
         }
-
-        if (data?.message) return data.message;
 
         const codeMessages = {
             timeout: 'AI đang phản hồi chậm. Vui lòng thử lại.',
@@ -1906,10 +1971,9 @@ async function sendCompletionAJAX(progressUrl, lessonId) {
         }
 
         // 3. Hiển thị Toast: ✅ Bạn đã hoàn thành bài học!
-        showToast('✅ Bạn đã hoàn thành bài học!', 'success');
+        showToast('Bạn đã hoàn thành bài học!', 'success');
 
     } catch (error) {
         console.error('Error auto completing lesson:', error);
     }
 }
-

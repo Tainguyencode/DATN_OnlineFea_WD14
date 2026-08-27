@@ -14,10 +14,10 @@ return new class extends Migration
         Schema::create('instructor_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->string('phone');
-            $table->string('specialty');
-            $table->text('experience');
-            $table->text('bio');
+            $table->string('phone')->nullable();
+            $table->string('specialty')->nullable();
+            $table->text('experience')->nullable();
+            $table->text('bio')->nullable();
             $table->string('linkedin_url')->nullable();
             $table->string('github_url')->nullable();
             $table->string('website_url')->nullable();

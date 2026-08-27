@@ -12,7 +12,7 @@ class VideoWatchHistory extends Model
         'lesson_id',
         'course_id',
         'current_time',
-        'watched_seconds'
+        'watched_seconds',
     ];
 
     public function user(): BelongsTo

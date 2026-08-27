@@ -10,6 +10,9 @@ use App\Services\PayoutService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class WalletController extends Controller
@@ -34,19 +37,32 @@ class WalletController extends Controller
         return view('instructor.wallet.index', compact('stats', 'banks', 'withdrawals', 'user'));
     }
 
-    public function updateBankDetails(Request $request): RedirectResponse
+    public function updateBankDetails(Request $request, PayoutService $payoutService): RedirectResponse
     {
-        $validated = $request->validate([
-            'bank_code' => ['required', 'string', 'max:50'],
-            'bank_name' => ['required', 'string', 'max:100'],
-            'bank_account_number' => ['required', 'string', 'max:50'],
-            'bank_account_name' => ['required', 'string', 'max:100'],
+        $banks = collect($payoutService->getVietNamBanks());
+        $bankCodes = $banks->pluck('code')->filter()->unique()->values()->all();
+
+        $validated = Validator::make($request->all(), [
+            'bank_code' => ['required', 'string', Rule::in($bankCodes)],
+            'bank_account_number' => ['required', 'string', 'regex:/^[0-9]{6,20}$/'],
+            'bank_account_name' => ['required', 'string', 'min:3', 'max:100', 'regex:/^[\pL\s]+$/u'],
         ], [
             'bank_code.required' => 'Vui lòng chọn ngân hàng.',
-            'bank_name.required' => 'Vui lòng nhập tên ngân hàng.',
+            'bank_code.in' => 'Ngân hàng không hợp lệ hoặc không hỗ trợ VietQR.',
             'bank_account_number.required' => 'Vui lòng nhập số tài khoản ngân hàng.',
+            'bank_account_number.regex' => 'Số tài khoản phải gồm từ 6 đến 20 chữ số.',
             'bank_account_name.required' => 'Vui lòng nhập tên chủ tài khoản.',
-        ]);
+            'bank_account_name.min' => 'Tên chủ tài khoản phải có ít nhất 3 ký tự.',
+            'bank_account_name.regex' => 'Tên chủ tài khoản chỉ được chứa chữ cái và khoảng trắng.',
+        ])->validate();
+
+        $selectedBank = $banks->firstWhere('code', $validated['bank_code']);
+        $bankName = $selectedBank['shortName'] ?? $selectedBank['name'] ?? null;
+        if (! $bankName) {
+            return back()->withErrors(['bank_code' => 'Không thể xác định ngân hàng đã chọn.'])->withInput();
+        }
+
+        $accountName = mb_strtoupper(Str::ascii(preg_replace('/\s+/u', ' ', trim($validated['bank_account_name']))));
 
         $user = auth()->user();
         $oldBank = [
@@ -58,9 +74,9 @@ class WalletController extends Controller
 
         $user->update([
             'bank_code' => strtoupper(trim($validated['bank_code'])),
-            'bank_name' => trim($validated['bank_name']),
+            'bank_name' => $bankName,
             'bank_account_number' => trim($validated['bank_account_number']),
-            'bank_account_name' => mb_strtoupper(trim($validated['bank_account_name'])),
+            'bank_account_name' => $accountName,
         ]);
 
         ActivityLogService::log(
@@ -91,12 +107,12 @@ class WalletController extends Controller
         }
 
         $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:10000', 'max:' . $availableBalance],
+            'amount' => ['required', 'numeric', 'min:10000', 'max:'.$availableBalance],
         ], [
             'amount.required' => 'Vui lòng nhập số tiền cần rút.',
             'amount.numeric' => 'Số tiền rút phải là chữ số hợp lệ.',
             'amount.min' => 'Số tiền rút tối thiểu là 10,000 VNĐ.',
-            'amount.max' => 'Số tiền rút vượt quá Số dư khả dụng hiện có (' . number_format($availableBalance, 0, ',', '.') . ' VNĐ).',
+            'amount.max' => 'Số tiền rút vượt quá Số dư khả dụng hiện có ('.number_format($availableBalance, 0, ',', '.').' VNĐ).',
         ]);
 
         $amount = (float) $validated['amount'];
@@ -132,9 +148,9 @@ class WalletController extends Controller
             $result->id,
             ['amount' => $amount, 'bank_name' => $user->bank_name, 'account' => $user->bank_account_number],
             $request,
-            "Giảng viên {$user->name} đã gửi yêu cầu rút tiền " . number_format($amount, 0, ',', '.') . " VNĐ."
+            "Giảng viên {$user->name} đã gửi yêu cầu rút tiền ".number_format($amount, 0, ',', '.').' VNĐ.'
         );
 
-        return back()->with('success', 'Đã gửi yêu cầu rút tiền ' . number_format($amount, 0, ',', '.') . ' VNĐ thành công! Quản trị viên sẽ kiểm tra và chuyển khoản cho bạn trong thời gian sớm nhất.');
+        return back()->with('success', 'Đã gửi yêu cầu rút tiền '.number_format($amount, 0, ',', '.').' VNĐ thành công! Quản trị viên sẽ kiểm tra và chuyển khoản cho bạn trong thời gian sớm nhất.');
     }
 }

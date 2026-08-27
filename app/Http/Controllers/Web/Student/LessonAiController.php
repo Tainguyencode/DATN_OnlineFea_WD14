@@ -114,7 +114,24 @@ class LessonAiController extends Controller
         return response()->json([
             'success' => false,
             'code' => $exception->codeKey,
-            'message' => $exception->getMessage(),
+            'message' => $this->publicErrorMessage($exception->codeKey),
         ], $exception->status);
+    }
+
+    private function publicErrorMessage(string $code): string
+    {
+        return match ($code) {
+            'no_source' => 'Bài học chưa có đủ nội dung văn bản để dùng AI.',
+            'validation', 'invalid_request' => 'Dữ liệu câu hỏi không hợp lệ.',
+            'forbidden' => 'Bạn không có quyền dùng AI hỗ trợ bài học.',
+            'lesson_mismatch' => 'Bài học không thuộc khóa học này.',
+            'conversation_mismatch' => 'Cuộc hội thoại không thuộc bài học hiện tại.',
+            'content_blocked' => 'Nội dung này chưa thể được AI xử lý. Vui lòng thử câu hỏi khác.',
+            'response_truncated' => 'Phản hồi AI bị cắt vì quá dài. Hãy hỏi ngắn hơn.',
+            'empty_response' => 'AI không trả về nội dung. Vui lòng thử lại.',
+            'invalid_response' => 'Phản hồi AI không hợp lệ. Vui lòng thử lại.',
+            'timeout' => 'AI đang phản hồi chậm. Vui lòng thử lại.',
+            default => 'Tính năng AI hiện chưa khả dụng. Vui lòng thử lại sau.',
+        };
     }
 }

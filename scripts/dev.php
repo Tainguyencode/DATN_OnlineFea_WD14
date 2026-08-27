@@ -9,7 +9,6 @@ declare(strict_types=1);
  * On Windows we run serve + queue + vite only, and never use --kill-others
  * so one process exit cannot tear down the whole stack.
  */
-
 $hasPcntl = function_exists('pcntl_fork');
 
 $names = ['server', 'queue'];

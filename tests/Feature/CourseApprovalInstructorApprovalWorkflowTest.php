@@ -6,6 +6,7 @@ use App\Enums\CourseStatus;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\CourseReviewService;
@@ -30,7 +31,7 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
             'email_verified_at' => now(),
         ], $attributes));
 
-        \App\Models\InstructorProfile::firstOrCreate(
+        InstructorProfile::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'category_id' => $category->id,
@@ -443,7 +444,7 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
 
         // Step 2: Admin approves instructor
         $instructor->update(['instructor_status' => 'approved']);
-        app(\App\Services\CourseReviewService::class)->syncInstructorApprovedCourses($instructor->fresh());
+        app(CourseReviewService::class)->syncInstructorApprovedCourses($instructor->fresh());
 
         $course->refresh();
         // Course is now published without needing any resubmission

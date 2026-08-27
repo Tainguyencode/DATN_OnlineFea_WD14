@@ -89,13 +89,13 @@ class InstructorCertificate extends Model
     {
         $bytes = $this->file_size;
         if ($bytes >= 1048576) {
-            return round($bytes / 1048576, 2) . ' MB';
+            return round($bytes / 1048576, 2).' MB';
         }
         if ($bytes >= 1024) {
-            return round($bytes / 1024, 1) . ' KB';
+            return round($bytes / 1024, 1).' KB';
         }
 
-        return $bytes > 0 ? $bytes . ' B' : 'N/A';
+        return $bytes > 0 ? $bytes.' B' : 'N/A';
     }
 
     public function isImage(): bool

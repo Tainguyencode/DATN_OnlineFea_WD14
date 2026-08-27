@@ -5,14 +5,10 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreCouponRequest;
 use App\Models\Coupon;
-use App\Models\Course;
 use App\Models\MonthlyRewardLog;
 use App\Models\Order;
 use App\Models\SystemSetting;
-use App\Models\User;
-use App\Models\UserCoupon;
 use App\Services\ActivityLogService;
-use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -336,7 +332,7 @@ class CouponController extends Controller
 
         return redirect()
             ->route('admin.coupons.reward_history')
-            ->with('success', "Đã kích hoạt tiến trình trao thưởng tháng {$period}. Kết quả: " . trim($output));
+            ->with('success', "Đã kích hoạt tiến trình trao thưởng tháng {$period}. Kết quả: ".trim($output));
     }
 
     /**

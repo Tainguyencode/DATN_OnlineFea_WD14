@@ -19,7 +19,7 @@ class LearningPlayerService
         bool $canBypassVisibility,
     ): array {
         $course->loadMissing([
-            'instructor:id,name,avatar,bio',
+            'instructor:id,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
             'category:id,name,slug',
             'courseSections' => fn ($q) => $q->orderBy('sort_order'),
             'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order'),
@@ -30,7 +30,7 @@ class LearningPlayerService
         $lesson->loadMissing([
             'section:id,course_id,title,sort_order',
             'chapter:id,course_id,title,sort_order',
-            'quiz.questions.options',
+            'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
         ]);
 
         $enrollment = $user
@@ -349,12 +349,21 @@ class LearningPlayerService
     ): ?array {
         $quiz = $lesson->quiz;
 
-        if (! $quiz || ! $quiz->is_active) {
+        if (! $quiz || ! app(QuizContentService::class)->isEffectivelyActive($quiz)) {
             return null;
         }
 
+        $versioning = app(QuizVersioningService::class);
+        $attemptService = app(QuizAttemptService::class);
+        $attempt = $user?->isStudent() && $isEnrolled
+            ? $attemptService->findInProgress($course, $lesson, $user)
+            : null;
+        $quiz = $attempt
+            ? $attemptService->projectQuiz($attempt)
+            : $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
+
         $attemptsCount = $user
-            ? $quiz->attempts()->where('user_id', $user->id)->count()
+            ? $attemptService->completedAttemptsCount($quiz, $user)
             : 0;
 
         $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
@@ -385,6 +394,11 @@ class LearningPlayerService
             'attempt_limit_reached' => $attemptLimitReached,
             'can_take' => $user?->isStudent() && $isEnrolled && ! $attemptLimitReached,
             'quiz_status' => $quizStatus,
+            'attempt_id' => $attempt?->id,
+            'quiz_version_id' => $attempt?->quiz_version_id,
+            'started_at' => $attempt?->started_at?->toIso8601String(),
+            'remaining_seconds' => $attempt ? $attemptService->remainingTime($attempt) : null,
+            'start_url' => route('courses.lessons.quiz.start', [$course, $lesson]),
             'submit_url' => route('courses.lessons.quiz.submit', [$course, $lesson]),
             'total_questions' => count($questions),
             'total_points' => $quiz->questions->sum('points'),

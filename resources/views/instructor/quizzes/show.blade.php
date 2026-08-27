@@ -8,13 +8,9 @@
             'true_false' => 'Đúng/Sai',
         ];
         $questions = $quiz?->questions ?? collect();
-        $questionsMissingCorrectAnswer = $questions->filter(
-            fn($question) => $question->options->where('is_correct', true)->isEmpty(),
-        );
-        $canSaveQuiz = $quiz && $questions->isNotEmpty() && $questionsMissingCorrectAnswer->isEmpty();
-        $saveBlockText = $questions->isEmpty()
-            ? 'Them it nhat 1 cau hoi va danh dau dap an dung truoc khi luu quiz.'
-            : 'Moi cau hoi can co it nhat 1 dap an dung truoc khi luu quiz.';
+        $quizValidation ??= ['is_complete' => false, 'errors' => ['Quiz chưa sẵn sàng.'], 'warnings' => []];
+        $mutationsLocked ??= false;
+        $canSaveQuiz = $quiz && !$mutationsLocked;
     @endphp
 
     <div class="space-y-6 pb-28">
@@ -24,6 +20,33 @@
                     <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600">Lesson quiz</p>
                     <h2 class="mt-1 text-2xl font-bold tracking-tight text-slate-950">{{ $lesson->title }}</h2>
                     <p class="mt-2 text-sm text-slate-500">{{ $course->title }}</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @if ($authoringVersion)
+                            <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 ring-1 ring-violet-200">
+                                @if ($authoringVersion->status === \App\Models\QuizVersion::STATUS_DRAFT)
+                                    Bản đang chỉnh sửa: V{{ $authoringVersion->version }} — Bản nháp
+                                @else
+                                    Đang xem V{{ $authoringVersion->version }} — Đã xuất bản
+                                @endif
+                            </span>
+                        @endif
+                        @if ($publishedVersion)
+                            <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                                Đang áp dụng cho học viên: V{{ $publishedVersion->version }}
+                            </span>
+                        @else
+                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                                Chưa có phiên bản đã xuất bản
+                            </span>
+                        @endif
+                        @if ($reviewUpdate?->isPending())
+                            <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">Đang chờ duyệt</span>
+                        @elseif ($reviewUpdate?->isRejected())
+                            <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 ring-1 ring-rose-200">Bị từ chối — có thể tiếp tục sửa</span>
+                        @elseif ($reviewUpdate?->isApproved())
+                            <span class="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-200">Đã duyệt — chờ kích hoạt an toàn</span>
+                        @endif
+                    </div>
                 </div>
                 <a href="{{ route('instructor.courses.curriculum', $course) }}"
                     class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
@@ -35,6 +58,7 @@
         <form method="POST" action="{{ route('instructor.courses.lessons.quiz.store', [$course, $lesson]) }}"
             class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             @csrf
+            <fieldset @disabled($mutationsLocked)>
             <div class="grid gap-4 lg:grid-cols-2">
                 <label class="block">
                     <span class="mb-1.5 block text-sm font-bold text-slate-700">Tiêu đề quiz</span>
@@ -72,47 +96,81 @@
                     class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500">{{ old('description', $quiz->description ?? '') }}</textarea>
             </label>
 
-            @unless ($canSaveQuiz)
-                <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
-                    {{ $saveBlockText }}
-                    @if ($questionsMissingCorrectAnswer->isNotEmpty())
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            @foreach ($questionsMissingCorrectAnswer as $missingQuestion)
-                                <a href="#question-{{ $missingQuestion->id }}"
-                                    class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
-                                    Cau {{ $loop->iteration }}
-                                </a>
-                            @endforeach
-                        </div>
-                    @endif
+            @if (!$quizValidation['is_complete'])
+                <div id="quiz-save-requirements" role="status"
+                    class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                    <p class="text-sm font-bold">Quiz chưa sẵn sàng để bật hoặc gửi duyệt vì còn thiếu:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-medium">
+                        @foreach ($quizValidation['errors'] as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
                 </div>
-            @endunless
+            @endif
+
+            @if ($quizValidation['warnings'] !== [])
+                <div class="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-950">
+                    <p class="text-sm font-bold">Cần lưu ý:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-medium">
+                        @foreach ($quizValidation['warnings'] as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            @if ($errors->has('quiz'))
+                <div role="alert" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 text-rose-950">
+                    <p class="text-sm font-bold">Không thể lưu quiz:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-medium">
+                        @foreach ($errors->get('quiz') as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
 
             <div class="mt-4 flex flex-wrap items-center gap-3">
                 <label
                     class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                    <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $quiz->is_active ?? true))
+                    <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $desiredIsActive ?? false))
                         class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                    Dang bat
+                    {{ $publishedVersion ? 'Trạng thái mong muốn sau duyệt' : 'Đang bật' }}
                 </label>
                 <button type="submit" @disabled(!$canSaveQuiz)
                     class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600">
-                    Luu quiz
+                    Lưu bản nháp
                 </button>
             </div>
+            </fieldset>
         </form>
+
+        @if ($mutationsLocked)
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                Nội dung của phiên bản này đang được kiểm duyệt hoặc đã được duyệt, nên tạm thời không thể chỉnh sửa.
+            </div>
+        @endif
 
         @if ($quiz)
             <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-950">Danh sach cau hoi</h3>
-                        <p class="mt-1 text-sm text-slate-500">{{ $questions->count() }} cau hoi</p>
+                        <h3 class="text-lg font-bold text-slate-950">Danh sách câu hỏi</h3>
+                        <p class="mt-1 text-sm text-slate-500">{{ $questions->count() }} câu hỏi trong quiz</p>
                     </div>
-                    <span
-                        class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        Tong diem: {{ $questions->sum('points') }}
-                    </span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" data-open-import-modal
+                            class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-emerald-700">
+                            <svg class="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            Nhập từ Excel / CSV
+                        </button>
+                        <span
+                            class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                            Tổng điểm: {{ $questions->sum('points') }}
+                        </span>
+                    </div>
                 </div>
             </section>
 
@@ -149,6 +207,7 @@
                                 @endif
                             </div>
                             <div class="flex shrink-0 flex-wrap gap-2">
+                                @unless ($mutationsLocked)
                                 <details>
                                     <summary
                                         class="inline-flex min-h-10 cursor-pointer list-none items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
@@ -216,6 +275,7 @@
                                         Xóa
                                     </button>
                                 </form>
+                                @endunless
                             </div>
                         </div>
 
@@ -229,19 +289,21 @@
                                 <div
                                     class="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(0,1fr)_110px_150px_110px] lg:items-center">
                                     <input type="text" name="answers[{{ $answer->id }}][answer_text]"
-                                        value="{{ $answer->option_text }}"
+                                        value="{{ $answer->option_text }}" @readonly($isTrueFalse) @disabled($mutationsLocked)
                                         class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500">
                                     <input type="number" name="answers[{{ $answer->id }}][sort_order]"
-                                        value="{{ $answer->sort_order }}" min="0"
+                                        value="{{ $answer->sort_order }}" min="0" @readonly($isTrueFalse) @disabled($mutationsLocked)
                                         class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500">
                                     <label class="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
                                         @if ($isMultipleChoice)
                                             <input type="checkbox" name="correct_answers[]"
                                                 value="{{ $answer->id }}" @checked($answer->is_correct)
+                                                @disabled($mutationsLocked)
                                                 class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                                         @else
                                             <input type="radio" name="correct_answer" value="{{ $answer->id }}"
                                                 @checked($answer->is_correct)
+                                                @disabled($mutationsLocked)
                                                 class="border-slate-300 text-emerald-600 focus:ring-emerald-500">
                                         @endif
                                         Đáp án đúng
@@ -252,6 +314,7 @@
                                         <label class="inline-flex items-center gap-2 text-sm font-bold text-rose-700">
                                             <input type="checkbox" name="delete_answers[]"
                                                 value="{{ $answer->id }}"
+                                                @disabled($mutationsLocked)
                                                 class="rounded border-rose-300 text-rose-600 focus:ring-rose-500">
                                             Xóa
                                         </label>
@@ -266,13 +329,15 @@
 
                             @if ($question->options->isNotEmpty())
                                 <button type="submit"
+                                    @disabled($mutationsLocked)
                                     class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
                                     Lưu đáp án
                                 </button>
                             @endif
                         </form>
 
-                        <form method="POST"
+                        @unless ($isTrueFalse || $mutationsLocked)
+                            <form method="POST"
                             action="{{ route('instructor.quiz-questions.answers.store', $question) }}"
                             class="mt-3 grid gap-3 rounded-lg border border-dashed border-slate-300 p-3 lg:grid-cols-[minmax(0,1fr)_120px_150px_auto] lg:items-center">
                             @csrf
@@ -296,7 +361,8 @@
                                 class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
                                 Thêm đáp án
                             </button>
-                        </form>
+                            </form>
+                        @endunless
                     </article>
                 @empty
                     <div
@@ -306,6 +372,7 @@
                 @endforelse
             </div>
 
+            @unless ($mutationsLocked)
             <button type="button" data-open-question-panel
                 class="fixed bottom-6 right-6 z-40 inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-bold text-white shadow-2xl shadow-slate-900/25 transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                 Thêm câu hỏi
@@ -375,7 +442,61 @@
                         </button>
                     </form>
                 </aside>
+            <!-- Modal Import câu hỏi bằng Excel / CSV -->
+            <div data-import-modal class="fixed inset-0 z-50 {{ $errors->has('import_file') ? '' : 'hidden' }}">
+                <button type="button" data-close-import-modal class="absolute inset-0 bg-slate-950/45"></button>
+                <div class="absolute left-1/2 top-1/2 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-950">Nhập câu hỏi từ Excel / CSV</h3>
+                            <p class="mt-1 text-sm text-slate-500">Tải lên tệp chứa câu hỏi để thêm tự động vào bài học này.</p>
+                        </div>
+                        <button type="button" data-close-import-modal
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-lg font-bold text-slate-500 hover:bg-slate-50">
+                            ✕
+                        </button>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs leading-relaxed text-emerald-950">
+                        <div class="flex items-center justify-between font-bold">
+                            <span class="flex items-center gap-1.5 text-emerald-800">
+                                💡 File mẫu định dạng Excel / CSV chuẩn
+                            </span>
+                            <a href="{{ route('instructor.quizzes.questions.sample-template') }}"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-emerald-700">
+                                ⬇ Tải file mẫu
+                            </a>
+                        </div>
+                        <p class="mt-2 text-emerald-800">
+                            File mẫu chứa đầy đủ cấu trúc: <strong>Nội dung câu hỏi, Loại câu hỏi, Điểm, Giải thích, Đáp án 1..4, Đáp án đúng</strong>.
+                        </p>
+                    </div>
+
+                    <form method="POST" action="{{ route('instructor.quizzes.questions.import', $quiz) }}" enctype="multipart/form-data" class="mt-5 space-y-4">
+                        @csrf
+                        <div>
+                            <label class="mb-1.5 block text-sm font-bold text-slate-700">Chọn tệp Excel / CSV (.csv, .xlsx, .xls)</label>
+                            <input type="file" name="import_file" accept=".csv, .xlsx, .xls, .txt" required
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-emerald-700">
+                            @error('import_file')
+                                <p class="mt-1.5 text-xs font-semibold text-rose-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="flex items-center justify-end gap-3 pt-2">
+                            <button type="button" data-close-import-modal
+                                class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                                Hủy bỏ
+                            </button>
+                            <button type="submit"
+                                class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-emerald-700">
+                                Tải lên & Nhập câu hỏi
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
+            @endunless
         @endif
     </div>
 
@@ -413,6 +534,25 @@
                 closeButtons.forEach(function(button) {
                     button.addEventListener('click', function() {
                         panel.classList.add('hidden');
+                        document.body.classList.remove('overflow-hidden');
+                    });
+                });
+            }
+
+            // Handling Excel / CSV Import Modal
+            const importModal = document.querySelector('[data-import-modal]');
+            const openImportBtn = document.querySelector('[data-open-import-modal]');
+            const closeImportBtns = document.querySelectorAll('[data-close-import-modal]');
+
+            if (importModal && openImportBtn) {
+                openImportBtn.addEventListener('click', function() {
+                    importModal.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+                });
+
+                closeImportBtns.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        importModal.classList.add('hidden');
                         document.body.classList.remove('overflow-hidden');
                     });
                 });

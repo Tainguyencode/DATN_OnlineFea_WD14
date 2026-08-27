@@ -2,13 +2,21 @@
 
 namespace App\Services;
 
+use App\Jobs\ConvertVideoToHLS;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\QuestionVersion;
+use App\Models\Quiz;
+use App\Models\QuizVersion;
 use App\Models\User;
+use App\Models\VideoModeration;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ContentUpdateService
 {
@@ -43,27 +51,35 @@ class ContentUpdateService
     public function applyApprovedUpdate(ContentUpdate $update, User $admin): void
     {
         DB::transaction(function () use ($update, $admin) {
+            $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $payload = $update->payload ?? [];
 
-            switch ($update->type) {
-                case ContentUpdate::TYPE_COURSE:
-                    $this->applyCourseUpdate($update, $payload);
-                    break;
+            if ($update->type === ContentUpdate::TYPE_QUIZ) {
+                $this->approveQuizCandidate($update, $payload, $admin);
+            } else {
+                switch ($update->type) {
+                    case ContentUpdate::TYPE_COURSE:
+                        $this->applyCourseUpdate($update, $payload);
+                        break;
 
-                case ContentUpdate::TYPE_CHAPTER:
-                    $this->applyChapterUpdate($update, $payload);
-                    break;
+                    case ContentUpdate::TYPE_CHAPTER:
+                        $this->applyChapterUpdate($update, $payload);
+                        break;
 
-                case ContentUpdate::TYPE_LESSON:
-                    $this->applyLessonUpdate($update, $payload);
-                    break;
+                    case ContentUpdate::TYPE_LESSON:
+                        $this->applyLessonUpdate($update, $payload);
+                        break;
+
+                    default:
+                        abort(422, 'Loại cập nhật nội dung không được hỗ trợ.');
+                }
+
+                $update->update([
+                    'status' => ContentUpdate::STATUS_APPROVED,
+                    'reviewed_by' => $admin->id,
+                    'reviewed_at' => now(),
+                ]);
             }
-
-            $update->update([
-                'status' => ContentUpdate::STATUS_APPROVED,
-                'reviewed_by' => $admin->id,
-                'reviewed_at' => now(),
-            ]);
 
             // Kiểm tra xem khóa học còn bản cập nhật pending nào khác không, nếu không thì đưa trạng thái về published
             $remainingPending = ContentUpdate::where('course_id', $update->course_id)
@@ -118,6 +134,99 @@ class ContentUpdateService
         }
     }
 
+    private function approveQuizCandidate(ContentUpdate $update, array $payload, User $admin): void
+    {
+        $quizId = (int) ($payload['quiz_id'] ?? 0);
+        $versionId = (int) ($payload['quiz_version_id'] ?? 0);
+        $quiz = Quiz::query()->lockForUpdate()->with('lesson')->find($quizId);
+        $version = QuizVersion::query()->lockForUpdate()->find($versionId);
+
+        abort_unless($quiz && $version, 422, 'Không tìm thấy ứng viên Quiz cần duyệt.');
+        abort_unless((int) $update->entity_id === $quizId, 422, 'ContentUpdate không khớp Quiz ứng viên.');
+        abort_unless((int) $quiz->lesson?->course_id === (int) $update->course_id, 422, 'Quiz không thuộc khóa học của ContentUpdate.');
+
+        $versioning = app(QuizVersioningService::class);
+        $versioning->assertVersionBelongsToQuiz($quiz, $version);
+
+        if ($update->isApproved()) {
+            $this->activateApprovedQuizCandidate($update, $payload, $quiz, $version);
+
+            return;
+        }
+
+        abort_unless($update->isPending(), 422, 'Chỉ ContentUpdate đang chờ duyệt mới có thể kích hoạt Quiz.');
+        abort_unless((int) $quiz->current_draft_version_id === $versionId, 422, 'Ứng viên không còn là bản nháp Quiz hiện tại.');
+        abort_unless($version->status === QuizVersion::STATUS_DRAFT, 422, 'Ứng viên Quiz không còn ở trạng thái bản nháp.');
+
+        $validation = app(QuizContentService::class)->validateQuizVersion($version);
+        abort_unless($validation['is_complete'], 422, implode(' ', $validation['errors']));
+
+        $update->update([
+            'status' => ContentUpdate::STATUS_APPROVED,
+            'reviewed_by' => $admin->id,
+            'reviewed_at' => now(),
+        ]);
+
+        $this->activateApprovedQuizCandidate($update, $payload, $quiz, $version);
+    }
+
+    private function activateApprovedQuizCandidate(ContentUpdate $update, array $payload, Quiz $quiz, QuizVersion $candidate): void
+    {
+        abort_unless($update->isApproved(), 422, 'Quiz candidate must be approved before activation.');
+
+        if ((int) $quiz->current_published_version_id === (int) $candidate->id
+            && $candidate->status === QuizVersion::STATUS_PUBLISHED
+            && $quiz->current_draft_version_id === null) {
+            return;
+        }
+
+        abort_unless((int) $quiz->current_draft_version_id === (int) $candidate->id, 422, 'Ứng viên không còn là bản nháp Quiz hiện tại.');
+        abort_unless($candidate->status === QuizVersion::STATUS_DRAFT, 422, 'Ứng viên Quiz không còn ở trạng thái bản nháp.');
+
+        $validation = app(QuizContentService::class)->validateQuizVersion($candidate);
+        abort_unless($validation['is_complete'], 422, implode(' ', $validation['errors']));
+
+        $current = $quiz->current_published_version_id
+            ? QuizVersion::query()->lockForUpdate()->findOrFail($quiz->current_published_version_id)
+            : null;
+        if ($current) {
+            abort_unless((int) $current->quiz_id === (int) $quiz->id, 422, 'Published Quiz pointer is invalid.');
+            abort_unless($current->status === QuizVersion::STATUS_PUBLISHED, 422, 'Published Quiz pointer must reference a published version.');
+        }
+
+        $mappings = $candidate->questionMappings()->lockForUpdate()->get();
+        QuestionVersion::query()
+            ->whereIn('id', $mappings->pluck('question_version_id'))
+            ->where('status', QuestionVersion::STATUS_DRAFT)
+            ->update([
+                'status' => QuestionVersion::STATUS_PUBLISHED,
+                'published_at' => now(),
+            ]);
+
+        $current?->update(['status' => QuizVersion::STATUS_SUPERSEDED]);
+        $candidate->update([
+            'status' => QuizVersion::STATUS_PUBLISHED,
+            'published_at' => now(),
+        ]);
+
+        $quizUpdates = [
+            'current_published_version_id' => $candidate->id,
+            'current_draft_version_id' => null,
+        ];
+        if (array_key_exists('desired_is_active', $payload)) {
+            $quizUpdates['is_active'] = (bool) $payload['desired_is_active'];
+        }
+        $quiz->update($quizUpdates);
+
+        $update->update([
+            'payload' => [
+                ...$payload,
+                'activation_deferred' => false,
+                'activated_at' => now()->toIso8601String(),
+            ],
+        ]);
+    }
+
     private function applyChapterUpdate(ContentUpdate $update, array $payload): void
     {
         if ($update->action === ContentUpdate::ACTION_CREATE) {
@@ -145,6 +254,7 @@ class ContentUpdateService
                 $chapter->update(array_intersect_key($payload, array_flip(['title', 'sort_order'])));
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
+            app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($update->entity_id);
             CourseSection::destroy($update->entity_id);
             Chapter::destroy($update->entity_id);
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
@@ -197,20 +307,22 @@ class ContentUpdateService
                 'is_preview', 'is_required', 'sort_order', 'status', 'attachments',
             ]))));
 
-            $oldHlsDir = 'lesson-hls/update_' . $update->id;
-            $newHlsDir = 'lesson-hls/' . $lesson->id;
-            if (\Illuminate\Support\Facades\Storage::disk('local')->exists($oldHlsDir)) {
-                if (\Illuminate\Support\Facades\Storage::disk('local')->exists($newHlsDir)) {
-                    \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory($newHlsDir);
+            app(CurriculumLessonService::class)->syncAssignment($lesson, $payload);
+
+            $oldHlsDir = 'lesson-hls/update_'.$update->id;
+            $newHlsDir = 'lesson-hls/'.$lesson->id;
+            if (Storage::disk('local')->exists($oldHlsDir)) {
+                if (Storage::disk('local')->exists($newHlsDir)) {
+                    Storage::disk('local')->deleteDirectory($newHlsDir);
                 }
-                \Illuminate\Support\Facades\Storage::disk('local')->move($oldHlsDir, $newHlsDir);
-                $lesson->update(['video_path' => $newHlsDir . '/playlist.m3u8']);
-            } elseif ($lesson->type === 'video' && ($lesson->original_video_key || ($lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))) {
-                \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+                Storage::disk('local')->move($oldHlsDir, $newHlsDir);
+                $lesson->update(['video_path' => $newHlsDir.'/playlist.m3u8']);
+            } elseif ($lesson->type === Lesson::TYPE_VIDEO && ($lesson->original_video_key || ($lesson->video_path && Str::endsWith($lesson->video_path, '.mp4')))) {
+                ConvertVideoToHLS::dispatch($lesson);
             }
 
-            if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
-                \App\Models\VideoModeration::updateOrCreate(
+            if (! empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                VideoModeration::updateOrCreate(
                     ['lesson_id' => $lesson->id],
                     $payload['ai_moderation']
                 );
@@ -219,17 +331,17 @@ class ContentUpdateService
             // Gửi thông báo cho toàn bộ học viên đang ghi danh nếu khóa học đã xuất bản
             $course = Course::find($update->course_id);
             if ($course && ($course->is_published || $course->status === Course::STATUS_PUBLISHED || $course->status === Course::STATUS_PENDING_UPDATE)) {
-                $isHlsVideo = $lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path);
+                $isHlsVideo = $lesson->type === Lesson::TYPE_VIDEO && ($lesson->original_video_key || $lesson->video_path);
                 $isHlsReady = ! $isHlsVideo || $lesson->processing_status === 'completed' || $lesson->isHlsReady();
                 if ($isHlsReady) {
-                    app(\App\Services\NotificationService::class)->notifyCourseLessonCreated($course, $lesson);
+                    app(NotificationService::class)->notifyCourseLessonCreated($course, $lesson);
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
             $lesson = Lesson::find($update->entity_id);
             if ($lesson) {
                 $hasMediaChange = isset($payload['video_path']) || isset($payload['original_video_key']) || isset($payload['video_url']) || isset($payload['document_file']);
-                
+
                 $updateData = array_intersect_key($payload, array_flip([
                     'section_id', 'chapter_id', 'title', 'type', 'video_url',
                     'video_path', 'original_video_key', 'hls_manifest_key',
@@ -244,9 +356,10 @@ class ContentUpdateService
                 }
 
                 $lesson->update($updateData);
+                app(CurriculumLessonService::class)->syncAssignment($lesson, $payload);
 
-                if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
-                    \App\Models\VideoModeration::updateOrCreate(
+                if (! empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                    VideoModeration::updateOrCreate(
                         ['lesson_id' => $lesson->id],
                         $payload['ai_moderation']
                     );
@@ -254,30 +367,31 @@ class ContentUpdateService
                     $lesson->videoModeration()?->delete();
                 }
 
-                $oldHlsDir = 'lesson-hls/update_' . $update->id;
-                $newHlsDir = 'lesson-hls/' . $lesson->id;
-                if (\Illuminate\Support\Facades\Storage::disk('local')->exists($oldHlsDir)) {
-                    if (\Illuminate\Support\Facades\Storage::disk('local')->exists($newHlsDir)) {
-                        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory($newHlsDir);
+                $oldHlsDir = 'lesson-hls/update_'.$update->id;
+                $newHlsDir = 'lesson-hls/'.$lesson->id;
+                if (Storage::disk('local')->exists($oldHlsDir)) {
+                    if (Storage::disk('local')->exists($newHlsDir)) {
+                        Storage::disk('local')->deleteDirectory($newHlsDir);
                     }
-                    \Illuminate\Support\Facades\Storage::disk('local')->move($oldHlsDir, $newHlsDir);
-                    $lesson->update(['video_path' => $newHlsDir . '/playlist.m3u8']);
-                } elseif ($lesson->type === 'video' && ($lesson->original_video_key || ($lesson->video_path && \Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))) {
-                    \App\Jobs\ConvertVideoToHLS::dispatch($lesson);
+                    Storage::disk('local')->move($oldHlsDir, $newHlsDir);
+                    $lesson->update(['video_path' => $newHlsDir.'/playlist.m3u8']);
+                } elseif ($lesson->type === Lesson::TYPE_VIDEO && ($lesson->original_video_key || ($lesson->video_path && Str::endsWith($lesson->video_path, '.mp4')))) {
+                    ConvertVideoToHLS::dispatch($lesson);
                 }
 
                 // Gửi thông báo cho toàn bộ học viên đang ghi danh nếu khóa học đã xuất bản
                 $course = Course::find($update->course_id);
                 if ($course && ($course->is_published || $course->status === Course::STATUS_PUBLISHED || $course->status === Course::STATUS_PENDING_UPDATE)) {
                     $isVideoChange = isset($payload['video_path']) || isset($payload['original_video_key']) || isset($payload['video_url']);
-                    $isHlsVideo = $lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path);
+                    $isHlsVideo = $lesson->type === Lesson::TYPE_VIDEO && ($lesson->original_video_key || $lesson->video_path);
                     $isHlsReady = ! $isHlsVideo || $lesson->processing_status === 'completed' || $lesson->isHlsReady();
                     if ($isHlsReady) {
-                        app(\App\Services\NotificationService::class)->notifyCourseLessonUpdated($course, $lesson, $isVideoChange);
+                        app(NotificationService::class)->notifyCourseLessonUpdated($course, $lesson, $isVideoChange);
                     }
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
+            app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($update->entity_id);
             Lesson::destroy($update->entity_id);
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
             $orders = $payload['lesson_orders'] ?? [];
@@ -292,7 +406,7 @@ class ContentUpdateService
     /**
      * Merge published course sections and lessons with active ContentUpdate records (draft, pending, rejected).
      */
-    public function mergeCurriculumWithUpdates(Course $course): \Illuminate\Support\Collection
+    public function mergeCurriculumWithUpdates(Course $course): Collection
     {
         $course->load([
             'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order')->with(['videoModeration', 'assignment']),
@@ -344,7 +458,7 @@ class ContentUpdateService
                     'section_id' => $secId,
                     'chapter_id' => $secId,
                     'title' => $payload['title'] ?? 'Bài học mới',
-                    'type' => $payload['type'] ?? 'video',
+                    'type' => $payload['type'] ?? Lesson::TYPE_VIDEO,
                     'video_url' => $payload['video_url'] ?? null,
                     'video_path' => $payload['video_path'] ?? null,
                     'original_video_key' => $payload['original_video_key'] ?? null,
@@ -358,29 +472,30 @@ class ContentUpdateService
                     'document_file' => $payload['document_file'] ?? null,
                     'duration' => $payload['duration'] ?? $payload['duration_seconds'] ?? 0,
                     'duration_seconds' => $payload['duration_seconds'] ?? $payload['duration'] ?? 0,
-                    'is_preview' => !empty($payload['is_preview']),
+                    'is_preview' => ! empty($payload['is_preview']),
                     'sort_order' => $payload['sort_order'] ?? 999,
-                    'status' => $payload['status'] ?? 'draft',
+                    'status' => $payload['status'] ?? Lesson::STATUS_DRAFT,
                 ]);
                 $draftLesson->id = $lUpdate->id;
                 $draftLesson->draft_update = $lUpdate;
                 $draftLesson->update_status = $lUpdate->status;
                 $draftLesson->is_draft_create = true;
 
-                if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
-                    $draftLesson->setRelation('videoModeration', new \App\Models\VideoModeration($payload['ai_moderation']));
+                if (! empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                    $draftLesson->setRelation('videoModeration', new VideoModeration($payload['ai_moderation']));
                 } else {
                     $draftLesson->setRelation('videoModeration', null);
                 }
 
                 // Attach to matching section
-                $matchedSection = $sections->first(function ($s) use ($secId, $lUpdate) {
-                    if ($secId && (string)$s->id === (string)$secId) {
+                $matchedSection = $sections->first(function ($s) use ($secId) {
+                    if ($secId && (string) $s->id === (string) $secId) {
                         return true;
                     }
                     if (isset($s->draft_update) && $s->draft_update->id == $secId) {
                         return true;
                     }
+
                     return false;
                 }) ?? $sections->first();
 
@@ -407,8 +522,8 @@ class ContentUpdateService
                         $existingLesson->update_status = $lUpdate->status;
                         $existingLesson->is_draft_update = true;
 
-                        if (!empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
-                            $existingLesson->setRelation('videoModeration', new \App\Models\VideoModeration($payload['ai_moderation']));
+                        if (! empty($payload['ai_moderation']) && is_array($payload['ai_moderation'])) {
+                            $existingLesson->setRelation('videoModeration', new VideoModeration($payload['ai_moderation']));
                         } else {
                             $existingLesson->setRelation('videoModeration', null);
                         }

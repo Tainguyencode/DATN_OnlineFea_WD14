@@ -47,19 +47,6 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             </div>
         </div>
 
-        {{-- Alerts --}}
-        @if(session('success'))
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800/30 dark:bg-emerald-950/20 dark:text-emerald-400">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800 dark:border-rose-800/30 dark:bg-rose-950/20 dark:text-rose-400">
-                {{ session('error') }}
-            </div>
-        @endif
-
         @if(isset($pendingInvitation) && $pendingInvitation)
             <div class="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 shadow-sm dark:border-blue-900/40 dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
@@ -445,8 +432,8 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                                     <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium" id="attachment-preview-size">0 KB</p>
                                 </div>
                             </div>
-                            <button type="button" onclick="clearSelectedAttachment()" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <button type="button" onclick="clearSelectedAttachment()" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer" aria-label="Bỏ tệp đính kèm">
+                                <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                         </div>
 
@@ -469,14 +456,17 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                                 <button type="button" 
                                         onclick="document.getElementById('attachment-input').click()"
                                         class="absolute left-3 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 p-1.5 rounded-lg transition cursor-pointer"
+                                        aria-label="Đính kèm tệp tin"
+                                        aria-describedby="attachment-validation-error"
                                         title="Đính kèm tệp tin">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                                    <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                                 </button>
                                 
                                 <input type="file" 
                                        id="attachment-input" 
                                        name="file" 
                                        accept="image/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/x-zip-compressed,text/plain" 
+                                       aria-describedby="attachment-validation-error"
                                        class="hidden" 
                                        onchange="handleAttachmentSelect(event)">
 
@@ -488,10 +478,12 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                             </div>
                             <button type="submit" 
                                     id="send-button"
+                                    aria-label="Gửi tin nhắn"
                                     class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0056D2] px-6 text-sm font-bold text-white transition hover:bg-[#0046B8] dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer disabled:opacity-50">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                             </button>
                         </form>
+                        <p id="attachment-validation-error" class="mt-2 hidden text-xs font-semibold text-rose-600 dark:text-rose-400" role="status" aria-live="polite"></p>
                     </div>
 
                 </div>
@@ -613,10 +605,31 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
     const fileIconPreview = document.getElementById('file-icon-preview');
     const attachmentPreviewName = document.getElementById('attachment-preview-name');
     const attachmentPreviewSize = document.getElementById('attachment-preview-size');
+    const attachmentValidationError = document.getElementById('attachment-validation-error');
     const uploadProgressContainer = document.getElementById('upload-progress-container');
     const uploadProgressPercent = document.getElementById('upload-progress-percent');
     const uploadProgressBar = document.getElementById('upload-progress-bar');
     let lastMessageId = {{ $studyGroup->messages->last()->id ?? 0 }};
+
+    function showStudyGroupToast(message, type = 'error') {
+        const safeMessage = typeof message === 'string' && message.trim() !== ''
+            ? message
+            : 'Không thể thực hiện thao tác. Vui lòng thử lại.';
+
+        if (window.AppToast?.show) {
+            window.AppToast.show({ type, message: safeMessage });
+            return;
+        }
+
+        console.error(safeMessage);
+    }
+
+    function setAttachmentValidationError(message = '') {
+        const safeMessage = typeof message === 'string' ? message.trim() : '';
+        attachmentValidationError.textContent = safeMessage;
+        attachmentValidationError.classList.toggle('hidden', safeMessage === '');
+        attachmentInput.setAttribute('aria-invalid', safeMessage === '' ? 'false' : 'true');
+    }
 
     function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
     window.addEventListener('DOMContentLoaded', () => { scrollToBottom(); messageInput.focus(); });
@@ -706,11 +719,11 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                     renderRecalledMessage(msgEl, data.data || { id: msgId, user_id: currentUserId, created_at: new Date().toISOString() });
                 }
             } else {
-                alert(data.message || 'Không thể thu hồi tin nhắn.');
+                showStudyGroupToast(data.message || 'Không thể thu hồi tin nhắn.');
             }
         } catch (e) {
             console.error(e);
-            alert('Lỗi kết nối khi thu hồi tin nhắn.');
+            showStudyGroupToast('Không thể kết nối tới máy chủ. Vui lòng thử lại.');
         }
     }
 
@@ -783,9 +796,22 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
         const file = event.target.files[0];
         if (!file) return;
         const sizeMb = file.size / (1024 * 1024);
-        if (file.type.startsWith('image/') && sizeMb > 5) { alert('Ảnh tối đa 5MB.'); attachmentInput.value = ''; return; }
-        if (file.type.startsWith('video/') && sizeMb > 100) { alert('Video tối đa 100MB.'); attachmentInput.value = ''; return; }
-        if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && sizeMb > 20) { alert('Tệp tối đa 20MB.'); attachmentInput.value = ''; return; }
+        if (file.type.startsWith('image/') && sizeMb > 5) {
+            clearSelectedAttachment();
+            setAttachmentValidationError('Ảnh có dung lượng tối đa 5 MB. Vui lòng chọn ảnh nhỏ hơn.');
+            return;
+        }
+        if (file.type.startsWith('video/') && sizeMb > 100) {
+            clearSelectedAttachment();
+            setAttachmentValidationError('Video có dung lượng tối đa 100 MB. Vui lòng chọn video nhỏ hơn.');
+            return;
+        }
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && sizeMb > 20) {
+            clearSelectedAttachment();
+            setAttachmentValidationError('Tệp có dung lượng tối đa 20 MB. Vui lòng chọn tệp nhỏ hơn.');
+            return;
+        }
+        setAttachmentValidationError();
         attachmentPreviewName.textContent = file.name;
         attachmentPreviewSize.textContent = file.size > 1024 * 1024 ? `${sizeMb.toFixed(1)} MB` : `${(file.size / 1024).toFixed(1)} KB`;
         if (file.type.startsWith('image/')) {
@@ -804,6 +830,7 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
         attachmentInput.value = ''; imagePreview.src = '#'; imagePreview.classList.add('hidden');
         fileIconPreview.innerHTML = ''; fileIconPreview.classList.remove('hidden');
         attachmentPreviewContainer.classList.add('hidden');
+        setAttachmentValidationError();
     }
 
     function showLightbox(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox-modal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
@@ -958,15 +985,15 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             } else {
                 try {
                     const err = JSON.parse(xhr.responseText);
-                    alert(err.message || 'Lỗi khi gửi tin nhắn.');
+                    showStudyGroupToast(err.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.');
                 } catch(e) {
-                    alert('Lỗi khi gửi tin nhắn.');
+                    showStudyGroupToast('Không thể gửi tin nhắn. Vui lòng thử lại.');
                 }
             }
         };
         xhr.onerror = function() {
             messageInput.disabled = false; sendButton.disabled = false; uploadProgressContainer.classList.add('hidden');
-            alert('Lỗi kết nối mạng khi gửi tin nhắn.');
+            showStudyGroupToast('Không thể kết nối tới máy chủ. Vui lòng thử lại.');
         };
         xhr.send(formData);
     }
@@ -1076,15 +1103,15 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             const data = await res.json();
             if (res.ok && data.success) {
                 if (btnContainer) btnContainer.innerHTML = '<span class="text-xs text-amber-600 font-semibold">Đã gửi lời mời</span>';
-                alert(`Đã gửi lời mời tham gia nhóm tới ${userName}!`);
+                showStudyGroupToast(`Đã gửi lời mời tham gia nhóm tới ${userName}!`, 'success');
                 setTimeout(() => window.location.reload(), 1200);
             } else {
-                alert(data.message || 'Không thể gửi lời mời.');
+                showStudyGroupToast(data.message || 'Không thể gửi lời mời.');
                 if (btnContainer) btnContainer.innerHTML = `<button type="button" onclick="sendInvite(${userId}, '${userName}')" class="px-3 py-1 bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold rounded-lg transition cursor-pointer">Mời</button>`;
             }
         } catch (e) {
             console.error(e);
-            alert('Lỗi kết nối khi gửi lời mời.');
+            showStudyGroupToast('Không thể kết nối tới máy chủ. Vui lòng thử lại.');
             if (btnContainer) btnContainer.innerHTML = `<button type="button" onclick="sendInvite(${userId}, '${userName}')" class="px-3 py-1 bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold rounded-lg transition cursor-pointer">Mời</button>`;
         }
     }

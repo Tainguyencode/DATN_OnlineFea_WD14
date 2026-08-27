@@ -65,13 +65,13 @@ class UpdateUserRequest extends FormRequest
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'role' => ['sometimes', 'required', Rule::in(['student', 'instructor', 'admin'])],
-            'phone' => ['nullable', 'string', 'max:20'],
+            'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/'],
             'bio' => ['nullable', 'string', 'max:5000'],
             'avatar' => ['nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'bank_name' => ['nullable', 'string', 'max:255'],
-            'bank_account_number' => ['nullable', 'string', 'max:50'],
+            'bank_account_number' => ['nullable', 'string', 'max:50', 'regex:/^[0-9A-Za-z\-]+$/'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
         ];
     }
@@ -90,7 +90,9 @@ class UpdateUserRequest extends FormRequest
             'password.confirmed' => 'Xác nhận mật khẩu không khớp.',
             'role.required' => 'Vui lòng chọn vai trò.',
             'role.in' => 'Vai trò không hợp lệ.',
+            'phone.regex' => 'Số điện thoại không hợp lệ.',
             'phone.max' => 'Số điện thoại không được vượt quá 20 ký tự.',
+            'bank_account_number.regex' => 'Số tài khoản ngân hàng chỉ được chứa chữ cái, chữ số và dấu gạch nối.',
             'bio.max' => 'Giới thiệu không được vượt quá 5000 ký tự.',
             'avatar.max' => 'Đường dẫn avatar không được vượt quá 255 ký tự.',
         ];

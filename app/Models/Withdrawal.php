@@ -11,7 +11,9 @@ class Withdrawal extends Model
     use HasFactory;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [
@@ -46,7 +48,7 @@ class Withdrawal extends Model
         $accNo = urlencode($this->bank_account_number ?? '');
         $amount = (int) $this->amount;
         $accountName = urlencode($this->bank_account_name ?? '');
-        $addInfo = urlencode("RUT TIEN MAGV " . $this->user_id . " REQ" . $this->id);
+        $addInfo = urlencode('RUT TIEN MAGV '.$this->user_id.' REQ'.$this->id);
 
         return "https://img.vietqr.io/image/{$bankCode}-{$accNo}-compact2.png?amount={$amount}&addInfo={$addInfo}&accountName={$accountName}";
     }

@@ -4,10 +4,6 @@
         <p class="mt-1 text-sm text-slate-500">Tiếp nhận, phản hồi và cập nhật trạng thái yêu cầu hỗ trợ.</p>
     </div>
 
-    @if(session('success'))
-        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ session('success') }}</div>
-    @endif
-
     <form method="GET" class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-4">
         <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Mã, tiêu đề, email..." class="rounded-lg border-slate-300 text-sm md:col-span-2">
         <select name="status" class="rounded-lg border-slate-300 text-sm">

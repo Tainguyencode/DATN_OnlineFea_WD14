@@ -59,7 +59,7 @@ class StudyGroup extends Model
 
     public function canManage(?User $user): bool
     {
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 

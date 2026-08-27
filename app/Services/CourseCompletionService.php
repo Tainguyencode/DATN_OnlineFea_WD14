@@ -8,7 +8,7 @@ use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\PushNotification;
-use App\Models\QuizAttempt;
+use App\Models\Submission;
 use App\Models\User;
 use App\Notifications\CertificateIssuedNotification;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +17,7 @@ use Throwable;
 
 /**
  * Service Kiểm tra Hoàn thành Khóa học & Cấp Chứng chỉ Tự động (CourseCompletionService)
- * 
+ *
  * Chức năng chính:
  * 1. Kiểm tra điều kiện hoàn thành 3 tầng: Xem 100% Video, Làm 100% Bài Trắc nghiệm (Quiz), Đạt điểm Bài tập Tự luận (Assignment >= passing_score).
  * 2. Cập nhật trạng thái `Enrollment` sang `completed` và ghi nhận `completed_at`.
@@ -28,9 +28,9 @@ class CourseCompletionService
 {
     /**
      * Kiểm tra chi tiết tiến độ và điều kiện hoàn thành khóa học của Học viên.
-     * 
-     * @param Enrollment $enrollment Bản ghi ghi danh học viên
-     * @param int $userId ID học viên
+     *
+     * @param  Enrollment  $enrollment  Bản ghi ghi danh học viên
+     * @param  int  $userId  ID học viên
      * @return array [eligible, progress_percent, missing_requirements, completed_at]
      */
     public function check(Enrollment $enrollment, int $userId): array
@@ -67,12 +67,7 @@ class CourseCompletionService
             if (! $quiz) {
                 continue;
             }
-            $submitted = QuizAttempt::query()
-                ->where('user_id', $userId)
-                ->where('quiz_id', $quiz->id)
-                ->whereNotNull('completed_at')
-                ->exists();
-            if (! $submitted) {
+            if (! $quiz->hasPassedAttemptFor($userId)) {
                 $missing[] = "Bài trắc nghiệm \"{$lesson->title}\" chưa đạt điểm yêu cầu.";
             }
         }
@@ -84,7 +79,7 @@ class CourseCompletionService
             if (! $assignment) {
                 continue;
             }
-            $passed = \App\Models\Submission::query()
+            $passed = Submission::query()
                 ->where('user_id', $userId)
                 ->where('assignment_id', $assignment->id)
                 ->where('status', 'graded')
@@ -108,7 +103,7 @@ class CourseCompletionService
                 ]);
 
                 // Cộng +50 XP hoàn thành khóa học (1 lần duy nhất)
-                app(\App\Services\PointService::class)->awardCourseCompletionPoints($userId, $course->id);
+                app(PointService::class)->awardCourseCompletionPoints($userId, $course->id);
 
                 $certificate = $this->issueCertificate($userId, $course);
 
@@ -139,9 +134,9 @@ class CourseCompletionService
 
     /**
      * Khởi tạo Chứng chỉ điện tử cho Học viên sau khi hoàn thành khóa học.
-     * 
-     * @param int $userId ID học viên
-     * @param Course $course Model khóa học
+     *
+     * @param  int  $userId  ID học viên
+     * @param  Course  $course  Model khóa học
      * @return Certificate|null Model chứng chỉ vừa tạo hoặc null nếu khóa học tắt chứng chỉ
      */
     private function issueCertificate(int $userId, Course $course): ?Certificate
@@ -173,10 +168,10 @@ class CourseCompletionService
 
     /**
      * Gửi email thông báo cấp chứng chỉ kèm đường dẫn tải PDF cho Học viên.
-     * 
-     * @param int $userId ID học viên
-     * @param Course $course Khóa học
-     * @param Certificate $certificate Chứng chỉ
+     *
+     * @param  int  $userId  ID học viên
+     * @param  Course  $course  Khóa học
+     * @param  Certificate  $certificate  Chứng chỉ
      */
     private function sendCertificateEmail(int $userId, Course $course, Certificate $certificate): void
     {

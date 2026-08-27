@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Listeners\AwardLoginPoints;
 use App\Models\Permission;
 use App\Services\NotificationService;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -33,8 +35,8 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Event::listen(
-            \Illuminate\Auth\Events\Login::class,
-            \App\Listeners\AwardLoginPoints::class
+            Login::class,
+            AwardLoginPoints::class
         );
 
         Gate::before(fn ($user) => $user->isAdmin() ? true : null);

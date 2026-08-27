@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests\Instructor;
 
-use App\Models\Course;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

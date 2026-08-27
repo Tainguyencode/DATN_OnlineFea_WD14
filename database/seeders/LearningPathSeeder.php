@@ -77,7 +77,7 @@ class LearningPathSeeder extends Seeder
                 'Giai đoạn 3: Đồ án Thực chiến & Triển khai',
             ];
             foreach ($courseIds->take(3) as $sortOrder => $courseId) {
-                $stageName = $fullstackStages[$sortOrder] ?? 'Giai đoạn ' . ($sortOrder + 1);
+                $stageName = $fullstackStages[$sortOrder] ?? 'Giai đoạn '.($sortOrder + 1);
                 DB::table('learning_path_courses')->updateOrInsert(
                     ['learning_path_id' => $fullstackPathId, 'course_id' => $courseId],
                     ['sort_order' => $sortOrder + 1, 'stage_name' => $stageName]
@@ -91,7 +91,7 @@ class LearningPathSeeder extends Seeder
             ];
             if ($courseIds->count() >= 2) {
                 foreach ($courseIds->slice(1, 2)->values() as $sortOrder => $courseId) {
-                    $stageName = $uiuxStages[$sortOrder] ?? 'Giai đoạn ' . ($sortOrder + 1);
+                    $stageName = $uiuxStages[$sortOrder] ?? 'Giai đoạn '.($sortOrder + 1);
                     DB::table('learning_path_courses')->updateOrInsert(
                         ['learning_path_id' => $designPathId, 'course_id' => $courseId],
                         ['sort_order' => $sortOrder + 1, 'stage_name' => $stageName]

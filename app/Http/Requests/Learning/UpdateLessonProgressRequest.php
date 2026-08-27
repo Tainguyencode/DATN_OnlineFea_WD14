@@ -9,9 +9,10 @@ class UpdateLessonProgressRequest extends FormRequest
     public function authorize(): bool
     {
         $user = $this->user();
-        if (!$user) {
+        if (! $user) {
             return false;
         }
+
         return $user->isStudent() || $user->isAdmin() || $user->isInstructor();
     }
 

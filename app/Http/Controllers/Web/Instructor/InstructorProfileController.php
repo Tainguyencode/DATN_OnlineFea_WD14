@@ -5,14 +5,13 @@ namespace App\Http\Controllers\Web\Instructor;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Category;
-use App\Models\InstructorApplication;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\AuthService;
+use App\Services\InstructorRequirementService;
 use App\Services\NotificationService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,8 +51,8 @@ class InstructorProfileController extends Controller
         $cooldownDaysRemaining = $user->reactivationCooldownDaysRemaining();
         $canRequestReactivation = $user->canRequestReactivation();
 
-        $requirementData = app(\App\Services\InstructorRequirementService::class)->getRequirementsForInstructor($user);
-        $categories = \App\Models\Category::query()
+        $requirementData = app(InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $categories = Category::query()
             ->whereNull('parent_id')
             ->with(['children' => fn ($q) => $q->orderBy('name')])
             ->orderBy('name')
@@ -218,7 +217,7 @@ class InstructorProfileController extends Controller
         $user->update($userUpdates);
 
         $categoryIds = array_map('intval', $validated['category_ids']);
-        app(\App\Services\InstructorRequirementService::class)->handleCategoriesSync($user, $categoryIds);
+        app(InstructorRequirementService::class)->handleCategoriesSync($user, $categoryIds);
 
         $profile = InstructorProfile::where('user_id', $user->id)->first() ?? new InstructorProfile(['user_id' => $user->id]);
         $profile->fill([
@@ -239,7 +238,7 @@ class InstructorProfileController extends Controller
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo cập nhật hồ sơ giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo cập nhật hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
         return back()->with('success', 'Cập nhật thông tin hồ sơ thành công.');
@@ -279,7 +278,7 @@ class InstructorProfileController extends Controller
         $requirement = null;
 
         if ($requirementId) {
-            $requirement = app(\App\Services\InstructorRequirementService::class)
+            $requirement = app(InstructorRequirementService::class)
                 ->validateRequirementForInstructor($user, (int) $requirementId);
             $documentType = $requirement->document_type;
             $defaultTitle = $requirement->document_title;
@@ -303,7 +302,7 @@ class InstructorProfileController extends Controller
 
             $storedPath = $file->storeAs(
                 "instructor-certificates/{$user->id}",
-                Str::uuid() . '.' . $extension,
+                Str::uuid().'.'.$extension,
                 'local'
             );
 
@@ -344,7 +343,7 @@ class InstructorProfileController extends Controller
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo nộp tài liệu giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo nộp tài liệu giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
         return back()->with('active_tab', 'documents')->with('success', "Đã tải lên {$uploadedCount} tài liệu minh chứng thành công. Hồ sơ đang chờ Ban quản trị kiểm duyệt.");
@@ -399,7 +398,7 @@ class InstructorProfileController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($certificate->original_name) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($certificate->original_name).'"',
             ]);
         }
 
@@ -409,7 +408,7 @@ class InstructorProfileController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($certificate->original_name) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($certificate->original_name).'"',
             ]);
         }
 
@@ -452,7 +451,7 @@ class InstructorProfileController extends Controller
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
         return back()->with('active_tab', 'documents')->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
@@ -500,7 +499,7 @@ class InstructorProfileController extends Controller
                 route('admin.instructors.applications.show', $user)
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo yêu cầu cấp lại quyền giảng viên cho admin thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo yêu cầu cấp lại quyền giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
         return back()->with('success', 'Yêu cầu cấp lại quyền giảng viên đã được gửi tới Ban quản trị. Vui lòng chờ xét duyệt.');

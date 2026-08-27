@@ -34,8 +34,6 @@
                     <a href="{{ route('leaderboard') }}" class="{{ $navItemClass }} {{ request()->routeIs('leaderboard') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Xếp hạng</a>
                     <a href="{{ route('learning-paths.index') }}" class="{{ $navItemClass }} {{ request()->routeIs('learning-paths.*') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Lộ trình</a>
                     <a href="{{ route('instructors.index') }}" class="{{ $navItemClass }} {{ request()->routeIs('instructors.*') ? 'text-[#0056D2] dark:text-blue-300 after:w-full' : 'after:w-0 hover:after:w-full' }}">Giảng viên</a>
-                    <a href="{{ route('home') }}#business" class="{{ $navItemClass }} after:w-0 hover:after:w-full">Doanh nghiệp</a>
-                    <a href="{{ route('home') }}#faq" class="{{ $navItemClass }} after:w-0 hover:after:w-full">FAQ</a>
                 </nav>
 
                 <form method="GET" action="{{ route('home') }}" class="hidden min-w-0 flex-1 items-center lg:flex">
@@ -128,8 +126,6 @@
                 <a href="{{ route('home') }}#categories" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Danh mục</a>
                 <a href="{{ route('learning-paths.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 {{ request()->routeIs('learning-paths.*') ? 'text-[#0056D2] font-bold' : '' }}">Lộ trình</a>
                 <a href="{{ route('instructors.index') }}" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Giảng viên</a>
-                <a href="{{ route('home') }}#business" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">Doanh nghiệp</a>
-                <a href="{{ route('home') }}#faq" class="rounded-lg px-3 py-3 hover:bg-slate-100 dark:hover:bg-slate-800">FAQ</a>
             </nav>
             <div class="mt-auto border-t border-slate-200 p-5 dark:border-slate-800">
                 @auth
@@ -144,16 +140,7 @@
         </aside>
     </div>
 
-    @if(session('success'))
-        <div data-flash-message="success" role="status" aria-live="polite" class="ui-alert-success mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
-            {{ session('success') }}
-        </div>
-    @endif
-    @if(session('error'))
-        <div class="ui-alert-error mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
-            {{ session('error') }}
-        </div>
-    @endif
+    <x-toast-container />
 
     <main class="flex-1">
         @yield('content')
@@ -202,78 +189,11 @@
         </div>
     </footer>
 
-    <button onclick="toggleChat()" class="fixed bottom-6 right-6 z-40 rounded-full border border-slate-200 bg-white p-4 text-slate-900 shadow-md transition duration-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800" aria-label="Open AI Assistant">
-        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-5l-5 5v-5Z" />
-        </svg>
-    </button>
-
-    <div id="ai-chat-drawer" class="fixed right-0 top-0 z-50 flex h-screen w-full translate-x-full transform flex-col border-l border-slate-200 bg-white shadow-md transition-transform duration-200 ease-in-out dark:border-slate-800 dark:bg-slate-900 sm:w-[440px]">
-        <div class="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
-            <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#0056D2] text-sm font-bold text-white">AI</div>
-                <div>
-                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Trợ lý học tập FEA</h3>
-                    <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Đang hoạt động</span>
-                </div>
-            </div>
-            <button onclick="toggleChat()" class="rounded-lg p-2 text-slate-500 transition duration-200 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
-
-        <div id="chat-messages" class="chat-scroll flex-1 overflow-y-auto p-4">
-            <div class="mb-4 flex justify-start">
-                <div class="max-w-[85%] rounded-lg rounded-tl-none bg-slate-100 px-4 py-2.5 text-sm leading-relaxed text-slate-800 dark:bg-slate-800 dark:text-slate-200">
-                    Xin chào! Mình là FEA AI Assistant.
-                    <br><br>
-                    Mình ở đây để tư vấn lộ trình học tập, cung cấp tài liệu nghiên cứu và hướng dẫn bạn hoàn thành đồ án tốt nghiệp.
-                </div>
-            </div>
-        </div>
-
-        <div class="flex flex-wrap justify-center gap-2 border-t border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
-            <button onclick="sendPresetMessage('Lộ trình học tập')" class="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition duration-200 hover:border-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Lộ trình học</button>
-            <button onclick="sendPresetMessage('Đồ án tốt nghiệp')" class="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition duration-200 hover:border-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Làm đồ án</button>
-            <button onclick="sendPresetMessage('Quyền của giảng viên')" class="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition duration-200 hover:border-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Giảng viên</button>
-        </div>
-
-        <div class="flex items-center gap-2 border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <input type="text" id="chat-input" placeholder="Hỏi AI Trợ lý tại đây..." onkeydown="if(event.key === 'Enter') sendChatMessage()"
-                   class="ui-input flex-1">
-            <button onclick="sendChatMessage()" class="ui-button-primary h-[50px] px-4">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m14 5 7 7m0 0-7 7m7-7H3" />
-                </svg>
-            </button>
-        </div>
-    </div>
+    {{-- AI Tư vấn Lộ trình (Chỉ hiển thị trên trang Lộ trình học tập) --}}
+    @if(request()->routeIs('learning-paths.*'))
+        <x-learning-path.floating-ai :learning-path="$learningPath ?? null" />
+    @endif
     
-    @auth
-    <script>
-        // Poll for session validity every 15 seconds
-        setInterval(function() {
-            fetch('/api/session/check', {
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }).then(response => {
-                if (response.status === 401) {
-                    alert('Tài khoản đã được đăng nhập trên thiết bị khác.');
-                    window.location.href = '/login';
-                }
-                return response.json();
-            }).then(data => {
-                if (data && data.active === false) {
-                    alert(data.message || 'Tài khoản đã được đăng nhập trên thiết bị khác.');
-                    window.location.href = '/login';
-                }
-            }).catch(e => console.error(e));
-        }, 15000);
-    </script>
-    @endauth
+    <x-session-invalidation-monitor />
 </body>
 </html>

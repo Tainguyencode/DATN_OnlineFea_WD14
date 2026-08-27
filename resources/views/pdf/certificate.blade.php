@@ -57,11 +57,14 @@
                 Quay lại
             </a>
             
-            <div class="flex items-center gap-3">
-                <button onclick="navigator.clipboard.writeText(window.location.href); alert('Đã copy link chứng chỉ!');" class="flex items-center px-4 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition font-medium text-sm">
-                    <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                    Share
-                </button>
+            <div class="flex items-start gap-3">
+                <div>
+                    <button type="button" onclick="copyCertificateLink()" aria-describedby="certificate-copy-status" class="flex items-center px-4 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition font-medium text-sm">
+                        <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                        Share
+                    </button>
+                    <p id="certificate-copy-status" class="mt-1 min-h-4 text-xs font-medium text-gray-600" role="status" aria-live="polite"></p>
+                </div>
                 <a href="{{ route('certificates.public.pdf', ['code' => $certificate->certificate_code, 'download' => 1]) }}" class="flex items-center px-4 py-2.5 bg-white text-[#3B5BDB] border border-[#3B5BDB]/20 rounded-lg shadow-sm hover:bg-blue-50 transition font-medium text-sm">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     Download PDF
@@ -163,6 +166,23 @@
             </div>
         </div>
     </div>
+    <script>
+        async function copyCertificateLink() {
+            const status = document.getElementById('certificate-copy-status');
+
+            try {
+                if (!navigator.clipboard?.writeText) {
+                    throw new Error('Clipboard API unavailable');
+                }
+
+                await navigator.clipboard.writeText(window.location.href);
+                status.textContent = 'Đã sao chép liên kết chứng chỉ.';
+            } catch (error) {
+                console.error('Certificate link copy failed.', error);
+                status.textContent = 'Không thể sao chép tự động. Vui lòng sao chép liên kết trên thanh địa chỉ.';
+            }
+        }
+    </script>
 </body>
 </html>
 @else

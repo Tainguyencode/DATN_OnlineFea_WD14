@@ -5,6 +5,7 @@
     'menu' => [],
     'title' => 'Dashboard',
     'pageTitle' => 'Dashboard',
+    'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
 ])
 
@@ -152,7 +153,7 @@
             <header class="bg-white/95 backdrop-blur border-b border-slate-200/70 shadow-[0_1px_10px_rgba(15,23,42,0.03)] sticky top-0 z-20">
                 <div class="flex h-16 items-center justify-between px-4 sm:px-6 xl:px-7">
                     <div class="min-w-0">
-                        <h1 class="text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate">{{ $pageTitle }}</h1>
+                        <h1 class="{{ $pageTitleClass }}">{{ $pageTitle }}</h1>
                         @if($breadcrumb)
                             <p class="text-xs text-slate-500 mt-1 truncate">{{ $breadcrumb }}</p>
                         @endif
@@ -187,15 +188,7 @@
                 </div>
             </header>
 
-            @if(session('success'))
-                <div data-flash-message="success" role="status" aria-live="polite" class="mx-4 sm:mx-6 xl:mx-7 mt-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
-                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    {{ session('success') }}
-                </div>
-            @endif
-            @if(session('error'))
-                <div class="mx-4 sm:mx-6 xl:mx-7 mt-4 bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-xl">{{ session('error') }}</div>
-            @endif
+            <x-toast-container />
 
             <main class="min-h-[calc(100vh-4rem)] p-4 sm:p-6 xl:p-7">
                 {{ $slot }}
@@ -219,6 +212,5 @@
         @endforeach
     </nav>
     <div class="h-16 lg:hidden"></div>
-    <div id="learning-toast" class="learning-toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>
