@@ -254,6 +254,7 @@ class ContentUpdateService
                 $chapter->update(array_intersect_key($payload, array_flip(['title', 'sort_order'])));
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
+            app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($update->entity_id);
             CourseSection::destroy($update->entity_id);
             Chapter::destroy($update->entity_id);
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
@@ -390,6 +391,7 @@ class ContentUpdateService
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
+            app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($update->entity_id);
             Lesson::destroy($update->entity_id);
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
             $orders = $payload['lesson_orders'] ?? [];

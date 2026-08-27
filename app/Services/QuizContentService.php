@@ -276,6 +276,8 @@ class QuizContentService
             return;
         }
 
+        app(HistoricalQuizDeletionGuard::class)->assertQuestionCanBeHardDeleted($question);
+
         DB::transaction(fn () => $question->delete());
     }
 
@@ -477,6 +479,8 @@ class QuizContentService
 
             return;
         }
+
+        app(HistoricalQuizDeletionGuard::class)->assertOptionCanBeHardDeleted($option);
 
         DB::transaction(fn () => $option->delete());
     }
