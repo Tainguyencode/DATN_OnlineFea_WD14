@@ -18,6 +18,7 @@ class QuizAttempt extends Model
         'percent',
         'passed',
         'answers',
+        'presentation_order',
         'started_at',
         'completed_at',
     ];
@@ -30,6 +31,7 @@ class QuizAttempt extends Model
             'percent' => 'decimal:2',
             'passed' => 'boolean',
             'answers' => 'array',
+            'presentation_order' => 'array',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
@@ -53,6 +55,11 @@ class QuizAttempt extends Model
     public function attemptAnswers(): HasMany
     {
         return $this->hasMany(QuizAttemptAnswer::class);
+    }
+
+    public function regrades(): HasMany
+    {
+        return $this->hasMany(QuizAttemptRegrade::class);
     }
 
     public function getIsPassedAttribute(): bool

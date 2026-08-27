@@ -60,6 +60,22 @@ class LessonImportV2ParserValidatorTest extends TestCase
         $this->assertSame(0, $validated['canonical_payload']['options'][0]['relative_order']);
     }
 
+    public function test_parser_preserves_latex_source_strings_in_quiz_fields(): void
+    {
+        $parsed = app(LessonImportParser::class)->parse($this->workbookUpload(function (Spreadsheet $workbook): void {
+            $workbook->getSheetByName('QuizQuestions')->setCellValue('C2', 'Question \\(x_1^2 + x_2^2\\)');
+            $workbook->getSheetByName('QuizQuestions')->setCellValue('F2', 'Explain with \\[a^2 + b^2\\]');
+            $workbook->getSheetByName('QuizOptions')->setCellValue('C2', 'Option \\(x = 2\\)');
+        }));
+
+        $question = $parsed['sheets']['QuizQuestions'][0]['values'];
+        $option = $parsed['sheets']['QuizOptions'][0]['values'];
+
+        $this->assertSame('Question \\(x_1^2 + x_2^2\\)', $question['question']);
+        $this->assertSame('Explain with \\[a^2 + b^2\\]', $question['explanation']);
+        $this->assertSame('Option \\(x = 2\\)', $option['option_text']);
+    }
+
     public function test_parser_rejects_formula_in_every_v2_data_sheet(): void
     {
         $upload = $this->workbookUpload(function (Spreadsheet $workbook): void {
