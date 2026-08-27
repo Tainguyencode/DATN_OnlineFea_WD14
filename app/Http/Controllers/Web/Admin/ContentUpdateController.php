@@ -73,7 +73,7 @@ class ContentUpdateController extends Controller
         return back()->with(
             'success',
             $contentUpdate->type === ContentUpdate::TYPE_QUIZ
-                ? 'Đã duyệt ứng viên Quiz; V1 tiếp tục áp dụng cho học viên đến khi Phase 2B0.8 kích hoạt an toàn.'
+                ? 'Đã duyệt và kích hoạt phiên bản Quiz an toàn cho học viên mới.'
                 : 'Đã phê duyệt và áp dụng bản cập nhật nội dung thành công.',
         );
     }

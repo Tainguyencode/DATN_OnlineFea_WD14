@@ -230,7 +230,7 @@ class QuizVersionedAuthoringTest extends TestCase
         ]);
     }
 
-    public function test_quiz_content_update_approval_keeps_v1_live_and_rejected_candidate_reuses_v2(): void
+    public function test_quiz_content_update_approval_activates_v2_and_rejected_candidate_reuses_v2(): void
     {
         [$instructor, $course, , $quiz, $questions] = $this->publishedQuiz();
         $admin = User::factory()->create(['role' => 'admin']);
@@ -250,11 +250,12 @@ class QuizVersionedAuthoringTest extends TestCase
 
         app(ContentUpdateService::class)->applyApprovedUpdate($update->fresh(), $admin);
 
-        $this->assertSame($publishedId, $quiz->fresh()->current_published_version_id);
-        $this->assertSame($draft->id, $quiz->fresh()->current_draft_version_id);
-        $this->assertSame(QuizVersion::STATUS_DRAFT, $draft->fresh()->status);
+        $this->assertSame($draft->id, $quiz->fresh()->current_published_version_id);
+        $this->assertNull($quiz->fresh()->current_draft_version_id);
+        $this->assertSame(QuizVersion::STATUS_SUPERSEDED, QuizVersion::findOrFail($publishedId)->status);
+        $this->assertSame(QuizVersion::STATUS_PUBLISHED, $draft->fresh()->status);
         $this->assertTrue($update->fresh()->isApproved());
-        $this->assertTrue((bool) data_get($update->fresh()->payload, 'activation_deferred'));
+        $this->assertFalse((bool) data_get($update->fresh()->payload, 'activation_deferred'));
 
         [$instructor2, $course2, , $quiz2, $questions2] = $this->publishedQuiz(false, 'Rejected candidate');
         $this->actingAs($instructor2);
