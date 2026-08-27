@@ -100,8 +100,12 @@ class QuizHistoricalResultActivationTest extends TestCase
         $result = app(QuizAttemptResultService::class)->forLearner($course, $lesson, $student, $attempt->fresh());
         $questions = array_values($result['questions']);
         $this->assertCount(5, $questions);
-        $this->assertCount(2, collect($questions[0]['options'])->where('is_selected', true));
-        $this->assertTrue($questions[1]['is_unanswered']);
+        $multipleQuestion = collect($questions)->firstWhere('question', 'V1 question 1');
+        $unansweredQuestion = collect($questions)->firstWhere('question', 'V1 question 2');
+        $this->assertNotNull($multipleQuestion);
+        $this->assertNotNull($unansweredQuestion);
+        $this->assertCount(2, collect($multipleQuestion['options'])->where('is_selected', true));
+        $this->assertTrue($unansweredQuestion['is_unanswered']);
 
         QuizAttemptAnswer::where('quiz_attempt_id', $attempt->id)
             ->where('question_version_id', $first->question_version_id)

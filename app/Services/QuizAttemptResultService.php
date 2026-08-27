@@ -42,8 +42,10 @@ class QuizAttemptResultService
     {
         $answersByQuestionVersion = $attempt->attemptAnswers->groupBy('question_version_id');
 
-        return $version->questionMappings->map(function ($mapping, int $index) use ($answersByQuestionVersion, $attempt): array {
-            $questionVersion = $mapping->questionVersion;
+        return app(QuizAttemptPresentationService::class)->orderedQuestionData($attempt)->map(function (array $data, int $index) use ($answersByQuestionVersion, $attempt): array {
+            $mapping = $data['mapping'];
+            $questionVersion = $data['questionVersion'];
+            $options = $data['options'];
             abort_unless($questionVersion && (int) $questionVersion->question_id === (int) $mapping->question_id, 404);
 
             $rows = $answersByQuestionVersion->get($questionVersion->id, collect());
@@ -75,7 +77,7 @@ class QuizAttemptResultService
                 'is_correct' => $rows->contains(fn ($answer): bool => (bool) $answer->is_correct),
                 'is_unanswered' => $selectedIds === [] && ! $missingSelection,
                 'has_missing_selection' => $missingSelection,
-                'options' => $questionVersion->options->map(fn ($option): array => [
+                'options' => $options->map(fn ($option): array => [
                     'id' => (int) $option->id,
                     'text' => $option->option_text,
                     'is_selected' => in_array((int) $option->id, $selectedIds, true),
