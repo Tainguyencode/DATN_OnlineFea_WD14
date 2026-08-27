@@ -170,6 +170,9 @@ class CourseController extends Controller
             return back()->withErrors(['course' => $exception->getMessage()]);
         }
 
+        $course->lessons()->get()->each(function (Lesson $lesson) {
+            $lesson->delete();
+        });
         $this->deleteThumbnail($course);
         $course->delete();
 
