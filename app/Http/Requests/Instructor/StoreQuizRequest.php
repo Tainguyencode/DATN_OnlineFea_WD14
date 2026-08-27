@@ -4,7 +4,7 @@ namespace App\Http\Requests\Instructor;
 
 use App\Models\Course;
 use App\Models\Lesson;
-use App\Models\QuizQuestion;
+use App\Services\QuizContentService;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -87,7 +87,11 @@ class StoreQuizRequest extends FormRequest
                 return;
             }
 
-            $quiz = $lesson->quiz()->with('questions.options')->first();
+            if (! $this->boolean('is_active')) {
+                return;
+            }
+
+            $quiz = $lesson->quiz()->first();
 
             if (! $quiz) {
                 $validator->errors()->add('quiz', 'Vui lòng thêm câu hỏi trước khi lưu quiz.');
@@ -95,31 +99,11 @@ class StoreQuizRequest extends FormRequest
                 return;
             }
 
-            if ($quiz->questions->count() < 5) {
-                $validator->errors()->add('quiz', 'Quiz phải có ít nhất 5 câu hỏi trước khi lưu.');
-            }
+            $result = app(QuizContentService::class)->validateQuiz($quiz);
 
-            foreach ($quiz->questions as $question) {
-                if ($question->type !== QuizQuestion::TYPE_TRUE_FALSE && $question->options->count() < 3) {
-                    $validator->errors()->add('quiz', 'Mỗi câu hỏi (trừ Đúng/Sai) phải có ít nhất 3 đáp án.');
-                    break;
-                }
-            }
-
-            if (! $this->quizHasCorrectAnswers($quiz)) {
-                $validator->errors()->add('quiz', 'Mỗi câu hỏi cần có ít nhất 1 đáp án đúng trước khi lưu quiz.');
+            foreach ($result['errors'] as $message) {
+                $validator->errors()->add('quiz', $message);
             }
         });
-    }
-
-    private function quizHasCorrectAnswers($quiz): bool
-    {
-        if ($quiz->questions->isEmpty()) {
-            return false;
-        }
-
-        return $quiz->questions->every(
-            fn (QuizQuestion $question) => $question->options->where('is_correct', true)->isNotEmpty()
-        );
     }
 }

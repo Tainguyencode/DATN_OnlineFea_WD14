@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Data\CourseSubmissionCheckResult;
 use App\Models\Course;
+use App\Models\Lesson;
 
 class CourseSubmissionValidator
 {
@@ -21,6 +22,12 @@ class CourseSubmissionValidator
 
     public const KEY_VIDEO_DURATION = 'video_duration';
 
+    public const KEY_QUIZ_CONTENT = 'quiz_content';
+
+    public function __construct(
+        private readonly QuizContentService $quizContent,
+    ) {}
+
     public function validate(Course $course): CourseSubmissionCheckResult
     {
         $course->loadMissing('category.parent');
@@ -28,6 +35,7 @@ class CourseSubmissionValidator
         $lessonCount = $course->lessonCount();
         $durationMinutes = $course->totalVideoDurationMinutes();
         $categoryReady = $course->category?->isSelectableForCourse() ?? false;
+        $quizErrors = $this->quizReadinessErrors($course);
 
         $items = [
             $this->makeItem(
@@ -85,6 +93,12 @@ class CourseSubmissionValidator
                     ),
             ),
             $this->makeItem(
+                self::KEY_QUIZ_CONTENT,
+                'Nội dung quiz',
+                $quizErrors === [],
+                $quizErrors === [] ? null : implode(' ', $quizErrors),
+            ),
+            $this->makeItem(
                 'hls_security',
                 'Xử lý bảo mật video (HLS)',
                 ! $course->hasIncompleteHlsVideos(),
@@ -106,5 +120,34 @@ class CourseSubmissionValidator
             'passed' => $passed,
             'message' => $passed ? null : $failMessage,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function quizReadinessErrors(Course $course): array
+    {
+        $lessons = $course->lessons()
+            ->where('type', Lesson::TYPE_QUIZ)
+            ->with([
+                'quiz.currentDraftVersion.questionMappings.questionVersion.options',
+                'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        $errors = [];
+
+        foreach ($lessons as $lesson) {
+            if (! $lesson->quiz) {
+                $errors[] = "Quiz '{$lesson->title}' chưa có nội dung quiz.";
+
+                continue;
+            }
+
+            array_push($errors, ...$this->quizContent->validateQuiz($lesson->quiz)['errors']);
+        }
+
+        return array_values(array_unique($errors));
     }
 }

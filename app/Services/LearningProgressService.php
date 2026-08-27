@@ -50,13 +50,19 @@ class LearningProgressService
             $previousWatched = (int) ($existing?->watched_seconds ?? 0);
             $watchedSeconds = max($previousWatched, min($watchedSeconds, $durationSeconds > 0 ? $durationSeconds : $watchedSeconds));
 
-            $progressPercent = $durationSeconds > 0
-                ? min(100, round(($watchedSeconds / $durationSeconds) * 100, 2))
-                : ($forceCompleted ? 100 : (float) ($existing?->progress_percent ?? 0));
+            if ($lesson->type === Lesson::TYPE_QUIZ) {
+                $quizPassed = $lesson->quiz?->hasPassedAttemptFor($userId) ?? false;
+                $progressPercent = $quizPassed ? 100 : 0;
+                $completed = $quizPassed;
+            } else {
+                $progressPercent = $durationSeconds > 0
+                    ? min(100, round(($watchedSeconds / $durationSeconds) * 100, 2))
+                    : ($forceCompleted ? 100 : (float) ($existing?->progress_percent ?? 0));
 
-            $completed = $statusOverride !== null
-                ? $statusOverride
-                : ((bool) ($existing?->is_completed ?? false) || $forceCompleted || $progressPercent >= $threshold);
+                $completed = $statusOverride !== null
+                    ? $statusOverride
+                    : ((bool) ($existing?->is_completed ?? false) || $forceCompleted || $progressPercent >= $threshold);
+            }
 
             if ($completed) {
                 $progressPercent = 100;

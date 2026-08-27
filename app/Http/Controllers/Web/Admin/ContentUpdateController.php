@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
+use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Models\ContentUpdate;
+use App\Models\QuizVersion;
 use App\Services\ContentUpdateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,16 +42,45 @@ class ContentUpdateController extends Controller
             ContentUpdate::TYPE_COURSE => 'Khóa học',
             ContentUpdate::TYPE_CHAPTER => 'Chương học',
             ContentUpdate::TYPE_LESSON => 'Bài học',
+            ContentUpdate::TYPE_QUIZ => 'Quiz',
         ];
 
-        return view('admin.content-updates.index', compact('updates', 'status', 'type', 'courseId', 'statusOptions', 'typeOptions'));
+        $quizCandidateIds = $updates->getCollection()
+            ->where('type', ContentUpdate::TYPE_QUIZ)
+            ->map(fn (ContentUpdate $update): int => (int) data_get($update->payload, 'quiz_version_id'))
+            ->filter();
+        $quizCandidates = QuizVersion::query()
+            ->with('quiz.currentPublishedVersion')
+            ->withCount('questionMappings')
+            ->whereIn('id', $quizCandidateIds)
+            ->get()
+            ->keyBy('id');
+
+        return view('admin.content-updates.index', compact(
+            'updates',
+            'status',
+            'type',
+            'courseId',
+            'statusOptions',
+            'typeOptions',
+            'quizCandidates',
+        ));
     }
 
     public function approve(ContentUpdate $contentUpdate): RedirectResponse
     {
-        $this->contentUpdateService->applyApprovedUpdate($contentUpdate, auth()->user());
+        try {
+            $this->contentUpdateService->applyApprovedUpdate($contentUpdate, auth()->user());
+        } catch (HistoricalQuizDeletionException $exception) {
+            return back()->withErrors(['content_update' => $exception->getMessage()]);
+        }
 
-        return back()->with('success', 'Đã phê duyệt và áp dụng bản cập nhật nội dung thành công.');
+        return back()->with(
+            'success',
+            $contentUpdate->type === ContentUpdate::TYPE_QUIZ
+                ? 'Đã duyệt và kích hoạt phiên bản Quiz an toàn cho học viên mới.'
+                : 'Đã phê duyệt và áp dụng bản cập nhật nội dung thành công.',
+        );
     }
 
     public function reject(Request $request, ContentUpdate $contentUpdate): RedirectResponse

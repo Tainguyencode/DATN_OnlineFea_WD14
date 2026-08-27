@@ -46,21 +46,22 @@ class QuizQuestion extends Model
         return $this->hasMany(QuizAttemptAnswer::class, 'question_id');
     }
 
+    public function versions(): HasMany
+    {
+        return $this->hasMany(QuestionVersion::class, 'question_id')->orderBy('version');
+    }
+
+    public function versionMappings(): HasMany
+    {
+        return $this->hasMany(QuizVersionQuestion::class, 'question_id');
+    }
+
     public function getFormTypeAttribute(): string
     {
         return match ($this->type) {
             self::TYPE_MULTIPLE => 'multiple_choice',
             self::TYPE_TRUE_FALSE => 'true_false',
             default => 'single_choice',
-        };
-    }
-
-    public static function storageTypeFromRequest(string $type): string
-    {
-        return match ($type) {
-            'multiple_choice', self::TYPE_MULTIPLE => self::TYPE_MULTIPLE,
-            'true_false', self::TYPE_TRUE_FALSE => self::TYPE_TRUE_FALSE,
-            default => self::TYPE_SINGLE,
         };
     }
 }
