@@ -34,6 +34,10 @@ class QuizHistoricalResultActivationTest extends TestCase
         [$student, $course, $lesson, $quiz, $v1] = $this->publishedQuiz();
         $attempt = $this->startAttempt($student, $course, $lesson);
         $this->actingAs($student)
+            ->get(route('learn.lessons.quiz.show', [$course->slug, $lesson]))
+            ->assertOk()
+            ->assertSee('data-math-content', false);
+        $this->actingAs($student)
             ->post(route('learn.lessons.quiz.submit', [$course, $lesson]), [
                 'attempt_id' => $attempt->id,
                 'answers' => $this->correctAnswers($v1),
@@ -53,6 +57,35 @@ class QuizHistoricalResultActivationTest extends TestCase
             ->assertDontSee('V2 option 1-1');
 
         $this->assertSame($v1->id, $attempt->fresh()->quiz_version_id);
+    }
+
+    public function test_historical_result_marks_latex_content_as_safe_render_targets(): void
+    {
+        [$student, $course, $lesson, , $v1] = $this->publishedQuiz();
+        $v1->load('questionMappings.questionVersion.options');
+        $first = $v1->questionMappings->first();
+        $questionText = 'Solve \\(x^2 = 4\\) <script>alert(1)</script>';
+
+        $first->questionVersion->update([
+            'question' => $questionText,
+            'explanation' => 'Use \\(x = 2\\) to verify the answer.',
+        ]);
+        $first->questionVersion->options->firstOrFail()->update([
+            'option_text' => '\\(x = 2\\)',
+        ]);
+
+        $attempt = $this->startAttempt($student, $course, $lesson);
+        $this->submit($student, $course, $lesson, $attempt, $this->correctAnswers($v1))->assertOk();
+
+        $this->actingAs($student)
+            ->get(route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]))
+            ->assertOk()
+            ->assertSee('data-math-content', false)
+            ->assertSee('Solve \\(x^2 = 4\\)', false)
+            ->assertSee('Use \\(x = 2\\)', false)
+            ->assertSee('\\(x = 2\\)', false)
+            ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)
+            ->assertDontSee('<script>alert(1)</script>', false);
     }
 
     public function test_historical_result_groups_multiple_answers_and_handles_unanswered_and_missing_legacy_answers(): void

@@ -1,3 +1,5 @@
+import { renderMath } from './math-renderer';
+
 const STATUS_PRESENTATION = {
     valid: {
         label: 'Hợp lệ',
@@ -735,7 +737,13 @@ function initializeLessonImport(root) {
             const mainRow = createElement('tr', presentation.rowClass);
 
             v2Cells(sheetName, safeRow, data).forEach((value, index) => {
-                mainRow.append(createElement('td', v2CellClass(sheetName, index), value));
+                const cell = createElement('td', v2CellClass(sheetName, index), value);
+
+                if ((sheetName === 'QuizQuestions' || sheetName === 'QuizOptions') && index === 3) {
+                    cell.dataset.mathContent = '';
+                }
+
+                mainRow.append(cell);
             });
 
             const statusCell = createElement('td', 'px-3 py-3');
@@ -831,6 +839,8 @@ function initializeLessonImport(root) {
             const body = root.querySelector(`[data-lesson-import-v2-sheet-rows="${sheetName}"]`);
             if (body) body.replaceChildren(createV2EntityRows(sheetName, v2SheetRows(sheets, sheetName), issuesByRow));
         });
+
+        renderMath(root);
 
         renderV2Issues(issues);
         elements.v2ErrorGuidance?.classList.toggle('hidden', counts.errors <= 0);
