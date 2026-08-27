@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Data\CourseSubmissionCheckResult;
+use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Instructor\StoreChapterRequest;
 use App\Http\Requests\Instructor\StoreCourseRequest;
@@ -25,6 +26,7 @@ use App\Models\User;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
+use App\Services\HistoricalQuizDeletionGuard;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -159,6 +161,12 @@ class CourseController extends Controller
 
             return redirect()->route('instructor.courses.index')
                 ->with('success', 'Khóa học đã có dữ liệu học viên hoặc đơn hàng nên được chuyển sang trạng thái lưu trữ.');
+        }
+
+        try {
+            app(HistoricalQuizDeletionGuard::class)->assertCourseCanBeHardDeleted($course);
+        } catch (HistoricalQuizDeletionException $exception) {
+            return back()->withErrors(['course' => $exception->getMessage()]);
         }
 
         $this->deleteThumbnail($course);

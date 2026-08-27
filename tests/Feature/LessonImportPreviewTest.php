@@ -75,6 +75,34 @@ class LessonImportPreviewTest extends TestCase
         $workbook->disconnectWorksheets();
     }
 
+    public function test_template_endpoint_returns_v2_only_when_explicitly_requested(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+
+        $response = $this->get(
+            route('instructor.courses.lessons.import.template', $course).'?version=2',
+        );
+
+        $response->assertOk();
+        $this->assertStringContainsString(
+            LessonImportTemplateService::V2_FILENAME,
+            (string) $response->headers->get('content-disposition'),
+        );
+
+        $path = $this->temporaryPath();
+        file_put_contents($path, $response->streamedContent());
+        $workbook = IOFactory::load($path);
+
+        $this->assertSame(
+            ['_meta', 'Lessons', 'Quizzes', 'QuizQuestions', 'QuizOptions'],
+            $workbook->getSheetNames(),
+        );
+        $this->assertSame(2, $workbook->getSheetByName('_meta')->getCell('B1')->getValue());
+
+        $workbook->disconnectWorksheets();
+    }
+
     public function test_curriculum_renders_lesson_import_trigger_dialog_and_section_routes_for_owner(): void
     {
         $instructor = $this->signInInstructor();

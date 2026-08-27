@@ -88,7 +88,13 @@ class CourseReviewService
 
         $this->assertChecklistComplete($checklist);
 
-        return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately) {
+        $wasAlreadyPublished = (bool) $course->is_published || in_array($course->status, [
+            Course::STATUS_PUBLISHED,
+            Course::STATUS_PENDING_UPDATE,
+            Course::STATUS_REJECTED_UPDATE,
+        ], true);
+
+        return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately, $wasAlreadyPublished) {
             $review = $this->latestPendingReview($course);
 
             if ($review) {
@@ -103,12 +109,16 @@ class CourseReviewService
             // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này (phê duyệt chapter trước lesson)
             $pendingUpdates = ContentUpdate::where('course_id', $course->id)
                 ->where('status', ContentUpdate::STATUS_PENDING)
-                ->orderByRaw("FIELD(type, 'chapter', 'lesson', 'course')")
+                ->orderByRaw("CASE type WHEN 'chapter' THEN 1 WHEN 'lesson' THEN 2 WHEN 'quiz' THEN 3 WHEN 'course' THEN 4 ELSE 5 END")
                 ->get();
 
             $contentUpdateService = app(ContentUpdateService::class);
             foreach ($pendingUpdates as $pendingUpdate) {
                 $contentUpdateService->applyApprovedUpdate($pendingUpdate, $admin);
+            }
+
+            if (! $wasAlreadyPublished) {
+                app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             }
 
             $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
@@ -184,6 +194,7 @@ class CourseReviewService
 
         $count = 0;
         foreach ($approvedCourses as $course) {
+            app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             $course->update([
                 'status' => CourseStatus::Published->value,
                 'is_published' => true,
@@ -271,12 +282,15 @@ class CourseReviewService
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::Approved->value, CourseStatus::Suspended->value], true), 422);
 
-        $course->update([
-            'status' => CourseStatus::Published->value,
-            'is_published' => true,
-            'published_at' => $course->published_at ?? now(),
-            'suspended_at' => null,
-        ]);
+        DB::transaction(function () use ($course): void {
+            app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+            $course->update([
+                'status' => CourseStatus::Published->value,
+                'is_published' => true,
+                'published_at' => $course->published_at ?? now(),
+                'suspended_at' => null,
+            ]);
+        });
 
         ActivityLogService::log($admin->id, 'publish_course', Course::class, $course->id);
     }

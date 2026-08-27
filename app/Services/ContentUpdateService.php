@@ -8,6 +8,9 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\QuestionVersion;
+use App\Models\Quiz;
+use App\Models\QuizVersion;
 use App\Models\User;
 use App\Models\VideoModeration;
 use Illuminate\Support\Collection;
@@ -48,27 +51,35 @@ class ContentUpdateService
     public function applyApprovedUpdate(ContentUpdate $update, User $admin): void
     {
         DB::transaction(function () use ($update, $admin) {
+            $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $payload = $update->payload ?? [];
 
-            switch ($update->type) {
-                case ContentUpdate::TYPE_COURSE:
-                    $this->applyCourseUpdate($update, $payload);
-                    break;
+            if ($update->type === ContentUpdate::TYPE_QUIZ) {
+                $this->approveQuizCandidate($update, $payload, $admin);
+            } else {
+                switch ($update->type) {
+                    case ContentUpdate::TYPE_COURSE:
+                        $this->applyCourseUpdate($update, $payload);
+                        break;
 
-                case ContentUpdate::TYPE_CHAPTER:
-                    $this->applyChapterUpdate($update, $payload);
-                    break;
+                    case ContentUpdate::TYPE_CHAPTER:
+                        $this->applyChapterUpdate($update, $payload);
+                        break;
 
-                case ContentUpdate::TYPE_LESSON:
-                    $this->applyLessonUpdate($update, $payload);
-                    break;
+                    case ContentUpdate::TYPE_LESSON:
+                        $this->applyLessonUpdate($update, $payload);
+                        break;
+
+                    default:
+                        abort(422, 'Loại cập nhật nội dung không được hỗ trợ.');
+                }
+
+                $update->update([
+                    'status' => ContentUpdate::STATUS_APPROVED,
+                    'reviewed_by' => $admin->id,
+                    'reviewed_at' => now(),
+                ]);
             }
-
-            $update->update([
-                'status' => ContentUpdate::STATUS_APPROVED,
-                'reviewed_by' => $admin->id,
-                'reviewed_at' => now(),
-            ]);
 
             // Kiểm tra xem khóa học còn bản cập nhật pending nào khác không, nếu không thì đưa trạng thái về published
             $remainingPending = ContentUpdate::where('course_id', $update->course_id)
@@ -123,6 +134,99 @@ class ContentUpdateService
         }
     }
 
+    private function approveQuizCandidate(ContentUpdate $update, array $payload, User $admin): void
+    {
+        $quizId = (int) ($payload['quiz_id'] ?? 0);
+        $versionId = (int) ($payload['quiz_version_id'] ?? 0);
+        $quiz = Quiz::query()->lockForUpdate()->with('lesson')->find($quizId);
+        $version = QuizVersion::query()->lockForUpdate()->find($versionId);
+
+        abort_unless($quiz && $version, 422, 'Không tìm thấy ứng viên Quiz cần duyệt.');
+        abort_unless((int) $update->entity_id === $quizId, 422, 'ContentUpdate không khớp Quiz ứng viên.');
+        abort_unless((int) $quiz->lesson?->course_id === (int) $update->course_id, 422, 'Quiz không thuộc khóa học của ContentUpdate.');
+
+        $versioning = app(QuizVersioningService::class);
+        $versioning->assertVersionBelongsToQuiz($quiz, $version);
+
+        if ($update->isApproved()) {
+            $this->activateApprovedQuizCandidate($update, $payload, $quiz, $version);
+
+            return;
+        }
+
+        abort_unless($update->isPending(), 422, 'Chỉ ContentUpdate đang chờ duyệt mới có thể kích hoạt Quiz.');
+        abort_unless((int) $quiz->current_draft_version_id === $versionId, 422, 'Ứng viên không còn là bản nháp Quiz hiện tại.');
+        abort_unless($version->status === QuizVersion::STATUS_DRAFT, 422, 'Ứng viên Quiz không còn ở trạng thái bản nháp.');
+
+        $validation = app(QuizContentService::class)->validateQuizVersion($version);
+        abort_unless($validation['is_complete'], 422, implode(' ', $validation['errors']));
+
+        $update->update([
+            'status' => ContentUpdate::STATUS_APPROVED,
+            'reviewed_by' => $admin->id,
+            'reviewed_at' => now(),
+        ]);
+
+        $this->activateApprovedQuizCandidate($update, $payload, $quiz, $version);
+    }
+
+    private function activateApprovedQuizCandidate(ContentUpdate $update, array $payload, Quiz $quiz, QuizVersion $candidate): void
+    {
+        abort_unless($update->isApproved(), 422, 'Quiz candidate must be approved before activation.');
+
+        if ((int) $quiz->current_published_version_id === (int) $candidate->id
+            && $candidate->status === QuizVersion::STATUS_PUBLISHED
+            && $quiz->current_draft_version_id === null) {
+            return;
+        }
+
+        abort_unless((int) $quiz->current_draft_version_id === (int) $candidate->id, 422, 'Ứng viên không còn là bản nháp Quiz hiện tại.');
+        abort_unless($candidate->status === QuizVersion::STATUS_DRAFT, 422, 'Ứng viên Quiz không còn ở trạng thái bản nháp.');
+
+        $validation = app(QuizContentService::class)->validateQuizVersion($candidate);
+        abort_unless($validation['is_complete'], 422, implode(' ', $validation['errors']));
+
+        $current = $quiz->current_published_version_id
+            ? QuizVersion::query()->lockForUpdate()->findOrFail($quiz->current_published_version_id)
+            : null;
+        if ($current) {
+            abort_unless((int) $current->quiz_id === (int) $quiz->id, 422, 'Published Quiz pointer is invalid.');
+            abort_unless($current->status === QuizVersion::STATUS_PUBLISHED, 422, 'Published Quiz pointer must reference a published version.');
+        }
+
+        $mappings = $candidate->questionMappings()->lockForUpdate()->get();
+        QuestionVersion::query()
+            ->whereIn('id', $mappings->pluck('question_version_id'))
+            ->where('status', QuestionVersion::STATUS_DRAFT)
+            ->update([
+                'status' => QuestionVersion::STATUS_PUBLISHED,
+                'published_at' => now(),
+            ]);
+
+        $current?->update(['status' => QuizVersion::STATUS_SUPERSEDED]);
+        $candidate->update([
+            'status' => QuizVersion::STATUS_PUBLISHED,
+            'published_at' => now(),
+        ]);
+
+        $quizUpdates = [
+            'current_published_version_id' => $candidate->id,
+            'current_draft_version_id' => null,
+        ];
+        if (array_key_exists('desired_is_active', $payload)) {
+            $quizUpdates['is_active'] = (bool) $payload['desired_is_active'];
+        }
+        $quiz->update($quizUpdates);
+
+        $update->update([
+            'payload' => [
+                ...$payload,
+                'activation_deferred' => false,
+                'activated_at' => now()->toIso8601String(),
+            ],
+        ]);
+    }
+
     private function applyChapterUpdate(ContentUpdate $update, array $payload): void
     {
         if ($update->action === ContentUpdate::ACTION_CREATE) {
@@ -150,6 +254,7 @@ class ContentUpdateService
                 $chapter->update(array_intersect_key($payload, array_flip(['title', 'sort_order'])));
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
+            app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($update->entity_id);
             CourseSection::destroy($update->entity_id);
             Chapter::destroy($update->entity_id);
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
@@ -286,6 +391,7 @@ class ContentUpdateService
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
+            app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($update->entity_id);
             Lesson::destroy($update->entity_id);
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
             $orders = $payload['lesson_orders'] ?? [];

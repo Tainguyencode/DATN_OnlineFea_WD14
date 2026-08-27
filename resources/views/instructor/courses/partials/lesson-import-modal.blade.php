@@ -127,16 +127,28 @@
                 </div>
 
                 <footer class="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                    <a
-                        href="{{ route('instructor.courses.lessons.import.template', $course) }}"
-                        download
-                        class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                    >
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
-                        </svg>
-                        Tải file mẫu
-                    </a>
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <a
+                            href="{{ route('instructor.courses.lessons.import.template', $course) }}"
+                            download
+                            class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+                            </svg>
+                            Tải mẫu v1
+                        </a>
+                        <a
+                            href="{{ route('instructor.courses.lessons.import.template', ['course' => $course, 'version' => 2]) }}"
+                            download
+                            class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+                            </svg>
+                            Tải mẫu v2 (kèm Quiz)
+                        </a>
+                    </div>
                     <div class="flex flex-col-reverse gap-2 sm:flex-row">
                         <button type="button" data-lesson-import-close class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50">
                             Hủy
@@ -154,7 +166,7 @@
             </div>
 
             <div data-lesson-import-step="preview" class="hidden min-h-0 flex-1 overflow-y-auto">
-                <div class="space-y-5 px-4 py-5 sm:px-6">
+                <div data-lesson-import-v1-preview class="space-y-5 px-4 py-5 sm:px-6">
                     <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3" aria-label="Tóm tắt kết quả kiểm tra">
                         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
                             <span class="text-xs font-bold text-slate-600">Tổng số</span>
@@ -225,6 +237,204 @@
                             <tbody data-lesson-import-rows class="divide-y divide-slate-200 bg-white"></tbody>
                         </table>
                     </div>
+                </div>
+
+                <div data-lesson-import-v2-preview class="hidden space-y-5 px-4 py-5 sm:px-6">
+                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6" aria-label="Tóm tắt kết quả kiểm tra workbook v2">
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <span class="text-xs font-bold text-slate-600">Bài học</span>
+                            <strong data-lesson-import-v2-count="lessons" class="mt-1 block text-xl text-slate-950">0</strong>
+                        </div>
+                        <div class="rounded-lg border border-violet-200 bg-violet-50 p-3">
+                            <span class="text-xs font-bold text-violet-800">Quiz</span>
+                            <strong data-lesson-import-v2-count="quizzes" class="mt-1 block text-xl text-violet-900">0</strong>
+                        </div>
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                            <span class="text-xs font-bold text-sky-800">Câu hỏi</span>
+                            <strong data-lesson-import-v2-count="questions" class="mt-1 block text-xl text-sky-900">0</strong>
+                        </div>
+                        <div class="rounded-lg border border-cyan-200 bg-cyan-50 p-3">
+                            <span class="text-xs font-bold text-cyan-800">Đáp án</span>
+                            <strong data-lesson-import-v2-count="options" class="mt-1 block text-xl text-cyan-900">0</strong>
+                        </div>
+                        <div class="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                            <span class="text-xs font-bold text-rose-800">Lỗi</span>
+                            <strong data-lesson-import-v2-count="errors" class="mt-1 block text-xl text-rose-900">0</strong>
+                        </div>
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <span class="text-xs font-bold text-amber-800">Cảnh báo</span>
+                            <strong data-lesson-import-v2-count="warnings" class="mt-1 block text-xl text-amber-900">0</strong>
+                        </div>
+                    </div>
+
+                    <div data-lesson-import-v2-error-guidance class="hidden rounded-lg border border-rose-200 bg-rose-50 p-4" role="status">
+                        <p class="text-sm font-bold text-rose-900">Workbook còn lỗi và chưa sẵn sàng để import.</p>
+                        <p class="mt-1 text-sm text-rose-800">Vui lòng sửa các ô được nêu bên dưới, sau đó kiểm tra lại file Excel.</p>
+                    </div>
+
+                    <div class="rounded-lg border border-slate-200 bg-white">
+                        <div class="border-b border-slate-200 px-3 pt-3 sm:px-4">
+                            <div class="flex gap-2 overflow-x-auto pb-3" role="tablist" aria-label="Dữ liệu workbook v2">
+                                <button
+                                    type="button"
+                                    id="lesson-import-v2-tab-Lessons"
+                                    data-lesson-import-v2-tab="Lessons"
+                                    role="tab"
+                                    aria-controls="lesson-import-v2-panel-Lessons"
+                                    aria-selected="true"
+                                    tabindex="0"
+                                    class="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-slate-900 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                                >Bài học</button>
+                                <button
+                                    type="button"
+                                    id="lesson-import-v2-tab-Quizzes"
+                                    data-lesson-import-v2-tab="Quizzes"
+                                    role="tab"
+                                    aria-controls="lesson-import-v2-panel-Quizzes"
+                                    aria-selected="false"
+                                    tabindex="-1"
+                                    class="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                                >Quiz</button>
+                                <button
+                                    type="button"
+                                    id="lesson-import-v2-tab-QuizQuestions"
+                                    data-lesson-import-v2-tab="QuizQuestions"
+                                    role="tab"
+                                    aria-controls="lesson-import-v2-panel-QuizQuestions"
+                                    aria-selected="false"
+                                    tabindex="-1"
+                                    class="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                                >Câu hỏi</button>
+                                <button
+                                    type="button"
+                                    id="lesson-import-v2-tab-QuizOptions"
+                                    data-lesson-import-v2-tab="QuizOptions"
+                                    role="tab"
+                                    aria-controls="lesson-import-v2-panel-QuizOptions"
+                                    aria-selected="false"
+                                    tabindex="-1"
+                                    class="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                                >Đáp án</button>
+                            </div>
+                        </div>
+
+                        <div
+                            id="lesson-import-v2-panel-Lessons"
+                            data-lesson-import-v2-sheet-panel="Lessons"
+                            role="tabpanel"
+                            aria-labelledby="lesson-import-v2-tab-Lessons"
+                            tabindex="0"
+                            class="overflow-x-auto"
+                        >
+                            <table class="min-w-[760px] w-full border-collapse text-left text-sm">
+                                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th scope="col" class="w-16 px-3 py-3 font-bold">Dòng</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Mã</th>
+                                        <th scope="col" class="min-w-64 px-3 py-3 font-bold">Tên bài học</th>
+                                        <th scope="col" class="w-28 px-3 py-3 font-bold">Loại</th>
+                                        <th scope="col" class="w-32 px-3 py-3 font-bold">Thời lượng</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-lesson-import-v2-sheet-rows="Lessons" class="divide-y divide-slate-200 bg-white"></tbody>
+                            </table>
+                        </div>
+
+                        <div
+                            id="lesson-import-v2-panel-Quizzes"
+                            data-lesson-import-v2-sheet-panel="Quizzes"
+                            role="tabpanel"
+                            aria-labelledby="lesson-import-v2-tab-Quizzes"
+                            tabindex="0"
+                            class="hidden overflow-x-auto"
+                        >
+                            <table class="min-w-[900px] w-full border-collapse text-left text-sm">
+                                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th scope="col" class="w-16 px-3 py-3 font-bold">Dòng</th>
+                                        <th scope="col" class="w-32 px-3 py-3 font-bold">Mã bài học</th>
+                                        <th scope="col" class="min-w-56 px-3 py-3 font-bold">Quiz</th>
+                                        <th scope="col" class="w-24 px-3 py-3 font-bold">Điểm đạt</th>
+                                        <th scope="col" class="w-28 px-3 py-3 font-bold">Thời gian</th>
+                                        <th scope="col" class="w-24 px-3 py-3 font-bold">Lần làm</th>
+                                        <th scope="col" class="w-24 px-3 py-3 font-bold">Kích hoạt</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-lesson-import-v2-sheet-rows="Quizzes" class="divide-y divide-slate-200 bg-white"></tbody>
+                            </table>
+                        </div>
+
+                        <div
+                            id="lesson-import-v2-panel-QuizQuestions"
+                            data-lesson-import-v2-sheet-panel="QuizQuestions"
+                            role="tabpanel"
+                            aria-labelledby="lesson-import-v2-tab-QuizQuestions"
+                            tabindex="0"
+                            class="hidden overflow-x-auto"
+                        >
+                            <table class="min-w-[940px] w-full border-collapse text-left text-sm">
+                                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th scope="col" class="w-16 px-3 py-3 font-bold">Dòng</th>
+                                        <th scope="col" class="w-28 px-3 py-3 font-bold">Mã bài học</th>
+                                        <th scope="col" class="w-32 px-3 py-3 font-bold">Mã câu hỏi</th>
+                                        <th scope="col" class="min-w-80 px-3 py-3 font-bold">Câu hỏi</th>
+                                        <th scope="col" class="w-28 px-3 py-3 font-bold">Loại</th>
+                                        <th scope="col" class="w-20 px-3 py-3 font-bold">Điểm</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-lesson-import-v2-sheet-rows="QuizQuestions" class="divide-y divide-slate-200 bg-white"></tbody>
+                            </table>
+                        </div>
+
+                        <div
+                            id="lesson-import-v2-panel-QuizOptions"
+                            data-lesson-import-v2-sheet-panel="QuizOptions"
+                            role="tabpanel"
+                            aria-labelledby="lesson-import-v2-tab-QuizOptions"
+                            tabindex="0"
+                            class="hidden overflow-x-auto"
+                        >
+                            <table class="min-w-[840px] w-full border-collapse text-left text-sm">
+                                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th scope="col" class="w-16 px-3 py-3 font-bold">Dòng</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Mã câu hỏi</th>
+                                        <th scope="col" class="w-28 px-3 py-3 font-bold">Mã đáp án</th>
+                                        <th scope="col" class="min-w-80 px-3 py-3 font-bold">Đáp án</th>
+                                        <th scope="col" class="w-24 px-3 py-3 font-bold">Đúng</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-lesson-import-v2-sheet-rows="QuizOptions" class="divide-y divide-slate-200 bg-white"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <section class="overflow-hidden rounded-lg border border-slate-200 bg-white" aria-labelledby="lesson-import-v2-issues-title">
+                        <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                            <h3 id="lesson-import-v2-issues-title" class="text-sm font-bold text-slate-900">Lỗi và cảnh báo</h3>
+                            <p class="mt-0.5 text-xs text-slate-600">Mỗi mục chỉ rõ sheet, dòng và trường cần kiểm tra.</p>
+                        </div>
+                        <div data-lesson-import-v2-issues-empty class="px-4 py-6 text-sm font-semibold text-emerald-700">Không có lỗi hoặc cảnh báo.</div>
+                        <div data-lesson-import-v2-issues-wrap class="hidden overflow-x-auto">
+                            <table class="min-w-[720px] w-full border-collapse text-left text-sm">
+                                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th scope="col" class="w-28 px-3 py-3 font-bold">Mức độ</th>
+                                        <th scope="col" class="w-36 px-3 py-3 font-bold">Sheet</th>
+                                        <th scope="col" class="w-20 px-3 py-3 font-bold">Dòng</th>
+                                        <th scope="col" class="w-40 px-3 py-3 font-bold">Trường</th>
+                                        <th scope="col" class="min-w-80 px-3 py-3 font-bold">Thông báo</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-lesson-import-v2-issues class="divide-y divide-slate-200 bg-white"></tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
 
                 <footer class="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">

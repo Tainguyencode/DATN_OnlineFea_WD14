@@ -6,17 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonProgress;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
-use App\Models\QuizQuestion;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use App\Services\PointService;
-use App\Services\QuizService;
+use App\Services\QuizAttemptResultService;
+use App\Services\QuizAttemptService;
+use App\Services\QuizContentService;
+use App\Services\QuizVersioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class QuizController extends Controller
@@ -24,341 +26,168 @@ class QuizController extends Controller
     public function show(Course $course, Lesson $lesson): View
     {
         $this->authorizePublishedLesson($course, $lesson);
-
-        $lesson->loadMissing(['section:id,course_id,title', 'chapter:id,course_id,title', 'quiz.questions.options']);
+        $lesson->loadMissing(['quiz.currentPublishedVersion.questionMappings.questionVersion.options']);
         $quiz = $this->activeQuiz($lesson);
         $isEnrolled = $this->isEnrolled($course);
-        $canBypass = auth()->check() && (
-            auth()->user()->isAdmin() ||
-            (auth()->user()->isInstructor() && $course->isOwnedBy(auth()->user()))
-        );
-
+        $canBypass = auth()->check() && (auth()->user()->isAdmin() || (auth()->user()->isInstructor() && $course->isOwnedBy(auth()->user())));
         abort_unless($isEnrolled || $lesson->is_preview || $canBypass, 403);
 
-        $attemptsCount = auth()->check()
-            ? $quiz->attempts()->where('user_id', auth()->id())->count()
-            : 0;
-        $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
-        $canSubmit = auth()->check()
-            && auth()->user()->isStudent()
-            && $isEnrolled
-            && ! $attemptLimitReached;
+        $attempt = null;
+        $attemptService = app(QuizAttemptService::class);
+        if (auth()->user()?->isStudent() && $isEnrolled) {
+            $attempt = $attemptService->findInProgress($course, $lesson, auth()->user());
+            $completedAttempts = $attemptService->completedAttemptsCount($quiz, auth()->user());
+            if (! $attempt && ($quiz->max_attempts === null || $completedAttempts < $quiz->max_attempts)) {
+                $attempt = $attemptService->startOrResume($course, $lesson, auth()->user());
+            }
+            if ($attempt) {
+                $quiz = $attemptService->projectQuiz($attempt);
+            }
+        }
 
-        return view('courses.quiz', compact(
-            'course',
-            'lesson',
-            'quiz',
-            'isEnrolled',
-            'canSubmit',
-            'attemptsCount',
-            'attemptLimitReached'
-        ));
+        $attemptsCount = auth()->user()?->isStudent() ? $attemptService->completedAttemptsCount($quiz, auth()->user()) : 0;
+        $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
+        $canSubmit = $attempt !== null;
+        $canStart = auth()->user()?->isStudent() && $isEnrolled && (! $attemptLimitReached || $attempt !== null);
+
+        return view('courses.quiz', compact('course', 'lesson', 'quiz', 'isEnrolled', 'attempt', 'canStart', 'canSubmit', 'attemptsCount', 'attemptLimitReached'));
+    }
+
+    public function start(Request $request, Course $course, Lesson $lesson): JsonResponse|RedirectResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        $attempt = app(QuizAttemptService::class)->startOrResume($course, $lesson, $request->user());
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'attempt' => [
+                'id' => $attempt->id,
+                'quiz_version_id' => $attempt->quiz_version_id,
+                'started_at' => $attempt->started_at?->toIso8601String(),
+            ]]);
+        }
+
+        return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson]);
     }
 
     public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse
     {
         $this->authorizePublishedLesson($course, $lesson);
-
         abort_unless($request->user()?->isStudent(), 403);
-
         if (! $this->isEnrolled($course)) {
-            return redirect()
-                ->route('learn.lessons.quiz.show', [$course->slug, $lesson])
-                ->with('error', 'Ban can dang ky khoa hoc de nop quiz.');
+            return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson])->with('error', 'Enrollment is required to submit this quiz.');
         }
 
-        $lesson->loadMissing(['quiz.questions.options']);
-        $quiz = $this->activeQuiz($lesson);
-
-        if ($quiz->max_attempts !== null && $quiz->attempts()->where('user_id', $request->user()->id)->count() >= $quiz->max_attempts) {
-            return redirect()
-                ->route('learn.lessons.quiz.show', [$course->slug, $lesson])
-                ->with('error', 'Ban da het so lan lam quiz nay.');
+        [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
+        if ($completedNow) {
+            $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService);
         }
 
-        $validated = $request->validate([
-            'answers' => ['nullable', 'array'],
-        ]);
-
-        $graded = app(QuizService::class)->grade($quiz, $validated['answers'] ?? []);
-
-        $attempt = DB::transaction(function () use ($quiz, $request, $graded) {
-            $attempt = QuizAttempt::create([
-                'user_id' => $request->user()->id,
-                'quiz_id' => $quiz->id,
-                'score' => $graded['score'],
-                'total_score' => $graded['total_score'],
-                'percent' => $graded['percent'],
-                'passed' => $graded['passed'],
-                'answers' => $graded['answers'],
-                'started_at' => now(),
-                'completed_at' => now(),
-            ]);
-
-            foreach ($graded['questions'] as $questionId => $result) {
-                if ($result['selected_ids'] === []) {
-                    $attempt->attemptAnswers()->create([
-                        'question_id' => $questionId,
-                        'answer_id' => null,
-                        'is_correct' => false,
-                    ]);
-
-                    continue;
-                }
-
-                foreach ($result['selected_ids'] as $answerId) {
-                    $attempt->attemptAnswers()->create([
-                        'question_id' => $questionId,
-                        'answer_id' => $answerId,
-                        'is_correct' => in_array($answerId, $result['correct_ids'], true),
-                    ]);
-                }
-            }
-
-            return $attempt;
-        });
-
-        $progressService->recordLessonProgress(
-            $request->user()->id,
-            $course,
-            $lesson,
-            0,
-            0,
-            true,
-        );
-
-        app(PointService::class)->awardQuizPoints(
-            $request->user()->id,
-            $quiz,
-            (float) $attempt->percent,
-            $course->id
-        );
-
-        return view('courses.quiz-result', [
-            'course' => $course,
-            'lesson' => $lesson,
-            'quiz' => $quiz,
-            'attempt' => $attempt,
-            'graded' => $graded,
-        ]);
+        return redirect()->route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]);
     }
 
-    public function submitAjax(
-        Request $request,
-        Course $course,
-        Lesson $lesson,
-        LearningProgressService $progressService,
-    ): JsonResponse {
+    public function result(Course $course, Lesson $lesson, QuizAttempt $attempt, QuizAttemptResultService $resultService): View
+    {
         $this->authorizePublishedLesson($course, $lesson);
-        abort_unless($lesson->type === 'quiz', 404);
-        abort_unless($request->user()?->isStudent() || $request->user()?->isAdmin() || $request->user()?->isInstructor(), 403);
+        abort_unless(auth()->user()?->isStudent(), 403);
 
+        $result = $resultService->forLearner($course, $lesson, auth()->user(), $attempt);
+
+        return view('courses.quiz-attempt-result', compact('course', 'lesson', 'result'));
+    }
+
+    public function submitAjax(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): JsonResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless($request->user()?->isStudent(), 403);
         if (! $this->isEnrolled($course)) {
-            return response()->json(['success' => false, 'message' => 'Bạn cần đăng ký khóa học để làm quiz.'], 403);
+            return response()->json(['success' => false, 'message' => 'Enrollment is required to submit this quiz.'], 403);
         }
 
-        $lesson->loadMissing(['quiz.questions.options']);
-        $quiz = $this->activeQuiz($lesson);
-
-        if ($quiz->max_attempts !== null && $quiz->attempts()->where('user_id', $request->user()->id)->count() >= $quiz->max_attempts) {
-            return response()->json(['success' => false, 'message' => 'Bạn đã hết số lần làm quiz này.'], 422);
-        }
-
-        $validated = $request->validate([
-            'answers' => ['nullable', 'array'],
-        ]);
-
-        $graded = app(QuizService::class)->grade($quiz, $validated['answers'] ?? []);
-
-        $attempt = DB::transaction(function () use ($quiz, $request, $graded) {
-            $attempt = QuizAttempt::create([
-                'user_id' => $request->user()->id,
-                'quiz_id' => $quiz->id,
-                'score' => $graded['score'],
-                'total_score' => $graded['total_score'],
-                'percent' => $graded['percent'],
-                'passed' => $graded['passed'],
-                'answers' => $graded['answers'],
-                'started_at' => now(),
-                'completed_at' => now(),
-            ]);
-
-            foreach ($graded['questions'] as $questionId => $result) {
-                if ($result['selected_ids'] === []) {
-                    $attempt->attemptAnswers()->create([
-                        'question_id' => $questionId,
-                        'answer_id' => null,
-                        'is_correct' => false,
-                    ]);
-
-                    continue;
-                }
-
-                foreach ($result['selected_ids'] as $answerId) {
-                    $attempt->attemptAnswers()->create([
-                        'question_id' => $questionId,
-                        'answer_id' => $answerId,
-                        'is_correct' => in_array($answerId, $result['correct_ids'], true),
-                    ]);
-                }
-            }
-
-            return $attempt;
-        });
-
-        $progress = $progressService->recordLessonProgress(
-            $request->user()->id,
-            $course,
-            $lesson,
-            0,
-            0,
-            true,
-        );
-
-        app(PointService::class)->awardQuizPoints(
-            $request->user()->id,
-            $quiz,
-            (float) $attempt->percent,
-            $course->id
-        );
-
-        $correctCount = collect($graded['questions'])->filter(fn ($q) => $q['is_correct'])->count();
-        $totalQuestions = count($graded['questions']);
+        [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
+        $progress = $completedNow
+            ? $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService)
+            : [];
+        $attemptService = app(QuizAttemptService::class);
+        $completedAttempts = $attemptService->completedAttemptsCount($quiz, $request->user());
 
         return response()->json([
             'success' => true,
             'attempt' => [
                 'id' => $attempt->id,
+                'quiz_version_id' => $attempt->quiz_version_id,
                 'score' => $attempt->score,
                 'total_score' => $attempt->total_score,
                 'percent' => (float) $attempt->percent,
                 'passed' => (bool) $attempt->passed,
-                'correct_count' => $correctCount,
-                'total_questions' => $totalQuestions,
+                'correct_count' => collect($graded['questions'])->filter(fn ($question) => $question['is_correct'])->count(),
+                'total_questions' => count($graded['questions']),
                 'pass_score' => (int) $quiz->pass_score,
             ],
-            'graded' => [
-                'questions' => collect($graded['questions'])->map(fn ($result, $questionId) => [
-                    'question_id' => (int) $questionId,
-                    'selected_ids' => $result['selected_ids'],
-                    'correct_ids' => $result['correct_ids'],
-                    'is_correct' => $result['is_correct'],
-                ])->values(),
-            ],
+            'graded' => ['questions' => collect($graded['questions'])->map(fn ($result, $questionId) => [
+                'question_id' => (int) $questionId,
+                'selected_ids' => $result['selected_ids'],
+                'correct_ids' => $result['correct_ids'],
+                'is_correct' => $result['is_correct'],
+            ])->values()],
             'course_progress' => $progress['course_progress'] ?? null,
-            'lesson_completed' => $progress['lesson_completed'] ?? false,
+            'lesson_completed' => $progress['lesson_completed'] ?? (bool) LessonProgress::query()
+                ->where('user_id', $request->user()->id)
+                ->where('lesson_id', $lesson->id)
+                ->value('is_completed'),
             'next_lesson_url' => $this->nextLessonUrl($course, $lesson),
-            'attempts_count' => $quiz->attempts()->where('user_id', $request->user()->id)->count(),
-            'remaining_attempts' => $quiz->max_attempts !== null
-                ? max(0, $quiz->max_attempts - $quiz->attempts()->where('user_id', $request->user()->id)->count())
-                : null,
+            'attempts_count' => $completedAttempts,
+            'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
         ]);
+    }
+
+    /** @return array{0: QuizAttempt, 1: Quiz, 2: array<string, mixed>, 3: bool} */
+    private function gradeBoundAttempt(Request $request, Course $course, Lesson $lesson): array
+    {
+        $validated = $request->validate([
+            'attempt_id' => ['required', 'integer'],
+            'answers' => ['nullable', 'array'],
+        ]);
+        $attemptService = app(QuizAttemptService::class);
+        $submission = $attemptService->submit(
+            $course,
+            $lesson,
+            $request->user(),
+            (int) $validated['attempt_id'],
+            $validated['answers'] ?? [],
+        );
+        $attempt = $submission['attempt'];
+        $quiz = $attemptService->projectQuiz($attempt);
+
+        return [$attempt, $quiz, $submission['graded'], $submission['completed_now']];
+    }
+
+    private function recordAttemptProgress(Request $request, Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt, LearningProgressService $progressService): array
+    {
+        $progress = $progressService->recordLessonProgress($request->user()->id, $course, $lesson);
+        app(PointService::class)->awardQuizPoints($request->user()->id, $quiz, (float) $attempt->percent, $course->id);
+
+        return $progress;
     }
 
     private function nextLessonUrl(Course $course, Lesson $lesson): ?string
     {
         $service = app(LearningPlayerService::class);
-        $sections = $service->curriculumSections($course->loadMissing(['courseSections.lessons', 'chapters.lessons']));
-        $ordered = $service->orderedLessons($sections);
-        $index = $ordered->search(fn (Lesson $l) => (int) $l->id === (int) $lesson->id);
+        $ordered = $service->orderedLessons($service->curriculumSections($course->loadMissing(['courseSections.lessons', 'chapters.lessons'])));
+        $index = $ordered->search(fn (Lesson $item) => (int) $item->id === (int) $lesson->id);
 
-        if ($index === false || $index >= $ordered->count() - 1) {
-            return null;
-        }
-
-        return route('courses.lessons.show', [$course, $ordered[$index + 1]]);
-    }
-
-    private function gradeQuiz(Quiz $quiz, array $submittedAnswers): array
-    {
-        $score = 0;
-        $totalScore = 0;
-        $answers = [];
-        $questions = [];
-
-        $quiz->loadMissing('questions.options');
-
-        foreach ($quiz->questions as $question) {
-            $points = (int) $question->points;
-            $totalScore += $points;
-
-            $selectedIds = $this->selectedAnswerIds($submittedAnswers[$question->id] ?? [], $question);
-            $correctIds = $question->options
-                ->where('is_correct', true)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->values()
-                ->all();
-
-            $questionPassed = $this->questionIsCorrect($question, $selectedIds, $correctIds);
-
-            if ($questionPassed) {
-                $score += $points;
-            }
-
-            $answers[$question->id] = $selectedIds;
-            $questions[$question->id] = [
-                'selected_ids' => $selectedIds,
-                'correct_ids' => $correctIds,
-                'is_correct' => $questionPassed,
-            ];
-        }
-
-        $percent = $totalScore > 0 ? round(($score / $totalScore) * 100, 2) : 0;
-
-        return [
-            'score' => $score,
-            'total_score' => $totalScore,
-            'percent' => $percent,
-            'passed' => $percent >= (int) $quiz->pass_score,
-            'answers' => $answers,
-            'questions' => $questions,
-        ];
-    }
-
-    private function selectedAnswerIds(mixed $rawAnswers, QuizQuestion $question): array
-    {
-        $rawAnswers = is_array($rawAnswers) ? $rawAnswers : [$rawAnswers];
-        $validIds = $question->options->pluck('id')->map(fn ($id) => (int) $id)->all();
-
-        return collect($rawAnswers)
-            ->filter(fn ($id) => $id !== null && $id !== '')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->filter(fn ($id) => in_array($id, $validIds, true))
-            ->values()
-            ->all();
-    }
-
-    private function questionIsCorrect(QuizQuestion $question, array $selectedIds, array $correctIds): bool
-    {
-        sort($selectedIds);
-        sort($correctIds);
-
-        if ($correctIds === []) {
-            return false;
-        }
-
-        if ($question->type === QuizQuestion::TYPE_MULTIPLE) {
-            return $selectedIds === $correctIds;
-        }
-
-        return count($selectedIds) === 1 && $selectedIds[0] === $correctIds[0];
+        return $index === false || $index >= $ordered->count() - 1 ? null : route('courses.lessons.show', [$course, $ordered[$index + 1]]);
     }
 
     private function activeQuiz(Lesson $lesson): Quiz
     {
         $quiz = $lesson->quiz;
+        abort_unless($quiz && app(QuizContentService::class)->isEffectivelyActive($quiz), 404);
 
-        abort_unless($quiz && $quiz->is_active, 404);
-
-        return $quiz;
+        return app(QuizVersioningService::class)->projectVersion($quiz, app(QuizVersioningService::class)->currentPublished($quiz));
     }
 
     private function authorizePublishedLesson(Course $course, Lesson $lesson): void
     {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
-
         $user = auth()->user();
         $canBypass = $user && ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user)));
 
@@ -373,7 +202,6 @@ class QuizController extends Controller
         if (! $user) {
             return false;
         }
-
         if ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user))) {
             Enrollment::firstOrCreate([
                 'user_id' => $user->id,
@@ -387,10 +215,7 @@ class QuizController extends Controller
             return true;
         }
 
-        return Enrollment::where('user_id', $user->id)
-            ->where('course_id', $course->id)
-            ->withLearningAccess()
-            ->exists();
+        return Enrollment::where('user_id', $user->id)->where('course_id', $course->id)->withLearningAccess()->exists();
     }
 
     private function lessonBelongsToCourse(Course $course, Lesson $lesson): bool
@@ -398,7 +223,6 @@ class QuizController extends Controller
         if ((int) $lesson->course_id === (int) $course->id) {
             return true;
         }
-
         if ($lesson->section_id && $lesson->section()->where('course_id', $course->id)->exists()) {
             return true;
         }

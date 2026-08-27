@@ -487,7 +487,7 @@ function initQuizPlayer() {
     let currentIndex = 0;
     const answers = {};
     let timerId = null;
-    let remainingSeconds = quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : null;
+    let remainingSeconds = quiz.remaining_seconds ?? (quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : null);
 
     const renderQuestion = () => {
         const question = quiz.questions[currentIndex];
@@ -539,9 +539,13 @@ function initQuizPlayer() {
     };
 
     const startTimer = () => {
-        if (!remainingSeconds || !timerEl) return;
+        if (remainingSeconds === null || !timerEl) return;
         timerEl.hidden = false;
         timerEl.textContent = formatTime(remainingSeconds);
+        if (remainingSeconds <= 0) {
+            submitQuiz(true);
+            return;
+        }
 
         timerId = window.setInterval(() => {
             remainingSeconds -= 1;
@@ -553,12 +557,36 @@ function initQuizPlayer() {
         }, 1000);
     };
 
-    const startQuiz = () => {
+    const activateQuiz = () => {
         intro.hidden = true;
         active.hidden = false;
         currentIndex = 0;
         renderQuestion();
         startTimer();
+    };
+
+    const startQuiz = async () => {
+        if (quiz.attempt_id) {
+            activateQuiz();
+            return;
+        }
+
+        const startButton = root.querySelector('[data-quiz-start]');
+        if (!quiz.start_url || !startButton) return;
+        startButton.disabled = true;
+        try {
+            const response = await fetch(quiz.start_url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw createUserFacingError(data.message || 'Khong the bat dau quiz.');
+            window.location.reload();
+        } catch (error) {
+            startButton.disabled = false;
+            showToast(getUserFacingErrorMessage(error, 'Khong the bat dau quiz.'), 'error');
+        }
     };
 
     const submitQuiz = async (auto = false) => {
@@ -574,7 +602,7 @@ function initQuizPlayer() {
         prevBtn.disabled = true;
         if (timerId) window.clearInterval(timerId);
 
-        const payload = { answers: {} };
+        const payload = { attempt_id: quiz.attempt_id, answers: {} };
         Object.entries(answers).forEach(([questionId, ids]) => {
             const question = quiz.questions.find((q) => String(q.id) === String(questionId));
             payload.answers[questionId] = question?.type === 'multiple' ? ids : ids[0];
@@ -636,6 +664,8 @@ function initQuizPlayer() {
     };
 
     root.querySelector('[data-quiz-start]')?.addEventListener('click', startQuiz);
+
+    if (quiz.attempt_id) startQuiz();
 
     prevBtn?.addEventListener('click', () => {
         if (currentIndex > 0) {
