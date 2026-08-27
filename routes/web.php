@@ -14,6 +14,7 @@ use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathCo
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Web\Admin\RefundController as AdminRefundController;
+use App\Http\Controllers\Web\Admin\QuizQuestionInvalidationController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\StudentReviewController as AdminStudentReviewController;
 use App\Http\Controllers\Web\Admin\SupportTicketController as AdminSupportTicketController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\Web\Instructor\InstructorProfileController;
 use App\Http\Controllers\Web\Instructor\LearningPathController as InstructorLearningPathController;
 use App\Http\Controllers\Web\Instructor\LessonImportController as InstructorLessonImportController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
+use App\Http\Controllers\Web\Instructor\QuizQuestionInvalidationController as InstructorQuizQuestionInvalidationController;
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
 use App\Http\Controllers\Web\Instructor\ReviewReplyController;
 use App\Http\Controllers\Web\Instructor\S3MultipartUploadController;
@@ -385,6 +387,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::get('/quizzes/questions/sample-template', [InstructorQuizController::class, 'downloadSampleTemplate'])->name('quizzes.questions.sample-template');
             Route::post('/quizzes/{quiz}/import-questions', [InstructorQuizController::class, 'importQuestions'])->name('quizzes.questions.import');
             Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
+            Route::post('/quiz-version-questions/{mapping}/invalidations', [InstructorQuizQuestionInvalidationController::class, 'store'])->name('quiz-version-questions.invalidations.store');
             Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
             Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
             Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
@@ -471,6 +474,10 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/content-updates', [ContentUpdateController::class, 'index'])->name('content-updates.index');
     Route::post('/content-updates/{contentUpdate}/approve', [ContentUpdateController::class, 'approve'])->name('content-updates.approve');
     Route::post('/content-updates/{contentUpdate}/reject', [ContentUpdateController::class, 'reject'])->name('content-updates.reject');
+    Route::get('/quiz-invalidations', [QuizQuestionInvalidationController::class, 'index'])->name('quiz-invalidations.index');
+    Route::get('/quiz-invalidations/{invalidation}', [QuizQuestionInvalidationController::class, 'show'])->name('quiz-invalidations.show');
+    Route::post('/quiz-invalidations/{invalidation}/approve', [QuizQuestionInvalidationController::class, 'approve'])->name('quiz-invalidations.approve');
+    Route::post('/quiz-invalidations/{invalidation}/reject', [QuizQuestionInvalidationController::class, 'reject'])->name('quiz-invalidations.reject');
     Route::get('/student-reviews', [AdminStudentReviewController::class, 'index'])->name('student-reviews.index');
     Route::get('/student-reviews/{review}', [AdminStudentReviewController::class, 'show'])->name('student-reviews.show');
     Route::patch('/student-reviews/{review}/hide', [AdminStudentReviewController::class, 'hide'])->name('student-reviews.hide');
