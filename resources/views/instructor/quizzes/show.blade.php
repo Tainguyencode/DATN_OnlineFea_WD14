@@ -192,9 +192,9 @@
                                         </span>
                                     @endif
                                 </div>
-                                <h4 class="mt-2 text-base font-bold text-slate-950">{{ $question->question }}</h4>
+                                <h4 class="mt-2 text-base font-bold text-slate-950"><span data-math-content>{{ $question->question }}</span></h4>
                                 @if ($question->explanation)
-                                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ $question->explanation }}</p>
+                                    <p class="mt-2 text-sm leading-6 text-slate-500"><span data-math-content>{{ $question->explanation }}</span></p>
                                 @endif
                             </div>
                             <div class="flex shrink-0 flex-wrap gap-2">
@@ -215,6 +215,7 @@
                                                 hỏi</span>
                                             <textarea name="question_text" rows="3"
                                                 class="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-emerald-500 @if($errors->has('question_text') && old('editing_question_id') == $question->id) border-rose-500 focus:border-rose-500 @else border-slate-300 @endif">{{ $question->question }}</textarea>
+                                            <p class="mt-1 text-xs leading-5 text-slate-500">LaTeX inline: <code>\( x^2 + y^2 \)</code><br>LaTeX riêng dòng: <code>\[ x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \]</code></p>
                                             @if($errors->has('question_text') && old('editing_question_id') == $question->id)
                                                 <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('question_text') }}</p>
                                             @endif
@@ -392,6 +393,7 @@
                             <span class="mb-1.5 block text-sm font-bold text-slate-700">Nội dung câu hỏi</span>
                             <textarea name="question_text" rows="4" maxlength="10000"
                                 class="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-emerald-500 @if($errors->has('question_text') && old('is_creating_question')) border-rose-500 focus:border-rose-500 @else border-slate-300 @endif">{{ old('question_text') }}</textarea>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">LaTeX inline: <code>\( x^2 + y^2 \)</code><br>LaTeX riêng dòng: <code>\[ x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \]</code></p>
                             @if($errors->has('question_text') && old('is_creating_question'))
                                 <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('question_text') }}</p>
                             @endif

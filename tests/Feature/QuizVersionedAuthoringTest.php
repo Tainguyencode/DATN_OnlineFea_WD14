@@ -50,6 +50,7 @@ class QuizVersionedAuthoringTest extends TestCase
         $this->actingAs($instructor)
             ->get(route('instructor.courses.lessons.quiz.show', [$course, $lesson]))
             ->assertOk()
+            ->assertSee('data-math-content', false)
             ->assertSee('Đang xem V1 — Đã xuất bản');
         $this->assertSame(1, $quiz->versions()->count());
         $this->assertNull($quiz->fresh()->current_draft_version_id);

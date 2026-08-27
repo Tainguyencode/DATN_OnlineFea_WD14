@@ -29,7 +29,7 @@
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{ $question['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">{{ $question['is_correct'] ? 'Dung' : 'Sai' }}</span>
-                            <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">Cau {{ $question['number'] }}. {{ $question['question'] }}</h2>
+                            <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">Cau {{ $question['number'] }}. <span data-math-content>{{ $question['question'] }}</span></h2>
                         </div>
                         <span class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $question['points'] }} diem</span>
                     </div>
@@ -48,7 +48,7 @@
                                     : ($option['is_selected'] ? 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100' : 'border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200');
                             @endphp
                             <div class="flex items-start justify-between gap-3 rounded-xl border p-3 text-sm {{ $optionClass }}">
-                                <span class="leading-6">{{ $option['text'] }}</span>
+                                <span class="leading-6" data-math-content>{{ $option['text'] }}</span>
                                 <div class="flex shrink-0 flex-wrap justify-end gap-2">
                                     @if($option['is_selected'])<span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-700 dark:bg-black/20 dark:text-white">Ban chon</span>@endif
                                     @if($option['is_correct'])<span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:bg-black/20 dark:text-emerald-100">Dap an dung</span>@endif
@@ -58,7 +58,7 @@
                     </div>
 
                     @if($question['explanation'])
-                        <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-900/70 dark:text-slate-300"><strong class="text-slate-900 dark:text-white">Giai thich:</strong> {{ $question['explanation'] }}</div>
+                        <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-900/70 dark:text-slate-300"><strong class="text-slate-900 dark:text-white">Giai thich:</strong> <span data-math-content>{{ $question['explanation'] }}</span></div>
                     @endif
                 </article>
             @endforeach
