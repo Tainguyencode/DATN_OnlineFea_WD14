@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\SystemSetting;
-use App\Models\User;
 use App\Models\Enrollment;
 use App\Models\User;
 use App\Services\PointService;
