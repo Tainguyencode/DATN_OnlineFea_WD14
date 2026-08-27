@@ -175,6 +175,7 @@ Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(functi
 });
 
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
+Route::get('/learn/{course:slug}/lessons/{lesson}/quiz-attempts/{attempt}/result', [StudentQuizController::class, 'result'])->middleware('auth')->name('learn.lessons.quiz.result');
 Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
 Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:6,1'])->group(function () {
     Route::post('/courses/{course}/reviews', [ReviewController::class, 'store'])->name('courses.reviews.store');

@@ -11,6 +11,7 @@ use App\Models\QuizAttempt;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use App\Services\PointService;
+use App\Services\QuizAttemptResultService;
 use App\Services\QuizAttemptService;
 use App\Services\QuizContentService;
 use App\Services\QuizVersioningService;
@@ -79,7 +80,17 @@ class QuizController extends Controller
             $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService);
         }
 
-        return view('courses.quiz-result', compact('course', 'lesson', 'quiz', 'attempt', 'graded'));
+        return redirect()->route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]);
+    }
+
+    public function result(Course $course, Lesson $lesson, QuizAttempt $attempt, QuizAttemptResultService $resultService): View
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless(auth()->user()?->isStudent(), 403);
+
+        $result = $resultService->forLearner($course, $lesson, auth()->user(), $attempt);
+
+        return view('courses.quiz-attempt-result', compact('course', 'lesson', 'result'));
     }
 
     public function submitAjax(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): JsonResponse
