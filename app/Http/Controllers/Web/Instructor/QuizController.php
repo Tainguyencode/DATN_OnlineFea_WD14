@@ -10,6 +10,7 @@ use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
 use App\Services\QuizContentService;
+use App\Services\QuizQuestionInvalidationService;
 use App\Services\QuizVersioningService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class QuizController extends Controller
     public function __construct(
         private readonly QuizContentService $quizContent,
         private readonly QuizVersioningService $quizVersioning,
+        private readonly QuizQuestionInvalidationService $questionInvalidations,
     ) {}
 
     public function show(Course $course, Lesson $lesson): View
@@ -45,6 +47,23 @@ class QuizController extends Controller
         $reviewUpdate = $quizIdentity && $quizIdentity->current_draft_version_id && $authoringVersion
             ? $this->quizVersioning->contentUpdateForVersion($quizIdentity, $authoringVersion)
             : null;
+        $publishedMappings = collect();
+        $publishedInvalidations = collect();
+        $publishedInvalidationCounts = collect();
+
+        if ($publishedVersion) {
+            $publishedVersion->load([
+                'questionMappings.questionVersion',
+                'questionMappings.invalidations' => fn ($query) => $query->latest('id'),
+            ]);
+            $publishedMappings = $publishedVersion->questionMappings;
+            $publishedInvalidations = $publishedMappings->mapWithKeys(fn ($mapping) => [
+                $mapping->id => $mapping->invalidations->first(),
+            ]);
+            $publishedInvalidationCounts = $publishedMappings->mapWithKeys(fn ($mapping) => [
+                $mapping->id => $this->questionInvalidations->counts($mapping),
+            ]);
+        }
 
         return view('instructor.quizzes.show', [
             'course' => $course,
@@ -59,6 +78,9 @@ class QuizController extends Controller
             'desiredIsActive' => $reviewUpdate
                 ? (bool) data_get($reviewUpdate->payload, 'desired_is_active', $quizIdentity?->is_active)
                 : (bool) $quizIdentity?->is_active,
+            'publishedMappings' => $publishedMappings,
+            'publishedInvalidations' => $publishedInvalidations,
+            'publishedInvalidationCounts' => $publishedInvalidationCounts,
         ]);
     }
 

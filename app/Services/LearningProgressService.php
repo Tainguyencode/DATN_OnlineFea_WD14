@@ -6,6 +6,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
+use App\Models\Quiz;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -303,6 +304,95 @@ class LearningProgressService
         }
 
         return $ids;
+    }
+
+    /**
+     * Reconcile quiz progress after a historical regrade without replaying quiz XP.
+     * A previously completed lesson is never rolled back by an instructor correction.
+     */
+    public function reconcileQuizAfterRegrade(Quiz $quiz, int $userId): array
+    {
+        return DB::transaction(function () use ($quiz, $userId): array {
+            $lesson = Lesson::query()->with(['course', 'section', 'chapter'])->findOrFail($quiz->lesson_id);
+            $courseId = $lesson->course_id
+                ?? $lesson->section?->course_id
+                ?? $lesson->chapter?->course_id;
+
+            $enrollment = Enrollment::query()
+                ->where('user_id', $userId)
+                ->where('course_id', $courseId)
+                ->withLearningAccess()
+                ->with('course')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $enrollment) {
+                return [
+                    'success' => false,
+                    'skipped' => true,
+                    'reason' => 'No learning enrollment found.',
+                ];
+            }
+
+            $existing = LessonProgress::query()
+                ->where('user_id', $userId)
+                ->where('lesson_id', $lesson->id)
+                ->lockForUpdate()
+                ->first();
+            $passed = $quiz->fresh()->hasPassedAttemptFor($userId);
+            $completed = (bool) ($existing?->is_completed ?? false) || $passed;
+            $progressPercent = $completed ? 100 : 0;
+            $completedAt = $completed ? ($existing?->completed_at ?? now()) : null;
+
+            $progress = LessonProgress::updateOrCreate(
+                ['user_id' => $userId, 'lesson_id' => $lesson->id],
+                [
+                    'course_id' => $enrollment->course_id,
+                    'watched_seconds' => (int) ($existing?->watched_seconds ?? 0),
+                    'duration_seconds' => (int) ($existing?->duration_seconds ?? 0),
+                    'last_position_seconds' => (int) ($existing?->last_position_seconds ?? 0),
+                    'furthest_position_seconds' => (int) ($existing?->furthest_position_seconds ?? 0),
+                    'progress_percent' => $progressPercent,
+                    'is_completed' => $completed,
+                    'last_watched_at' => now(),
+                    'completed_at' => $completedAt,
+                ],
+            );
+
+            $requiredLessonIds = $this->requiredLessonIds($enrollment->course);
+            $completedLessons = LessonProgress::query()
+                ->where('user_id', $userId)
+                ->whereIn('lesson_id', $requiredLessonIds)
+                ->where('is_completed', true)
+                ->count();
+            $totalRequired = $requiredLessonIds->count();
+            $courseProgress = $totalRequired > 0
+                ? min(100, round(($completedLessons / $totalRequired) * 100, 2))
+                : 0.0;
+
+            $enrollment->update([
+                'progress_percent' => $courseProgress,
+                'completed_lessons' => $completedLessons,
+                'total_lessons' => $totalRequired,
+                'last_accessed_at' => now(),
+            ]);
+
+            $completion = app(CourseCompletionService::class)->check($enrollment->fresh(), $userId);
+
+            return [
+                'success' => true,
+                'reconciled' => true,
+                'completed' => $completed,
+                'lesson_progress' => $progressPercent,
+                'course_progress' => $courseProgress,
+                'progress_percent' => $courseProgress,
+                'lesson_completed' => $completed,
+                'course_completed' => $completion['eligible'],
+                'completed_lessons' => $completedLessons,
+                'total_lessons' => $totalRequired,
+                'completion' => $completion,
+            ];
+        });
     }
 
     private function refreshCourseProgress(Enrollment $enrollment, int $userId, Course $course, LessonProgress $lessonProgress): array
