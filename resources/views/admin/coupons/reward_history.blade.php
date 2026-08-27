@@ -57,8 +57,13 @@
                                 $coupon = $item->coupon;
                                 $userCoupon = $item->userCoupon;
 
-                                $periodObj = \Illuminate\Support\Carbon::createFromFormat('Y-m', $item->period_key);
-                                $periodLabel = $periodObj ? $periodObj->format('m/Y') : $item->period_key;
+                                if (preg_match('/^(\d{4})W(\d{2})$/i', $item->period_key, $m)) {
+                                    $periodLabel = "Tuần {$m[2]}/{$m[1]}";
+                                } elseif (preg_match('/^(\d{4})-(\d{2})$/', $item->period_key, $m)) {
+                                    $periodLabel = "Tháng {$m[2]}/{$m[1]}";
+                                } else {
+                                    $periodLabel = $item->period_key;
+                                }
 
                                 $isUsed = $userCoupon && $userCoupon->used_at !== null;
                                 $isExpired = !$isUsed && $coupon && $coupon->expires_at && $coupon->expires_at->isPast();
