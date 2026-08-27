@@ -378,7 +378,7 @@
                 Thêm câu hỏi
             </button>
 
-            <div data-question-panel class="fixed inset-0 z-50 {{ ($errors->has('question_text') || $errors->has('score')) && old('is_creating_question') ? '' : 'hidden' }}">
+            <div data-question-panel class="fixed inset-0 z-[60] {{ ($errors->has('question_text') || $errors->has('score')) && old('is_creating_question') ? '' : 'hidden' }}">
                 <button type="button" data-close-question-panel class="absolute inset-0 bg-slate-950/45"></button>
                 <aside
                     class="absolute right-0 top-0 h-full w-full overflow-y-auto bg-white p-5 shadow-2xl sm:w-[540px] sm:p-6">
@@ -442,8 +442,10 @@
                         </button>
                     </form>
                 </aside>
+            </div>
+
             <!-- Modal Import câu hỏi bằng Excel / CSV -->
-            <div data-import-modal class="fixed inset-0 z-50 {{ $errors->has('import_file') ? '' : 'hidden' }}">
+            <div data-import-modal class="fixed inset-0 z-[60] {{ $errors->has('import_file') ? '' : 'hidden' }}">
                 <button type="button" data-close-import-modal class="absolute inset-0 bg-slate-950/45"></button>
                 <div class="absolute left-1/2 top-1/2 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl">
                     <div class="flex items-start justify-between gap-4">

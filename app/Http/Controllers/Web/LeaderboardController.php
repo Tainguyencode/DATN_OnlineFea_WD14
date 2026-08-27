@@ -88,7 +88,7 @@ class LeaderboardController extends Controller
 
         // 4. Current user personal achievement stats
         $currentUserData = null;
-        $currentUser = auth()->user();
+        $currentUser = $request->user();
         if ($currentUser && $currentUser->role === 'student') {
             $weeklyXp = $pointService->getUserWeeklyPoints($currentUser->id);
             $monthlyXp = $pointService->getUserMonthlyPoints($currentUser->id);
