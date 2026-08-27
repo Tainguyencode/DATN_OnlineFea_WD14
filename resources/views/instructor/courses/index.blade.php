@@ -123,15 +123,23 @@
             <div class="hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm md:block">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm">
+                        <colgroup>
+                            <col style="width: 38%">  {{-- Khóa học --}}
+                            <col style="width: 14%">  {{-- Trạng thái --}}
+                            <col style="width: 10%">  {{-- Giá --}}
+                            <col style="width: 9%">   {{-- Học viên --}}
+                            <col style="width: 11%">  {{-- Ngày tạo --}}
+                            <col style="width: 18%">  {{-- Thao tác --}}
+                        </colgroup>
                         <thead
                             class="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                             <tr>
-                                <th class="px-5 py-4">Khóa học</th>
-                                <th class="px-5 py-4">Trạng thái</th>
-                                <th class="px-5 py-4">Giá</th>
-                                <th class="px-5 py-4">Học viên</th>
-                                <th class="px-5 py-4">Ngày tạo</th>
-                                <th class="px-5 py-4 text-right">Thao tác</th>
+                                <th class="px-5 py-4 text-left">Khóa học</th>
+                                <th class="px-4 py-4 text-left">Trạng thái</th>
+                                <th class="px-4 py-4 text-left">Giá</th>
+                                <th class="px-4 py-4 text-center">Học viên</th>
+                                <th class="px-4 py-4 text-left">Ngày tạo</th>
+                                <th class="px-4 py-4 text-right">Thao tác</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -144,31 +152,28 @@
                                     $isReady = $check?->passes() ?? false;
                                 @endphp
                                 <tr class="align-middle transition-colors duration-200 hover:bg-slate-50">
-                                    <td class="px-5 py-4 w-[30%]">
-                                        <div class="flex items-center gap-4">
-                                            <div
-                                                class="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                                    {{-- Khóa học --}}
+                                    <td class="px-5 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                                                 @if ($course->thumbnail)
                                                     <img src="{{ asset('storage/' . $course->thumbnail) }}"
                                                          alt="{{ $course->title }}" class="h-full w-full object-cover">
                                                 @else
-                                                    <div
-                                                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-emerald-700 text-xs font-bold text-white">
-                                                        Fea</div>
+                                                    <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-emerald-700 text-xs font-bold text-white">Fea</div>
                                                 @endif
                                             </div>
                                             <div class="min-w-0">
-                                                <p class="truncate font-bold text-slate-950">{{ $course->title }}</p>
+                                                <p class="line-clamp-2 font-bold leading-snug text-slate-950">{{ $course->title }}</p>
                                                 <p class="mt-1 truncate text-xs text-slate-500">
                                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
-                                                    {{ $levelLabels[$course->level] ?? 'Chưa chọn trình độ' }}</p>
+                                                    {{ $levelLabels[$course->level] ?? 'Chưa chọn trình độ' }}
+                                                </p>
                                                 @if (in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
-                                                    <p class="mt-2 line-clamp-2 text-xs font-semibold text-rose-600">Lý
-                                                        do: {{ $course->rejectionReasonText() }}</p>
+                                                    <p class="mt-1 line-clamp-2 text-xs font-semibold text-rose-600">Lý do: {{ $course->rejectionReasonText() }}</p>
                                                 @endif
-
                                                 @if ($canSubmit && $check && ! $isReady)
-                                                    <ul class="mt-2 space-y-0.5 text-xs text-amber-700">
+                                                    <ul class="mt-1.5 space-y-0.5 text-xs text-amber-700">
                                                         @foreach ($check->errorMessages() as $message)
                                                             <li>• {{ $message }}</li>
                                                         @endforeach
@@ -177,9 +182,10 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="px-5 py-4">
-                                        <span
-                                            class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">
+
+                                    {{-- Trạng thái --}}
+                                    <td class="px-4 py-4">
+                                        <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">
                                             {{ $statusOptions[$course->status] ?? $course->status }}
                                         </span>
                                         @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) && $course->copyright_agreed)
@@ -188,60 +194,59 @@
                                             </div>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-4">
-                                        <div class="font-bold text-slate-900">
-                                            {{ $formatPrice($discountPrice ?? $course->price) }}</div>
+
+                                    {{-- Giá --}}
+                                    <td class="px-4 py-4">
+                                        <div class="font-bold text-slate-900">{{ $formatPrice($discountPrice ?? $course->price) }}</div>
                                         @if ($discountPrice)
-                                            <div class="text-xs text-slate-400 line-through">
-                                                {{ $formatPrice($course->price) }}</div>
+                                            <div class="text-xs text-slate-400 line-through">{{ $formatPrice($course->price) }}</div>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-4 text-slate-600">{{ $course->enrollments_count ?? 0 }}</td>
-                                    <td class="px-5 py-4 text-slate-500">{{ $course->created_at?->format('d/m/Y') }}
+
+                                    {{-- Học viên --}}
+                                    <td class="px-4 py-4 text-center font-semibold text-slate-700">
+                                        {{ $course->enrollments_count ?? 0 }}
                                     </td>
-                                    <td class="px-5 py-4">
-                                        <div class="flex flex-wrap items-center justify-end gap-2 w-full max-w-[280px] ml-auto">
+
+                                    {{-- Ngày tạo --}}
+                                    <td class="px-4 py-4 text-sm text-slate-500">
+                                        {{ $course->created_at?->format('d/m/Y') }}
+                                    </td>
+
+                                    {{-- Thao tác --}}
+                                    <td class="px-4 py-4">
+                                        <div class="flex flex-wrap items-center justify-end gap-1.5">
                                             <a href="{{ route('instructor.courses.students', $course) }}"
-                                                 class="rounded-lg px-2 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50">Học viên</a>
+                                               class="rounded-md px-2 py-1 text-xs font-bold text-blue-700 hover:bg-blue-50">Học viên</a>
                                             <a href="{{ route('instructor.courses.edit', $course) }}"
-                                                class="rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50">Kiểm duyệt</a>
+                                               class="rounded-md px-2 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-50">Kiểm duyệt</a>
                                             <a href="{{ route('instructor.courses.curriculum', $course) }}"
-                                               class="rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50">Nội dung</a>
+                                               class="rounded-md px-2 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50">Nội dung</a>
                                             @if ($course->status === 'published')
                                                 <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
-                                                   class="rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">Xem trước</a>
+                                                   class="rounded-md px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100">Xem trước</a>
                                             @endif
                                             @if ($canSubmit && $isReady)
                                                 <a href="{{ route('instructor.courses.edit', $course) }}"
-                                                    class="rounded-lg px-2 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-50">
+                                                   class="rounded-md px-2 py-1 text-xs font-bold text-amber-700 hover:bg-amber-50">
                                                     {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại' : 'Gửi duyệt' }}
                                                 </a>
                                             @endif
                                             @if ($course->status === 'published')
-                                                <form method="POST"
-                                                      action="{{ route('instructor.courses.archive', $course) }}"
+                                                <form method="POST" action="{{ route('instructor.courses.archive', $course) }}"
                                                       onsubmit="return confirm('Ẩn khóa học này khỏi trang học viên?')">
                                                     @csrf
-                                                    <button type="submit"
-                                                            class="rounded-lg px-2 py-1.5 text-xs font-bold text-zinc-700 hover:bg-zinc-100">
-                                                        Ẩn
-                                                    </button>
+                                                    <button type="submit" class="rounded-md px-2 py-1 text-xs font-bold text-zinc-700 hover:bg-zinc-100">Ẩn</button>
                                                 </form>
                                             @endif
                                             @if ($course->is_featured)
-                                                <span class="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700" title="Khóa học được Admin đánh dấu Nổi bật">
-                                                    ⭐ Nổi bật
-                                                </span>
+                                                <span class="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">⭐ Nổi bật</span>
                                             @endif
-                                            <form method="POST"
-                                                  action="{{ route('instructor.courses.destroy', $course) }}"
+                                            <form method="POST" action="{{ route('instructor.courses.destroy', $course) }}"
                                                   onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit"
-                                                        class="rounded-lg px-2 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50">
-                                                    Xóa
-                                                </button>
+                                                <button type="submit" class="rounded-md px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50">Xóa</button>
                                             </form>
                                         </div>
                                     </td>

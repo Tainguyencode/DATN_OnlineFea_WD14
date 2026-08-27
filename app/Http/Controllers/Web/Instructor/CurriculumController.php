@@ -291,14 +291,6 @@ class CurriculumController extends Controller
                 if ($request->hasFile('video_file')) {
                     Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate Update Local)', ['content_update_id' => $contentUpdate->id]);
                     ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
-                } elseif ($request->filled('s3_key')) {
-                    $s3Key = (string) $request->input('s3_key');
-                    if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
-                        Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate Update S3 Object exists)', ['content_update_id' => $contentUpdate->id, 'key' => $s3Key]);
-                        ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
-                    } else {
-                        Log::info('[UPLOAD TRACE] S3 Object still uploading in background. HLS will be dispatched on S3 complete.', ['content_update_id' => $contentUpdate->id, 'key' => $s3Key]);
-                    }
                 }
             }
 
@@ -330,14 +322,9 @@ class CurriculumController extends Controller
             if ($request->hasFile('video_file')) {
                 Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update Local video_file)', ['lesson_id' => $lesson->id]);
                 ConvertVideoToHLS::dispatch($lesson);
-            } elseif ($request->filled('s3_key')) {
-                $s3Key = (string) $request->input('s3_key');
-                if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
-                    Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update S3 Object exists)', ['lesson_id' => $lesson->id, 'key' => $s3Key]);
-                    ConvertVideoToHLS::dispatch($lesson);
-                } else {
-                    Log::info('[UPLOAD TRACE] S3 Object still uploading in background. HLS will be dispatched on S3 complete.', ['lesson_id' => $lesson->id, 'key' => $s3Key]);
-                }
+            } elseif ($lesson->original_video_key && ! $lesson->isHlsReady() && $lesson->upload_status === 'uploaded') {
+                Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (Update S3 video ready)', ['lesson_id' => $lesson->id]);
+                ConvertVideoToHLS::dispatch($lesson);
             }
         }
 
@@ -425,11 +412,6 @@ class CurriculumController extends Controller
         if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
             if ($request->hasFile('video_file')) {
                 ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
-            } elseif ($request->filled('s3_key')) {
-                $s3Key = (string) $request->input('s3_key');
-                if (app(AwsS3UploadService::class)->doesObjectExist($s3Key)) {
-                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
-                }
             }
         }
 
@@ -542,7 +524,7 @@ class CurriculumController extends Controller
             $originalName = (string) ($request->input('video_original_name') ?: basename($s3Key));
             $mime = (string) ($request->input('video_mime') ?: 'video/mp4');
             $size = $request->input('video_size') ? (int) $request->input('video_size') : 0;
-            $s3Exists = app(AwsS3UploadService::class)->doesObjectExist($s3Key);
+            $isSameUploadedKey = $lesson && $lesson->original_video_key === $s3Key && $lesson->upload_status === 'uploaded';
 
             return [
                 ...$validated,
@@ -550,7 +532,7 @@ class CurriculumController extends Controller
                 'video_original_name' => $originalName,
                 'video_mime' => $mime,
                 'video_size' => $size,
-                'upload_status' => $s3Exists ? 'uploaded' : 'pending',
+                'upload_status' => $isSameUploadedKey ? 'uploaded' : 'pending',
                 'processing_status' => 'pending',
             ];
         }

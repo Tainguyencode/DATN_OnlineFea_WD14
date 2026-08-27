@@ -159,6 +159,7 @@ class S3MultipartUploader {
                         ETag: p.eTag,
                     })),
                     duration: duration,
+                    lesson_id: this.lessonId || null,
                 }),
             });
 
@@ -840,7 +841,11 @@ function createLessonFormState(config) {
                                 parentDetails.removeAttribute('open');
                             }
                         } else {
-                            // Khi sửa bài học thành công, đóng accordion sửa bài học
+                            // Khi sửa bài học thành công, đóng modal sửa bài học
+                            const modal = form.closest('[id^="edit-lesson-modal-"]') || form.closest('.fixed');
+                            if (modal) {
+                                modal.classList.add('hidden');
+                            }
                             const parentDetails = form.closest('details');
                             if (parentDetails) {
                                 parentDetails.removeAttribute('open');
@@ -855,9 +860,18 @@ function createLessonFormState(config) {
                         if (window.showCurriculumToast) {
                             const lessonTitle = resData.lesson ? resData.lesson.title : (resData.title || '');
                             const msg = isCreateForm
-                                ? (lessonTitle ? `Đã lưu bài học "${lessonTitle}" thành công! Video đang tiếp tục tải lên trong hàng chờ.` : 'Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.')
-                                : 'Đã cập nhật bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.';
+                                ? (lessonTitle ? `Đã lưu bài học "${lessonTitle}" thành công!` : 'Đã lưu bài học thành công!')
+                                : 'Đã cập nhật bài học thành công!';
                             window.showCurriculumToast(msg);
+                        }
+
+                        // Cập nhật DOM nếu là form sửa bài học để không reload trang làm mất hàng chờ video ngầm
+                        if (!isCreateForm && resData.lesson_id) {
+                            const titleEl = document.querySelector(`#lesson-item-${resData.lesson_id} h4`)
+                                || document.querySelector(`[data-lesson-title-key="lesson_${resData.lesson_id}"]`);
+                            if (titleEl && resData.title) {
+                                titleEl.textContent = resData.title;
+                            }
                         }
                     } else {
                         form.submit();
