@@ -1,101 +1,263 @@
 @extends('layouts.app')
 
-@section('title', 'Ket qua quiz - ' . $quiz->title)
+@section('title', 'Kết quả Quiz - ' . $quiz->title)
 
 @section('content')
-<section class="bg-slate-50 py-8 dark:bg-[#0a0a0a]">
+@php
+    $questionsReview = $review['questions'] ?? null;
+    $allAttempts = $review['all_attempts'] ?? [];
+    $currentAttemptNumber = $review['attempt_number'] ?? null;
+@endphp
+
+<section class="bg-slate-50 py-8 dark:bg-[#0a0a0a] min-h-[calc(100vh-4rem)]">
     <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {{-- Header Breadcrumb & Status --}}
+        <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-slate-800 pb-5">
             <div class="min-w-0">
-                <a href="{{ route('courses.show', $course->slug) }}" class="text-sm font-bold text-indigo-600 hover:underline dark:text-indigo-300">
-                    Quay lai khoa hoc
-                </a>
-                <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-3xl">Ket qua quiz</h1>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $quiz->title }}</p>
+                <div class="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <a href="{{ route('courses.show', $course->slug) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">
+                        {{ $course->title }}
+                    </a>
+                    <span>/</span>
+                    <span>{{ $lesson->title }}</span>
+                </div>
+                <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-3xl flex items-center gap-3">
+                    <span>Xem lại kết quả bài Quiz</span>
+                    @if($currentAttemptNumber)
+                        <span class="text-base font-semibold px-3 py-1 rounded-full bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            Lần làm #{{ $currentAttemptNumber }}
+                        </span>
+                    @endif
+                </h1>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400 font-medium">{{ $quiz->title }}</p>
             </div>
-            <span class="inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ring-1 {{ $attempt->passed ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">
-                {{ $attempt->passed ? 'Dat' : 'Chua dat' }}
-            </span>
+            
+            <div class="flex flex-col sm:items-end gap-1">
+                <span class="inline-flex w-fit items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-extrabold ring-1 {{ $attempt->passed ? 'bg-emerald-50 text-emerald-700 ring-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-300 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">
+                    @if($attempt->passed)
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        ĐẠT YÊU CẦU
+                    @else
+                        <svg class="w-4 h-4 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        CHƯA ĐẠT
+                    @endif
+                </span>
+                @if($attempt->completed_at)
+                    <time class="text-xs text-slate-400">{{ $attempt->completed_at->format('d/m/Y H:i') }}</time>
+                @endif
+            </div>
         </div>
 
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-6">
-            <div class="grid gap-3 sm:grid-cols-4">
-                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
-                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Diem</span>
-                    <strong class="mt-1 block text-2xl text-slate-950 dark:text-white">{{ $attempt->score }}</strong>
+        {{-- Multiple Attempts Switcher --}}
+        @if(count($allAttempts) > 1)
+            <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
+                <span class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+                    Lịch sử các lần làm bài ({{ count($allAttempts) }} lần):
+                </span>
+                <div class="flex flex-wrap gap-2">
+                    @foreach($allAttempts as $att)
+                        @php
+                            $isCurrent = (int)$att['id'] === (int)$attempt->id;
+                        @endphp
+                        <a href="{{ route('courses.lessons.quiz.attempts.show', [$course, $lesson, $att['id']]) }}"
+                           class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition border {{ $isCurrent ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800' }}">
+                            <span>Lần {{ $att['attempt_number'] }}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[11px] {{ $isCurrent ? 'bg-white/20 text-white' : ($att['passed'] ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300') }}">
+                                {{ number_format((float)$att['percent'], 0) }}%
+                            </span>
+                            @if($isCurrent)
+                                <span class="text-[10px] uppercase bg-white text-indigo-700 font-extrabold px-1 rounded">Đang xem</span>
+                            @endif
+                        </a>
+                    @endforeach
                 </div>
-                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
-                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Tong diem</span>
-                    <strong class="mt-1 block text-2xl text-slate-950 dark:text-white">{{ $attempt->total_score }}</strong>
+            </div>
+        @endif
+
+        {{-- Statistics Overview Card --}}
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-6 mb-6">
+            <div class="grid gap-3 grid-cols-2 sm:grid-cols-4">
+                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70 border border-slate-100 dark:border-slate-800">
+                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Điểm số</span>
+                    <strong class="mt-1 block text-2xl font-black text-slate-950 dark:text-white">{{ $attempt->score }} / {{ $attempt->total_score }}</strong>
                 </div>
-                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
-                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Phan tram</span>
-                    <strong class="mt-1 block text-2xl text-slate-950 dark:text-white">{{ number_format((float) $attempt->percent, 2) }}%</strong>
+                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70 border border-slate-100 dark:border-slate-800">
+                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Tỷ lệ đạt</span>
+                    <strong class="mt-1 block text-2xl font-black {{ $attempt->passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                        {{ number_format((float) $attempt->percent, 1) }}%
+                    </strong>
                 </div>
-                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
-                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Diem dat</span>
-                    <strong class="mt-1 block text-2xl text-slate-950 dark:text-white">{{ $quiz->pass_score }}%</strong>
+                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70 border border-slate-100 dark:border-slate-800">
+                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Điểm yêu cầu</span>
+                    <strong class="mt-1 block text-2xl font-black text-slate-950 dark:text-white">{{ $quiz->pass_score }}%</strong>
+                </div>
+                <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70 border border-slate-100 dark:border-slate-800">
+                    <span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Số câu đúng</span>
+                    <strong class="mt-1 block text-2xl font-black text-slate-950 dark:text-white">
+                        {{ $review['correct_questions_count'] ?? 0 }} / {{ $review['total_questions'] ?? $quiz->questions->count() }}
+                    </strong>
                 </div>
             </div>
         </article>
 
-        <div class="mt-6 space-y-5">
-            @foreach($quiz->questions as $question)
-                @php
-                    $result = $graded['questions'][$question->id] ?? ['selected_ids' => [], 'correct_ids' => [], 'is_correct' => false];
-                @endphp
-                <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-6">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{ $result['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">
-                                {{ $result['is_correct'] ? 'Đúng' : 'Sai' }}
+        {{-- Question List Review --}}
+        <div class="space-y-6">
+            @if($questionsReview)
+                @foreach($questionsReview as $q)
+                    <article class="rounded-2xl border {{ $q['is_correct'] ? 'border-emerald-200/80 dark:border-emerald-500/20 bg-white dark:bg-[#161615]' : 'border-rose-200/80 dark:border-rose-500/20 bg-white dark:bg-[#161615]' }} p-5 shadow-sm sm:p-6 transition">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-extrabold ring-1 {{ $q['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' }}">
+                                        @if($q['is_correct'])
+                                            <svg class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                            ĐÚNG
+                                        @else
+                                            <svg class="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            SAI
+                                        @endif
+                                    </span>
+                                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        {{ $q['form_type'] ?? $q['type'] }}
+                                    </span>
+                                </div>
+                                <h2 class="mt-3 text-base font-bold text-slate-950 dark:text-white leading-relaxed">
+                                    Câu {{ $q['question_number'] }}. {{ $q['question'] }}
+                                </h2>
+                            </div>
+                            <span class="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                {{ $q['points'] }} điểm
                             </span>
-                            <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">
-                                Cau {{ $loop->iteration }}. {{ $question->question }}
-                            </h2>
                         </div>
-                        <span class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $question->points }} diem</span>
-                    </div>
 
-                    <div class="mt-4 space-y-2">
-                        @foreach($question->options as $answer)
-                            @php
-                                $selected = in_array((int) $answer->id, $result['selected_ids'], true);
-                                $correct = in_array((int) $answer->id, $result['correct_ids'], true);
-                                $answerClass = $correct
-                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
-                                    : ($selected ? 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100' : 'border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200');
-                            @endphp
-                            <div class="flex items-start justify-between gap-3 rounded-xl border p-3 text-sm {{ $answerClass }}">
-                                <span class="leading-6">{{ $answer->option_text }}</span>
-                                <div class="flex shrink-0 flex-wrap justify-end gap-2">
-                                    @if($selected)
-                                        <span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-700 dark:bg-black/20 dark:text-white">Ban chon</span>
-                                    @endif
-                                    @if($correct)
-                                        <span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:bg-black/20 dark:text-emerald-100">Dap an dung</span>
-                                    @endif
+                        <div class="mt-4 space-y-2.5">
+                            @foreach($q['options'] as $option)
+                                @php
+                                    $isSelected = $option['is_selected'];
+                                    $isCorrect = $option['is_correct'];
+
+                                    if ($isSelected && $isCorrect) {
+                                        // Student selected correctly
+                                        $boxClass = 'border-emerald-500 bg-emerald-50/70 text-emerald-950 ring-1 ring-emerald-500/40 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-100';
+                                    } elseif ($isSelected && !$isCorrect) {
+                                        // Student selected incorrectly
+                                        $boxClass = 'border-rose-500 bg-rose-50/70 text-rose-950 ring-1 ring-rose-500/40 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100';
+                                    } elseif (!$isSelected && $isCorrect) {
+                                        // Correct option that wasn't selected
+                                        $boxClass = 'border-emerald-400 bg-emerald-50/30 text-emerald-900 border-dashed dark:border-emerald-500/40 dark:bg-emerald-500/5 dark:text-emerald-200';
+                                    } else {
+                                        // Normal neutral option
+                                        $boxClass = 'border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/40';
+                                    }
+                                @endphp
+
+                                <div class="flex items-start justify-between gap-3 rounded-xl border p-3.5 text-sm transition {{ $boxClass }}">
+                                    <div class="flex items-start gap-2.5 min-w-0">
+                                        <div class="mt-0.5 shrink-0">
+                                            @if($isSelected && $isCorrect)
+                                                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-black shadow-xs">✓</span>
+                                            @elseif($isSelected && !$isCorrect)
+                                                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-white text-xs font-black shadow-xs">✗</span>
+                                            @elseif(!$isSelected && $isCorrect)
+                                                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black ring-1 ring-emerald-500/40">✓</span>
+                                            @else
+                                                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-slate-400 text-xs dark:border-slate-700"></span>
+                                            @endif
+                                        </div>
+                                        <span class="leading-6 font-medium">{{ $option['option_text'] }}</span>
+                                    </div>
+
+                                    <div class="flex shrink-0 flex-wrap justify-end gap-1.5">
+                                        @if($isSelected && $isCorrect)
+                                            <span class="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white shadow-xs">
+                                                ✓ Bạn chọn đúng
+                                            </span>
+                                        @elseif($isSelected && !$isCorrect)
+                                            <span class="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-0.5 text-xs font-bold text-white shadow-xs">
+                                                ✗ Bạn chọn sai
+                                            </span>
+                                        @elseif(!$isSelected && $isCorrect)
+                                            <span class="inline-flex items-center gap-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-xs font-bold dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700">
+                                                ✓ Đáp án đúng
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        @if(!empty($q['explanation']))
+                            <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700 border border-slate-200/80 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-800 flex items-start gap-2.5">
+                                <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <div>
+                                    <strong class="text-slate-900 dark:text-white font-bold">Giải thích:</strong>
+                                    <span class="ml-1">{{ $q['explanation'] }}</span>
                                 </div>
                             </div>
-                        @endforeach
-                    </div>
-
-                    @if($question->explanation)
-                        <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-900/70 dark:text-slate-300">
-                            <strong class="text-slate-900 dark:text-white">Giai thich:</strong> {{ $question->explanation }}
+                        @endif
+                    </article>
+                @endforeach
+            @else
+                {{-- Fallback if review structure wasn't provided --}}
+                @foreach($quiz->questions as $question)
+                    @php
+                        $result = $graded['questions'][$question->id] ?? ['selected_ids' => [], 'correct_ids' => [], 'is_correct' => false];
+                    @endphp
+                    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-6">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{ $result['is_correct'] ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300' }}">
+                                    {{ $result['is_correct'] ? 'Đúng' : 'Sai' }}
+                                </span>
+                                <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">
+                                    Câu {{ $loop->iteration }}. {{ $question->question }}
+                                </h2>
+                            </div>
+                            <span class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $question->points }} điểm</span>
                         </div>
-                    @endif
-                </article>
-            @endforeach
+
+                        <div class="mt-4 space-y-2">
+                            @foreach($question->options as $answer)
+                                @php
+                                    $selected = in_array((int) $answer->id, $result['selected_ids'], true);
+                                    $correct = in_array((int) $answer->id, $result['correct_ids'], true);
+                                    $answerClass = $correct
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
+                                        : ($selected ? 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100' : 'border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200');
+                                @endphp
+                                <div class="flex items-start justify-between gap-3 rounded-xl border p-3 text-sm {{ $answerClass }}">
+                                    <span class="leading-6">{{ $answer->option_text }}</span>
+                                    <div class="flex shrink-0 flex-wrap justify-end gap-2">
+                                        @if($selected)
+                                            <span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-700 dark:bg-black/20 dark:text-white">Bạn chọn</span>
+                                        @endif
+                                        @if($correct)
+                                            <span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:bg-black/20 dark:text-emerald-100">Đáp án đúng</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </article>
+                @endforeach
+            @endif
         </div>
 
-        <div class="mt-6 flex flex-wrap justify-end gap-3">
-            <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="inline-flex h-11 items-center rounded-xl border border-slate-300 px-5 text-sm font-extrabold text-slate-700 transition hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
-                Lam lai quiz
+        {{-- Bottom Actions --}}
+        <div class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 dark:border-slate-800 pt-6">
+            <a href="{{ route('courses.lessons.show', [$course, $lesson]) }}" class="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 px-5 text-sm font-extrabold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                Quay lại bài học
             </a>
-            <a href="{{ route('courses.show', $course->slug) }}" class="inline-flex h-11 items-center rounded-xl bg-indigo-600 px-5 text-sm font-extrabold text-white transition hover:bg-indigo-700">
-                Ve khoa hoc
-            </a>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="inline-flex h-11 items-center rounded-xl border border-indigo-600 px-5 text-sm font-extrabold text-indigo-600 transition hover:bg-indigo-50 dark:border-indigo-400 dark:text-indigo-400 dark:hover:bg-indigo-950/50">
+                    Làm lại Quiz
+                </a>
+                <a href="{{ route('courses.show', $course->slug) }}" class="inline-flex h-11 items-center rounded-xl bg-indigo-600 px-6 text-sm font-extrabold text-white transition hover:bg-indigo-700 shadow-sm">
+                    Về trang khóa học
+                </a>
+            </div>
         </div>
     </div>
 </section>

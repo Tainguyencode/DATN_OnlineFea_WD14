@@ -141,6 +141,7 @@ Route::middleware(['auth', 'active', 'role:student'])->group(function () {
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
+Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('courses.lessons.quiz.attempts.show');
 Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssignmentController::class, 'submit'])->middleware('auth')->name('courses.lessons.assignment.submit');
 
 Route::middleware(['auth', 'active'])->group(function () {
@@ -181,6 +182,7 @@ Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(functi
 
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
 Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
+Route::get('/learn/{course:slug}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('learn.lessons.quiz.attempts.show');
 Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:6,1'])->group(function () {
     Route::post('/courses/{course}/reviews', [ReviewController::class, 'store'])->name('courses.reviews.store');
     Route::put('/courses/{course}/reviews/{review}', [ReviewController::class, 'update'])->name('courses.reviews.update');
@@ -335,6 +337,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
         Route::get('/courses/{course}/students/export', [InstructorCourseController::class, 'exportStudents'])->name('courses.students.export');
         Route::get('/courses/{course}/students/{student}', [InstructorCourseController::class, 'studentDetail'])->name('courses.students.detail');
+        Route::get('/courses/{course}/students/{student}/quizzes/{quiz}/attempts/{attempt}', [InstructorCourseController::class, 'studentQuizAttempt'])->name('courses.students.quiz-attempt');
         Route::post('/courses/{course}/students/{student}/notify', [InstructorCourseController::class, 'sendNotification'])->name('courses.students.notify');
         Route::get('/revenue', [InstructorCourseController::class, 'revenue'])->name('revenue');
         Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
