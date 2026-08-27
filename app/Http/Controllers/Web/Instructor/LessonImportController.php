@@ -12,6 +12,7 @@ use App\Services\CurriculumLessonService;
 use App\Services\LessonImportPreviewService;
 use App\Services\LessonImportService;
 use App\Services\LessonImportTemplateService;
+use App\Support\LessonImportWorkbookSchema;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -27,9 +28,22 @@ class LessonImportController extends Controller
     ): StreamedResponse {
         abort_unless($course->isOwnedBy($request->user()), 403);
 
+        $requestedVersion = $request->query('version');
+        $version = $requestedVersion === null
+            ? LessonImportWorkbookSchema::VERSION_V1
+            : filter_var($requestedVersion, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+        abort_unless(
+            $version !== null
+                && in_array($version, [
+                    LessonImportWorkbookSchema::VERSION_V1,
+                    LessonImportWorkbookSchema::VERSION_V2,
+                ], true),
+            422,
+        );
+
         return response()->streamDownload(
-            fn () => $templateService->stream(),
-            LessonImportTemplateService::FILENAME,
+            fn () => $templateService->stream($version),
+            $templateService->filenameForVersion($version),
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         );
     }
