@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class QuizVersionQuestion extends Model
 {
@@ -34,5 +35,10 @@ class QuizVersionQuestion extends Model
     public function questionVersion(): BelongsTo
     {
         return $this->belongsTo(QuestionVersion::class);
+    }
+
+    public function invalidations(): HasMany
+    {
+        return $this->hasMany(QuizVersionQuestionInvalidation::class);
     }
 }

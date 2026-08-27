@@ -122,7 +122,7 @@
                                     </span>
                                 </div>
                                 <h2 class="mt-3 text-base font-bold text-slate-950 dark:text-white leading-relaxed">
-                                    Câu {{ $q['question_number'] }}. {{ $q['question'] }}
+                                    Câu {{ $q['question_number'] }}. <span data-math-content>{{ $q['question'] }}</span>
                                 </h2>
                             </div>
                             <span class="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -164,7 +164,7 @@
                                                 <span class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-slate-400 text-xs dark:border-slate-700"></span>
                                             @endif
                                         </div>
-                                        <span class="leading-6 font-medium">{{ $option['option_text'] }}</span>
+                                        <span class="leading-6 font-medium" data-math-content>{{ $option['option_text'] }}</span>
                                     </div>
 
                                     <div class="flex shrink-0 flex-wrap justify-end gap-1.5">
@@ -191,7 +191,7 @@
                                 <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 <div>
                                     <strong class="text-slate-900 dark:text-white font-bold">Giải thích:</strong>
-                                    <span class="ml-1">{{ $q['explanation'] }}</span>
+                                    <span class="ml-1" data-math-content>{{ $q['explanation'] }}</span>
                                 </div>
                             </div>
                         @endif
@@ -210,7 +210,7 @@
                                     {{ $result['is_correct'] ? 'Đúng' : 'Sai' }}
                                 </span>
                                 <h2 class="mt-3 text-base font-extrabold text-slate-950 dark:text-white">
-                                    Câu {{ $loop->iteration }}. {{ $question->question }}
+                                    Câu {{ $loop->iteration }}. <span data-math-content>{{ $question->question }}</span>
                                 </h2>
                             </div>
                             <span class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $question->points }} điểm</span>
@@ -226,7 +226,7 @@
                                         : ($selected ? 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100' : 'border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200');
                                 @endphp
                                 <div class="flex items-start justify-between gap-3 rounded-xl border p-3 text-sm {{ $answerClass }}">
-                                    <span class="leading-6">{{ $answer->option_text }}</span>
+                                    <span class="leading-6" data-math-content>{{ $answer->option_text }}</span>
                                     <div class="flex shrink-0 flex-wrap justify-end gap-2">
                                         @if($selected)
                                             <span class="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-700 dark:bg-black/20 dark:text-white">Bạn chọn</span>
@@ -238,6 +238,12 @@
                                 </div>
                             @endforeach
                         </div>
+                        @if($question->explanation)
+                            <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-900/70 dark:text-slate-300">
+                                <strong class="text-slate-900 dark:text-white">Giải thích:</strong>
+                                <span data-math-content>{{ $question->explanation }}</span>
+                            </div>
+                        @endif
                     </article>
                 @endforeach
             @endif

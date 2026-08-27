@@ -8,6 +8,7 @@ use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizVersion;
+use App\Models\QuizVersionQuestionInvalidation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -51,6 +52,7 @@ class QuizAttemptService
                 'quiz_id' => $quiz->id,
                 'quiz_version_id' => $version->id,
                 'status' => 'in_progress',
+                'presentation_order' => app(QuizAttemptPresentationService::class)->createSnapshot($version),
                 'started_at' => now(),
             ])->load('quizVersion');
         });
@@ -73,7 +75,7 @@ class QuizAttemptService
 
             abort_unless($attempt->quiz_version_id !== null, 409, 'Quiz attempt does not have a bound quiz version.');
             $version = QuizVersion::query()
-                ->with('questionMappings.questionVersion.options')
+                ->with('questionMappings.questionVersion.options', 'questionMappings.invalidations')
                 ->findOrFail($attempt->quiz_version_id);
             abort_unless((int) $version->quiz_id === (int) $quiz->id, 409, 'Quiz attempt has an invalid quiz version.');
 
@@ -157,7 +159,9 @@ class QuizAttemptService
         $attempt->loadMissing(['quiz', 'quizVersion']);
         abort_unless($attempt->quiz && $attempt->quizVersion, 404);
 
-        return app(QuizVersioningService::class)->projectVersion($attempt->quiz, $attempt->quizVersion);
+        $projected = app(QuizVersioningService::class)->projectVersion($attempt->quiz, $attempt->quizVersion);
+
+        return app(QuizAttemptPresentationService::class)->projectQuiz($projected, $attempt);
     }
 
     public function remainingTime(QuizAttempt $attempt): ?int
@@ -204,7 +208,7 @@ class QuizAttemptService
     /** @return array<string, mixed> */
     private function completedGrade(QuizAttempt $attempt, QuizVersion $version): array
     {
-        $attempt->loadMissing('attemptAnswers');
+        $attempt->loadMissing('attemptAnswers', 'quizVersion.questionMappings.invalidations');
         $attemptAnswers = $attempt->attemptAnswers->groupBy('question_id');
         $answers = [];
         $questions = [];
@@ -234,6 +238,8 @@ class QuizAttemptService
                 'selected_ids' => $selectedIds,
                 'correct_ids' => $correctIds,
                 'is_correct' => $attemptAnswers->get($questionId, collect())->contains('is_correct', true),
+                'is_excluded' => $mapping->invalidations
+                    ->contains('status', QuizVersionQuestionInvalidation::STATUS_ACTIVE),
             ];
         }
 

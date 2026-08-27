@@ -2,6 +2,7 @@ import './bootstrap';
 import './lesson-import';
 import Alpine from 'alpinejs';
 import Chart from 'chart.js/auto';
+import { observeMath } from './math-renderer';
 
 window.Alpine = Alpine;
 window.Chart = Chart;
@@ -208,6 +209,12 @@ window.AppToast = {
 };
 
 Alpine.start();
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => observeMath(document), { once: true });
+} else {
+    observeMath(document);
+}
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeToasts, { once: true });
