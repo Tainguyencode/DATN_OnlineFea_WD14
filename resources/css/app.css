@@ -57,24 +57,8 @@
         @apply inline-flex items-center rounded bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300;
     }
 
-    .ui-alert {
-        @apply rounded-lg border px-4 py-3 text-sm;
-    }
-
-    .ui-alert-success {
-        @apply rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300;
-    }
-
     .ui-alert-error {
         @apply rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300;
-    }
-
-    [data-flash-message] {
-        transition: opacity 250ms ease;
-    }
-
-    [data-flash-message].flash-message--fading {
-        opacity: 0;
     }
 
     .ui-table {
@@ -171,6 +155,191 @@
 
     .support-ticket-page input[type='file'].support-ticket-control::file-selector-button:hover {
         background: #e0e7ff;
+    }
+}
+
+.toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 60;
+    display: flex;
+    width: min(360px, calc(100vw - 32px));
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.app-toast {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 20px;
+    align-items: start;
+    gap: 10px;
+    min-width: 0;
+    border: 1px solid #e2e8f0;
+    border-left-width: 3px;
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px 14px;
+    color: #334155;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+    pointer-events: auto;
+    animation: app-toast-enter 200ms ease-out both;
+}
+
+.app-toast--success {
+    border-left-color: #10b981;
+}
+
+.app-toast--error {
+    border-left-color: #ef4444;
+}
+
+.app-toast--warning {
+    border-left-color: #f59e0b;
+}
+
+.app-toast--info {
+    border-left-color: #2563eb;
+}
+
+.app-toast__icon {
+    display: flex;
+    width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+}
+
+.app-toast__icon svg,
+.app-toast__close svg {
+    width: 20px;
+    height: 20px;
+}
+
+.app-toast--success .app-toast__icon {
+    color: #059669;
+}
+
+.app-toast--error .app-toast__icon {
+    color: #dc2626;
+}
+
+.app-toast--warning .app-toast__icon {
+    color: #d97706;
+}
+
+.app-toast--info .app-toast__icon {
+    color: #2563eb;
+}
+
+.app-toast__message {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.app-toast__close {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    padding: 0;
+    color: #64748b;
+    cursor: pointer;
+    transition: background-color 180ms ease, color 180ms ease;
+}
+
+.app-toast__close:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.app-toast__close:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+.app-toast--dismissing {
+    pointer-events: none;
+    animation: app-toast-exit 200ms ease-in both;
+}
+
+.dark .app-toast {
+    border-color: #334155;
+    background: #0f172a;
+    color: #e2e8f0;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+}
+
+.dark .app-toast--success {
+    border-left-color: #10b981;
+}
+
+.dark .app-toast--error {
+    border-left-color: #ef4444;
+}
+
+.dark .app-toast--warning {
+    border-left-color: #f59e0b;
+}
+
+.dark .app-toast--info {
+    border-left-color: #3b82f6;
+}
+
+.dark .app-toast__close {
+    color: #94a3b8;
+}
+
+.dark .app-toast__close:hover {
+    background: #1e293b;
+    color: #f8fafc;
+}
+
+@keyframes app-toast-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes app-toast-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+@media (max-width: 639px) {
+    .toast-container {
+        top: 76px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-toast,
+    .app-toast--dismissing {
+        animation: none;
     }
 }
 
@@ -794,12 +963,6 @@ html.dark body.admin-shell hr {
     border-color: var(--admin-border) !important;
 }
 
-html.dark body.admin-shell .learning-toast {
-    border-color: var(--admin-border);
-    background: var(--admin-surface-raised);
-    color: var(--admin-text-primary);
-}
-
 html.dark body.admin-shell .admin-dashboard .admin-dashboard-scrollbar {
     scrollbar-color: var(--admin-border-strong) transparent;
 }
@@ -941,28 +1104,6 @@ html {
     .learning-sidebar.learning-sidebar--closed {
         transform: translateX(100%);
     }
-}
-
-.learning-toast {
-    position: fixed;
-    right: 1rem;
-    bottom: 1rem;
-    z-index: 60;
-    max-width: 20rem;
-    border-radius: 6px;
-    border: 1px solid #d1d7dc;
-    background: #fff;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #1c1d1f;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-.learning-toast--error {
-    border-color: #fecaca;
-    background: #fef2f2;
-    color: #991b1b;
 }
 
 /* Role & Permission admin module */
@@ -1121,28 +1262,6 @@ html {
 
 .role-management-page .role-btn-ghost {
     background: transparent;
-}
-
-.role-management-page .role-alert {
-    margin-bottom: 1rem;
-    border-radius: 8px;
-    padding: 0.85rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 650;
-}
-
-.role-management-page .role-alert p {
-    margin: 0;
-}
-
-.role-management-page .role-alert p + p {
-    margin-top: 0.35rem;
-}
-
-.role-management-page .role-alert-danger {
-    border: 1px solid #fecaca;
-    background: var(--role-danger-soft);
-    color: #b42318;
 }
 
 .role-management-page .role-table-wrap {
@@ -1588,4 +1707,10 @@ html {
 }
 .custom-modal-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(156, 163, 175, 0.7);
+}
+
+/* Status is communicated by its text label; omit decorative colored dots. */
+span[class~="rounded-full"][class~="h-1.5"][class~="w-1.5"],
+span[class~="rounded-full"][class~="h-2"][class~="w-2"] {
+    display: none !important;
 }

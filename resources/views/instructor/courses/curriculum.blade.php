@@ -97,7 +97,7 @@
             </div>
             <div class="rounded-lg bg-slate-50 p-4">
                 <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Bài học</span>
-                <strong class="mt-1 block text-2xl text-slate-950">{{ $course->courseSections->sum(fn ($section) => $section->lessons->count()) }}</strong>
+                <strong id="overview-total-lessons" class="mt-1 block text-2xl text-slate-950">{{ $course->courseSections->sum(fn ($section) => $section->lessons->count()) }}</strong>
             </div>
             <div class="rounded-lg bg-slate-50 p-4">
                 <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Bài xem thử</span>
@@ -106,9 +106,53 @@
         </div>
     </div>
 
+    {{-- HÀNG CHỜ UPLOAD VIDEO LÊN S3 --}}
+    <div id="global-video-upload-queue-panel" class="hidden"></div>
 
+    {{-- THÔNG BÁO BẢO MẬT HLS CHUNG DUY NHẤT VÀ NÚT GỬI DUYỆT (Requirement 7, 8, 14, 15, 16, 18) --}}
+    @php
+        $totalVideoLessons = $course->lessons()->where('type', 'video')->count();
+        $hasIncompleteHls = $course->hasIncompleteHlsVideos();
+        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasIncompleteHls;
+    @endphp
 
+    <div id="common-hls-banner-wrapper"
+         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasIncompleteHls ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900') }}">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3">
+                <span id="common-hls-icon" class="text-xl shrink-0">
+                    {{ $hasIncompleteHls ? '⏳' : '✅' }}
+                </span>
+                <div>
+                    <p id="common-hls-message" class="text-sm font-bold">
+                        @if($hasIncompleteHls)
+                            Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.
+                        @elseif($totalVideoLessons > 0)
+                            Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.
+                        @endif
+                    </p>
+                </div>
+            </div>
 
+            <div class="shrink-0 flex items-center gap-2">
+                @if($course->canBeSubmittedForReview())
+                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" id="curriculumSubmitForm">
+                        @csrf
+                        <input type="hidden" name="copyright_agreed" value="1">
+                        <button type="submit"
+                                id="curriculum-submit-review-btn"
+                                {{ $hasIncompleteHls ? 'disabled' : '' }}
+                                @if($hasIncompleteHls)
+                                    title="Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật."
+                                @endif
+                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasIncompleteHls ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
+                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+    </div>
 
     <form method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -126,15 +170,36 @@
                        class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus-visible:ring-2 @error('description', 'storeSection') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 focus:border-emerald-500 focus-visible:ring-emerald-500/20 @enderror">
                 @error('description', 'storeSection') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
             </label>
-            <button type="submit"
-                    class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer">
-                + Thêm chương
-            </button>
+            <div class="flex flex-col gap-2 sm:flex-row">
+                <button type="submit"
+                        class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer sm:w-auto">
+                    + Thêm chương
+                </button>
+                <button
+                    type="button"
+                    data-lesson-import-open
+                    aria-controls="lesson-import-dialog"
+                    aria-haspopup="dialog"
+                    class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 sm:w-auto"
+                >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10M18 15v6m-3-3h6" />
+                    </svg>
+                    Nhập từ Excel
+                </button>
+            </div>
         </div>
     </form>
 
+    @include('instructor.courses.partials.lesson-import-modal', ['course' => $course])
+
     <div class="space-y-5">
         @forelse($curriculumSections as $section)
+            @php
+                $hasInvalidSectionDescription = filled($section->description)
+                    && \App\Models\CourseSection::descriptionContainsMarkup($section->description);
+                $safeSectionDescription = $hasInvalidSectionDescription ? null : $section->description;
+            @endphp
             <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-100 bg-slate-50 px-5 py-4">
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -153,8 +218,8 @@
                                 @endif
                             </div>
                             <h3 class="mt-2 text-lg font-bold text-slate-950">{{ $section->title }}</h3>
-                            @if($section->description)
-                                <p class="mt-1 text-sm leading-6 text-slate-500">{{ $section->description }}</p>
+                            @if(filled($safeSectionDescription))
+                                <p class="mt-1 text-sm leading-6 text-slate-500">{{ $safeSectionDescription }}</p>
                             @endif
                         </div>
                         <div class="flex shrink-0 flex-wrap gap-2">
@@ -173,7 +238,10 @@
                                         </label>
                                         <label class="block">
                                             <span class="mb-1 block text-xs font-bold text-slate-600">Mô tả</span>
-                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $section->description }}</textarea>
+                                            <textarea name="description" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm outline-none @error('description', 'updateSection_'.$section->id) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">{{ $safeSectionDescription }}</textarea>
+                                            @if($hasInvalidSectionDescription)
+                                                <p class="mt-1 text-xs font-semibold text-amber-700">Mô tả cũ chứa dữ liệu không hợp lệ. Hãy nhập lại mô tả bằng văn bản thuần.</p>
+                                            @endif
                                             @error('description', 'updateSection_'.$section->id) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                                         </label>
                                         <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 cursor-pointer">Lưu chương</button>
@@ -191,7 +259,7 @@
                     </div>
                 </div>
 
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-slate-100" id="section-lessons-{{ $section->id }}" data-section-lessons-container="{{ $section->id }}">
                     @forelse($section->lessons as $lesson)
                         @php
                             $typeClass = $typeStyles[$lesson->type] ?? $typeStyles['video'];
@@ -244,18 +312,30 @@
                                             </span>
                                         @endif
                                     </div>
+                                    @php
+                                        $hlsKey = !empty($lesson->is_draft_create) && isset($lesson->draft_update) 
+                                            ? 'update_' . $lesson->draft_update->id 
+                                            : 'lesson_' . $lesson->id;
+                                    @endphp
                                     <h4 class="mt-2 font-bold text-slate-950">{{ $lesson->title }}</h4>
                                     <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
-                                        <span>Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
+                                        <span data-lesson-duration-key="{{ $hlsKey }}">Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
                                         <span>Bài {{ $lesson->sort_order }}</span>
                                         @if($lesson->type === 'video' && ($lesson->original_video_key || $lesson->hls_manifest_key || $lesson->video_path))
-                                            <span class="font-semibold text-emerald-600">
-                                                @if($lesson->processing_status === 'completed' || $lesson->hls_manifest_key || (!empty($lesson->video_path) && !\Illuminate\Support\Str::endsWith($lesson->video_path, '.mp4')))
-                                                    Video S3 HLS (Đã bảo mật)
-                                                @elseif($lesson->processing_status === 'failed')
-                                                    Video S3 (Lỗi xử lý HLS)
+                                            @php
+                                                $isHlsReady = $lesson->isHlsReady();
+                                                $isHlsFailed = $lesson->hasFailedProcessing();
+                                                $isHlsProcessing = $lesson->isProcessing();
+                                            @endphp
+                                            <span data-hls-status-key="{{ $hlsKey }}"
+                                                  @if($isHlsProcessing) data-hls-processing="true" @endif
+                                                  class="font-semibold @if($isHlsReady) text-emerald-600 @elseif($isHlsFailed) text-rose-600 @else text-amber-600 @endif">
+                                                @if($isHlsReady)
+                                                    Video đã được xử lý bảo mật thành công.
+                                                @elseif($isHlsFailed)
+                                                    Video xử lý bảo mật thất bại.
                                                 @else
-                                                    Video S3 (Đang chờ xử lý HLS)
+                                                    Video đang trong quá trình xử lý bảo mật. Vui lòng chờ trong giây lát.
                                                 @endif
                                             </span>
                                         @elseif($lesson->type === 'video' && $lesson->video_url)
@@ -385,7 +465,7 @@
                             </div>
                         </div>
                     @empty
-                        <div class="px-5 py-6 text-sm text-slate-500">Chương này chưa có bài học.</div>
+                        <div class="px-5 py-6 text-sm text-slate-500" data-empty-lessons-notice>Chương này chưa có bài học.</div>
                     @endforelse
                 </div>
 
@@ -461,6 +541,10 @@
 
         video.src = objectUrl;
     });
+
+    if (window.initCurriculumHlsPolling) {
+        window.initCurriculumHlsPolling(@js(route('instructor.courses.hls-status', $course)));
+    }
 </script>
 
 </x-instructor-layout>

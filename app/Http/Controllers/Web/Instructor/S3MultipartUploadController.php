@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Web\Instructor;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ConvertContentUpdateVideoToHLS;
+use App\Jobs\ConvertVideoToHLS;
+use App\Models\ContentUpdate;
 use App\Models\Course;
+use App\Models\Lesson;
 use App\Services\AwsS3UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -24,27 +29,31 @@ class S3MultipartUploadController extends Controller
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
-            'filename' => ['required', 'string', 'max:255'],
-            'content_type' => ['nullable', 'string', 'max:100'],
+            'filename' => ['required', 'string'],
+            'content_type' => ['nullable', 'string'],
             'lesson_id' => ['nullable', 'integer'],
             'file_size' => ['nullable', 'integer', 'min:1'],
+            'key' => ['nullable', 'string'],
         ]);
 
         $filename = $validated['filename'];
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         $allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
 
-        if (!in_array($extension, $allowedExtensions, true)) {
+        if (! in_array($extension, $allowedExtensions, true)) {
             return response()->json([
                 'message' => 'Định dạng video không được hỗ trợ. Vui lòng chọn tệp MP4, MOV, AVI, WEBM, hoặc MKV.',
             ], 422);
         }
 
-        $contentType = $validated['content_type'] ?: 'video/' . ($extension === 'mov' ? 'quicktime' : $extension);
+        $contentType = $validated['content_type'] ?: 'video/'.($extension === 'mov' ? 'quicktime' : $extension);
         $lessonId = $validated['lesson_id'] ?? null;
 
-        // Sinh S3 object key bảo mật theo cấu trúc quy định
-        $key = $this->s3Service->generateVideoObjectKey($course->id, $lessonId, $filename);
+        // Sinh hoặc sử dụng S3 object key bảo mật theo cấu trúc quy định
+        $key = $validated['key'] ?? $this->s3Service->generateVideoObjectKey($course->id, $lessonId, $filename);
+        if (! empty($validated['key'])) {
+            $this->validateKeyPrefix($course, $key);
+        }
 
         try {
             $uploadId = $this->s3Service->createMultipartUpload($key, $contentType);
@@ -55,10 +64,14 @@ class S3MultipartUploadController extends Controller
                 'bucket' => $this->s3Service->getBucket(),
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 CreateMultipartUpload Error: ' . $e->getMessage());
+            Log::error('S3 multipart upload initialization failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'lesson_id' => $lessonId,
+            ]);
 
             return response()->json([
-                'message' => 'Không thể khởi tạo phiên tải lên S3: ' . $e->getMessage(),
+                'message' => 'Không thể bắt đầu tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -93,10 +106,14 @@ class S3MultipartUploadController extends Controller
                 'presignedUrls' => $presignedUrls,
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 SignPart Error: ' . $e->getMessage());
+            Log::error('S3 multipart batch signing failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'part_count' => count($partNumbers),
+            ]);
 
             return response()->json([
-                'message' => 'Lỗi tạo chữ ký upload part: ' . $e->getMessage(),
+                'message' => 'Không thể chuẩn bị tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -124,10 +141,14 @@ class S3MultipartUploadController extends Controller
                 'url' => $url,
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 SignPart Single Error: ' . $e->getMessage());
+            Log::error('S3 multipart part signing failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'part_number' => (int) $validated['partNumber'],
+            ]);
 
             return response()->json([
-                'message' => 'Lỗi tạo chữ ký upload part: ' . $e->getMessage(),
+                'message' => 'Không thể chuẩn bị tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -145,13 +166,44 @@ class S3MultipartUploadController extends Controller
             'parts' => ['required', 'array', 'min:1'],
             'parts.*.PartNumber' => ['required', 'integer', 'min:1'],
             'parts.*.ETag' => ['required', 'string'],
+            'duration' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $key = $validated['key'];
+        $duration = (int) round((float) ($validated['duration'] ?? 0));
         $this->validateKeyPrefix($course, $key);
 
         try {
             $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
+
+            // Kích hoạt ConvertVideoToHLS nếu lesson đã được tạo/lưu trong DB
+            $lesson = Lesson::where('original_video_key', $key)->first();
+            if ($lesson && ! $lesson->isHlsReady()) {
+                $lessonUpdateData = [
+                    'upload_status' => 'uploaded',
+                    'processing_status' => 'pending',
+                ];
+                if ($duration > 0 && ($lesson->duration <= 0 || $lesson->duration_seconds <= 0)) {
+                    $lessonUpdateData['duration'] = $duration;
+                    $lessonUpdateData['duration_seconds'] = $duration;
+                }
+                $lesson->update($lessonUpdateData);
+                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key, 'duration' => $duration]);
+                ConvertVideoToHLS::dispatch($lesson);
+            }
+
+            // Kích hoạt ConvertContentUpdateVideoToHLS nếu có ContentUpdate draft tương ứng
+            $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
+                ->where('course_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->whereJsonContains('payload->original_video_key', $key)
+                ->latest()
+                ->first();
+
+            if ($contentUpdate) {
+                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
+                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            }
 
             return response()->json([
                 'status' => 'success',
@@ -159,10 +211,14 @@ class S3MultipartUploadController extends Controller
                 'location' => $result['location'] ?? null,
             ]);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('S3 CompleteMultipartUpload Error: ' . $e->getMessage());
+            Log::error('S3 multipart upload completion failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'part_count' => count($validated['parts']),
+            ]);
 
             return response()->json([
-                'message' => 'Lỗi ghép file trên S3: ' . $e->getMessage(),
+                'message' => 'Không thể hoàn tất tải video lên lúc này. Vui lòng thử lại.',
             ], 500);
         }
     }
@@ -197,7 +253,7 @@ class S3MultipartUploadController extends Controller
     private function validateKeyPrefix(Course $course, string $key): void
     {
         $expectedPrefix = "originals/courses/{$course->id}/";
-        if (!Str::startsWith($key, $expectedPrefix)) {
+        if (! Str::startsWith($key, $expectedPrefix)) {
             abort(403, 'Đường dẫn S3 không hợp lệ hoặc không thuộc khóa học này.');
         }
     }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Aws\S3\S3Client;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -13,9 +14,9 @@ class AwsS3UploadService
 
     public function isS3Configured(): bool
     {
-        return !empty(Config::get('filesystems.disks.s3.key'))
-            && !empty(Config::get('filesystems.disks.s3.secret'))
-            && !empty(Config::get('filesystems.disks.s3.bucket'));
+        return ! empty(Config::get('filesystems.disks.s3.key'))
+            && ! empty(Config::get('filesystems.disks.s3.secret'))
+            && ! empty(Config::get('filesystems.disks.s3.bucket'));
     }
 
     public function getS3Client(): S3Client
@@ -36,7 +37,7 @@ class AwsS3UploadService
             'use_path_style_endpoint' => (bool) ($config['use_path_style_endpoint'] ?? false),
         ];
 
-        if (!empty($config['endpoint'])) {
+        if (! empty($config['endpoint'])) {
             $clientConfig['endpoint'] = $config['endpoint'];
         }
 
@@ -59,12 +60,12 @@ class AwsS3UploadService
     {
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION)) ?: 'mp4';
         $allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
-        if (!in_array($extension, $allowedExtensions, true)) {
+        if (! in_array($extension, $allowedExtensions, true)) {
             $extension = 'mp4';
         }
 
         $uuid = (string) Str::uuid();
-        $lessonSegment = $lessonId ? (string) $lessonId : 'temp_' . Str::random(10);
+        $lessonSegment = $lessonId ? (string) $lessonId : 'temp_'.Str::random(10);
 
         return "originals/courses/{$courseId}/lessons/{$lessonSegment}/{$uuid}.{$extension}";
     }
@@ -109,7 +110,7 @@ class AwsS3UploadService
     /**
      * Hoàn tất Multipart Upload
      *
-     * @param array<int, array{PartNumber: int, ETag: string}> $parts
+     * @param  array<int, array{PartNumber: int, ETag: string}>  $parts
      */
     public function completeMultipartUpload(string $key, string $uploadId, array $parts): array
     {
@@ -151,7 +152,7 @@ class AwsS3UploadService
                 'UploadId' => $uploadId,
             ]);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Abort multipart upload failed for key {$key}: " . $e->getMessage());
+            Log::warning("Abort multipart upload failed for key {$key}: ".$e->getMessage());
         }
     }
 
@@ -162,9 +163,10 @@ class AwsS3UploadService
     {
         // Hỗ trợ CloudFront URL nếu có cấu hình
         $cloudFrontUrl = Config::get('filesystems.disks.s3.cloudfront_url') ?? env('AWS_CLOUDFRONT_URL');
-        if (!empty($cloudFrontUrl)) {
+        if (! empty($cloudFrontUrl)) {
             $baseUrl = rtrim($cloudFrontUrl, '/');
             $cleanKey = ltrim($key, '/');
+
             return "{$baseUrl}/{$cleanKey}";
         }
 
@@ -179,5 +181,22 @@ class AwsS3UploadService
         $request = $client->createPresignedRequest($command, "+{$expiresInMinutes} minutes");
 
         return (string) $request->getUri();
+    }
+
+    /**
+     * Kiểm tra xem một S3 object key đã thực sự tồn tại hoàn chỉnh trên S3 chưa
+     */
+    public function doesObjectExist(string $key): bool
+    {
+        try {
+            $client = $this->getS3Client();
+            $bucket = $this->getBucket();
+
+            return $client->doesObjectExist($bucket, $key);
+        } catch (\Throwable $e) {
+            Log::warning("S3 doesObjectExist check error for key {$key}: ".$e->getMessage());
+
+            return false;
+        }
     }
 }

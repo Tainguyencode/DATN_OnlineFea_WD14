@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ContentUpdate;
 use App\Models\Lesson;
 use App\Models\VideoModeration;
 use App\Services\GeminiService;
 use App\Services\VideoFrameExtractor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class AiModerationController extends Controller
 {
@@ -17,11 +21,11 @@ class AiModerationController extends Controller
      */
     private function resolveLessonAndVideoPath(string|int $lessonId): array
     {
-        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
 
-        if (str_starts_with((string)$lessonId, 'update_les_')) {
+        if (str_starts_with((string) $lessonId, 'update_les_')) {
             $updateId = str_replace('update_les_', '', $lessonId);
-            $update = \App\Models\ContentUpdate::find($updateId);
+            $update = ContentUpdate::find($updateId);
             if ($update) {
                 $payload = $update->payload ?? [];
                 $draftLesson = new Lesson([
@@ -32,6 +36,7 @@ class AiModerationController extends Controller
                     'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
                 ]);
                 $draftLesson->id = $lessonId;
+
                 return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
             }
         }
@@ -39,15 +44,15 @@ class AiModerationController extends Controller
         $lesson = Lesson::find($lessonId);
         if ($lesson) {
             // Check if there is a pending or draft ContentUpdate for this lesson override
-            $pendingUpdate = \App\Models\ContentUpdate::where('entity_id', $lesson->id)
-                ->where('type', \App\Models\ContentUpdate::TYPE_LESSON)
-                ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING, \App\Models\ContentUpdate::STATUS_REJECTED])
+            $pendingUpdate = ContentUpdate::where('entity_id', $lesson->id)
+                ->where('type', ContentUpdate::TYPE_LESSON)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
                 ->latest()
                 ->first();
 
             if ($pendingUpdate) {
                 $p = $pendingUpdate->payload ?? [];
-                if (!empty($p['original_video_key']) || !empty($p['hls_manifest_key']) || !empty($p['video_path'])) {
+                if (! empty($p['original_video_key']) || ! empty($p['hls_manifest_key']) || ! empty($p['video_path'])) {
                     return [$lesson, $p['video_path'] ?? $p['hls_manifest_key'] ?? $p['original_video_key']];
                 }
             }
@@ -56,8 +61,8 @@ class AiModerationController extends Controller
         }
 
         // Fallback check if $lessonId is a numeric ContentUpdate ID
-        $update = \App\Models\ContentUpdate::find($lessonId);
-        if ($update && $update->type === \App\Models\ContentUpdate::TYPE_LESSON) {
+        $update = ContentUpdate::find($lessonId);
+        if ($update && $update->type === ContentUpdate::TYPE_LESSON) {
             $payload = $update->payload ?? [];
             $draftLesson = new Lesson([
                 'title' => $payload['title'] ?? 'Bài học nháp',
@@ -66,7 +71,8 @@ class AiModerationController extends Controller
                 'original_video_key' => $payload['original_video_key'] ?? null,
                 'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
             ]);
-            $draftLesson->id = 'update_les_' . $update->id;
+            $draftLesson->id = 'update_les_'.$update->id;
+
             return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
         }
 
@@ -88,11 +94,11 @@ class AiModerationController extends Controller
         }
 
         // 1. Kiểm tra S3
-        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
         if ($useS3) {
             $s3Key = $lesson?->original_video_key ?: $videoPath;
-            if (\Illuminate\Support\Facades\Storage::disk('s3')->exists($s3Key)) {
-                $stream = \Illuminate\Support\Facades\Storage::disk('s3')->readStream($s3Key);
+            if (Storage::disk('s3')->exists($s3Key)) {
+                $stream = Storage::disk('s3')->readStream($s3Key);
                 if ($stream) {
                     return response()->stream(function () use ($stream) {
                         fpassthru($stream);
@@ -109,13 +115,13 @@ class AiModerationController extends Controller
 
         // 2. Local Disk
         $path = null;
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPath)) {
-            $path = \Illuminate\Support\Facades\Storage::disk('local')->path($videoPath);
-        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($videoPath)) {
-            $path = \Illuminate\Support\Facades\Storage::disk('public')->path($videoPath);
+        if (Storage::disk('local')->exists($videoPath)) {
+            $path = Storage::disk('local')->path($videoPath);
+        } elseif (Storage::disk('public')->exists($videoPath)) {
+            $path = Storage::disk('public')->path($videoPath);
         }
 
-        if (!$path || !file_exists($path)) {
+        if (! $path || ! file_exists($path)) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
             }
@@ -123,7 +129,7 @@ class AiModerationController extends Controller
         }
 
         return response()->file($path, [
-            'Content-Type'  => 'video/mp4',
+            'Content-Type' => 'video/mp4',
             'Cache-Control' => 'no-store',
         ]);
     }
@@ -137,15 +143,15 @@ class AiModerationController extends Controller
     {
         [$lesson, $videoPath] = $this->resolveLessonAndVideoPath($lessonId);
 
-        $isUpdate = str_starts_with((string)$lessonId, 'update_les_');
+        $isUpdate = str_starts_with((string) $lessonId, 'update_les_');
         $rawId = $isUpdate ? str_replace('update_les_', '', $lessonId) : $lessonId;
 
-        $cacheKey = 'hls_signed_playlist_' . $lessonId;
-        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        $cacheKey = 'hls_signed_playlist_'.$lessonId;
+        $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
 
         // Kiểm tra cache đã có playlist đã ký S3 chưa
-        if ($useS3 && \Illuminate\Support\Facades\Cache::has($cacheKey)) {
-            return response(\Illuminate\Support\Facades\Cache::get($cacheKey), 200, [
+        if ($useS3 && Cache::has($cacheKey)) {
+            return response(Cache::get($cacheKey), 200, [
                 'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
                 'Access-Control-Allow-Origin' => '*',
                 'Cache-Control' => 'public, max-age=1800',
@@ -157,19 +163,19 @@ class AiModerationController extends Controller
         // 1. Kiểm tra S3
         if ($useS3) {
             $s3PlaylistKey = $isUpdate
-                ? 'hls/updates/' . $rawId . '/playlist.m3u8'
-                : 'hls/lessons/' . $rawId . '/playlist.m3u8';
+                ? 'hls/updates/'.$rawId.'/playlist.m3u8'
+                : 'hls/lessons/'.$rawId.'/playlist.m3u8';
             $s3MasterKey = $isUpdate
-                ? 'hls/updates/' . $rawId . '/master.m3u8'
-                : 'hls/lessons/' . $rawId . '/master.m3u8';
+                ? 'hls/updates/'.$rawId.'/master.m3u8'
+                : 'hls/lessons/'.$rawId.'/master.m3u8';
 
             $targetKey = null;
             try {
-                $content = \Illuminate\Support\Facades\Storage::disk('s3')->get($s3PlaylistKey);
+                $content = Storage::disk('s3')->get($s3PlaylistKey);
                 $targetKey = $s3PlaylistKey;
             } catch (\Throwable) {
                 try {
-                    $content = \Illuminate\Support\Facades\Storage::disk('s3')->get($s3MasterKey);
+                    $content = Storage::disk('s3')->get($s3MasterKey);
                     $targetKey = $s3MasterKey;
                 } catch (\Throwable) {
                     $content = null;
@@ -184,11 +190,11 @@ class AiModerationController extends Controller
 
                 foreach ($lines as $line) {
                     $trimmed = trim($line);
-                    if ($trimmed !== '' && !str_starts_with($trimmed, '#')) {
+                    if ($trimmed !== '' && ! str_starts_with($trimmed, '#')) {
                         // Nếu là file segment .ts hoặc playlist con .m3u8
-                        $segmentKey = $s3Dir . '/' . $trimmed;
+                        $segmentKey = $s3Dir.'/'.$trimmed;
                         try {
-                            $signedUrl = \Illuminate\Support\Facades\Storage::disk('s3')->temporaryUrl($segmentKey, $expiresAt);
+                            $signedUrl = Storage::disk('s3')->temporaryUrl($segmentKey, $expiresAt);
                             $signedLines[] = $signedUrl;
                         } catch (\Throwable $e) {
                             $signedLines[] = $line;
@@ -201,7 +207,7 @@ class AiModerationController extends Controller
                 $signedContent = implode("\n", $signedLines);
 
                 // Cache 6 giờ để tăng tốc tức thì
-                \Illuminate\Support\Facades\Cache::put($cacheKey, $signedContent, now()->addHours(6));
+                Cache::put($cacheKey, $signedContent, now()->addHours(6));
 
                 return response($signedContent, 200, [
                     'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
@@ -214,15 +220,15 @@ class AiModerationController extends Controller
         // 2. Fallback: Local
         if ($content === null) {
             $localDir = $isUpdate
-                ? 'lesson-hls/update_' . $rawId
-                : 'lesson-hls/' . $rawId;
-            $localPlaylist = $localDir . '/playlist.m3u8';
-            $localMaster = $localDir . '/master.m3u8';
+                ? 'lesson-hls/update_'.$rawId
+                : 'lesson-hls/'.$rawId;
+            $localPlaylist = $localDir.'/playlist.m3u8';
+            $localMaster = $localDir.'/master.m3u8';
 
-            if (\Illuminate\Support\Facades\Storage::disk('local')->exists($localPlaylist)) {
-                $content = \Illuminate\Support\Facades\Storage::disk('local')->get($localPlaylist);
-            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($localMaster)) {
-                $content = \Illuminate\Support\Facades\Storage::disk('local')->get($localMaster);
+            if (Storage::disk('local')->exists($localPlaylist)) {
+                $content = Storage::disk('local')->get($localPlaylist);
+            } elseif (Storage::disk('local')->exists($localMaster)) {
+                $content = Storage::disk('local')->get($localMaster);
             }
         }
 
@@ -242,29 +248,31 @@ class AiModerationController extends Controller
      */
     public function streamHlsSegment(string|int $lessonId, $segment)
     {
-        $isUpdate = str_starts_with((string)$lessonId, 'update_les_');
+        $isUpdate = str_starts_with((string) $lessonId, 'update_les_');
         $rawId = $isUpdate ? str_replace('update_les_', '', $lessonId) : $lessonId;
 
         // 1. Kiểm tra S3 -> Redirect trực tiếp đến S3 Signed URL thay vì proxy qua PHP
-        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
         if ($useS3) {
             $s3SegmentKey = $isUpdate
-                ? 'hls/updates/' . $rawId . '/' . $segment
-                : 'hls/lessons/' . $rawId . '/' . $segment;
+                ? 'hls/updates/'.$rawId.'/'.$segment
+                : 'hls/lessons/'.$rawId.'/'.$segment;
 
-            if (\Illuminate\Support\Facades\Storage::disk('s3')->exists($s3SegmentKey)) {
-                $signedUrl = \Illuminate\Support\Facades\Storage::disk('s3')->temporaryUrl($s3SegmentKey, now()->addHours(2));
+            if (Storage::disk('s3')->exists($s3SegmentKey)) {
+                $signedUrl = Storage::disk('s3')->temporaryUrl($s3SegmentKey, now()->addHours(2));
+
                 return redirect()->away($signedUrl);
             }
         }
 
         // 2. Fallback: Local
         $localSegment = $isUpdate
-            ? 'lesson-hls/update_' . $rawId . '/' . $segment
-            : 'lesson-hls/' . $rawId . '/' . $segment;
+            ? 'lesson-hls/update_'.$rawId.'/'.$segment
+            : 'lesson-hls/'.$rawId.'/'.$segment;
 
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($localSegment)) {
-            $path = \Illuminate\Support\Facades\Storage::disk('local')->path($localSegment);
+        if (Storage::disk('local')->exists($localSegment)) {
+            $path = Storage::disk('local')->path($localSegment);
+
             return response()->file($path, [
                 'Content-Type' => 'video/mp2t',
                 'Access-Control-Allow-Origin' => '*',
@@ -282,18 +290,18 @@ class AiModerationController extends Controller
     {
         [$lesson, $videoPathRel] = $this->resolveLessonAndVideoPath($lessonId);
 
-        if (!$videoPathRel) {
+        if (! $videoPathRel) {
             return response()->json(['error' => 'Bài học này không có video hợp lệ.'], 400);
         }
 
         $videoPath = null;
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($videoPathRel)) {
-            $videoPath = \Illuminate\Support\Facades\Storage::disk('local')->path($videoPathRel);
-        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($videoPathRel)) {
-            $videoPath = \Illuminate\Support\Facades\Storage::disk('public')->path($videoPathRel);
+        if (Storage::disk('local')->exists($videoPathRel)) {
+            $videoPath = Storage::disk('local')->path($videoPathRel);
+        } elseif (Storage::disk('public')->exists($videoPathRel)) {
+            $videoPath = Storage::disk('public')->path($videoPathRel);
         }
 
-        if (!$videoPath || !file_exists($videoPath)) {
+        if (! $videoPath || ! file_exists($videoPath)) {
             return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
         }
 
@@ -309,7 +317,14 @@ class AiModerationController extends Controller
                 'total' => count($frames),
             ]);
         } catch (\Throwable $e) {
-            return response()->json(['error' => 'Lỗi khi cắt frame: '.$e->getMessage()], 500);
+            Log::error('Admin AI moderation frame extraction failed.', [
+                'exception' => $e,
+                'lesson_id' => (string) $lessonId,
+            ]);
+
+            return response()->json([
+                'error' => 'Không thể trích xuất khung hình lúc này. Vui lòng thử lại.',
+            ], 500);
         }
     }
 
@@ -332,10 +347,21 @@ class AiModerationController extends Controller
 
         $result = $gemini->analyzeImage($framePath);
 
-        if (! isset($result['error'])) {
-            $result['timestamp'] = $timestamp;
-            $result['frame_path'] = $framePath;
+        if (isset($result['error'])) {
+            Log::warning('Admin AI moderation frame analysis failed.', [
+                'frame_name' => basename((string) $framePath),
+                'timestamp' => (float) $timestamp,
+                'technical_error' => (string) $result['error'],
+            ]);
+
+            return response()->json([
+                'error' => 'Không thể phân tích khung hình lúc này. Vui lòng thử lại.',
+            ]);
         }
+
+        unset($result['_model_used'], $result['_raw_text']);
+        $result['timestamp'] = $timestamp;
+        $result['frame_path'] = $framePath;
 
         return response()->json($result);
     }
@@ -353,7 +379,7 @@ class AiModerationController extends Controller
 
         if (count($results) === 0) {
             return response()->json([
-                'error' => 'Không có kết quả phân tích nào. API AI có thể đã hết quota hoặc tất cả frame đều thất bại.',
+                'error' => 'Không có kết quả phân tích nào để lưu. Vui lòng thử quét lại.',
             ], 422);
         }
 
@@ -370,12 +396,24 @@ class AiModerationController extends Controller
         $riskLevels = ['none' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
 
         foreach ($results as $result) {
-            if (! empty($result['violence'])) $violence = true;
-            if (! empty($result['adult'])) $adult = true;
-            if (! empty($result['weapon'])) $weapon = true;
-            if (! empty($result['tiktok_logo'])) $tiktok_logo = true;
-            if (! empty($result['youtube_logo'])) $youtube_logo = true;
-            if (! empty($result['watermark'])) $watermark = true;
+            if (! empty($result['violence'])) {
+                $violence = true;
+            }
+            if (! empty($result['adult'])) {
+                $adult = true;
+            }
+            if (! empty($result['weapon'])) {
+                $weapon = true;
+            }
+            if (! empty($result['tiktok_logo'])) {
+                $tiktok_logo = true;
+            }
+            if (! empty($result['youtube_logo'])) {
+                $youtube_logo = true;
+            }
+            if (! empty($result['watermark'])) {
+                $watermark = true;
+            }
 
             $currentRiskStr = strtolower($result['copyright_risk'] ?? 'none');
             $currentRiskValue = $riskLevels[$currentRiskStr] ?? 0;
@@ -391,22 +429,34 @@ class AiModerationController extends Controller
 
         if (empty($summary)) {
             $signs = [];
-            if ($tiktok_logo) $signs[] = 'logo TikTok';
-            if ($youtube_logo) $signs[] = 'logo YouTube';
-            if ($watermark) $signs[] = 'watermark';
-            if ($violence) $signs[] = 'nội dung bạo lực';
-            if ($adult) $signs[] = 'nội dung người lớn';
-            if ($weapon) $signs[] = 'vũ khí';
+            if ($tiktok_logo) {
+                $signs[] = 'logo TikTok';
+            }
+            if ($youtube_logo) {
+                $signs[] = 'logo YouTube';
+            }
+            if ($watermark) {
+                $signs[] = 'watermark';
+            }
+            if ($violence) {
+                $signs[] = 'nội dung bạo lực';
+            }
+            if ($adult) {
+                $signs[] = 'nội dung người lớn';
+            }
+            if ($weapon) {
+                $signs[] = 'vũ khí';
+            }
 
-            if (!empty($signs)) {
-                $summary = 'AI phát hiện dấu hiệu cần kiểm tra: ' . implode(', ', $signs) . '. Gợi ý: Có thể chỉ là video minh họa, admin nên xem lại trước khi quyết định.';
+            if (! empty($signs)) {
+                $summary = 'AI phát hiện dấu hiệu cần kiểm tra: '.implode(', ', $signs).'. Gợi ý: Có thể chỉ là video minh họa, admin nên xem lại trước khi quyết định.';
             }
         }
 
-        $isUpdate = str_starts_with((string)$lessonId, 'update_les_');
+        $isUpdate = str_starts_with((string) $lessonId, 'update_les_');
         $updateId = $isUpdate ? str_replace('update_les_', '', $lessonId) : null;
-        $update = $updateId ? \App\Models\ContentUpdate::find($updateId) : null;
-        $realLesson = (!$isUpdate && !$update) ? Lesson::find($lessonId) : null;
+        $update = $updateId ? ContentUpdate::find($updateId) : null;
+        $realLesson = (! $isUpdate && ! $update) ? Lesson::find($lessonId) : null;
 
         $moderationData = [
             'violence' => $violence,

@@ -19,11 +19,15 @@
                         @php
                             $missingStr = implode(', ', $requirementData['summary']['missing_titles'] ?? []);
                         @endphp
-                        <button type="button" onclick="alert('Không thể phê duyệt: Giảng viên chưa nộp đầy đủ các tài liệu bắt buộc theo ngành ({{ addslashes($missingStr) }}).')" class="rounded-xl bg-slate-300 px-5 py-2.5 text-sm font-bold text-slate-600 shadow-none cursor-not-allowed dark:bg-slate-800 dark:text-slate-500" title="Chưa đủ hồ sơ bắt buộc của ngành">
-                            ⚠️ Chưa đủ điều kiện duyệt
-                        </button>
+                        <div class="max-w-sm text-right">
+                            <button type="button" disabled aria-describedby="missing-instructor-requirements" class="rounded-xl bg-slate-300 px-5 py-2.5 text-sm font-bold text-slate-600 shadow-none cursor-not-allowed dark:bg-slate-800 dark:text-slate-500">
+                                ⚠️ Chưa đủ điều kiện duyệt
+                            </button>
+                            <p id="missing-instructor-requirements" class="mt-2 text-xs font-semibold leading-5 text-amber-700 dark:text-amber-300">
+                                Thiếu tài liệu bắt buộc: {{ $missingStr !== '' ? $missingStr : 'chưa xác định' }}.
+                            </p>
+                        </div>
                     @endif
-
                 @endif
 
                 @if($application->instructor_status !== 'rejected')

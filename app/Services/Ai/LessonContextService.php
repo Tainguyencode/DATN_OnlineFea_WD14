@@ -2,8 +2,8 @@
 
 namespace App\Services\Ai;
 
-use App\Models\Lesson;
 use App\Models\Course;
+use App\Models\Lesson;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 

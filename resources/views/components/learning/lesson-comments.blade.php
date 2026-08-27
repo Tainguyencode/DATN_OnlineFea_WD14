@@ -272,6 +272,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const commentsSection = document.getElementById('lesson-comments-section');
     if (!commentsSection) return;
 
+    const showCommentToast = (message) => {
+        const safeMessage = typeof message === 'string' && message.trim() !== ''
+            ? message
+            : 'Không thể thực hiện thao tác. Vui lòng thử lại.';
+
+        if (window.AppToast?.show) {
+            window.AppToast.show({ type: 'error', message: safeMessage });
+            return;
+        }
+
+        console.error(safeMessage);
+    };
+
     commentsSection.addEventListener('submit', function (e) {
         const form = e.target;
 
@@ -297,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (data.success) {
                     window.location.reload();
                 } else {
-                    alert(data.message || 'Có lỗi xảy ra khi gửi bình luận.');
+                    showCommentToast(data.message || 'Có lỗi xảy ra khi gửi bình luận.');
                 }
             })
             .catch(err => {
@@ -331,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (contentText) contentText.textContent = data.content;
                     window.location.reload();
                 } else {
-                    alert(data.message || 'Không thể cập nhật bình luận.');
+                    showCommentToast(data.message || 'Không thể cập nhật bình luận.');
                 }
             })
             .catch(err => {
@@ -367,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         window.location.reload();
                     }
                 } else {
-                    alert(data.message || 'Không thể xóa bình luận.');
+                    showCommentToast(data.message || 'Không thể xóa bình luận.');
                 }
             })
             .catch(err => {
@@ -416,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }
                 } else {
-                    alert(data.message || 'Không thể thay đổi trạng thái.');
+                    showCommentToast(data.message || 'Không thể thay đổi trạng thái.');
                 }
             })
             .catch(err => {

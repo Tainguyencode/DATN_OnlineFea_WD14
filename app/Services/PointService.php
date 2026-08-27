@@ -2,17 +2,15 @@
 
 namespace App\Services;
 
+use App\Models\Badge;
+use App\Models\Course;
+use App\Models\Lesson;
+use App\Models\PushNotification;
+use App\Models\Quiz;
 use App\Models\User;
 use App\Models\UserPoint;
-use App\Models\Badge;
-use App\Models\Enrollment;
-use App\Models\LessonProgress;
-use App\Models\QuizAttempt;
-use App\Models\Lesson;
-use App\Models\Course;
-use App\Models\PushNotification;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class PointService
 {
@@ -58,7 +56,7 @@ class PointService
     public function checkAndAwardBadges(int $userId): void
     {
         $user = User::find($userId);
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -88,7 +86,7 @@ class PointService
                 ->where('message', 'like', "%\"{$badge->name}\"%")
                 ->exists();
 
-            if (!$hasNotified) {
+            if (! $hasNotified) {
                 try {
                     PushNotification::create([
                         'user_id' => $userId,
@@ -115,7 +113,7 @@ class PointService
     public function awardLessonCompletionPoints(int $userId, int $lessonId, mixed $createdAt = null): void
     {
         $lesson = Lesson::find($lessonId);
-        if (!$lesson) {
+        if (! $lesson) {
             return;
         }
 
@@ -125,7 +123,7 @@ class PointService
             ->where('source', 'lesson_completed')
             ->where(function ($q) use ($lessonId, $lessonTag) {
                 $q->where('reference_id', $lessonId)
-                  ->orWhere('description', 'like', "%{$lessonTag}%");
+                    ->orWhere('description', 'like', "%{$lessonTag}%");
             })
             ->exists();
 
@@ -159,7 +157,7 @@ class PointService
     /**
      * Award points for quiz completion and quiz score bonuses.
      */
-    public function awardQuizPoints(int $userId, \App\Models\Quiz $quiz, float $percent, int $courseId, mixed $createdAt = null): void
+    public function awardQuizPoints(int $userId, Quiz $quiz, float $percent, int $courseId, mixed $createdAt = null): void
     {
         $quizTag = "quiz_id:{$quiz->id}";
 
@@ -168,11 +166,11 @@ class PointService
             ->where('source', 'quiz_completed')
             ->where(function ($q) use ($quiz, $quizTag) {
                 $q->where('reference_id', $quiz->id)
-                  ->orWhere('description', 'like', "%{$quizTag}%");
+                    ->orWhere('description', 'like', "%{$quizTag}%");
             })
             ->exists();
 
-        if (!$hasCompleted) {
+        if (! $hasCompleted) {
             $this->awardPoints(
                 $userId,
                 10,
@@ -189,7 +187,7 @@ class PointService
             ->whereIn('source', ['quiz_score_bonus_90', 'quiz_passed_perfect'])
             ->where(function ($q) use ($quiz, $quizTag) {
                 $q->where('reference_id', $quiz->id)
-                  ->orWhere('description', 'like', "%{$quizTag}%");
+                    ->orWhere('description', 'like', "%{$quizTag}%");
             })
             ->exists();
 
@@ -197,12 +195,12 @@ class PointService
             ->whereIn('source', ['quiz_score_bonus_80', 'quiz_passed_high'])
             ->where(function ($q) use ($quiz, $quizTag) {
                 $q->where('reference_id', $quiz->id)
-                  ->orWhere('description', 'like', "%{$quizTag}%");
+                    ->orWhere('description', 'like', "%{$quizTag}%");
             })
             ->exists();
 
         if ($percent >= 90.0) {
-            if (!$has90Bonus) {
+            if (! $has90Bonus) {
                 $bonusToAward = $has80Bonus ? 10 : 20;
                 $this->awardPoints(
                     $userId,
@@ -215,7 +213,7 @@ class PointService
                 );
             }
         } elseif ($percent >= 80.0) {
-            if (!$has80Bonus && !$has90Bonus) {
+            if (! $has80Bonus && ! $has90Bonus) {
                 $this->awardPoints(
                     $userId,
                     10,
@@ -237,7 +235,7 @@ class PointService
     public function awardCourseCompletionPoints(int $userId, int $courseId, mixed $createdAt = null): void
     {
         $course = Course::find($courseId);
-        if (!$course) {
+        if (! $course) {
             return;
         }
 
@@ -247,8 +245,8 @@ class PointService
             ->where('source', 'course_completed')
             ->where(function ($q) use ($courseId, $courseTag) {
                 $q->where('reference_id', $courseId)
-                  ->orWhere('course_id', $courseId)
-                  ->orWhere('description', 'like', "%{$courseTag}%");
+                    ->orWhere('course_id', $courseId)
+                    ->orWhere('description', 'like', "%{$courseTag}%");
             })
             ->exists();
 
@@ -366,7 +364,7 @@ class PointService
             ->where('created_at', '>=', now()->subDays($daysMilestone - 1)->startOfDay())
             ->exists();
 
-        if (!$recentlyAwarded) {
+        if (! $recentlyAwarded) {
             $this->awardPoints(
                 $userId,
                 $points,
@@ -425,7 +423,7 @@ class PointService
             ->concat($quizDates)
             ->concat($learningPointDates)
             ->filter()
-            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
             ->unique();
 
         return $learningDates->count();
@@ -478,7 +476,7 @@ class PointService
 
         $higherUsersCount = DB::table('user_points')
             ->select('user_id', DB::raw('SUM(points) as period_points'))
-            ->when($dateConstraint, fn($q) => $q->where('created_at', '>=', $dateConstraint))
+            ->when($dateConstraint, fn ($q) => $q->where('created_at', '>=', $dateConstraint))
             ->groupBy('user_id')
             ->having('period_points', '>', $userPoints)
             ->get()

@@ -86,7 +86,7 @@ return new class extends Migration
                     'support_tickets_code_unique'
                 );
             });
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Already unique
         }
     }

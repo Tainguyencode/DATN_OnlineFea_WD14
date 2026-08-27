@@ -2,16 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Mail\StudyGroupInvitationMail;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
-use App\Models\PushNotification;
 use App\Models\StudyGroup;
 use App\Models\StudyGroupInvitation;
-use App\Models\StudyGroupMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -22,13 +22,13 @@ class StudyGroupTest extends TestCase
     private function createCourseWithEnrollment(User $student, ?User $instructor = null): Course
     {
         $instructor = $instructor ?? User::factory()->create(['role' => 'instructor']);
-        $category = Category::create(['name' => 'IT', 'slug' => 'it-' . uniqid()]);
-        
+        $category = Category::create(['name' => 'IT', 'slug' => 'it-'.uniqid()]);
+
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,
             'title' => 'Laravel Advanced',
-            'slug' => 'laravel-advanced-' . uniqid(),
+            'slug' => 'laravel-advanced-'.uniqid(),
             'short_description' => 'Short desc',
             'description' => 'Detailed desc',
             'thumbnail' => 'laravel.png',
@@ -52,12 +52,12 @@ class StudyGroupTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
         $instructor = User::factory()->create(['role' => 'instructor']);
-        $category = Category::create(['name' => 'IT', 'slug' => 'it-' . uniqid()]);
+        $category = Category::create(['name' => 'IT', 'slug' => 'it-'.uniqid()]);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,
             'title' => 'Laravel Advanced',
-            'slug' => 'laravel-advanced-' . uniqid(),
+            'slug' => 'laravel-advanced-'.uniqid(),
             'short_description' => 'Short desc',
             'description' => 'Detailed desc',
             'thumbnail' => 'laravel.png',
@@ -72,7 +72,7 @@ class StudyGroupTest extends TestCase
                 'course_id' => $course->id,
                 'name' => 'Laravel Study Team',
                 'description' => 'Learn together',
-                'max_members' => 5
+                'max_members' => 5,
             ]);
 
         $response->assertStatus(403);
@@ -611,7 +611,7 @@ class StudyGroupTest extends TestCase
     // CASE 23: Notification & Email invitation → đến đúng người
     public function test_case_23_invitation_sends_notification_and_email_to_target_user(): void
     {
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
 
         $student1 = User::factory()->create(['role' => 'student', 'name' => 'Alice']);
         $student2 = User::factory()->create(['role' => 'student', 'name' => 'Bob', 'email' => 'bob@fea.test']);
@@ -636,7 +636,7 @@ class StudyGroupTest extends TestCase
             'title' => 'Bạn được mời vào nhóm học',
         ]);
 
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\StudyGroupInvitationMail::class, function ($mail) use ($student2) {
+        Mail::assertSent(StudyGroupInvitationMail::class, function ($mail) {
             return $mail->hasTo('bob@fea.test');
         });
     }

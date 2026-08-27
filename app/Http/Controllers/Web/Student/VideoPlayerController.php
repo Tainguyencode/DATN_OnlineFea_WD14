@@ -12,10 +12,13 @@ use App\Models\VideoWatchHistory;
 use App\Services\LearningProgressService;
 use App\Services\SecurityAlertService;
 use App\Services\VideoTokenService;
+use hisorange\BrowserDetect\Parser as Browser;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
-use hisorange\BrowserDetect\Parser as Browser; // If using hisorange/browser-detect, otherwise basic parsing
+
+ // If using hisorange/browser-detect, otherwise basic parsing
 
 class VideoPlayerController extends Controller
 {
@@ -38,7 +41,7 @@ class VideoPlayerController extends Controller
             ->withLearningAccess()
             ->exists();
 
-        if (!$hasAccess && !$lesson->is_preview && !$user->isAdmin() && (! $course || (int) $course->instructor_id !== (int) $user->id)) {
+        if (! $hasAccess && ! $lesson->is_preview && ! $user->isAdmin() && (! $course || (int) $course->instructor_id !== (int) $user->id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -66,15 +69,16 @@ class VideoPlayerController extends Controller
     {
         $token = $request->query('token');
 
-        if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
+        if (! $token || ! $this->tokenService->verifyToken($token, $lesson->id)) {
             $this->alertService->logAlert('TOKEN_INVALID', null, [
                 'token' => $token,
-                'lesson_id' => $lesson->id
+                'lesson_id' => $lesson->id,
             ]);
+
             return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
         }
 
-        if ($lesson->isProcessing() && !$lesson->isHlsReady()) {
+        if ($lesson->isProcessing() && ! $lesson->isHlsReady()) {
             return response('Video is processing', 404, [
                 'Access-Control-Allow-Origin' => '*',
                 'X-Video-Status' => 'processing',
@@ -83,13 +87,13 @@ class VideoPlayerController extends Controller
 
         $content = null;
         $isPlaylistRequest = str_ends_with($request->path(), 'playlist.m3u8');
-        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
-        $cacheKey = 'hls_signed_playlist_student_' . $lesson->id . '_' . ($isPlaylistRequest ? 'playlist' : 'master');
+        $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
+        $cacheKey = 'hls_signed_playlist_student_'.$lesson->id.'_'.($isPlaylistRequest ? 'playlist' : 'master');
 
         // 1. Kiểm tra S3 HLS Manifest với Direct Signed URLs
         if ($useS3) {
-            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
-                return response(\Illuminate\Support\Facades\Cache::get($cacheKey), 200, [
+            if (Cache::has($cacheKey)) {
+                return response(Cache::get($cacheKey), 200, [
                     'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
                     'Access-Control-Allow-Origin' => '*',
                     'Cache-Control' => 'public, max-age=1800',
@@ -97,8 +101,8 @@ class VideoPlayerController extends Controller
             }
 
             try {
-                $s3ManifestKey = $lesson->hls_manifest_key ?: ('hls/lessons/' . $lesson->id . '/master.m3u8');
-                $s3PlaylistKey = 'hls/lessons/' . $lesson->id . '/playlist.m3u8';
+                $s3ManifestKey = $lesson->hls_manifest_key ?: ('hls/lessons/'.$lesson->id.'/master.m3u8');
+                $s3PlaylistKey = 'hls/lessons/'.$lesson->id.'/playlist.m3u8';
                 $targetKey = null;
 
                 try {
@@ -121,20 +125,20 @@ class VideoPlayerController extends Controller
 
                     foreach ($lines as $line) {
                         $trimmed = trim($line);
-                        if ($trimmed !== '' && !str_starts_with($trimmed, '#')) {
+                        if ($trimmed !== '' && ! str_starts_with($trimmed, '#')) {
                             if (str_ends_with($trimmed, '.ts')) {
                                 // Ký trực tiếp S3 URL cho file segment .ts
-                                $segmentKey = $s3Dir . '/' . $trimmed;
+                                $segmentKey = $s3Dir.'/'.$trimmed;
                                 try {
                                     $signedLines[] = Storage::disk('s3')->temporaryUrl($segmentKey, $expiresAt);
                                 } catch (\Throwable $e) {
                                     $separator = str_contains($line, '?') ? '&' : '?';
-                                    $signedLines[] = $line . $separator . 'token=' . urlencode($token);
+                                    $signedLines[] = $line.$separator.'token='.urlencode($token);
                                 }
                             } else {
                                 // Nếu là file con .m3u8
                                 $separator = str_contains($line, '?') ? '&' : '?';
-                                $signedLines[] = $line . $separator . 'token=' . urlencode($token);
+                                $signedLines[] = $line.$separator.'token='.urlencode($token);
                             }
                         } else {
                             $signedLines[] = $line;
@@ -142,7 +146,7 @@ class VideoPlayerController extends Controller
                     }
 
                     $signedContent = implode("\n", $signedLines);
-                    \Illuminate\Support\Facades\Cache::put($cacheKey, $signedContent, now()->addHours(6));
+                    Cache::put($cacheKey, $signedContent, now()->addHours(6));
 
                     return response($signedContent, 200, [
                         'Content-Type' => 'application/vnd.apple.mpegurl; charset=utf-8',
@@ -151,15 +155,15 @@ class VideoPlayerController extends Controller
                     ]);
                 }
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('S3 HLS read error: ' . $e->getMessage());
+                Log::warning('S3 HLS read error: '.$e->getMessage());
             }
         }
 
         // 2. Fallback: Local Disk
         if ($content === null) {
-            $hlsDir = 'lesson-hls/' . $lesson->id;
-            $localMaster = $hlsDir . '/master.m3u8';
-            $localPlaylist = $hlsDir . '/playlist.m3u8';
+            $hlsDir = 'lesson-hls/'.$lesson->id;
+            $localMaster = $hlsDir.'/master.m3u8';
+            $localPlaylist = $hlsDir.'/playlist.m3u8';
 
             if ($isPlaylistRequest) {
                 if (Storage::disk('local')->exists($localPlaylist)) {
@@ -184,10 +188,10 @@ class VideoPlayerController extends Controller
         $lines = explode("\n", $content);
         foreach ($lines as &$line) {
             $line = trim($line);
-            if ($line && !str_starts_with($line, '#')) {
-                $line .= '?token=' . urlencode($token);
+            if ($line && ! str_starts_with($line, '#')) {
+                $line .= '?token='.urlencode($token);
             } elseif (str_contains($line, 'URI=')) {
-                $line = preg_replace('/URI="([^"]+)"/', 'URI="$1?token=' . urlencode($token) . '"', $line);
+                $line = preg_replace('/URI="([^"]+)"/', 'URI="$1?token='.urlencode($token).'"', $line);
             }
         }
         $modifiedContent = implode("\n", $lines);
@@ -206,13 +210,13 @@ class VideoPlayerController extends Controller
     {
         $token = $request->query('token');
 
-        if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
+        if (! $token || ! $this->tokenService->verifyToken($token, $lesson->id)) {
             return response('Not found', 404);
         }
 
-        $keyPath = 'lesson-hls/' . $lesson->id . '/enc.key';
+        $keyPath = 'lesson-hls/'.$lesson->id.'/enc.key';
 
-        if (!Storage::disk('local')->exists($keyPath)) {
+        if (! Storage::disk('local')->exists($keyPath)) {
             return response('Not found', 404);
         }
 
@@ -231,28 +235,30 @@ class VideoPlayerController extends Controller
     {
         $token = $request->query('token');
 
-        if (!$token || !$this->tokenService->verifyToken($token, $lesson->id)) {
+        if (! $token || ! $this->tokenService->verifyToken($token, $lesson->id)) {
             return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
         }
 
         // 1. Kiểm tra S3 -> Redirect trực tiếp đến S3 Signed URL
-        $useS3 = !empty(config('filesystems.disks.s3.key')) && !empty(config('filesystems.disks.s3.bucket'));
+        $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
         if ($useS3) {
             try {
-                $s3SegmentKey = 'hls/lessons/' . $lesson->id . '/' . $segment;
+                $s3SegmentKey = 'hls/lessons/'.$lesson->id.'/'.$segment;
                 if (Storage::disk('s3')->exists($s3SegmentKey)) {
                     $signedUrl = Storage::disk('s3')->temporaryUrl($s3SegmentKey, now()->addHours(2));
+
                     return redirect()->away($signedUrl);
                 }
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('S3 segment read error: ' . $e->getMessage());
+                Log::warning('S3 segment read error: '.$e->getMessage());
             }
         }
 
         // 2. Fallback: Local Disk
-        $segmentPath = 'lesson-hls/' . $lesson->id . '/' . $segment;
+        $segmentPath = 'lesson-hls/'.$lesson->id.'/'.$segment;
         if (Storage::disk('local')->exists($segmentPath)) {
             $path = Storage::disk('local')->path($segmentPath);
+
             return response()->file($path, [
                 'Content-Type' => 'video/mp2t',
                 'Access-Control-Allow-Origin' => '*',
@@ -293,7 +299,7 @@ class VideoPlayerController extends Controller
         if ($progress['stale'] ?? false) {
             return response()->json($progress, 409);
         }
-        
+
         // Cập nhật hoặc tạo mới history
         VideoWatchHistory::updateOrCreate(
             ['user_id' => $user->id, 'lesson_id' => $lesson->id],
@@ -308,11 +314,11 @@ class VideoPlayerController extends Controller
             ->where('lesson_id', $lesson->id)
             ->orderByDesc('id')
             ->first();
-            
+
         if ($log && $log->watch_started_at) {
             $log->update([
                 'watch_ended_at' => now(),
-                'watch_duration' => max(0, now()->timestamp - $log->watch_started_at->timestamp)
+                'watch_duration' => max(0, now()->timestamp - $log->watch_started_at->timestamp),
             ]);
         }
 
@@ -353,20 +359,40 @@ class VideoPlayerController extends Controller
 
     private function getBrowserName($userAgent)
     {
-        if (strpos($userAgent, 'Firefox') !== false) return 'Firefox';
-        if (strpos($userAgent, 'Chrome') !== false) return 'Chrome';
-        if (strpos($userAgent, 'Safari') !== false) return 'Safari';
-        if (strpos($userAgent, 'Edge') !== false) return 'Edge';
+        if (strpos($userAgent, 'Firefox') !== false) {
+            return 'Firefox';
+        }
+        if (strpos($userAgent, 'Chrome') !== false) {
+            return 'Chrome';
+        }
+        if (strpos($userAgent, 'Safari') !== false) {
+            return 'Safari';
+        }
+        if (strpos($userAgent, 'Edge') !== false) {
+            return 'Edge';
+        }
+
         return 'Unknown';
     }
 
     private function getPlatformName($userAgent)
     {
-        if (strpos($userAgent, 'Windows') !== false) return 'Windows';
-        if (strpos($userAgent, 'Mac') !== false) return 'macOS';
-        if (strpos($userAgent, 'Linux') !== false) return 'Linux';
-        if (strpos($userAgent, 'Android') !== false) return 'Android';
-        if (strpos($userAgent, 'iPhone') !== false || strpos($userAgent, 'iPad') !== false) return 'iOS';
+        if (strpos($userAgent, 'Windows') !== false) {
+            return 'Windows';
+        }
+        if (strpos($userAgent, 'Mac') !== false) {
+            return 'macOS';
+        }
+        if (strpos($userAgent, 'Linux') !== false) {
+            return 'Linux';
+        }
+        if (strpos($userAgent, 'Android') !== false) {
+            return 'Android';
+        }
+        if (strpos($userAgent, 'iPhone') !== false || strpos($userAgent, 'iPad') !== false) {
+            return 'iOS';
+        }
+
         return 'Unknown';
     }
 
@@ -378,6 +404,7 @@ class VideoPlayerController extends Controller
         if (preg_match('/(up.browser|up.link|mmp|symbian|smartphone|midp|wap|phone|android|iemobile)/i', strtolower($userAgent))) {
             return 'Mobile';
         }
+
         return 'Desktop';
     }
 }

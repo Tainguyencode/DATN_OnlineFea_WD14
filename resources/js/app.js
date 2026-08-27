@@ -1,31 +1,218 @@
 import './bootstrap';
+import './lesson-import';
 import Alpine from 'alpinejs';
 import Chart from 'chart.js/auto';
 
 window.Alpine = Alpine;
 window.Chart = Chart;
 
-Alpine.start();
+const TOAST_TYPES = new Set(['success', 'error', 'warning', 'info']);
+const DEFAULT_TOAST_DURATION = 3000;
+const TOAST_ICON_ELEMENTS = {
+    success: [
+        { tag: 'path', attributes: { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'm5 12 4 4L19 6' } },
+    ],
+    error: [
+        { tag: 'path', attributes: { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M12 8v4m0 4h.01M10.3 3.9 2.6 17.1A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.9L13.7 3.9a2 2 0 0 0-3.4 0Z' } },
+    ],
+    warning: [
+        { tag: 'path', attributes: { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M12 9v4m0 4h.01M10.3 3.9 2.6 17.1A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.9L13.7 3.9a2 2 0 0 0-3.4 0Z' } },
+    ],
+    info: [
+        { tag: 'circle', attributes: { cx: '12', cy: '12', r: '9' } },
+        { tag: 'path', attributes: { 'stroke-linecap': 'round', d: 'M12 11v5m0-8h.01' } },
+    ],
+};
 
-function initializeFlashMessages() {
-    document.querySelectorAll('[data-flash-message="success"]').forEach((flash) => {
-        if (flash.dataset.flashDismissScheduled === 'true') return;
-
-        flash.dataset.flashDismissScheduled = 'true';
-        window.setTimeout(() => {
-            flash.classList.add('flash-message--fading');
-
-            window.setTimeout(() => {
-                flash.remove();
-            }, 250);
-        }, 2000);
-    });
+function normalizeToastType(type) {
+    return TOAST_TYPES.has(type) ? type : 'info';
 }
 
+function normalizeToastDuration(duration) {
+    const parsedDuration = Number.parseInt(duration, 10);
+
+    return Number.isFinite(parsedDuration) && parsedDuration > 0
+        ? parsedDuration
+        : DEFAULT_TOAST_DURATION;
+}
+
+function getToastAccessibility(type) {
+    return type === 'error'
+        ? { role: 'alert', live: 'assertive' }
+        : { role: 'status', live: 'polite' };
+}
+
+function createToastSvg(elements) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('aria-hidden', 'true');
+
+    elements.forEach(({ tag, attributes }) => {
+        const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+
+        Object.entries(attributes).forEach(([name, value]) => {
+            element.setAttribute(name, value);
+        });
+
+        svg.append(element);
+    });
+
+    return svg;
+}
+
+function createToastIcon(type) {
+    const icon = document.createElement('span');
+    icon.className = 'app-toast__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.append(createToastSvg(TOAST_ICON_ELEMENTS[type]));
+
+    return icon;
+}
+
+function createToastDismissButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'app-toast__close';
+    button.setAttribute('data-toast-dismiss', '');
+    button.setAttribute('aria-label', 'Đóng thông báo');
+    button.append(createToastSvg([
+        { tag: 'path', attributes: { 'stroke-linecap': 'round', d: 'm6 6 12 12M18 6 6 18' } },
+    ]));
+
+    return button;
+}
+
+function getToastContainer() {
+    const existingContainer = document.querySelector('[data-toast-container]');
+
+    if (existingContainer) return existingContainer;
+    if (!document.body) return null;
+
+    const container = document.createElement('div');
+    container.className = 'toast-container';
+    container.setAttribute('data-toast-container', '');
+    container.setAttribute('aria-label', 'Thông báo hệ thống');
+    document.body.append(container);
+
+    return container;
+}
+
+function initializeToasts() {
+    document.querySelectorAll('[data-toast]').forEach(initializeToast);
+}
+
+function initializeToast(toast) {
+    if (toast.dataset.toastInitialized === 'true') return;
+
+    toast.dataset.toastInitialized = 'true';
+
+    const duration = normalizeToastDuration(toast.dataset.toastDuration);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let remaining = duration;
+    let startedAt = 0;
+    let timerId = null;
+    let dismissed = false;
+    let isHovered = false;
+    let isFocused = false;
+
+    const clearTimer = () => {
+        if (timerId === null) return;
+
+        window.clearTimeout(timerId);
+        timerId = null;
+    };
+
+    const dismissToast = () => {
+        if (dismissed) return;
+
+        dismissed = true;
+        clearTimer();
+        toast.classList.add('app-toast--dismissing');
+        toast.setAttribute('aria-hidden', 'true');
+
+        window.setTimeout(() => toast.remove(), prefersReducedMotion ? 0 : 220);
+    };
+
+    const pauseTimer = () => {
+        if (timerId === null || dismissed) return;
+
+        remaining = Math.max(0, remaining - (performance.now() - startedAt));
+        clearTimer();
+    };
+
+    const startTimer = () => {
+        if (dismissed || timerId !== null || isHovered || isFocused) return;
+
+        if (remaining <= 0) {
+            dismissToast();
+            return;
+        }
+
+        startedAt = performance.now();
+        timerId = window.setTimeout(dismissToast, remaining);
+    };
+
+    toast.addEventListener('mouseenter', () => {
+        isHovered = true;
+        pauseTimer();
+    });
+    toast.addEventListener('mouseleave', () => {
+        isHovered = false;
+        startTimer();
+    });
+    toast.addEventListener('focusin', () => {
+        isFocused = true;
+        pauseTimer();
+    });
+    toast.addEventListener('focusout', (event) => {
+        if (toast.contains(event.relatedTarget)) return;
+
+        isFocused = false;
+        startTimer();
+    });
+    toast.querySelector('[data-toast-dismiss]')?.addEventListener('click', dismissToast);
+
+    startTimer();
+}
+
+function showAppToast({ type = 'info', message = '', duration = DEFAULT_TOAST_DURATION } = {}) {
+    const container = getToastContainer();
+
+    if (!container) return null;
+
+    const toastType = normalizeToastType(type);
+    const accessibility = getToastAccessibility(toastType);
+    const toast = document.createElement('div');
+    toast.className = `app-toast app-toast--${toastType}`;
+    toast.setAttribute('data-toast', '');
+    toast.dataset.toastDuration = String(normalizeToastDuration(duration));
+    toast.setAttribute('role', accessibility.role);
+    toast.setAttribute('aria-live', accessibility.live);
+
+    const messageElement = document.createElement('p');
+    messageElement.className = 'app-toast__message';
+    messageElement.textContent = message === null || message === undefined ? '' : String(message);
+
+    toast.append(createToastIcon(toastType), messageElement, createToastDismissButton());
+    container.append(toast);
+    initializeToast(toast);
+
+    return toast;
+}
+
+window.AppToast = {
+    show: showAppToast,
+};
+
+Alpine.start();
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeFlashMessages, { once: true });
+    document.addEventListener('DOMContentLoaded', initializeToasts, { once: true });
 } else {
-    initializeFlashMessages();
+    initializeToasts();
 }
 
 function syncThemeToggleState() {
@@ -67,107 +254,6 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', syncThemeToggleState, { once: true });
 } else {
     syncThemeToggleState();
-}
-
-window.toggleChat = function () {
-    const drawer = document.getElementById('ai-chat-drawer');
-    if (drawer) {
-        drawer.classList.toggle('translate-x-full');
-    }
-};
-
-window.sendChatMessage = function () {
-    const input = document.getElementById('chat-input');
-    const messagesContainer = document.getElementById('chat-messages');
-    if (!input || !messagesContainer || !input.value.trim()) return;
-
-    const messageText = input.value.trim();
-    input.value = '';
-
-    // Append User Message
-    const userBubble = document.createElement('div');
-    userBubble.className = 'flex justify-end mb-4';
-    userBubble.innerHTML = `
-        <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 max-w-[80%] text-sm shadow-sm">
-            ${escapeHtml(messageText)}
-        </div>
-    `;
-    messagesContainer.appendChild(userBubble);
-    scrollChatToBottom();
-
-    // Show Typing Indicator
-    const typingBubble = document.createElement('div');
-    typingBubble.className = 'flex justify-start mb-4 opacity-75';
-    typingBubble.id = 'chat-typing-indicator';
-    typingBubble.innerHTML = `
-        <div class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-none px-4 py-3 text-sm">
-            <span class="inline-flex gap-1 items-center">
-                <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce"></span>
-                <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-            </span>
-        </div>
-    `;
-    messagesContainer.appendChild(typingBubble);
-    scrollChatToBottom();
-
-    // Simulate AI Reply
-    setTimeout(() => {
-        const indicator = document.getElementById('chat-typing-indicator');
-        if (indicator) indicator.remove();
-
-        const replyText = getAiResponse(messageText);
-        const aiBubble = document.createElement('div');
-        aiBubble.className = 'flex justify-start mb-4';
-        aiBubble.innerHTML = `
-            <div class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-none px-4 py-2.5 max-w-[85%] text-sm shadow-sm leading-relaxed">
-                ${replyText}
-            </div>
-        `;
-        messagesContainer.appendChild(aiBubble);
-        scrollChatToBottom();
-    }, 1000);
-};
-
-window.sendPresetMessage = function (text) {
-    const input = document.getElementById('chat-input');
-    if (input) {
-        input.value = text;
-        window.sendChatMessage();
-    }
-};
-
-function scrollChatToBottom() {
-    const container = document.getElementById('chat-messages');
-    if (container) {
-        container.scrollTop = container.scrollHeight;
-    }
-}
-
-function escapeHtml(unsafe) {
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
-}
-
-function getAiResponse(msg) {
-    const text = msg.toLowerCase();
-    if (text.includes('lộ trình') || text.includes('roadmap') || text.includes('học')) {
-        return 'Để học tập hiệu quả trên **Website học online FEA**, bạn nên bắt đầu từ các danh mục cơ bản như **Lập trình Web** với khóa học *Laravel từ Zero đến Hero*. Sau đó nâng cao lên *React.js Masterclass* và *Data Science*.';
-    }
-    if (text.includes('đồ án') || text.includes('datn') || text.includes('tốt nghiệp')) {
-        return 'Chào bạn! Website học online FEA hỗ trợ đầy đủ quản lý học trực tuyến, tương tác giữa giảng viên và học viên, báo cáo tiến độ trực tuyến, và tích hợp AI hỗ trợ học tập.';
-    }
-    if (text.includes('chào') || text.includes('hello') || text.includes('hi')) {
-        return 'Xin chào! Mình là **FEA AI Assistant**. Mình có thể giúp gì cho quá trình học tập online của bạn hôm nay?';
-    }
-    if (text.includes('giảng viên') || text.includes('admin') || text.includes('giáo viên')) {
-        return 'Giảng viên trên Website học online FEA có quyền tạo chương mục, tải tài liệu học tập, soạn bài tập, chấm điểm và trao đổi trực tiếp với học viên. Quản trị viên sẽ phê duyệt các khóa học chất lượng trước khi phát hành.';
-    }
-    return 'Cảm ơn bạn đã trò chuyện! Mình ghi nhận câu hỏi. Bạn có thể tham khảo lộ trình học lập trình Web, quản lý đồ án tốt nghiệp, hoặc liên hệ giảng viên hướng dẫn để được giải đáp chuyên sâu.';
 }
 
 function initAdminSidebar() {

@@ -18,10 +18,15 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $instructor;
+
     protected Category $categoryWeb;
+
     protected Category $categoryMarketing;
+
     protected InstructorDocumentRequirement $reqDegree;
+
     protected InstructorDocumentRequirement $reqCert;
 
     protected function setUp(): void

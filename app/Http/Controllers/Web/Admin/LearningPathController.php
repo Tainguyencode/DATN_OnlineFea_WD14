@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreLearningPathRequest;
+use App\Http\Requests\Admin\UpdateLearningPathRequest;
 use App\Models\Course;
 use App\Models\LearningPath;
 use Illuminate\Http\RedirectResponse;
@@ -34,23 +36,9 @@ class LearningPathController extends Controller
         return view('admin.learning-paths.create', compact('courses'));
     }
 
-
-    public function store(Request $request): RedirectResponse
+    public function store(StoreLearningPathRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'level' => 'required|in:beginner,intermediate,advanced',
-            'target_role' => 'nullable|string|max:255',
-            'salary_range' => 'nullable|string|max:255',
-            'estimated_duration' => 'nullable|string|max:255',
-            'skills_input' => 'nullable|string',
-            'is_featured' => 'nullable|boolean',
-            'courses' => 'nullable|array',
-            'courses.*' => 'exists:courses,id',
-            'sort_orders' => 'nullable|array',
-            'stage_names' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         $skills = [];
         if (! empty($validated['skills_input'])) {
@@ -102,23 +90,9 @@ class LearningPathController extends Controller
         return view('admin.learning-paths.edit', compact('learningPath', 'courses'));
     }
 
-
-    public function update(Request $request, LearningPath $learningPath): RedirectResponse
+    public function update(UpdateLearningPathRequest $request, LearningPath $learningPath): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'level' => 'required|in:beginner,intermediate,advanced',
-            'target_role' => 'nullable|string|max:255',
-            'salary_range' => 'nullable|string|max:255',
-            'estimated_duration' => 'nullable|string|max:255',
-            'skills_input' => 'nullable|string',
-            'is_featured' => 'nullable|boolean',
-            'courses' => 'nullable|array',
-            'courses.*' => 'exists:courses,id',
-            'sort_orders' => 'nullable|array',
-            'stage_names' => 'nullable|array',
-        ]);
+        $validated = $request->validated();
 
         $skills = [];
         if (! empty($validated['skills_input'])) {

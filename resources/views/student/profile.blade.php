@@ -1,12 +1,6 @@
 <x-student-layout title="Hồ sơ" page-title="Hồ sơ cá nhân" breadcrumb="Quản lý thông tin và bảo mật tài khoản">
 
 <div class="space-y-6">
-    @if(session('success'))
-        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700">
-            {{ session('success') }}
-        </div>
-    @endif
-
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="flex flex-col gap-6 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:p-8">
             <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-24 w-24 rounded-2xl object-cover ring-4 ring-slate-100">

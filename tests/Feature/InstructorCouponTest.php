@@ -163,15 +163,15 @@ class InstructorCouponTest extends TestCase
     private function createCourse(User $instructor, float $price = 500000): Course
     {
         $category = Category::create([
-            'name' => 'Cat ' . uniqid(),
-            'slug' => 'cat-' . uniqid(),
+            'name' => 'Cat '.uniqid(),
+            'slug' => 'cat-'.uniqid(),
         ]);
 
         return Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,
-            'title' => 'Course ' . uniqid(),
-            'slug' => 'course-' . uniqid(),
+            'title' => 'Course '.uniqid(),
+            'slug' => 'course-'.uniqid(),
             'short_description' => 'Short desc',
             'description' => 'Full description',
             'objectives' => 'Objectives',

@@ -12,11 +12,11 @@ class SecurityAlert extends Model
         'type', // NEW_DEVICE, MULTIPLE_LOGIN, MULTIPLE_IP, TOKEN_INVALID, SESSION_KICKED
         'ip_address',
         'user_agent',
-        'details'
+        'details',
     ];
 
     protected $casts = [
-        'details' => 'array'
+        'details' => 'array',
     ];
 
     public function user(): BelongsTo

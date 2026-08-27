@@ -275,7 +275,12 @@ class RecentlyViewedCoursesTest extends TestCase
 
     private function publishedCourse(string $title = 'Published Course', array $overrides = []): Course
     {
-        $instructor = User::factory()->create(['role' => 'instructor', 'email_verified_at' => now()]);
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $category = Category::create([
             'name' => 'Development '.Str::random(6),
             'slug' => 'development-'.Str::random(8),

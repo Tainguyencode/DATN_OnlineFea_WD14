@@ -35,7 +35,7 @@ class CourseReviewController extends Controller
             ->when($status === 'all_pending', fn ($q) => $q->whereIn('status', [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value]))
             ->when($status === 'approved_waiting_instructor', function ($q) {
                 $q->where('status', CourseStatus::Approved->value)
-                  ->whereHas('instructor', fn ($iq) => $iq->where('instructor_status', '!=', 'approved')->orWhereIn('account_status', ['locked', 'suspended']));
+                    ->whereHas('instructor', fn ($iq) => $iq->where('instructor_status', '!=', 'approved')->orWhereIn('account_status', ['locked', 'suspended']));
             })
             ->when($status && ! in_array($status, ['all_pending', 'approved_waiting_instructor', 'all'], true), fn ($q) => $q->where('status', $status));
 

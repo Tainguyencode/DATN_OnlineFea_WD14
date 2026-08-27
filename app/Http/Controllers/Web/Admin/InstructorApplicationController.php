@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Notifications\InstructorApprovedNotification;
 use App\Notifications\InstructorRejectedNotification;
 use App\Services\ActivityLogService;
+use App\Services\CourseReviewService;
+use App\Services\InstructorRequirementService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,7 +70,7 @@ class InstructorApplicationController extends Controller
 
         $user->load(['instructorProfile.category', 'instructorApplication', 'instructorCertificates.reviewer', 'instructorCertificates.requirement', 'approver']);
 
-        $requirementData = app(\App\Services\InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $requirementData = app(InstructorRequirementService::class)->getRequirementsForInstructor($user);
 
         return view('admin.instructors.applications.show', [
             'application' => $user,
@@ -104,7 +106,7 @@ class InstructorApplicationController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($relativePath) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($relativePath).'"',
             ]);
         }
 
@@ -114,7 +116,7 @@ class InstructorApplicationController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($relativePath) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($relativePath).'"',
             ]);
         }
 
@@ -135,7 +137,7 @@ class InstructorApplicationController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($certificate->original_name) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($certificate->original_name).'"',
             ]);
         }
 
@@ -145,7 +147,7 @@ class InstructorApplicationController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($certificate->original_name) . '"',
+                'Content-Disposition' => 'inline; filename="'.basename($certificate->original_name).'"',
             ]);
         }
 
@@ -159,9 +161,10 @@ class InstructorApplicationController extends Controller
         }
 
         // Kiểm tra xem giảng viên đã nộp đầy đủ toàn bộ tài liệu bắt buộc của ngành chưa
-        $completeness = app(\App\Services\InstructorRequirementService::class)->checkCanApproveInstructor($user);
+        $completeness = app(InstructorRequirementService::class)->checkCanApproveInstructor($user);
         if (! $completeness['can_approve']) {
             $missingList = implode(', ', $completeness['missing_titles']);
+
             return back()->with('error', "Không thể duyệt hồ sơ. Giảng viên còn thiếu tài liệu bắt buộc của ngành: {$missingList}.");
         }
 
@@ -192,7 +195,7 @@ class InstructorApplicationController extends Controller
         }
 
         try {
-            $user->notify(new InstructorApprovedNotification());
+            $user->notify(new InstructorApprovedNotification);
             app(NotificationService::class)->send(
                 $user,
                 'Chúc mừng! Hồ sơ Giảng viên đã được phê duyệt',
@@ -201,17 +204,17 @@ class InstructorApplicationController extends Controller
                 route('instructor.dashboard')
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi email Duyệt giảng viên thất bại: ' . $e->getMessage());
+            Log::error('Gửi email Duyệt giảng viên thất bại: '.$e->getMessage());
         }
 
         // Tự động kích hoạt xuất bản toàn bộ các khóa học đã được Admin duyệt nội dung trước đó của giảng viên
-        $publishedCoursesCount = app(\App\Services\CourseReviewService::class)->syncInstructorApprovedCourses($user);
+        $publishedCoursesCount = app(CourseReviewService::class)->syncInstructorApprovedCourses($user);
 
         ActivityLogService::log($adminId, 'approve_instructor', User::class, $user->id, [
             'auto_published_courses_count' => $publishedCoursesCount,
         ], $request);
 
-        $successMessage = 'Đã duyệt hồ sơ Giảng viên "' . $user->name . '" thành công!';
+        $successMessage = 'Đã duyệt hồ sơ Giảng viên "'.$user->name.'" thành công!';
         if ($publishedCoursesCount > 0) {
             $successMessage .= " Đồng thời tự động kích hoạt xuất bản {$publishedCoursesCount} khóa học đã được duyệt trước đó.";
         }
@@ -257,12 +260,12 @@ class InstructorApplicationController extends Controller
             app(NotificationService::class)->send(
                 $user,
                 'Thông báo về hồ sơ Giảng viên',
-                'Hồ sơ đăng ký giảng viên của bạn chưa được duyệt: ' . $reason,
+                'Hồ sơ đăng ký giảng viên của bạn chưa được duyệt: '.$reason,
                 'instructor_rejected',
                 route('instructor.pending')
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi email Từ chối giảng viên thất bại: ' . $e->getMessage());
+            Log::error('Gửi email Từ chối giảng viên thất bại: '.$e->getMessage());
         }
 
         ActivityLogService::log($adminId, 'reject_instructor', User::class, $user->id, [
@@ -270,7 +273,7 @@ class InstructorApplicationController extends Controller
         ], $request);
 
         return redirect()->route('admin.instructors.applications.index')
-            ->with('success', 'Đã từ chối hồ sơ Giảng viên "' . $user->name . '".');
+            ->with('success', 'Đã từ chối hồ sơ Giảng viên "'.$user->name.'".');
     }
 
     public function reviewDocument(Request $request, User $user, InstructorCertificate $certificate): RedirectResponse
@@ -322,7 +325,7 @@ class InstructorApplicationController extends Controller
             );
         }
 
-        return back()->with('success', 'Đã cập nhật trạng thái tài liệu "' . $docName . '" thành công.');
+        return back()->with('success', 'Đã cập nhật trạng thái tài liệu "'.$docName.'" thành công.');
     }
 
     public function approveReactivation(Request $request, User $user): RedirectResponse
@@ -346,10 +349,10 @@ class InstructorApplicationController extends Controller
                 route('instructor.dashboard')
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo mở khóa tài khoản giảng viên thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo mở khóa tài khoản giảng viên thất bại: '.$e->getMessage());
         }
 
-        return back()->with('success', 'Đã phê duyệt mở khóa và cấp lại quyền giảng viên cho "' . $user->name . '".');
+        return back()->with('success', 'Đã phê duyệt mở khóa và cấp lại quyền giảng viên cho "'.$user->name.'".');
     }
 
     public function rejectReactivation(Request $request, User $user): RedirectResponse
@@ -380,14 +383,14 @@ class InstructorApplicationController extends Controller
             app(NotificationService::class)->send(
                 $user,
                 'Yêu cầu cấp lại quyền Giảng viên bị từ chối',
-                'Yêu cầu mở khóa và cấp lại quyền giảng viên của bạn chưa được chấp thuận: ' . $notes,
+                'Yêu cầu mở khóa và cấp lại quyền giảng viên của bạn chưa được chấp thuận: '.$notes,
                 'instructor_reactivation_rejected',
                 route('instructor.profile')
             );
         } catch (\Throwable $e) {
-            Log::error('Gửi thông báo từ chối cấp lại giảng viên thất bại: ' . $e->getMessage());
+            Log::error('Gửi thông báo từ chối cấp lại giảng viên thất bại: '.$e->getMessage());
         }
 
-        return back()->with('success', 'Đã từ chối yêu cầu cấp lại quyền giảng viên cho "' . $user->name . '".');
+        return back()->with('success', 'Đã từ chối yêu cầu cấp lại quyền giảng viên cho "'.$user->name.'".');
     }
 }

@@ -54,10 +54,7 @@
 
                 <span class="text-slate-500">Phương thức thanh toán:</span>
                 <strong class="text-slate-900 text-right">
-                    @if($order->payment_method === 'vnpay') VNPay
-                    @elseif($order->payment_method === 'momo') MoMo
-                    @else Chuyển khoản
-                    @endif
+                    PayOS VietQR
                 </strong>
 
                 <span class="text-slate-500">Mã giao dịch:</span>

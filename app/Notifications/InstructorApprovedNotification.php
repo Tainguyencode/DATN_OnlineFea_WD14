@@ -3,7 +3,6 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -11,9 +10,7 @@ class InstructorApprovedNotification extends Notification
 {
     use Queueable;
 
-    public function __construct()
-    {
-    }
+    public function __construct() {}
 
     public function via(object $notifiable): array
     {
@@ -24,7 +21,7 @@ class InstructorApprovedNotification extends Notification
     {
         return (new MailMessage)
             ->subject('Chúc mừng! Hồ sơ Giảng viên của bạn đã được phê duyệt')
-            ->greeting('Xin chào ' . $notifiable->name . '!')
+            ->greeting('Xin chào '.$notifiable->name.'!')
             ->line('Chúc mừng bạn! Hồ sơ đăng ký Giảng viên của bạn tại hệ thống đã được Ban quản trị xem xét và phê duyệt.')
             ->line('Bây giờ bạn đã có thể bắt đầu tạo khóa học, quản lý nội dung bài học và kết nối với hàng nghìn học viên.')
             ->action('Truy cập Dashboard Giảng viên', route('instructor.dashboard'))

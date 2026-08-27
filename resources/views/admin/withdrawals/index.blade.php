@@ -56,23 +56,6 @@
         }
     }" class="space-y-6">
 
-        {{-- Session Flash Notifications --}}
-        @if (session('success'))
-            <div class="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-emerald-800 shadow-sm backdrop-blur-sm">
-                <div class="flex items-center gap-3">
-                    <div class="rounded-xl bg-emerald-500/10 p-2 text-emerald-600">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                    </div>
-                    <span class="text-sm font-semibold">{{ session('success') }}</span>
-                </div>
-                <button type="button" @click="$el.parentElement.remove()" class="text-emerald-500 hover:text-emerald-700">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-        @endif
-
         @if ($errors->any())
             <div class="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-rose-800 shadow-sm">
                 <div class="flex items-start gap-3">
@@ -308,7 +291,7 @@
             @endif
         </div>
 
-        {{-- Modal Quét Mã VietQR Napas247 - Bố Cục Căn Giữa Hoàn Hảo (Khôi Phục Khung 32cm x 20cm) --}}
+        {{-- Modal VietQR responsive --}}
         <div
             x-show="qrModalOpen"
             x-cloak
@@ -316,7 +299,7 @@
             role="dialog"
             aria-modal="true"
         >
-            <div class="flex min-h-screen items-center justify-center p-3 text-center sm:p-0">
+            <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-6">
                 <div
                     x-show="qrModalOpen"
                     x-transition:enter="ease-out duration-200"
@@ -337,8 +320,7 @@
                     x-transition:leave="ease-in duration-150"
                     x-transition:leave-start="opacity-100 scale-100"
                     x-transition:leave-end="opacity-0 scale-95"
-                    style="width: 32cm; max-width: 95vw; height: 20cm; min-height: 20cm;"
-                    class="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-6 p-7 sm:p-9 flex flex-col justify-between border border-slate-200"
+                    class="relative flex max-h-[92vh] w-full max-w-5xl transform flex-col overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-2xl transition-all sm:p-7"
                 >
                     {{-- Dòng Header Gợi Ý Bóng Đèn Căn Giữa --}}
                     <div class="flex items-center justify-center gap-2 text-center text-sm text-slate-700 font-medium border-b border-slate-100 pb-4">
@@ -348,14 +330,13 @@
                         <span>Mở App Ngân hàng bất kỳ để <strong>quét mã VietQR</strong> hoặc <strong>chuyển khoản</strong> chính xác số tiền, nội dung bên dưới</span>
                     </div>
 
-                    <form :action="'/admin/withdrawals/' + withdrawalId + '/approve'" method="POST" class="flex-1 flex flex-col justify-center items-center py-2">
+                    <form :action="'/admin/withdrawals/' + withdrawalId + '/approve'" method="POST" class="flex-1 py-5">
                         @csrf
 
-                        {{-- Bố Cục 2 Cột Căn Giữa Hoàn Hảo (Flex Row Center) Không Bị Trống Lề --}}
-                        <div class="flex flex-row items-center justify-center gap-10 sm:gap-14 w-full max-w-4xl mx-auto flex-1">
+                        <div class="mx-auto grid w-full max-w-4xl items-center gap-6 lg:grid-cols-[minmax(260px,340px)_1px_minmax(0,1fr)] lg:gap-8">
                             
                             {{-- CỘT TRÁI: Mã QR Code To & Nút Hủy bên dưới --}}
-                            <div class="w-72 sm:w-80 shrink-0 flex flex-col items-center justify-center">
+                            <div class="mx-auto flex w-full max-w-xs flex-col items-center justify-center">
                                 <div class="w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm text-center">
                                     <img :src="vietQrUrl" alt="Mã VietQR Chuyển Tiền" class="w-full h-auto rounded-2xl block mx-auto">
                                 </div>
@@ -373,10 +354,10 @@
                             </div>
 
                             {{-- Đường Vạch Phân Cách Dọc Nhẹ Nhàng --}}
-                            <div class="h-80 w-px bg-slate-100 hidden sm:block shrink-0"></div>
+                            <div class="hidden h-full min-h-80 w-px bg-slate-100 lg:block"></div>
 
                             {{-- CỘT PHẢI (W-[420px]): Thông Tin Ngân Hàng Thiết Kế Tinh Tế Cân Đối --}}
-                            <div class="w-full max-w-[420px] shrink-0 space-y-3.5 text-sm">
+                            <div class="w-full space-y-3.5 text-sm">
                                 
                                 {{-- Ngân hàng --}}
                                 <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex items-center gap-3">

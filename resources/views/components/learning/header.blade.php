@@ -120,60 +120,58 @@
     </div>
 </header>
 
-{{-- Toast Notification --}}
-<div id="cert-toast" style="display:none; position:fixed; bottom:24px; right:24px; z-index:99999; max-width:380px; border-radius:12px; padding:14px 18px; box-shadow:0 10px 40px rgba(0,0,0,0.18); align-items:center; gap:12px; font-family:inherit;" role="alert">
-    <span id="cert-toast-msg" style="font-size:14px; font-weight:500; flex:1;"></span>
-    <button onclick="document.getElementById('cert-toast').style.display='none'" style="background:none;border:none;cursor:pointer;opacity:0.6;padding:0;margin-left:8px;" aria-label="Đóng">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-    </button>
-</div>
-
 <script>
-function sendCertEmail(btn) {
+async function sendCertEmail(btn) {
+    if (btn.disabled) return;
+
     btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
 
-    // Hiển thị thông báo NGAY LẬP TỨC khi bấm
-    showCertToast('success', '✅ Email chứng chỉ đã được gửi tới hòm thư của bạn!');
+    try {
+        const response = await fetch(btn.dataset.sendUrl, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+            },
+        });
 
-    // Gửi request ngầm (fire and forget)
-    fetch(btn.dataset.sendUrl, {
-        method: 'GET',
-        redirect: 'follow',
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' }
-    })
-    .catch(function() {
-        // Nếu thực sự lỗi mạng thì cập nhật lại toast
-        showCertToast('error', '❌ Không gửi được email. Vui lòng thử lại sau.');
-    })
-    .finally(function() {
+        let data = null;
+
+        try {
+            data = await response.json();
+        } catch (error) {
+            console.error('Certificate email response was not valid JSON.', error);
+        }
+
+        if (response.ok && data?.success) {
+            window.AppToast.show({
+                type: 'success',
+                message: getCertificateToastMessage(data, 'Email chứng chỉ đã được gửi tới hòm thư của bạn!'),
+            });
+
+            return;
+        }
+
+        window.AppToast.show({
+            type: 'error',
+            message: getCertificateToastMessage(data, 'Không thể gửi email chứng chỉ. Vui lòng thử lại.'),
+        });
+    } catch (error) {
+        console.error('Certificate email request failed.', error);
+        window.AppToast.show({
+            type: 'error',
+            message: 'Không thể kết nối tới máy chủ. Vui lòng thử lại.',
+        });
+    } finally {
         btn.disabled = false;
-    });
-}
-
-function showCertToast(type, msg) {
-    var toast = document.getElementById('cert-toast');
-    var msgEl = document.getElementById('cert-toast-msg');
-    msgEl.textContent = msg;
-    if (type === 'success') {
-        toast.style.background = '#f0fdf4';
-        toast.style.border = '1px solid #bbf7d0';
-        toast.style.color = '#166534';
-    } else {
-        toast.style.background = '#fef2f2';
-        toast.style.border = '1px solid #fecaca';
-        toast.style.color = '#991b1b';
+        btn.removeAttribute('aria-busy');
     }
-    toast.style.display = 'flex';
-    clearTimeout(window._certToastTimer);
-    window._certToastTimer = setTimeout(function() {
-        toast.style.display = 'none';
-    }, 5000);
 }
 
-if (!document.getElementById('cert-toast-style')) {
-    var s = document.createElement('style');
-    s.id = 'cert-toast-style';
-    s.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
-    document.head.appendChild(s);
+function getCertificateToastMessage(data, fallback) {
+    return typeof data?.message === 'string' && data.message.trim() !== ''
+        ? data.message
+        : fallback;
 }
 </script>

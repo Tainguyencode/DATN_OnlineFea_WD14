@@ -10,6 +10,7 @@ class QuizAttemptAnswer extends Model
     protected $fillable = [
         'quiz_attempt_id',
         'question_id',
+        'question_version_id',
         'answer_id',
         'is_correct',
     ];
@@ -29,6 +30,11 @@ class QuizAttemptAnswer extends Model
     public function question(): BelongsTo
     {
         return $this->belongsTo(QuizQuestion::class, 'question_id');
+    }
+
+    public function questionVersion(): BelongsTo
+    {
+        return $this->belongsTo(QuestionVersion::class);
     }
 
     public function answer(): BelongsTo

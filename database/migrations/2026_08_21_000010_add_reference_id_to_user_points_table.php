@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_points', function (Blueprint $table) {
-            if (!Schema::hasColumn('user_points', 'reference_id')) {
+            if (! Schema::hasColumn('user_points', 'reference_id')) {
                 $table->unsignedBigInteger('reference_id')
                     ->nullable()
                     ->after('course_id');
