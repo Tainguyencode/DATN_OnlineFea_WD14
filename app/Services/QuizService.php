@@ -7,6 +7,7 @@ use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizQuestion;
 use App\Models\QuizVersion;
+use App\Models\QuizVersionQuestionInvalidation;
 use Illuminate\Validation\ValidationException;
 
 class QuizService
@@ -52,7 +53,7 @@ class QuizService
         $answers = [];
         $questions = [];
 
-        $version->loadMissing('questionMappings.questionVersion.options');
+        $version->loadMissing('questionMappings.questionVersion.options', 'questionMappings.invalidations');
 
         foreach ($version->questionMappings as $mapping) {
             $questionVersion = $mapping->questionVersion;
@@ -65,7 +66,12 @@ class QuizService
 
             $questionId = (int) $mapping->question_id;
             $points = (int) $questionVersion->points;
-            $totalScore += $points;
+            $isExcluded = $mapping->invalidations
+                ->contains('status', QuizVersionQuestionInvalidation::STATUS_ACTIVE);
+
+            if (! $isExcluded) {
+                $totalScore += $points;
+            }
 
             $selectedIds = $this->selectedAnswerIds($submittedAnswers[$questionId] ?? [], $questionVersion);
             $correctIds = $questionVersion->options
@@ -77,7 +83,7 @@ class QuizService
 
             $questionPassed = $this->questionIsCorrect($questionVersion->type, $selectedIds, $correctIds);
 
-            if ($questionPassed) {
+            if ($questionPassed && ! $isExcluded) {
                 $score += $points;
             }
 
@@ -87,6 +93,7 @@ class QuizService
                 'selected_ids' => $selectedIds,
                 'correct_ids' => $correctIds,
                 'is_correct' => $questionPassed,
+                'is_excluded' => $isExcluded,
             ];
         }
 
@@ -96,7 +103,7 @@ class QuizService
             'score' => $score,
             'total_score' => $totalScore,
             'percent' => $percent,
-            'passed' => $percent >= (int) $version->pass_score,
+            'passed' => $totalScore > 0 && $percent >= (int) $version->pass_score,
             'answers' => $answers,
             'questions' => $questions,
         ];

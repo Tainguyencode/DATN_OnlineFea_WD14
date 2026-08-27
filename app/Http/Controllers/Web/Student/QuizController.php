@@ -118,7 +118,10 @@ class QuizController extends Controller
                 'total_score' => $attempt->total_score,
                 'percent' => (float) $attempt->percent,
                 'passed' => (bool) $attempt->passed,
-                'correct_count' => collect($graded['questions'])->filter(fn ($question) => $question['is_correct'])->count(),
+                'correct_count' => collect($graded['questions'])
+                    ->reject(fn ($question) => $question['is_excluded'] ?? false)
+                    ->filter(fn ($question) => $question['is_correct'])
+                    ->count(),
                 'total_questions' => count($graded['questions']),
                 'pass_score' => (int) $quiz->pass_score,
             ],
@@ -127,6 +130,7 @@ class QuizController extends Controller
                 'selected_ids' => $result['selected_ids'],
                 'correct_ids' => $result['correct_ids'],
                 'is_correct' => $result['is_correct'],
+                'is_excluded' => $result['is_excluded'] ?? false,
             ])->values()],
             'course_progress' => $progress['course_progress'] ?? null,
             'lesson_completed' => $progress['lesson_completed'] ?? (bool) LessonProgress::query()

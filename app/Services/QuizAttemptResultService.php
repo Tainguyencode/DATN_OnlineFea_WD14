@@ -6,12 +6,14 @@ use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\QuizAttemptRegrade;
 use App\Models\QuizVersion;
+use App\Models\QuizVersionQuestionInvalidation;
 use App\Models\User;
 
 class QuizAttemptResultService
 {
-    /** @return array{attempt: QuizAttempt, quiz: Quiz, version: QuizVersion, questions: array<int, array<string, mixed>>} */
+    /** @return array{attempt: QuizAttempt, quiz: Quiz, version: QuizVersion, questions: array<int, array<string, mixed>>, regrade: ?QuizAttemptRegrade} */
     public function forLearner(Course $course, Lesson $lesson, User $user, QuizAttempt $requestedAttempt): array
     {
         app(QuizAttemptService::class)->assertAccess($course, $lesson, $user);
@@ -20,7 +22,9 @@ class QuizAttemptResultService
             ->with([
                 'quiz',
                 'quizVersion.questionMappings.questionVersion.options',
+                'quizVersion.questionMappings.invalidations',
                 'attemptAnswers.answer',
+                'regrades',
             ])
             ->findOrFail($requestedAttempt->id);
 
@@ -34,6 +38,7 @@ class QuizAttemptResultService
             'quiz' => $attempt->quiz,
             'version' => $attempt->quizVersion,
             'questions' => $this->questions($attempt, $attempt->quizVersion),
+            'regrade' => $attempt->regrades->sortByDesc('id')->first(),
         ];
     }
 
@@ -75,6 +80,8 @@ class QuizAttemptResultService
                 'points' => (int) $questionVersion->points,
                 'explanation' => $questionVersion->explanation,
                 'is_correct' => $rows->contains(fn ($answer): bool => (bool) $answer->is_correct),
+                'is_excluded' => $mapping->invalidations
+                    ->contains('status', QuizVersionQuestionInvalidation::STATUS_ACTIVE),
                 'is_unanswered' => $selectedIds === [] && ! $missingSelection,
                 'has_missing_selection' => $missingSelection,
                 'options' => $options->map(fn ($option): array => [

@@ -7,6 +7,7 @@ use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\QuizAttempt;
+use App\Models\QuizVersionQuestionInvalidation;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -31,6 +32,7 @@ class LearningPlayerService
             'section:id,course_id,title,sort_order',
             'chapter:id,course_id,title,sort_order',
             'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
+            'quiz.currentPublishedVersion.questionMappings.invalidations',
         ]);
 
         $enrollment = $user
@@ -377,6 +379,8 @@ class LearningPlayerService
             'type' => $question->type,
             'form_type' => $question->form_type,
             'points' => (int) $question->points,
+            'is_excluded' => $question->versionMapping?->invalidations
+                ?->contains('status', QuizVersionQuestionInvalidation::STATUS_ACTIVE) ?? false,
             'options' => $question->options->map(fn ($option) => [
                 'id' => $option->id,
                 'text' => $option->option_text,
@@ -401,7 +405,10 @@ class LearningPlayerService
             'start_url' => route('courses.lessons.quiz.start', [$course, $lesson]),
             'submit_url' => route('courses.lessons.quiz.submit', [$course, $lesson]),
             'total_questions' => count($questions),
-            'total_points' => $quiz->questions->sum('points'),
+            'total_points' => $quiz->questions
+                ->reject(fn ($question) => $question->versionMapping?->invalidations
+                    ?->contains('status', QuizVersionQuestionInvalidation::STATUS_ACTIVE) ?? false)
+                ->sum('points'),
             'questions' => $questions,
             'best_percent' => $bestAttempt ? (float) $bestAttempt->percent : null,
             'remaining_attempts' => $quiz->max_attempts !== null

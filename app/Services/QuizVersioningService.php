@@ -325,6 +325,7 @@ class QuizVersioningService
         $version->loadMissing([
             'questionMappings.question',
             'questionMappings.questionVersion.options',
+            'questionMappings.invalidations',
         ]);
         $projected = clone $quiz;
         $projected->setAttribute('title', $version->title);
