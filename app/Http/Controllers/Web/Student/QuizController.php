@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonProgress;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Services\LearningPlayerService;
@@ -77,7 +78,7 @@ class QuizController extends Controller
 
         [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
         if ($completedNow) {
-            $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService);
+            $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService);
         }
 
         return redirect()->route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]);
@@ -103,7 +104,7 @@ class QuizController extends Controller
 
         [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
         $progress = $completedNow
-            ? $this->recordCompletion($request, $course, $lesson, $quiz, $attempt, $progressService)
+            ? $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService)
             : [];
         $attemptService = app(QuizAttemptService::class);
         $completedAttempts = $attemptService->completedAttemptsCount($quiz, $request->user());
@@ -128,7 +129,10 @@ class QuizController extends Controller
                 'is_correct' => $result['is_correct'],
             ])->values()],
             'course_progress' => $progress['course_progress'] ?? null,
-            'lesson_completed' => $progress['lesson_completed'] ?? false,
+            'lesson_completed' => $progress['lesson_completed'] ?? (bool) LessonProgress::query()
+                ->where('user_id', $request->user()->id)
+                ->where('lesson_id', $lesson->id)
+                ->value('is_completed'),
             'next_lesson_url' => $this->nextLessonUrl($course, $lesson),
             'attempts_count' => $completedAttempts,
             'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
@@ -156,9 +160,9 @@ class QuizController extends Controller
         return [$attempt, $quiz, $submission['graded'], $submission['completed_now']];
     }
 
-    private function recordCompletion(Request $request, Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt, LearningProgressService $progressService): array
+    private function recordAttemptProgress(Request $request, Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt, LearningProgressService $progressService): array
     {
-        $progress = $progressService->recordLessonProgress($request->user()->id, $course, $lesson, 0, 0, true);
+        $progress = $progressService->recordLessonProgress($request->user()->id, $course, $lesson);
         app(PointService::class)->awardQuizPoints($request->user()->id, $quiz, (float) $attempt->percent, $course->id);
 
         return $progress;

@@ -16,6 +16,7 @@ use App\Notifications\CertificateIssuedNotification;
 use App\Services\CourseCompletionService;
 use App\Services\LearningProgressService;
 use App\Services\RoleSyncService;
+use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -206,6 +207,7 @@ class CertificateEligibilityTest extends TestCase
         QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'status' => 'completed',
             'score' => 50,
             'passed' => false,
             'started_at' => now(),
@@ -222,7 +224,7 @@ class CertificateEligibilityTest extends TestCase
             true
         );
 
-        $this->assertDatabaseHas('certificates', [
+        $this->assertDatabaseMissing('certificates', [
             'user_id' => $student->id,
             'course_id' => $course->id,
         ]);
@@ -231,6 +233,7 @@ class CertificateEligibilityTest extends TestCase
         QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'status' => 'completed',
             'score' => 90,
             'passed' => true,
             'started_at' => now(),
@@ -287,6 +290,7 @@ class CertificateEligibilityTest extends TestCase
         QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'status' => 'completed',
             'score' => 100,
             'passed' => true,
             'started_at' => now(),
@@ -328,13 +332,14 @@ class CertificateEligibilityTest extends TestCase
         QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'status' => 'completed',
             'score' => 100,
             'passed' => true,
             'started_at' => now(),
             'completed_at' => now(),
         ]);
 
-        $this->mock(\Illuminate\Contracts\Notifications\Dispatcher::class, function ($mock) {
+        $this->mock(Dispatcher::class, function ($mock) {
             $mock->shouldReceive('send')->andThrow(new \RuntimeException('SMTP down'));
         });
 
@@ -382,6 +387,7 @@ class CertificateEligibilityTest extends TestCase
         QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'status' => 'completed',
             'score' => 100,
             'passed' => true,
             'started_at' => now(),

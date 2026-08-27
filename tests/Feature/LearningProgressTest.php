@@ -3,13 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
+use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\User;
+use App\Services\ContentUpdateService;
 use App\Services\LearningProgressService;
 use App\Services\QuizContentService;
 use App\Services\QuizVersioningService;
@@ -249,77 +252,144 @@ class LearningProgressTest extends TestCase
             ->assertJsonPath('lesson_completed', true);
     }
 
-    public function test_quiz_lesson_is_completed_after_submission_even_when_not_passed(): void
+    public function test_failed_quiz_attempt_is_completed_but_lesson_remains_incomplete(): void
     {
-        $student = User::factory()->create(['role' => 'student']);
-        $course = $this->publishedCourse();
-        $lesson = Lesson::create([
-            'course_id' => $course->id,
-            'section_id' => $course->courseSections->first()->id,
-            'title' => 'Quiz',
-            'type' => 'quiz',
-            'content' => 'Quiz',
-            'sort_order' => 2,
-            'is_required' => true,
-            'status' => 'published',
-        ]);
-        $content = app(QuizContentService::class);
-        $quiz = $content->getOrCreateForLesson($lesson);
-        $content->saveMetadata($lesson, [
-            'title' => 'Quiz',
-            'pass_score' => 100,
-            'description' => null,
-            'time_limit_minutes' => null,
-            'max_attempts' => null,
-        ], false);
-        $question = $content->createQuestion($quiz, [
-            'question_text' => 'Q',
-            'question_type' => 'single',
-            'score' => 1,
-            'sort_order' => 0,
-        ], [
-            ['option_text' => 'Wrong', 'is_correct' => false, 'sort_order' => 0],
-            ['option_text' => 'Right', 'is_correct' => true, 'sort_order' => 1],
-            ['option_text' => 'Other', 'is_correct' => false, 'sort_order' => 2],
-        ]);
-        $wrong = $question->options->firstWhere('option_text', 'Wrong');
+        [$student, $course, $lesson, $quiz, , $wrongAnswers] = $this->publishedQuizLesson();
+        $attempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
 
-        for ($index = 2; $index <= 5; $index++) {
-            $content->createQuestion($quiz->fresh(), [
-                'question_text' => 'Q'.$index,
-                'question_type' => 'single',
-                'score' => 1,
-                'sort_order' => $index - 1,
-            ], [
-                ['option_text' => 'A'.$index, 'is_correct' => true, 'sort_order' => 0],
-                ['option_text' => 'B'.$index, 'is_correct' => false, 'sort_order' => 1],
-                ['option_text' => 'C'.$index, 'is_correct' => false, 'sort_order' => 2],
-            ]);
-        }
-        $quiz->update(['is_active' => true]);
-        app(QuizVersioningService::class)->publishDraft(
-            $quiz->fresh(),
-            app(QuizVersioningService::class)->currentDraft($quiz->fresh()),
-        );
-        $this->enroll($student, $course);
-        $this->actingAs($student)
-            ->postJson(route('courses.lessons.quiz.start', [$course, $lesson]))
-            ->assertOk();
-        $attempt = QuizAttempt::where('user_id', $student->id)->where('quiz_id', $quiz->id)->sole();
-
-        $this->actingAs($student)
-            ->postJson(route('courses.lessons.quiz.submit', [$course, $lesson]), [
-                'attempt_id' => $attempt->id,
-                'answers' => [$question->id => $wrong->id],
-            ])
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $wrongAnswers)
             ->assertOk()
+            ->assertJsonPath('attempt.passed', false)
+            ->assertJsonPath('lesson_completed', false);
+
+        $this->assertSame('completed', $attempt->fresh()->status);
+        $this->assertFalse($attempt->fresh()->passed);
+        $this->assertDatabaseHas('lesson_progress', [
+            'user_id' => $student->id,
+            'lesson_id' => $lesson->id,
+            'is_completed' => false,
+        ]);
+    }
+
+    public function test_passed_quiz_attempt_completes_lesson(): void
+    {
+        [$student, $course, $lesson, $quiz, $correctAnswers] = $this->publishedQuizLesson();
+        $attempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $correctAnswers)
+            ->assertOk()
+            ->assertJsonPath('attempt.passed', true)
             ->assertJsonPath('lesson_completed', true);
 
+        $this->assertSame('completed', $attempt->fresh()->status);
+        $this->assertTrue($attempt->fresh()->passed);
         $this->assertDatabaseHas('lesson_progress', [
             'user_id' => $student->id,
             'lesson_id' => $lesson->id,
             'is_completed' => true,
         ]);
+    }
+
+    public function test_fail_then_pass_completes_quiz_lesson(): void
+    {
+        [$student, $course, $lesson, $quiz, $correctAnswers, $wrongAnswers] = $this->publishedQuizLesson();
+        $failedAttempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $failedAttempt, $wrongAnswers)
+            ->assertJsonPath('lesson_completed', false);
+
+        $passedAttempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $passedAttempt, $correctAnswers)
+            ->assertJsonPath('lesson_completed', true);
+
+        $this->assertFalse($failedAttempt->fresh()->passed);
+        $this->assertTrue($passedAttempt->fresh()->passed);
+        $this->assertTrue(LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->sole()->is_completed);
+    }
+
+    public function test_multiple_failed_quiz_attempts_leave_lesson_incomplete(): void
+    {
+        [$student, $course, $lesson, $quiz, , $wrongAnswers] = $this->publishedQuizLesson();
+
+        foreach (range(1, 2) as $index) {
+            $attempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+            $this->submitQuizAttempt($student, $course, $lesson, $attempt, $wrongAnswers)
+                ->assertJsonPath('lesson_completed', false);
+        }
+
+        $this->assertSame(2, QuizAttempt::where('user_id', $student->id)->where('quiz_id', $quiz->id)->where('status', 'completed')->count());
+        $this->assertFalse(LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->sole()->is_completed);
+    }
+
+    public function test_passed_v1_attempt_keeps_lesson_complete_after_v2_activation(): void
+    {
+        [$student, $course, $lesson, $quiz, $correctAnswers] = $this->publishedQuizLesson();
+        $versioning = app(QuizVersioningService::class);
+        $v1 = $versioning->currentPublished($quiz);
+        $attempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $correctAnswers)
+            ->assertJsonPath('lesson_completed', true);
+
+        $versioning->ensureDraft($quiz->fresh());
+        $quiz = $quiz->fresh();
+        $draft = $versioning->currentDraft($quiz);
+        $update = $versioning->contentUpdateForVersion($quiz, $draft);
+        $update->update(['status' => ContentUpdate::STATUS_PENDING, 'submitted_at' => now()]);
+        app(ContentUpdateService::class)->applyApprovedUpdate($update->fresh(), User::factory()->create(['role' => 'admin']));
+        $v2 = $versioning->currentPublished($quiz->fresh());
+
+        $progress = app(LearningProgressService::class)->recordLessonProgress($student->id, $course, $lesson);
+
+        $this->assertNotSame($v1->id, $v2->id);
+        $this->assertSame($v1->id, $attempt->fresh()->quiz_version_id);
+        $this->assertTrue($progress['lesson_completed']);
+        $this->assertTrue(LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->sole()->is_completed);
+    }
+
+    public function test_course_stays_incomplete_after_quiz_failure_and_completes_after_pass(): void
+    {
+        [$student, $course, $lesson, $quiz, $correctAnswers, $wrongAnswers] = $this->publishedQuizLesson();
+        $video = $course->fresh('lessons')->lessons->firstWhere('type', Lesson::TYPE_VIDEO);
+        app(LearningProgressService::class)->recordLessonProgress($student->id, $course, $video, 300, 300, true);
+
+        $failedAttempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $failedAttempt, $wrongAnswers)
+            ->assertJsonPath('lesson_completed', false);
+        $this->assertSame(Enrollment::STATUS_ACTIVE, Enrollment::where('user_id', $student->id)->where('course_id', $course->id)->sole()->status);
+
+        $passedAttempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $passedAttempt, $correctAnswers)
+            ->assertJsonPath('lesson_completed', true);
+        $this->assertSame(Enrollment::STATUS_COMPLETED, Enrollment::where('user_id', $student->id)->where('course_id', $course->id)->sole()->status);
+    }
+
+    public function test_double_submit_failed_attempt_does_not_complete_lesson(): void
+    {
+        [$student, $course, $lesson, $quiz, , $wrongAnswers] = $this->publishedQuizLesson();
+        $attempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $wrongAnswers)
+            ->assertJsonPath('lesson_completed', false);
+
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $wrongAnswers)
+            ->assertJsonPath('lesson_completed', false);
+
+        $this->assertSame(1, LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->count());
+        $this->assertFalse(LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->sole()->is_completed);
+    }
+
+    public function test_double_submit_passed_attempt_does_not_duplicate_lesson_progress(): void
+    {
+        [$student, $course, $lesson, $quiz, $correctAnswers] = $this->publishedQuizLesson();
+        $attempt = $this->startQuizAttempt($student, $course, $lesson, $quiz);
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $correctAnswers)
+            ->assertJsonPath('lesson_completed', true);
+        $completedAt = LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->sole()->completed_at?->toIso8601String();
+
+        $this->submitQuizAttempt($student, $course, $lesson, $attempt, $correctAnswers)
+            ->assertJsonPath('lesson_completed', true);
+
+        $progress = LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->sole();
+        $this->assertSame(1, LessonProgress::where('user_id', $student->id)->where('lesson_id', $lesson->id)->count());
+        $this->assertSame($completedAt, $progress->completed_at?->toIso8601String());
     }
 
     public function test_progress_does_not_exceed_one_hundred_percent(): void
@@ -373,6 +443,73 @@ class LearningProgressTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('success', true);
+    }
+
+    /** @return array{0: User, 1: Course, 2: Lesson, 3: Quiz, 4: array<int, int>, 5: array<int, int>} */
+    private function publishedQuizLesson(): array
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->publishedCourse(['certificate_enabled' => false]);
+        $lesson = Lesson::create([
+            'course_id' => $course->id,
+            'section_id' => $course->courseSections->first()->id,
+            'title' => 'Quiz',
+            'type' => Lesson::TYPE_QUIZ,
+            'content' => 'Quiz',
+            'sort_order' => 2,
+            'is_required' => true,
+            'status' => Lesson::STATUS_PUBLISHED,
+        ]);
+        $content = app(QuizContentService::class);
+        $quiz = $content->getOrCreateForLesson($lesson);
+        $content->saveMetadata($lesson, [
+            'title' => 'Quiz',
+            'pass_score' => 100,
+            'description' => null,
+            'time_limit_minutes' => null,
+            'max_attempts' => null,
+        ], false);
+
+        $correctAnswers = [];
+        $wrongAnswers = [];
+        foreach (range(1, 5) as $index) {
+            $question = $content->createQuestion($quiz->fresh(), [
+                'question_text' => 'Question '.$index,
+                'question_type' => 'single',
+                'score' => 1,
+                'sort_order' => $index - 1,
+            ], [
+                ['option_text' => 'Correct '.$index, 'is_correct' => true, 'sort_order' => 0],
+                ['option_text' => 'Wrong '.$index, 'is_correct' => false, 'sort_order' => 1],
+                ['option_text' => 'Other '.$index, 'is_correct' => false, 'sort_order' => 2],
+            ]);
+            $correctAnswers[$question->id] = $question->options->firstWhere('is_correct', true)->id;
+            $wrongAnswers[$question->id] = $question->options->firstWhere('is_correct', false)->id;
+        }
+
+        $quiz->update(['is_active' => true]);
+        $versioning = app(QuizVersioningService::class);
+        $versioning->publishDraft($quiz->fresh(), $versioning->currentDraft($quiz->fresh()));
+        $this->enroll($student, $course);
+
+        return [$student, $course->fresh(), $lesson->fresh(), $quiz->fresh(), $correctAnswers, $wrongAnswers];
+    }
+
+    private function startQuizAttempt(User $student, Course $course, Lesson $lesson, Quiz $quiz): QuizAttempt
+    {
+        $this->actingAs($student)
+            ->postJson(route('courses.lessons.quiz.start', [$course, $lesson]))
+            ->assertOk();
+
+        return QuizAttempt::where('user_id', $student->id)->where('quiz_id', $quiz->id)->latest('id')->firstOrFail();
+    }
+
+    private function submitQuizAttempt(User $student, Course $course, Lesson $lesson, QuizAttempt $attempt, array $answers)
+    {
+        return $this->actingAs($student)->postJson(route('courses.lessons.quiz.submit', [$course, $lesson]), [
+            'attempt_id' => $attempt->id,
+            'answers' => $answers,
+        ]);
     }
 
     private function publishedCourse(array $attributes = []): Course
