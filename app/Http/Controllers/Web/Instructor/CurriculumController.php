@@ -128,9 +128,24 @@ class CurriculumController extends Controller
         if ($course->isPublished()) {
             $contentUpdate = ContentUpdate::find($sectionId);
             if ($contentUpdate && $contentUpdate->type === ContentUpdate::TYPE_CHAPTER) {
+                // Kiểm tra nếu có bài học nháp thuộc chương này
+                $hasDraftLessons = ContentUpdate::where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_LESSON)
+                    ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+                    ->whereJsonContains('payload->section_id', $sectionId)
+                    ->exists();
+
+                if ($hasDraftLessons) {
+                    return back()->with('error', 'Chương học này đang có bài học. Vui lòng xóa hết bài học trong chương trước khi xóa chương.');
+                }
+
                 $contentUpdate->delete();
 
                 return back()->with('success', 'Đã xóa bản nháp chương học.');
+            }
+
+            if ($sectionModel && $sectionModel->lessons()->exists()) {
+                return back()->with('error', 'Chương học này đang có bài học. Vui lòng xóa hết bài học trong chương trước khi xóa chương.');
             }
 
             app(ContentUpdateService::class)->recordPendingUpdate(
@@ -146,16 +161,16 @@ class CurriculumController extends Controller
         }
 
         if ($sectionModel) {
+            if ($sectionModel->lessons()->exists()) {
+                return back()->with('error', 'Chương học này đang có bài học. Vui lòng xóa hết bài học trong chương trước khi xóa chương.');
+            }
+
             try {
                 app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($sectionModel);
             } catch (HistoricalQuizDeletionException $exception) {
                 return back()->withErrors(['section' => $exception->getMessage()]);
             }
 
-            $sectionModel->lessons()->get()->each(function (Lesson $lesson) {
-                $this->deleteLessonFiles($lesson);
-                $lesson->delete();
-            });
             $sectionModel->delete();
         }
 
@@ -214,6 +229,14 @@ class CurriculumController extends Controller
         Log::info('[UPLOAD TRACE] RETURN RESPONSE (Success)');
 
         if ($request->wantsJson() || $request->ajax()) {
+            $lessonHtml = view('instructor.courses.partials.lesson-item', [
+                'course' => $course,
+                'section' => $sectionModel,
+                'lesson' => $lesson,
+                'lessonTypes' => $this->lessonTypes(),
+                'lessonStatuses' => $this->lessonStatuses(),
+            ])->render();
+
             return response()->json([
                 'success' => true,
                 'lesson_id' => $lesson->id,
@@ -233,6 +256,7 @@ class CurriculumController extends Controller
                     'content' => $lesson->content,
                     'destroy_url' => route('instructor.courses.lessons.destroy', [$course, $lesson->id]),
                 ],
+                'html' => $lessonHtml,
                 'title' => $lesson->title,
                 'message' => 'Đã thêm bài học.',
             ]);
@@ -253,7 +277,7 @@ class CurriculumController extends Controller
         return $minutes > 0 ? $minutes.' phút'.($remaining ? ' '.$remaining.' giây' : '') : $remaining.' giây';
     }
 
-    public function updateLesson(StoreLessonRequest $request, Course $course, Lesson $lesson): RedirectResponse
+    public function updateLesson(StoreLessonRequest $request, Course $course, Lesson $lesson): RedirectResponse|JsonResponse
     {
         $this->authorizeLesson($course, $lesson);
 

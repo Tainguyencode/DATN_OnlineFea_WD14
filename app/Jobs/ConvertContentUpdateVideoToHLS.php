@@ -106,27 +106,54 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             $playlistPath = $hlsOutDir.'/playlist.m3u8';
 
             $ffmpegConfig = $this->getFfmpegConfig();
-            Log::info('[ConvertContentUpdateVideoToHLS] [FFMPEG START] Starting HLS conversion', [
+            $ffmpegBin = $ffmpegConfig['ffmpeg.binaries'];
+            Log::info('[ConvertContentUpdateVideoToHLS] [FFMPEG START] Starting HLS conversion (Stream Copy mode)', [
                 'update_id' => $updateId,
                 'input' => $localInputPath,
                 'output_playlist' => $playlistPath,
-                'ffmpeg_binary' => $ffmpegConfig['ffmpeg.binaries'],
+                'ffmpeg_binary' => $ffmpegBin,
                 'ffprobe_binary' => $ffmpegConfig['ffprobe.binaries'],
-                'threads' => $ffmpegConfig['ffmpeg.threads'],
             ]);
 
-            $ffmpeg = FFMpeg::create($ffmpegConfig);
-            $video = $ffmpeg->open($localInputPath);
-
-            $format = new X264('aac', 'libx264');
-            $format->setPasses(1);
-            $format->setAdditionalParameters([
+            // 1. Thử phân đoạn HLS bằng Stream Copy (-c copy) để tốc độ tối đa (2-5 giây)
+            $command = [
+                $ffmpegBin,
+                '-y',
+                '-i', $localInputPath,
+                '-c', 'copy',
                 '-hls_time', '10',
                 '-hls_list_size', '0',
+                '-hls_segment_filename', $hlsOutDir.'/segment_%03d.ts',
                 '-f', 'hls',
-            ]);
+                $playlistPath,
+            ];
 
-            $video->save($format, $playlistPath);
+            $process = new \Symfony\Component\Process\Process($command);
+            $process->setTimeout(3600);
+            $process->run();
+
+            // 2. Fallback sang re-encode ultrafast nếu codec không tương thích
+            if (! $process->isSuccessful() || ! file_exists($playlistPath) || filesize($playlistPath) === 0) {
+                Log::warning('[ConvertContentUpdateVideoToHLS] Stream copy fallback to ultrafast re-encode: '.$process->getErrorOutput());
+
+                $fallbackCommand = [
+                    $ffmpegBin,
+                    '-y',
+                    '-i', $localInputPath,
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-c:a', 'aac',
+                    '-hls_time', '10',
+                    '-hls_list_size', '0',
+                    '-hls_segment_filename', $hlsOutDir.'/segment_%03d.ts',
+                    '-f', 'hls',
+                    $playlistPath,
+                ];
+
+                $fallbackProcess = new \Symfony\Component\Process\Process($fallbackCommand);
+                $fallbackProcess->setTimeout(3600);
+                $fallbackProcess->mustRun();
+            }
 
             // Master manifest
             $masterContent = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720\nplaylist.m3u8\n";
