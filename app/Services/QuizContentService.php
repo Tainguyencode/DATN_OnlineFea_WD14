@@ -1206,6 +1206,40 @@ class QuizContentService
         return $value === '' ? null : $value;
     }
 
+    public function purgeQuiz(Quiz $quiz): void
+    {
+        app(HistoricalQuizDeletionGuard::class)->assertQuizCanBeHardDeleted($quiz);
+
+        DB::transaction(function () use ($quiz) {
+            // 1. Break circular references on quizzes table
+            $quiz->update([
+                'current_published_version_id' => null,
+                'current_draft_version_id' => null,
+            ]);
+
+            // 2. Delete quiz_version_questions (mappings)
+            $versionIds = $quiz->versions()->pluck('id');
+            if ($versionIds->isNotEmpty()) {
+                DB::table('quiz_version_questions')->whereIn('quiz_version_id', $versionIds)->delete();
+            }
+
+            // 3. Delete question versions, mappings, options and questions
+            $questionIds = $quiz->questions()->pluck('id');
+            if ($questionIds->isNotEmpty()) {
+                DB::table('quiz_version_questions')->whereIn('question_id', $questionIds)->delete();
+                DB::table('quiz_options')->whereIn('quiz_question_id', $questionIds)->delete();
+                DB::table('question_versions')->whereIn('question_id', $questionIds)->delete();
+                DB::table('quiz_questions')->whereIn('id', $questionIds)->delete();
+            }
+
+            // 4. Delete quiz versions
+            $quiz->versions()->delete();
+
+            // 5. Delete quiz
+            $quiz->delete();
+        });
+    }
+
     private function nullableInteger(mixed $value): ?int
     {
         return $value === null || $value === '' ? null : (int) $value;

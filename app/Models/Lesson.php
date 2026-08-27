@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\QuizContentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,16 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Lesson extends Model
 {
+    protected static function booted(): void
+    {
+        static::deleting(function (Lesson $lesson) {
+            $quiz = $lesson->quiz()->first();
+            if ($quiz) {
+                app(QuizContentService::class)->purgeQuiz($quiz);
+            }
+        });
+    }
+
     public const TYPE_VIDEO = 'video';
 
     public const TYPE_DOCUMENT = 'document';

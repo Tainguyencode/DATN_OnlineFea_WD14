@@ -152,7 +152,10 @@ class CurriculumController extends Controller
                 return back()->withErrors(['section' => $exception->getMessage()]);
             }
 
-            $sectionModel->lessons()->get()->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
+            $sectionModel->lessons()->get()->each(function (Lesson $lesson) {
+                $this->deleteLessonFiles($lesson);
+                $lesson->delete();
+            });
             $sectionModel->delete();
         }
 
