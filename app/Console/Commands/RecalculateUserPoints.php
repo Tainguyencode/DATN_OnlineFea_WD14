@@ -43,8 +43,8 @@ class RecalculateUserPoints extends Command
             DB::table('user_badges')->truncate();
         }
 
-        // 1. Lesson completions (+10 XP)
-        $this->info('Recalculating lesson completions (+10 XP)...');
+        // 1. Lesson completions (based on duration: 10/15/20 XP)
+        $this->info('Recalculating lesson completions (based on duration: 10/15/20 XP)...');
         $progressRecords = LessonProgress::where('is_completed', true)->get();
         foreach ($progressRecords as $p) {
             $lesson = $p->lesson;

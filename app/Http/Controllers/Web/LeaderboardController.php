@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\Enrollment;
 use App\Services\PointService;
@@ -113,42 +114,80 @@ class LeaderboardController extends Controller
             ];
         }
 
-        // Monthly Top 3 Rewards definition
+        // Helper to format voucher text from SystemSetting
+        $formatVoucher = function (string $typeKey, string $valueKey, string $defaultType, float $defaultValue) {
+            $type = SystemSetting::get($typeKey, $defaultType);
+            $value = (float) SystemSetting::get($valueKey, $defaultValue);
+            if ($type === 'percent') {
+                return 'Voucher Giảm ' . (int) $value . '%';
+            }
+            return 'Voucher Giảm ' . number_format($value, 0, ',', '.') . 'đ';
+        };
+
+        // Monthly Rewards definition
         $monthlyRewards = [
             1 => [
                 'rank' => 'TOP 1',
                 'title' => 'Quán Quân Tháng',
-                'voucher' => 'Voucher Giảm 40%',
+                'voucher' => $formatVoucher('leaderboard_reward_top1_type', 'leaderboard_reward_top1_value', 'percent', 40),
                 'xp' => '+1.000 XP Thưởng',
                 'badge' => 'Huy hiệu Bá Vương Tháng',
             ],
             2 => [
                 'rank' => 'TOP 2',
                 'title' => 'Á Quân Tháng',
-                'voucher' => 'Voucher Giảm 30%',
+                'voucher' => $formatVoucher('leaderboard_reward_top2_type', 'leaderboard_reward_top2_value', 'percent', 30),
                 'xp' => '+500 XP Thưởng',
                 'badge' => 'Huy hiệu Á Quân Tháng',
             ],
             3 => [
                 'rank' => 'TOP 3',
                 'title' => 'Top 3 Tinh Anh',
-                'voucher' => 'Voucher Giảm 20%',
+                'voucher' => $formatVoucher('leaderboard_reward_top3_type', 'leaderboard_reward_top3_value', 'percent', 20),
                 'xp' => '+300 XP Thưởng',
                 'badge' => 'Huy hiệu Top 3 Tháng',
             ],
             '4_9' => [
                 'rank' => 'TOP 4 - TOP 9',
                 'title' => 'Khuyến Khích',
-                'voucher' => 'Voucher Giảm 15%',
+                'voucher' => $formatVoucher('leaderboard_reward_top4_9_type', 'leaderboard_reward_top4_9_value', 'percent', 15),
                 'xp' => '+100 XP Thưởng',
                 'badge' => 'Huy hiệu Top 9 Tháng',
             ],
             '10_50' => [
                 'rank' => 'TOP 10 - TOP 50',
                 'title' => 'Tích Cực',
-                'voucher' => 'Voucher Giảm 10%',
+                'voucher' => $formatVoucher('leaderboard_reward_top10_50_type', 'leaderboard_reward_top10_50_value', 'percent', 10),
                 'xp' => '+50 XP Thưởng',
                 'badge' => 'Huy hiệu Top 50 Tháng',
+            ],
+        ];
+
+        // Weekly Rewards definition
+        $weeklyRewards = [
+            1 => [
+                'rank' => 'TOP 1',
+                'title' => 'Quán Quân Tuần',
+                'voucher' => $formatVoucher('leaderboard_weekly_reward_top1_type', 'leaderboard_weekly_reward_top1_value', 'percent', 30),
+                'badge' => 'Voucher quà tặng TOP 1 Tuần',
+            ],
+            2 => [
+                'rank' => 'TOP 2',
+                'title' => 'Á Quân Tuần',
+                'voucher' => $formatVoucher('leaderboard_weekly_reward_top2_type', 'leaderboard_weekly_reward_top2_value', 'percent', 20),
+                'badge' => 'Voucher quà tặng TOP 2 Tuần',
+            ],
+            3 => [
+                'rank' => 'TOP 3',
+                'title' => 'Top 3 Tuần',
+                'voucher' => $formatVoucher('leaderboard_weekly_reward_top3_type', 'leaderboard_weekly_reward_top3_value', 'percent', 15),
+                'badge' => 'Voucher quà tặng TOP 3 Tuần',
+            ],
+            '4_10' => [
+                'rank' => 'TOP 4 - TOP 10',
+                'title' => 'Khuyến Khích Tuần',
+                'voucher' => $formatVoucher('leaderboard_weekly_reward_top4_10_type', 'leaderboard_weekly_reward_top4_10_value', 'percent', 10),
+                'badge' => 'Voucher quà tặng TOP 4 - 10 Tuần',
             ],
         ];
 
@@ -159,7 +198,8 @@ class LeaderboardController extends Controller
             'period',
             'search',
             'countdownTarget',
-            'monthlyRewards'
+            'monthlyRewards',
+            'weeklyRewards'
         ));
     }
 }
