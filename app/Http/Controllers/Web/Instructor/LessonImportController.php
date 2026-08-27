@@ -99,6 +99,24 @@ class LessonImportController extends Controller
 
         $batch = $result['batch'];
 
+        if (($result['template_version'] ?? LessonImportWorkbookSchema::VERSION_V1) === LessonImportWorkbookSchema::VERSION_V2) {
+            return response()->json([
+                'success' => true,
+                'batch' => [
+                    'token' => $batch->token,
+                    'template_version' => $batch->template_version,
+                    'row_count' => $batch->row_count,
+                    'valid_count' => $batch->valid_count,
+                    'warning_count' => $batch->warning_count,
+                    'error_count' => $batch->error_count,
+                    'expires_at' => $batch->expires_at->toIso8601String(),
+                ],
+                'summary' => $result['summary'],
+                'sheets' => $result['sheets'],
+                'issues' => $result['issues'],
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'batch' => [
