@@ -641,9 +641,9 @@
                             <thead class="bg-slate-50/70 text-slate-500 font-black uppercase tracking-wider border-b border-slate-200">
                                 <tr>
                                     <th class="px-5 py-3.5">Bài thực hành</th>
-                                    <th class="px-5 py-3.5 text-center w-40">Hạn nộp/Ngày nộp</th>
-                                    <th class="px-5 py-3.5 text-center w-32">Yêu cầu đạt</th>
-                                    <th class="px-5 py-3.5 text-center w-32">Điểm chấm</th>
+                                    <th class="px-5 py-3.5 text-center w-40">Bắt đầu / Hạn nộp (6h)</th>
+                                    <th class="px-5 py-3.5 text-center w-36">Ngày nộp bài</th>
+                                    <th class="px-5 py-3.5 text-center w-32">Kết quả</th>
                                     <th class="px-5 py-3.5 text-center w-36">Trạng thái nộp</th>
                                     <th class="px-5 py-3.5 text-center w-36">Trạng thái chấm</th>
                                 </tr>
@@ -652,41 +652,56 @@
                                 @forelse($assignments as $assignment)
                                     @php
                                         $sub = $submissions->get($assignment->id);
-                                        $passingLimit = $assignment->passing_score ?? 70;
                                     @endphp
                                     <tr class="hover:bg-slate-50/40 transition">
                                         <td class="px-5 py-4 font-bold text-slate-900">
                                             <div class="flex items-center gap-1.5 flex-wrap">
                                                 <span>{{ $assignment->title }}</span>
+                                                @if($sub)
+                                                    <span class="inline-flex rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-indigo-700">
+                                                        Lần {{ $sub->attempt_number }}/{{ $sub->allowed_attempts ?? 2 }}
+                                                    </span>
+                                                @endif
                                                 @if($assignment->is_required)
                                                     <span class="inline-flex text-[9px] text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-150 font-bold uppercase tracking-wide">Bắt buộc</span>
                                                 @endif
                                             </div>
                                         </td>
+                                        <td class="px-5 py-4 text-center font-semibold text-slate-600 font-mono text-[11px]">
+                                            @if($sub && $sub->started_at)
+                                                <span class="block text-slate-800 font-bold">{{ $sub->started_at->format('d/m/Y H:i') }}</span>
+                                                <span class="block text-amber-600 font-bold">Hạn: {{ $sub->getDeadline()?->format('d/m/Y H:i') }}</span>
+                                            @else
+                                                <span class="text-slate-400">Chưa bắt đầu</span>
+                                            @endif
+                                        </td>
                                         <td class="px-5 py-4 text-center font-semibold text-slate-600 font-mono">
                                             @if($sub && $sub->submitted_at)
-                                                <span class="text-slate-800">{{ $sub->submitted_at->format('d/m/Y') }}</span>
-                                            @elseif($assignment->due_date)
-                                                <span class="text-red-550 font-bold">Hạn: {{ $assignment->due_date->format('d/m/Y') }}</span>
+                                                <span class="text-slate-800 font-bold">{{ $sub->submitted_at->format('d/m/Y H:i') }}</span>
                                             @else
                                                 <span class="text-slate-400">--</span>
                                             @endif
                                         </td>
-                                        <td class="px-5 py-4 text-center font-bold text-slate-500 font-mono">
-                                            {{ $passingLimit }} / {{ $assignment->max_score }}
-                                        </td>
-                                        <td class="px-5 py-4 text-center font-extrabold font-mono whitespace-nowrap">
-                                            @if($sub && $sub->score !== null)
-                                                <span class="{{ $sub->score >= $passingLimit ? 'text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg' : 'text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-lg' }}">
-                                                    {{ floatval($sub->score) }}/{{ $assignment->max_score }}
+                                        <td class="px-5 py-4 text-center font-extrabold whitespace-nowrap">
+                                            @if($sub && $sub->result === 'pass')
+                                                <span class="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-xs font-black">
+                                                    ✓ PASS
+                                                </span>
+                                            @elseif($sub && ($sub->result === 'fail' || $sub->isExpired()))
+                                                <span class="text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg text-xs font-black">
+                                                    ✕ FAIL
                                                 </span>
                                             @else
                                                 <span class="text-slate-400">--</span>
                                             @endif
                                         </td>
                                         <td class="px-5 py-4 text-center font-semibold">
-                                            @if($sub)
+                                            @if($sub && $sub->submitted_at)
                                                 <span class="text-emerald-600 font-bold">Đã nộp</span>
+                                            @elseif($sub && $sub->isExpired())
+                                                <span class="text-rose-600 font-bold">Quá hạn</span>
+                                            @elseif($sub && $sub->started_at)
+                                                <span class="text-amber-600 font-bold">Đang làm</span>
                                             @else
                                                 <span class="text-slate-400 italic font-medium">Chưa nộp</span>
                                             @endif
@@ -701,12 +716,12 @@
                                                         @break
                                                     @case('graded')
                                                         <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-xs font-bold border border-emerald-200">
-                                                            Đã chấm
+                                                            Đã đánh giá
                                                         </span>
                                                         @break
-                                                    @case('returned')
-                                                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-500 px-2.5 py-0.5 text-xs font-bold border border-slate-200">
-                                                            Đã trả lại
+                                                    @case('expired')
+                                                        <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-800 px-2.5 py-0.5 text-xs font-bold border border-rose-200">
+                                                            Quá hạn
                                                         </span>
                                                         @break
                                                     @default

@@ -23,15 +23,139 @@ use Illuminate\Support\Facades\Storage;
 class AssignmentController extends Controller
 {
     /**
-     * Xử lý nộp bài tập tự luận cho bài học.
+     * Tải tài liệu bài tập về máy và kích hoạt thời gian làm bài (6 giờ) cho lần làm hiện tại.
      *
-     * Quy trình xử lý:
-     * 1. Kiểm tra học viên đã đăng ký khóa học (Enrollment active/completed) chưa.
-     * 2. Kiểm tra bài học có gắn Assignment tự luận hay không.
-     * 3. Kiểm tra xem học viên đã nộp chưa (tránh nộp đè bài đã được chấm).
-     * 4. Validate file upload (mimes: pdf, zip, rar, docx, png, jpg; max: 10MB) hoặc văn bản câu trả lời.
-     * 5. Lưu file vào storage/app/public/assignment-submissions và cập nhật DB (updateOrCreate).
-     * 6. Đánh dấu bài học này là Hoàn thành (is_completed = true).
+     * @param  Request  $request
+     * @param  Course  $course
+     * @param  Lesson  $lesson
+     * @return mixed
+     */
+    public function download(Request $request, Course $course, Lesson $lesson)
+    {
+        // 1. Kiểm tra học viên đã ghi danh vào khóa học chưa
+        $isEnrolled = $course->enrollments()
+            ->where('user_id', $request->user()->id)
+            ->whereIn('status', ['active', 'completed'])
+            ->exists();
+
+        abort_unless($isEnrolled, 403, 'Bạn cần đăng ký khóa học để tải tài liệu bài tập.');
+
+        // 2. Đảm bảo có bản ghi Assignment
+        $assignment = $lesson->assignment;
+        if (! $assignment) {
+            $assignment = Assignment::create([
+                'course_id' => $course->id,
+                'lesson_id' => $lesson->id,
+                'title' => $lesson->title ?? 'Bài tập thực hành',
+                'description' => 'Hãy thực hiện yêu cầu của bài tập thực hành dưới đây.',
+            ]);
+        }
+
+        // 3. Lấy attempt mới nhất của học viên hoặc tạo attempt 1
+        $submission = Submission::query()
+            ->where('assignment_id', $assignment->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('attempt_number', 'desc')
+            ->first();
+
+        if (! $submission) {
+            $submission = Submission::create([
+                'assignment_id' => $assignment->id,
+                'user_id' => $request->user()->id,
+                'attempt_number' => 1,
+                'allowed_attempts' => 2,
+                'started_at' => now(), // Bắt đầu tính 6 giờ cho lần 1
+                'status' => 'in_progress',
+            ]);
+        } elseif (! $submission->started_at) {
+            // Trường hợp học viên bấm "Làm lại" hoặc Giảng viên cấp lượt mới (started_at đang là null)
+            // Timer CHÍNH THỨC bắt đầu khi bấm "Tải tài liệu về"
+            $submission->update([
+                'started_at' => now(),
+                'status' => 'in_progress',
+            ]);
+        }
+
+        // 4. Trả về file tải nếu có
+        if ($lesson->document_file && Storage::disk('public')->exists($lesson->document_file)) {
+            $ext = strtolower(pathinfo($lesson->document_file, PATHINFO_EXTENSION));
+            $downloadName = \Illuminate\Support\Str::slug($lesson->title ?: 'bai-tap-thuc-hanh').($ext ? '.'.$ext : '');
+
+            return Storage::disk('public')->download($lesson->document_file, $downloadName);
+        }
+
+        return back()->with('success', 'Đã bắt đầu tính thời gian làm bài (6 giờ). Hãy tiến hành làm và nộp bài trước hạn!');
+    }
+
+    /**
+     * Bắt đầu lần làm lại bài tập thực hành (Retake).
+     *
+     * Quy tắc quan trọng:
+     * 1. Bấm "Làm lại" KHÔNG bắt đầu timer ngay.
+     * 2. Timer chỉ bắt đầu khi học viên bấm "Tải tài liệu về" của lần làm mới này.
+     * 3. Sử dụng allowed_attempts để kiểm tra số lượt được phép.
+     */
+    public function retry(Request $request, Course $course, Lesson $lesson): RedirectResponse
+    {
+        $isEnrolled = $course->enrollments()
+            ->where('user_id', $request->user()->id)
+            ->whereIn('status', ['active', 'completed'])
+            ->exists();
+
+        abort_unless($isEnrolled, 403, 'Bạn cần đăng ký khóa học để thực hiện hành động này.');
+
+        $assignment = $lesson->assignment;
+        abort_unless($assignment, 404, 'Không tìm thấy bài tập thực hành.');
+
+        $latestSubmission = Submission::query()
+            ->where('assignment_id', $assignment->id)
+            ->where('user_id', $request->user()->id)
+            ->orderBy('attempt_number', 'desc')
+            ->first();
+
+        if (! $latestSubmission) {
+            return back()->with('error', 'Bạn chưa làm bài tập này lần nào.');
+        }
+
+        if ($latestSubmission->isPassed()) {
+            return back()->with('error', 'Bài tập của bạn đã ĐẠT (PASS), không thể làm lại.');
+        }
+
+        $allowedAttempts = $latestSubmission->allowed_attempts ?? 2;
+
+        if ($latestSubmission->attempt_number >= $allowedAttempts) {
+            return back()->with('error', "Bạn đã sử dụng hết lượt làm bài ({$allowedAttempts}/{$allowedAttempts} lần). Vui lòng liên hệ giảng viên nếu cần được cấp thêm lượt.");
+        }
+
+        // Kiểm tra xem lần làm hiện tại đã kết thúc chưa (đã được chấm FAIL hoặc đã EXPIRED)
+        $isFinished = ($latestSubmission->status === 'graded' && $latestSubmission->result === 'fail') || $latestSubmission->isExpired();
+
+        if (! $isFinished && ! $latestSubmission->submitted_at) {
+            return back()->with('error', 'Lần làm bài hiện tại vẫn đang diễn ra.');
+        }
+
+        if ($latestSubmission->status === 'submitted') {
+            return back()->with('error', 'Bài làm của bạn đang chờ giảng viên chấm điểm.');
+        }
+
+        // Tạo bản ghi attempt mới độc lập (started_at = null -> Timer CHƯA bắt đầu)
+        $nextAttemptNumber = $latestSubmission->attempt_number + 1;
+
+        Submission::create([
+            'assignment_id' => $assignment->id,
+            'user_id' => $request->user()->id,
+            'attempt_number' => $nextAttemptNumber,
+            'allowed_attempts' => $allowedAttempts,
+            'started_at' => null, // Timer KHÔNG bắt đầu khi chỉ mới bấm "Làm lại"
+            'status' => 'in_progress',
+            'result' => null,
+        ]);
+
+        return back()->with('success', "Đã tạo lần làm lại thứ {$nextAttemptNumber}/{$allowedAttempts}. Vui lòng bấm \"Tải tài liệu về\" để bắt đầu tính 6 giờ làm bài.");
+    }
+
+    /**
+     * Xử lý nộp bài tập thực hành cho attempt hiện tại.
      *
      * @param  Request  $request  Chứa 'content' (văn bản) hoặc 'file' (tệp đính kèm)
      * @param  Course  $course  Khóa học hiện tại
@@ -48,26 +172,36 @@ class AssignmentController extends Controller
 
         abort_unless($isEnrolled, 403, 'Bạn cần đăng ký khóa học để thực hiện hành động này.');
 
-        // 2. Đảm bảo bài học hiện tại có bài tập tự luận (tự động tạo nếu thiếu để tránh lỗi 404)
+        // 2. Đảm bảo bài học hiện tại có bài tập thực hành
         $assignment = $lesson->assignment;
-        if (! $assignment) {
-            $assignment = Assignment::create([
-                'course_id' => $course->id,
-                'lesson_id' => $lesson->id,
-                'title' => $lesson->title ?? 'Bài tập thực hành',
-                'description' => 'Hãy thực hiện yêu cầu của bài tập tự luận dưới đây.',
-                'max_score' => 100,
-            ]);
-        }
+        abort_unless($assignment, 404, 'Không tìm thấy bài tập thực hành.');
 
-        // 3. Kiểm tra trạng thái bài nộp hiện tại (nếu đang chờ chấm hoặc đã chấm thành công thì không cho nộp đè)
+        // 3. Lấy attempt mới nhất hiện tại của học viên
         $submission = Submission::query()
             ->where('assignment_id', $assignment->id)
             ->where('user_id', $request->user()->id)
+            ->orderBy('attempt_number', 'desc')
             ->first();
 
-        if ($submission && in_array($submission->status, ['submitted', 'graded'])) {
-            return back()->with('error', 'Bạn đã nộp bài tập này rồi và bài làm đang được chấm hoặc đã chấm.');
+        // 3.1 Bắt buộc phải bấm tải tài liệu trước để bắt đầu làm bài
+        if (! $submission || ! $submission->started_at) {
+            return back()->with('error', 'Bạn cần bấm "Tải tài liệu về" để bắt đầu thời gian làm bài trước khi nộp bài.');
+        }
+
+        // 3.2 Kiểm tra deadline 6 giờ kể từ thời điểm bắt đầu tải tài liệu của lần làm này
+        $deadline = $submission->getDeadline();
+        if (($deadline && now()->gt($deadline)) || $submission->status === 'expired') {
+            $submission->update([
+                'status' => 'expired',
+                'result' => 'fail',
+            ]);
+
+            return back()->with('error', 'Đã hết thời gian làm bài (quá 6 giờ). Bạn không thể nộp bài và lần làm này được tính là FAIL.');
+        }
+
+        // 3.3 Tránh nộp đè khi bài đang chờ chấm hoặc đã chấm
+        if (in_array($submission->status, ['submitted', 'graded'])) {
+            return back()->with('error', 'Bạn đã nộp bài cho lần làm này rồi.');
         }
 
         // 4. Validate dữ liệu đầu vào: bắt buộc phải có 1 trong 2 (Nội dung văn bản HOẶC File đính kèm)
@@ -81,36 +215,27 @@ class AssignmentController extends Controller
             'file.max' => 'Dung lượng file tải lên không được vượt quá 10MB.',
         ]);
 
-        // 5. Quản lý lưu trữ file bài làm
+        // 5. Quản lý lưu trữ file bài làm (Lưu riêng từng attempt, không ghi đè file các lần trước)
         $filePath = null;
         if ($request->hasFile('file')) {
-            // Xóa file cũ trong bộ nhớ nếu học viên nộp lại
-            if ($submission && $submission->file_path) {
-                Storage::disk('public')->delete($submission->file_path);
-            }
             $filePath = $request->file('file')->store('assignment-submissions', 'public');
         } elseif ($submission) {
-            $filePath = $submission->file_path; // Giữ lại file cũ nếu chỉ cập nhật văn bản
+            $filePath = $submission->file_path;
         }
 
-        // 6. Lưu hoặc Cập nhật Bài nộp vào CSDL
-        Submission::updateOrCreate(
-            [
-                'assignment_id' => $assignment->id,
-                'user_id' => $request->user()->id,
-            ],
-            [
-                'file_path' => $filePath,
-                'content' => $request->input('content'),
-                'status' => 'submitted',
-                'submitted_at' => now(),
-                'score' => null,
-                'feedback' => null,
-                'graded_at' => null,
-            ]
-        );
+        // 6. Lưu hoặc Cập nhật Bài nộp vào CSDL cho attempt hiện tại
+        $submission->update([
+            'file_path' => $filePath,
+            'content' => $request->input('content'),
+            'status' => 'submitted',
+            'submitted_at' => now(),
+            'result' => null,
+            'score' => null,
+            'feedback' => null,
+            'graded_at' => null,
+        ]);
 
-        // 7. Cập nhật tiến độ hoàn thành bài học và đồng bộ tiến độ khóa học (chưa hoàn thành cho tới khi được chấm đạt)
+        // 7. Cập nhật tiến độ hoàn thành bài học (chưa đạt cho tới khi giảng viên chấm PASS)
         $progressService->recordLessonProgress(
             $request->user()->id,
             $course,
@@ -121,6 +246,6 @@ class AssignmentController extends Controller
             false
         );
 
-        return back()->with('success', 'Đã nộp bài tập tự luận thành công!');
+        return back()->with('success', "Đã nộp bài tập thực hành (Lần {$submission->attempt_number}) thành công! Vui lòng chờ giảng viên đánh giá.");
     }
 }

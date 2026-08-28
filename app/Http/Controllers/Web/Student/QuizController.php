@@ -69,6 +69,92 @@ class QuizController extends Controller
         return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson]);
     }
 
+    public function saveProgress(Request $request, Course $course, Lesson $lesson): JsonResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless($request->user()?->isStudent(), 403);
+        if (! $this->isEnrolled($course)) {
+            return response()->json(['success' => false, 'message' => 'Enrollment is required.'], 403);
+        }
+
+        $attemptId = (int) $request->input('attempt_id');
+        $answers = $request->input('answers', []);
+        if (is_string($answers)) {
+            $answers = json_decode($answers, true) ?: [];
+        }
+        $remainingSeconds = $request->has('remaining_seconds') ? (int) $request->input('remaining_seconds') : null;
+
+        $attempt = app(QuizAttemptService::class)->saveProgress(
+            $course,
+            $lesson,
+            $request->user(),
+            $attemptId,
+            $answers,
+            $remainingSeconds
+        );
+
+        return response()->json([
+            'success' => true,
+            'attempt_id' => $attempt->id,
+            'remaining_seconds' => $attempt->remaining_seconds,
+        ]);
+    }
+
+    public function terminate(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): JsonResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless($request->user()?->isStudent(), 403);
+        if (! $this->isEnrolled($course)) {
+            return response()->json(['success' => false, 'message' => 'Enrollment is required.'], 403);
+        }
+
+        $attemptId = (int) $request->input('attempt_id');
+        $reason = (string) $request->input('reason', QuizAttempt::REASON_PAGE_EXIT);
+        $answers = $request->input('answers', []);
+        if (is_string($answers)) {
+            $answers = json_decode($answers, true) ?: [];
+        }
+        $remainingSeconds = $request->has('remaining_seconds') ? (int) $request->input('remaining_seconds') : null;
+
+        $attemptService = app(QuizAttemptService::class);
+        $termination = $attemptService->terminate(
+            $course,
+            $lesson,
+            $request->user(),
+            $attemptId,
+            $reason,
+            $answers,
+            $remainingSeconds,
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        $attempt = $termination['attempt'];
+        $quiz = $attemptService->projectQuiz($attempt);
+        $completedAttempts = $attemptService->completedAttemptsCount($quiz, $request->user());
+
+        if ($termination['completed_now']) {
+            $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService);
+        }
+
+        return response()->json([
+            'success' => true,
+            'terminated' => true,
+            'reason' => $attempt->termination_reason,
+            'reason_label' => $attempt->getTerminationReasonLabel(),
+            'attempt' => [
+                'id' => $attempt->id,
+                'score' => $attempt->score,
+                'total_score' => $attempt->total_score,
+                'percent' => (float) $attempt->percent,
+                'passed' => (bool) $attempt->passed,
+                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]),
+            ],
+            'attempts_count' => $completedAttempts,
+            'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
+        ]);
+    }
+
     public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse
     {
         $this->authorizePublishedLesson($course, $lesson);

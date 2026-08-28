@@ -55,7 +55,7 @@
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Thời gian nộp</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Bài làm</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Trạng thái</th>
-                            <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Điểm</th>
+                            <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Kết quả</th>
                             <th class="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">Hành động</th>
                         </tr>
                     </thead>
@@ -75,13 +75,16 @@
                                     </div>
                                 </td>
 
-                                <!-- Khóa học & Bài tập -->
+                                <!-- Khóa học / Bài tập -->
                                 <td class="px-6 py-4">
                                     <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">
                                         {{ $submission->assignment->lesson->course->title }}
                                     </p>
                                     <p class="font-medium text-slate-900 dark:text-white mt-0.5">
                                         {{ $submission->assignment->title }}
+                                        <span class="ml-1 inline-flex rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                                            Lần {{ $submission->attempt_number }}/{{ $submission->allowed_attempts ?? 2 }}
+                                        </span>
                                     </p>
                                 </td>
 
@@ -90,16 +93,14 @@
                                     <span class="text-slate-600 dark:text-slate-300 text-xs">
                                         {{ $submission->submitted_at?->format('d/m/Y H:i') ?? 'N/A' }}
                                     </span>
-                                    @if($submission->assignment?->due_date)
-                                        @if($submission->isLate())
-                                            <span class="block mt-1 w-fit rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
-                                                Nộp trễ
-                                            </span>
-                                        @else
-                                            <span class="block mt-1 w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
-                                                Đúng hạn
-                                            </span>
-                                        @endif
+                                    @if($submission->isExpired())
+                                        <span class="block mt-1 w-fit rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
+                                            Quá hạn
+                                        </span>
+                                    @elseif($submission->submitted_at)
+                                        <span class="block mt-1 w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
+                                            Đúng hạn
+                                        </span>
                                     @endif
                                 </td>
 
@@ -123,24 +124,34 @@
                                         </span>
                                     @elseif($submission->status === 'graded')
                                         <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-950/20 dark:text-emerald-400">
-                                            Đã chấm
+                                            Đã đánh giá
                                         </span>
-                                    @elseif($submission->status === 'resubmit_required' || $submission->status === 'returned')
+                                    @elseif($submission->status === 'expired')
                                         <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/10 dark:bg-rose-950/20 dark:text-rose-400">
-                                            Nộp lại
+                                            Quá hạn
                                         </span>
                                     @endif
                                 </td>
 
-                                <!-- Điểm -->
-                                <td class="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                                    {{ $submission->score !== null ? floatval($submission->score) . '/' . ($submission->assignment->max_score ?? 100) : '—' }}
+                                <!-- Kết quả PASS / FAIL -->
+                                <td class="px-6 py-4 font-bold whitespace-nowrap">
+                                    @if($submission->result === 'pass')
+                                        <span class="inline-flex items-center gap-1 text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                            ✓ PASS
+                                        </span>
+                                    @elseif($submission->result === 'fail' || $submission->isExpired())
+                                        <span class="inline-flex items-center gap-1 text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                            ✕ FAIL
+                                        </span>
+                                    @else
+                                        <span class="text-xs text-slate-400 font-normal">Chờ đánh giá</span>
+                                    @endif
                                 </td>
 
                                 <!-- Hành động -->
                                 <td class="px-6 py-4">
                                     <a href="{{ route('instructor.submissions.show', $submission) }}" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 shadow-sm">
-                                        Xem & Chấm điểm
+                                        Xem & Đánh giá
                                     </a>
                                 </td>
                             </tr>

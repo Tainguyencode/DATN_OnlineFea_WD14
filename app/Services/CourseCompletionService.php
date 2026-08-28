@@ -82,11 +82,16 @@ class CourseCompletionService
             $passed = Submission::query()
                 ->where('user_id', $userId)
                 ->where('assignment_id', $assignment->id)
-                ->where('status', 'graded')
-                ->where('score', '>=', $assignment->passing_score ?? 70)
+                ->where(function ($q) use ($assignment) {
+                    $q->where('result', 'pass')
+                        ->orWhere(function ($legacy) use ($assignment) {
+                            $legacy->where('status', 'graded')
+                                ->where('score', '>=', $assignment->passing_score ?? 70);
+                        });
+                })
                 ->exists();
             if (! $passed) {
-                $missing[] = "Bài tập tự luận \"{$lesson->title}\" chưa đạt điểm đạt yêu cầu ({$assignment->passing_score} điểm).";
+                $missing[] = "Bài tập thực hành \"{$lesson->title}\" chưa đạt yêu cầu (PASS).";
             }
         }
 

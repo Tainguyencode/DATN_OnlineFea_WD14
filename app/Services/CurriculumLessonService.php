@@ -217,13 +217,9 @@ class CurriculumLessonService
                 $data['video_original_name'],
                 $data['video_mime'],
                 $data['video_size'],
-                $data['upload_status'],
-                $data['processing_status'],
             );
-        }
-
-        if (! in_array($type, [Lesson::TYPE_VIDEO, Lesson::TYPE_DOCUMENT, Lesson::TYPE_ASSIGNMENT], true)) {
-            unset($data['content']);
+            $data['upload_status'] = 'uploaded';
+            $data['processing_status'] = 'completed';
         }
 
         if (in_array($type, [Lesson::TYPE_DOCUMENT, Lesson::TYPE_ASSIGNMENT], true)
@@ -239,7 +235,7 @@ class CurriculumLessonService
                 'video_original_name' => (string) (($data['video_original_name'] ?? null) ?: basename($s3Key)),
                 'video_mime' => (string) (($data['video_mime'] ?? null) ?: 'video/mp4'),
                 'video_size' => (int) ($data['video_size'] ?? 0),
-                'upload_status' => 'pending',
+                'upload_status' => 'uploaded',
                 'processing_status' => 'pending',
             ]);
         } elseif ($type === Lesson::TYPE_VIDEO && $videoFile instanceof UploadedFile) {
@@ -267,7 +263,7 @@ class CurriculumLessonService
         return [
             $data,
             $storedFiles,
-            $type === Lesson::TYPE_VIDEO && $videoFile instanceof UploadedFile,
+            $type === Lesson::TYPE_VIDEO && ($videoFile instanceof UploadedFile || $s3Key !== null),
         ];
     }
 
