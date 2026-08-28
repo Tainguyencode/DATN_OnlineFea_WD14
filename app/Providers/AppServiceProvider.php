@@ -30,6 +30,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->assertSafeTestingDatabase();
+
         Event::listen(function (SocialiteWasCalled $event): void {
             $event->extendSocialite('microsoft', MicrosoftExtendSocialite::class);
         });
@@ -71,5 +73,26 @@ class AppServiceProvider extends ServiceProvider
                 'unreadStudyGroupCount' => $user->pushNotifications()->where('is_read', false)->where('type', 'study_group')->count(),
             ]);
         });
+    }
+
+    /**
+     * PHPUnit and testing Artisan commands may reset their database through
+     * RefreshDatabase or migrate:fresh. Refuse to boot in testing when the
+     * resolved connection is anything other than the dedicated test schema.
+     */
+    private function assertSafeTestingDatabase(): void
+    {
+        if (! $this->app->environment('testing')) {
+            return;
+        }
+
+        $connection = (string) config('database.default');
+        $database = (string) config("database.connections.{$connection}.database");
+
+        if ($database !== 'web_onlinefea_test') {
+            throw new \LogicException(
+                "Unsafe testing database [{$database}]. Automated tests may only use [web_onlinefea_test].",
+            );
+        }
     }
 }
