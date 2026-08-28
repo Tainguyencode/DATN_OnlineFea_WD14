@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class QuizController extends Controller
@@ -177,7 +178,7 @@ class QuizController extends Controller
             return back()->with('error', 'Tệp phải có định dạng .csv hoặc .xlsx / .xls.')->withInput();
         }
 
-        $rows = $this->readRowsFromFile($file->getPathname());
+        $rows = $this->readRowsFromFile($file->getPathname(), $extension);
 
         if (empty($rows)) {
             return back()->with('error', 'Không thể đọc nội dung tệp hoặc tệp rỗng. Vui lòng kiểm tra lại.')->withInput();
@@ -185,75 +186,29 @@ class QuizController extends Controller
 
         $importedCount = 0;
 
-        DB::transaction(function () use ($quiz, $rows, &$importedCount) {
-            foreach ($rows as $index => $row) {
-                if ($index === 0 && (str_contains(mb_strtolower($row[0] ?? ''), 'nội dung') || str_contains(mb_strtolower($row[0] ?? ''), 'câu hỏi'))) {
-                    continue;
-                }
+        // Tự động phát hiện định dạng file:
+        // Định dạng 1 (gom nhóm): question_code | option_code | option_text | is_correct
+        // Định dạng 2 (cũ): nội dung câu hỏi | loại | điểm | giải thích | đáp án 1..4 | đáp án đúng
+        $isGroupedFormat = $this->detectGroupedFormat($rows);
 
-                $questionText = trim($row[0] ?? '');
-                if ($questionText === '') {
-                    continue;
-                }
+        if ($isGroupedFormat) {
+            $questions = $this->parseGroupedFormat($rows);
+        } else {
+            $questions = $this->parseFlatFormat($rows);
+        }
 
-                $rawType = trim($row[1] ?? 'single_choice');
-                $type = $this->normalizeQuestionType($rawType);
-                $score = max(1, (int) ($row[2] ?? 1));
-                $explanation = trim($row[3] ?? '') ?: null;
-
-                $options = [];
-                for ($col = 4; $col <= 7; $col++) {
-                    if (isset($row[$col])) {
-                        $optText = trim($row[$col]);
-                        if ($optText !== '') {
-                            $options[] = $optText;
-                        }
-                    }
-                }
-
-                $rawCorrect = trim($row[8] ?? '');
-                $correctIndexes = $this->parseCorrectAnswers($rawCorrect, count($options), $type);
-
-                $optionData = collect($options)
-                    ->values()
-                    ->map(function (string $option, int $optionIndex) use ($correctIndexes): array {
-                        return [
-                            'option_text' => $option,
-                            'is_correct' => in_array($optionIndex + 1, $correctIndexes, true)
-                                || ($correctIndexes === [] && $optionIndex === 0),
-                            'sort_order' => $optionIndex,
-                        ];
-                    })
-                    ->all();
-
-                if ($type === QuizQuestion::TYPE_TRUE_FALSE) {
-                    $correctIndex = in_array(2, $correctIndexes, true) ? 1 : 0;
-                    $optionData = [
-                        [
-                            'option_text' => 'Đúng',
-                            'identity' => 'TRUE',
-                            'is_correct' => $correctIndex === 0,
-                            'sort_order' => 0,
-                        ],
-                        [
-                            'option_text' => 'Sai',
-                            'identity' => 'FALSE',
-                            'is_correct' => $correctIndex === 1,
-                            'sort_order' => 1,
-                        ],
-                    ];
-                }
-
-                if ($optionData === []) {
+        DB::transaction(function () use ($quiz, $questions, &$importedCount) {
+            foreach ($questions as $q) {
+                if (empty($q['option_data'])) {
                     continue;
                 }
 
                 $this->quizContent->createQuestion($quiz, [
-                    'question_text' => $questionText,
-                    'question_type' => $type,
-                    'score' => $score,
-                    'explanation' => $explanation,
-                ], $optionData);
+                    'question_text' => $q['question_text'],
+                    'question_type' => $q['question_type'],
+                    'score'         => $q['score'],
+                    'explanation'   => $q['explanation'],
+                ], $q['option_data']);
 
                 $importedCount++;
             }
@@ -266,8 +221,35 @@ class QuizController extends Controller
         return back()->with('success', "Đã nhập thành công {$importedCount} câu hỏi từ tệp vào Quiz!");
     }
 
-    private function readRowsFromFile(string $filePath): array
+    private function readRowsFromFile(string $filePath, string $extension = 'csv'): array
     {
+        $ext = strtolower($extension);
+
+        if (in_array($ext, ['xlsx', 'xls'], true)) {
+            try {
+                $reader = IOFactory::createReaderForFile($filePath);
+                $reader->setReadDataOnly(true);
+                $spreadsheet = $reader->load($filePath);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $rows = [];
+                foreach ($worksheet->getRowIterator() as $row) {
+                    $cellIterator = $row->getCellIterator();
+                    $cellIterator->setIterateOnlyExistingCells(false);
+                    $cells = [];
+                    foreach ($cellIterator as $cell) {
+                        $val = $cell ? trim((string) $cell->getValue()) : '';
+                        $cells[] = $val;
+                    }
+                    if (array_filter($cells, fn ($c) => $c !== '') !== []) {
+                        $rows[] = $cells;
+                    }
+                }
+                return $rows;
+            } catch (\Throwable $e) {
+                // Nếu đọc bằng Excel parser lỗi, fallback thử đọc dạng text bên dưới
+            }
+        }
+
         $rows = [];
         $handle = fopen($filePath, 'r');
         if (! $handle) {
@@ -341,6 +323,257 @@ class QuizController extends Controller
         }
 
         return array_unique($result);
+    }
+
+    /**
+     * Nhận diện định dạng gom nhóm (mỗi hàng = 1 đáp án, nhiều hàng cho 1 câu hỏi).
+     * Dấu hiệu: header có "option" hoặc "is_correct", hoặc cột đầu tiên lặp lại giá trị.
+     */
+    private function detectGroupedFormat(array $rows): bool
+    {
+        if (empty($rows)) {
+            return false;
+        }
+
+        $header = array_map(fn ($h) => mb_strtolower(trim((string) $h)), $rows[0]);
+
+        // Kiểm tra header có chứa các cột đặc trưng của định dạng gom nhóm
+        $groupedKeywords = ['option_code', 'option_text', 'is_correct', 'option', 'correct'];
+        foreach ($groupedKeywords as $kw) {
+            foreach ($header as $col) {
+                if (str_contains($col, $kw)) {
+                    return true;
+                }
+            }
+        }
+
+        // Kiểm tra nếu cột A lặp lại giá trị (Q001, Q001, Q001...) → gom nhóm
+        if (count($rows) > 3) {
+            $col0Values = array_slice(array_column($rows, 0), 1, 6); // bỏ header
+            $uniqueCount = count(array_unique($col0Values));
+            $totalCount  = count($col0Values);
+            if ($totalCount > 0 && ($uniqueCount / $totalCount) < 0.7) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Parse định dạng gom nhóm:
+     * Cột 0: question_code (text câu hỏi hoặc mã nhóm)
+     * Cột 1: option_code (A/B/C/D/TRUE/FALSE...)
+     * Cột 2: option_text (nội dung đáp án)
+     * Cột 3: is_correct (TRUE/FALSE/1/0)
+     */
+    private function parseGroupedFormat(array $rows): array
+    {
+        // Bỏ qua header nếu hàng đầu không phải dữ liệu
+        $startIndex = 0;
+        $header = array_map(fn ($h) => mb_strtolower(trim((string) $h)), $rows[0] ?? []);
+        $hasHeader = collect($header)->contains(fn ($h) =>
+            str_contains($h, 'option') || str_contains($h, 'correct') || str_contains($h, 'code')
+        );
+        if ($hasHeader) {
+            $startIndex = 1;
+        }
+
+        // Xác định vị trí các cột từ header (hoặc mặc định)
+        $colQuestionCode = 0;
+        $colOptionCode   = 1;
+        $colOptionText   = 2;
+        $colIsCorrect    = 3;
+
+        if ($hasHeader) {
+            foreach ($header as $i => $h) {
+                if (str_contains($h, 'question') && str_contains($h, 'code')) { $colQuestionCode = $i; }
+                if ($h === 'option_code' || ($i !== $colQuestionCode && str_contains($h, 'option') && str_contains($h, 'code'))) { $colOptionCode = $i; }
+                if ($h === 'option_text' || ($i !== $colQuestionCode && str_contains($h, 'option') && str_contains($h, 'text'))) { $colOptionText = $i; }
+                if (str_contains($h, 'is_correct') || str_contains($h, 'correct')) { $colIsCorrect = $i; }
+            }
+        }
+
+        // Gom nhóm các hàng theo question_code
+        $grouped = [];
+        $order   = [];
+        for ($i = $startIndex; $i < count($rows); $i++) {
+            $row  = $rows[$i];
+            $code = trim((string) ($row[$colQuestionCode] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            if (! isset($grouped[$code])) {
+                $grouped[$code] = [];
+                $order[] = $code;
+            }
+            $grouped[$code][] = $row;
+        }
+
+        $questions = [];
+        foreach ($order as $code) {
+            $optionRows = $grouped[$code];
+
+            // Xây dựng danh sách đáp án
+            $optionData = [];
+            $correctCount = 0;
+            foreach ($optionRows as $sortOrder => $optRow) {
+                $optCode    = trim((string) ($optRow[$colOptionCode] ?? ''));
+                $optText    = trim((string) ($optRow[$colOptionText] ?? ''));
+                $rawCorrect = mb_strtolower(trim((string) ($optRow[$colIsCorrect] ?? '')));
+
+                if ($optText === '') {
+                    continue;
+                }
+
+                $isCorrect = in_array($rawCorrect, ['true', '1', 'yes', 'đúng', 'correct'], true);
+                if ($isCorrect) {
+                    $correctCount++;
+                }
+
+                $optionEntry = [
+                    'option_text' => $optText,
+                    'is_correct'  => $isCorrect,
+                    'sort_order'  => $sortOrder,
+                ];
+
+                // TRUE/FALSE identity
+                $upperCode = mb_strtoupper($optCode);
+                if ($upperCode === 'TRUE') {
+                    $optionEntry['identity'] = 'TRUE';
+                } elseif ($upperCode === 'FALSE') {
+                    $optionEntry['identity'] = 'FALSE';
+                }
+
+                $optionData[] = $optionEntry;
+            }
+
+            if (empty($optionData)) {
+                continue;
+            }
+
+            // Xác định loại câu hỏi
+            $codes = array_map(
+                fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))),
+                $optionRows
+            );
+            $isTrueFalse = collect($codes)->contains(fn ($c) => in_array($c, ['TRUE', 'FALSE'], true));
+
+            if ($isTrueFalse) {
+                $type = QuizQuestion::TYPE_TRUE_FALSE;
+                // Chuẩn hoá lại optionData cho true_false
+                $optionData = [
+                    [
+                        'option_text' => 'Đúng',
+                        'identity'    => 'TRUE',
+                        'is_correct'  => collect($optionRows)
+                            ->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'TRUE')
+                            ? in_array(
+                                mb_strtolower(trim((string) (collect($optionRows)->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'TRUE')[$colIsCorrect] ?? ''))),
+                                ['true', '1', 'yes', 'đúng', 'correct'],
+                                true
+                            )
+                            : true,
+                        'sort_order'  => 0,
+                    ],
+                    [
+                        'option_text' => 'Sai',
+                        'identity'    => 'FALSE',
+                        'is_correct'  => collect($optionRows)
+                            ->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'FALSE')
+                            ? in_array(
+                                mb_strtolower(trim((string) (collect($optionRows)->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'FALSE')[$colIsCorrect] ?? ''))),
+                                ['true', '1', 'yes', 'đúng', 'correct'],
+                                true
+                            )
+                            : false,
+                        'sort_order'  => 1,
+                    ],
+                ];
+            } elseif ($correctCount > 1) {
+                $type = QuizQuestion::TYPE_MULTIPLE;
+            } else {
+                $type = QuizQuestion::TYPE_SINGLE;
+            }
+
+            $questions[] = [
+                'question_text' => $code,   // question_code được dùng làm nội dung câu hỏi
+                'question_type' => $type,
+                'score'         => 1,
+                'explanation'   => null,
+                'option_data'   => $optionData,
+            ];
+        }
+
+        return $questions;
+    }
+
+    /**
+     * Parse định dạng phẳng (1 hàng = 1 câu hỏi đầy đủ):
+     * Cột 0: nội dung | 1: loại | 2: điểm | 3: giải thích | 4-7: đáp án | 8: đáp án đúng
+     */
+    private function parseFlatFormat(array $rows): array
+    {
+        $questions = [];
+
+        foreach ($rows as $index => $row) {
+            // Bỏ qua header
+            if ($index === 0 && (str_contains(mb_strtolower($row[0] ?? ''), 'nội dung') || str_contains(mb_strtolower($row[0] ?? ''), 'câu hỏi'))) {
+                continue;
+            }
+
+            $questionText = trim((string) ($row[0] ?? ''));
+            if ($questionText === '') {
+                continue;
+            }
+
+            $type        = $this->normalizeQuestionType(trim((string) ($row[1] ?? 'single_choice')));
+            $score       = max(1, (int) ($row[2] ?? 1));
+            $explanation = trim((string) ($row[3] ?? '')) ?: null;
+
+            $options = [];
+            for ($col = 4; $col <= 7; $col++) {
+                $optText = trim((string) ($row[$col] ?? ''));
+                if ($optText !== '') {
+                    $options[] = $optText;
+                }
+            }
+
+            $rawCorrect    = trim((string) ($row[8] ?? ''));
+            $correctIndexes = $this->parseCorrectAnswers($rawCorrect, count($options), $type);
+
+            if ($type === QuizQuestion::TYPE_TRUE_FALSE) {
+                $correctIndex = in_array(2, $correctIndexes, true) ? 1 : 0;
+                $optionData   = [
+                    ['option_text' => 'Đúng', 'identity' => 'TRUE',  'is_correct' => $correctIndex === 0, 'sort_order' => 0],
+                    ['option_text' => 'Sai',  'identity' => 'FALSE', 'is_correct' => $correctIndex === 1, 'sort_order' => 1],
+                ];
+            } else {
+                $optionData = collect($options)
+                    ->values()
+                    ->map(fn (string $opt, int $i) => [
+                        'option_text' => $opt,
+                        'is_correct'  => in_array($i + 1, $correctIndexes, true)
+                            || ($correctIndexes === [] && $i === 0),
+                        'sort_order'  => $i,
+                    ])
+                    ->all();
+            }
+
+            if (empty($optionData)) {
+                continue;
+            }
+
+            $questions[] = [
+                'question_text' => $questionText,
+                'question_type' => $type,
+                'score'         => $score,
+                'explanation'   => $explanation,
+                'option_data'   => $optionData,
+            ];
+        }
+
+        return $questions;
     }
 
     public function storeQuestion(Request $request, Quiz $quiz): RedirectResponse

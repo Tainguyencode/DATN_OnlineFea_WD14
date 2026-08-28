@@ -17,21 +17,11 @@
 <!-- COURSE CHAT DRAWER / PANEL (SLIDE-OVER FROM RIGHT) -->
 <div x-show="chatOpen" 
      x-cloak
-     x-transition:enter="transition ease-out duration-300"
-     x-transition:enter-start="opacity-0"
-     x-transition:enter-end="opacity-100"
-     x-transition:leave="transition ease-in duration-200"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0"
-     class="fixed inset-0 z-50 overflow-hidden" 
+     class="fixed inset-0 z-50 overflow-hidden pointer-events-none" 
      role="dialog" 
-     aria-modal="true">
+     aria-modal="false">
 
-    <!-- Backdrop -->
-    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" 
-         @click="chatOpen = false"></div>
-
-    <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+    <div class="fixed inset-y-0 right-0 max-w-full flex pointer-events-auto shadow-2xl">
         <div x-show="chatOpen"
              x-transition:enter="transform transition ease-in-out duration-300 sm:duration-400"
              x-transition:enter-start="translate-x-full"

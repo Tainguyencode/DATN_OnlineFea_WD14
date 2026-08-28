@@ -94,9 +94,93 @@ class SubmissionController extends Controller
         // Xác thực Giảng viên có quyền truy cập bài nộp này hay không
         $this->ensureOwned($submission, $request->user()->id);
 
-        $submission->load(['user', 'assignment.lesson.course']);
+        $submission->load(['user', 'assignment.lesson.course', 'granter:id,name']);
 
-        return view('instructor.submissions.show', compact('submission'));
+        // Lấy toàn bộ lịch sử các lần làm (attempts) của học viên cho bài tập này
+        $allSubmissions = Submission::query()
+            ->where('assignment_id', $submission->assignment_id)
+            ->where('user_id', $submission->user_id)
+            ->with(['granter:id,name', 'gradedBy:id,name'])
+            ->orderBy('attempt_number', 'asc')
+            ->get();
+
+        return view('instructor.submissions.show', compact('submission', 'allSubmissions'));
+    }
+
+    /**
+     * Cấp thêm 1 lượt làm lại bài tập thực hành cho học viên khi đã hết lượt.
+     */
+    public function grantRetry(Request $request, Submission $submission): RedirectResponse
+    {
+        $this->ensureOwned($submission, $request->user()->id);
+
+        $latestSubmission = Submission::query()
+            ->where('assignment_id', $submission->assignment_id)
+            ->where('user_id', $submission->user_id)
+            ->orderBy('attempt_number', 'desc')
+            ->firstOrFail();
+
+        if ($latestSubmission->isPassed()) {
+            return back()->with('error', 'Học viên đã ĐẠT (PASS) bài tập này, không cần cấp thêm lượt làm lại.');
+        }
+
+        // Kiểm tra xem lần làm hiện tại đã kết thúc chưa
+        $isFinished = ($latestSubmission->status === 'graded' && $latestSubmission->result === 'fail') || $latestSubmission->isExpired();
+
+        if (! $isFinished && ! $latestSubmission->submitted_at) {
+            return back()->with('error', 'Học viên đang trong thời gian làm bài, không thể cấp thêm lượt lúc này.');
+        }
+
+        $currentAllowed = $latestSubmission->allowed_attempts ?? 2;
+        $newAllowed = max($currentAllowed, $latestSubmission->attempt_number) + 1;
+        $nextAttemptNumber = $latestSubmission->attempt_number + 1;
+        $reason = trim((string) $request->input('reason', 'Giảng viên cấp thêm lượt làm lại'));
+
+        // Cập nhật allowed_attempts cho các bản ghi cũ
+        Submission::query()
+            ->where('assignment_id', $submission->assignment_id)
+            ->where('user_id', $submission->user_id)
+            ->update(['allowed_attempts' => $newAllowed]);
+
+        // Tạo bản ghi attempt mới (started_at = null -> Timer KHÔNG chạy khi giảng viên cấp lượt)
+        $newAttempt = Submission::create([
+            'assignment_id' => $submission->assignment_id,
+            'user_id' => $submission->user_id,
+            'attempt_number' => $nextAttemptNumber,
+            'allowed_attempts' => $newAllowed,
+            'started_at' => null,
+            'status' => 'in_progress',
+            'result' => null,
+            'granted_by' => $request->user()->id,
+            'granted_at' => now(),
+            'grant_reason' => $reason,
+        ]);
+
+        // Gửi thông báo đến Học viên
+        try {
+            $student = $submission->user;
+            $assignmentTitle = $submission->assignment->title;
+            $course = $submission->assignment->lesson->course;
+
+            $url = route('courses.lessons.show', [
+                'course' => $course->id,
+                'lesson' => $submission->assignment->lesson_id,
+            ]);
+
+            app(NotificationService::class)->send(
+                $student,
+                'Bạn được cấp thêm lượt làm bài tập',
+                "Giảng viên đã cấp thêm cho bạn 1 lượt làm lại bài tập \"{$assignmentTitle}\" (Lần {$nextAttemptNumber}/{$newAllowed}). Hãy bấm \"Tải tài liệu về\" khi sẵn sàng để bắt đầu 6 giờ.",
+                'assignment_retry_granted',
+                $url
+            );
+        } catch (\Exception $e) {
+            logger()->error('Failed to send assignment retry grant notification: '.$e->getMessage());
+        }
+
+        return redirect()
+            ->route('instructor.submissions.show', $newAttempt)
+            ->with('success', "Đã cấp thêm 1 lượt làm bài (Lần {$nextAttemptNumber}/{$newAllowed}) thành công cho học viên {$submission->user->name}.");
     }
 
     /**
@@ -117,53 +201,39 @@ class SubmissionController extends Controller
         // 1. Phân quyền: Đảm bảo bài nộp thuộc khóa học của giảng viên hiện tại
         $this->ensureOwned($submission, $request->user()->id);
 
-        // 2. Validate dữ liệu chấm điểm đầu vào
+        // 2. Validate dữ liệu đánh giá đầu vào (PASS hoặc FAIL)
         $validated = $request->validate([
-            'score' => [
-                'required',
-                'numeric',
-                'min:0',
-                'max:'.($submission->assignment->max_score ?? 100),
-            ],
+            'result' => 'required|string|in:pass,fail',
             'feedback' => 'nullable|string|max:5000',
-            'status' => 'required|string|in:graded,returned',
         ], [
-            'score.required' => 'Vui lòng nhập điểm số.',
-            'score.numeric' => 'Điểm số phải là một số.',
-            'score.min' => 'Điểm số không được nhỏ hơn 0.',
-            'score.max' => 'Điểm số không được vượt quá điểm tối đa của bài tập.',
-            'status.required' => 'Vui lòng chọn trạng thái chấm điểm.',
+            'result.required' => 'Vui lòng chọn kết quả đánh giá (PASS hoặc FAIL).',
+            'result.in' => 'Kết quả đánh giá không hợp lệ (chỉ chấp nhận PASS hoặc FAIL).',
         ]);
 
-        $statusValue = $validated['status'];
-        if ($statusValue === 'returned') {
-            $statusValue = 'resubmit_required';
-        }
+        $resultValue = $validated['result'];
+        $isPassed = $resultValue === 'pass';
 
-        // 3. Ghi vết lịch sử chấm điểm (phục vụ xem lại các lần chấm lại)
+        // 3. Ghi vết lịch sử chấm điểm (phục vụ xem lại các lần đánh giá)
         $history = $submission->grading_history ?? [];
         $history[] = [
-            'score' => (float) $validated['score'],
+            'result' => $resultValue,
             'feedback' => $validated['feedback'],
-            'status' => $statusValue,
+            'status' => 'graded',
             'graded_by' => $request->user()->name,
             'graded_at' => now()->toIso8601String(),
         ];
 
         // 4. Cập nhật thông tin bài nộp
         $submission->update([
-            'score' => $validated['score'],
+            'result' => $resultValue,
             'feedback' => $validated['feedback'],
-            'status' => $statusValue,
+            'status' => 'graded',
             'graded_at' => now(),
             'graded_by' => $request->user()->id,
             'grading_history' => $history,
         ]);
 
-        // 4.1 Cập nhật trạng thái hoàn thành bài giảng theo kết quả chấm điểm (Đạt >= passing_score)
-        $passingScore = $submission->assignment->passing_score ?? 70;
-        $isPassed = $statusValue === 'graded' && ((float) $validated['score']) >= $passingScore;
-
+        // 4.1 Cập nhật trạng thái hoàn thành bài giảng theo kết quả PASS / FAIL
         app(LearningProgressService::class)->recordLessonProgress(
             $submission->user_id,
             $submission->assignment->lesson->course,
@@ -173,6 +243,7 @@ class SubmissionController extends Controller
             false,
             $isPassed
         );
+
         // 5. Gửi thông báo đến Học viên
         try {
             $student = $submission->user;
@@ -184,13 +255,10 @@ class SubmissionController extends Controller
                 'lesson' => $submission->assignment->lesson_id,
             ]);
 
-            $title = $statusValue === 'graded'
-                ? 'Bài tập của bạn đã được chấm điểm'
-                : 'Yêu cầu làm lại bài tập';
-
-            $message = $statusValue === 'graded'
-                ? "Bài tập \"{$assignmentTitle}\" trong khóa học \"{$course->title}\" đã đạt {$validated['score']}/{$submission->assignment->max_score} điểm."
-                : "Giảng viên yêu cầu bạn làm lại bài tập \"{$assignmentTitle}\" trong khóa học \"{$course->title}\".";
+            $title = 'Bài tập thực hành của bạn đã được đánh giá';
+            $message = $isPassed
+                ? "Bài tập \"{$assignmentTitle}\" (Lần {$submission->attempt_number}) trong khóa học \"{$course->title}\" đã được giảng viên đánh giá PASS (Đạt)."
+                : "Bài tập \"{$assignmentTitle}\" (Lần {$submission->attempt_number}) trong khóa học \"{$course->title}\" được giảng viên đánh giá FAIL (Không đạt).";
 
             app(NotificationService::class)->send(
                 $student,
@@ -217,7 +285,7 @@ class SubmissionController extends Controller
 
         return redirect()
             ->route('instructor.submissions.show', $submission)
-            ->with('success', 'Đã chấm điểm, ghi nhận lịch sử, kiểm tra điều kiện hoàn thành khóa học và gửi thông báo kết quả cho học viên.');
+            ->with('success', 'Đã lưu đánh giá bài tập ('.strtoupper($resultValue).'), kiểm tra điều kiện hoàn thành khóa học và gửi thông báo kết quả cho học viên.');
     }
 
     /**

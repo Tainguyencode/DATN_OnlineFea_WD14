@@ -65,7 +65,14 @@ class ConvertVideoToHLS implements ShouldQueue
 
         try {
             // ─── [BƯỚC 2] DOWNLOAD ORIGINAL ───
-            if ($hasS3Original && Storage::disk('s3')->exists($this->lesson->original_video_key)) {
+            if ($hasS3Original) {
+                if (! Storage::disk('s3')->exists($this->lesson->original_video_key)) {
+                    Log::warning("[ConvertVideoToHLS] S3 file not ready yet for Lesson {$lessonId}: {$this->lesson->original_video_key}. Waiting for upload completion.");
+                    $this->lesson->update(['processing_status' => 'pending']);
+
+                    return;
+                }
+
                 $ext = pathinfo($this->lesson->original_video_key, PATHINFO_EXTENSION) ?: 'mp4';
                 $localInputPath = $tmpDir.'/source_video.'.$ext;
 
@@ -108,13 +115,13 @@ class ConvertVideoToHLS implements ShouldQueue
             $playlistPath = $hlsOutDir.'/playlist.m3u8';
 
             $ffmpegConfig = $this->getFfmpegConfig();
-            Log::info('[ConvertVideoToHLS] [FFMPEG START] Starting HLS conversion', [
+            $ffmpegBin = $ffmpegConfig['ffmpeg.binaries'];
+            Log::info('[ConvertVideoToHLS] [FFMPEG START] Starting HLS conversion (Stream Copy mode)', [
                 'lesson_id' => $lessonId,
                 'input' => $localInputPath,
                 'output_playlist' => $playlistPath,
-                'ffmpeg_binary' => $ffmpegConfig['ffmpeg.binaries'],
+                'ffmpeg_binary' => $ffmpegBin,
                 'ffprobe_binary' => $ffmpegConfig['ffprobe.binaries'],
-                'threads' => $ffmpegConfig['ffmpeg.threads'],
             ]);
 
             $this->convertToHls($ffmpegConfig, $localInputPath, $playlistPath);
@@ -252,13 +259,36 @@ class ConvertVideoToHLS implements ShouldQueue
     }
 
     /**
-     * Tự động phát hiện đường dẫn binary FFmpeg & FFprobe
-     */
-    /**
      * @param  array<string, mixed>  $ffmpegConfig
      */
     private function convertToHls(array $ffmpegConfig, string $inputPath, string $playlistPath): void
     {
+        $hlsOutDir = dirname($playlistPath);
+        $segmentFilename = $hlsOutDir.'/segment_%03d.ts';
+
+        $streamCopyProcess = new Process([
+            (string) $ffmpegConfig['ffmpeg.binaries'],
+            '-hide_banner',
+            '-nostdin',
+            '-y',
+            '-i', $inputPath,
+            '-c', 'copy',
+            '-hls_time', '10',
+            '-hls_list_size', '0',
+            '-hls_segment_filename', $segmentFilename,
+            '-f', 'hls',
+            $playlistPath,
+        ]);
+        $streamCopyProcess->setTimeout((float) $ffmpegConfig['timeout']);
+        $streamCopyProcess->run();
+
+        if ($streamCopyProcess->isSuccessful() && file_exists($playlistPath) && filesize($playlistPath) > 0) {
+            return;
+        }
+
+        Log::warning('[ConvertVideoToHLS] Stream copy fallback to ultrafast re-encode: '.trim($streamCopyProcess->getErrorOutput()));
+        File::cleanDirectory($hlsOutDir);
+
         $process = new Process([
             (string) $ffmpegConfig['ffmpeg.binaries'],
             '-hide_banner',
@@ -266,10 +296,12 @@ class ConvertVideoToHLS implements ShouldQueue
             '-y',
             '-i', $inputPath,
             '-c:v', 'libx264',
+            '-preset', 'ultrafast',
             '-c:a', 'aac',
             '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
             '-hls_time', '10',
             '-hls_list_size', '0',
+            '-hls_segment_filename', $segmentFilename,
             '-f', 'hls',
             $playlistPath,
         ]);
@@ -287,6 +319,9 @@ class ConvertVideoToHLS implements ShouldQueue
         }
     }
 
+    /**
+     * Tự động phát hiện đường dẫn binary FFmpeg & FFprobe
+     */
     private function getFfmpegConfig(): array
     {
         $ffmpegBin = env('FFMPEG_BINARIES') ?: env('FFMPEG_BIN');

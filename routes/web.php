@@ -143,9 +143,12 @@ Route::middleware(['auth', 'active', 'role:student'])->group(function () {
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
 Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/start', [StudentQuizController::class, 'start'])->middleware('auth')->name('courses.lessons.quiz.start');
+Route::post('/courses/{course}/lessons/{lesson}/quiz/save-progress', [StudentQuizController::class, 'saveProgress'])->middleware('auth')->name('courses.lessons.quiz.save-progress');
+Route::post('/courses/{course}/lessons/{lesson}/quiz/terminate', [StudentQuizController::class, 'terminate'])->middleware('auth')->name('courses.lessons.quiz.terminate');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
-Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('courses.lessons.quiz.attempts.show');
+Route::get('/courses/{course}/lessons/{lesson}/assignment/download', [StudentAssignmentController::class, 'download'])->middleware('auth')->name('courses.lessons.assignment.download');
 Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssignmentController::class, 'submit'])->middleware('auth')->name('courses.lessons.assignment.submit');
+Route::post('/courses/{course}/lessons/{lesson}/assignment/retry', [StudentAssignmentController::class, 'retry'])->middleware('auth')->name('courses.lessons.assignment.retry');
 
 Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
@@ -355,6 +358,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/submissions', [SubmissionController::class, 'index'])->name('submissions.index');
         Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
         Route::post('/submissions/{submission}/grade', [SubmissionController::class, 'grade'])->name('submissions.grade');
+        Route::post('/submissions/{submission}/grant-retry', [SubmissionController::class, 'grantRetry'])->name('submissions.grant-retry');
         Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
         Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
         Route::get('/comments', [App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'index'])->name('comments.index');
