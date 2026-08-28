@@ -323,26 +323,20 @@
             @error('content', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
         </label>
 
-        <div class="mt-4 grid gap-4 sm:grid-cols-3">
-            <label class="block">
-                <span class="mb-1.5 block text-sm font-bold text-slate-700">Thời hạn nộp</span>
-                <input type="number" name="assignment_due_days" value="{{ $valueFor('assignment_due_days', $assignment->due_days ?? '') }}" min="1" max="3650" placeholder="Số ngày"
-                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 @error('assignment_due_days', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-amber-500 @enderror">
-                @error('assignment_due_days', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
-            </label>
-            <label class="block">
-                <span class="mb-1.5 block text-sm font-bold text-slate-700">Điểm tối đa</span>
-                <input type="number" name="assignment_max_score" value="{{ $valueFor('assignment_max_score', $assignment->max_score ?? 100) }}" min="1" max="1000"
-                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 @error('assignment_max_score', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-amber-500 @enderror">
-                @error('assignment_max_score', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
-            </label>
+        <!-- Ẩn các trường điểm số và lưu giá trị mặc định -->
+        <input type="hidden" name="assignment_due_days" value="{{ $valueFor('assignment_due_days', $assignment->due_days ?? 1) }}">
+        <input type="hidden" name="assignment_max_score" value="{{ $valueFor('assignment_max_score', $assignment->max_score ?? 100) }}">
+        <input type="hidden" name="assignment_passing_score" value="{{ $valueFor('assignment_passing_score', $assignment->passing_score ?? 70) }}">
 
-            <label class="block">
-                <span class="mb-1.5 block text-sm font-bold text-slate-700">Điểm đạt</span>
-                <input type="number" name="assignment_passing_score" value="{{ $valueFor('assignment_passing_score', $assignment->passing_score ?? 70) }}" min="0" max="1000"
-                       class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 @error('assignment_passing_score', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-amber-500 @enderror">
-                @error('assignment_passing_score', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
-            </label>
+        <div class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 text-xs text-indigo-950 space-y-1.5">
+            <div class="flex items-center gap-2 font-bold text-indigo-900">
+                <svg class="h-4 w-4 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Quy tắc làm bài & Đánh giá bài thực hành</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed">
+                • <strong>Thời gian làm bài:</strong> 6 Giờ (tự động kích hoạt khi học viên bấm tải tài liệu về máy).<br>
+                • <strong>Cơ chế đánh giá:</strong> Giảng viên chấm bài với 2 trạng thái <strong>PASS</strong> (Đạt) hoặc <strong>FAIL</strong> (Không đạt).
+            </p>
         </div>
 
         <label class="mt-4 block">
