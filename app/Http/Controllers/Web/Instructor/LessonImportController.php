@@ -51,10 +51,18 @@ class LessonImportController extends Controller
     public function preview(
         PreviewLessonImportRequest $request,
         Course $course,
-        CourseSection $section,
+        $section,
         CurriculumLessonService $lessonService,
         LessonImportPreviewService $previewService,
     ): JsonResponse {
+        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::where('course_id', $course->id)->find($section);
+        if (! $sectionModel) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chương học được chọn không tồn tại hoặc đã bị xóa. Vui lòng tải lại trang (F5) để cập nhật danh sách chương mới nhất.',
+            ], 422);
+        }
+
         if (! $lessonService->canCreateDirectly($course)) {
             return response()->json([
                 'success' => false,
@@ -66,14 +74,14 @@ class LessonImportController extends Controller
             $result = $previewService->preview(
                 $request->file('file'),
                 $course,
-                $section,
+                $sectionModel,
                 $request->user(),
             );
         } catch (LessonImportException $exception) {
             Log::warning('Lesson import preview rejected.', [
                 'issue_code' => $exception->issueCode,
                 'course_id' => $course->id,
-                'section_id' => $section->id,
+                'section_id' => $sectionModel->id,
                 'user_id' => $request->user()->id,
                 'exception' => $exception,
             ]);
@@ -86,7 +94,7 @@ class LessonImportController extends Controller
         } catch (Throwable $exception) {
             Log::error('Lesson import preview failed unexpectedly.', [
                 'course_id' => $course->id,
-                'section_id' => $section->id,
+                'section_id' => $sectionModel->id,
                 'user_id' => $request->user()->id,
                 'exception' => $exception,
             ]);
@@ -134,14 +142,22 @@ class LessonImportController extends Controller
     public function confirm(
         ConfirmLessonImportRequest $request,
         Course $course,
-        CourseSection $section,
+        $section,
         LessonImportService $importService,
     ): JsonResponse {
+        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::where('course_id', $course->id)->find($section);
+        if (! $sectionModel) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chương học được chọn không tồn tại hoặc đã bị xóa. Vui lòng tải lại trang (F5) để cập nhật danh sách chương mới nhất.',
+            ], 422);
+        }
+
         try {
             $result = $importService->confirm(
                 $request->validated('batch_token'),
                 $course,
-                $section,
+                $sectionModel,
                 $request->user(),
             );
         } catch (LessonImportException $exception) {
@@ -149,7 +165,7 @@ class LessonImportController extends Controller
                 Log::warning('Lesson import confirm rejected.', [
                     'issue_code' => $exception->issueCode,
                     'course_id' => $course->id,
-                    'section_id' => $section->id,
+                    'section_id' => $sectionModel->id,
                     'user_id' => $request->user()->id,
                 ]);
             }

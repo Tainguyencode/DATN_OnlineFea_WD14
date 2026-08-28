@@ -159,6 +159,7 @@ class S3MultipartUploader {
                         ETag: p.eTag,
                     })),
                     duration: duration,
+                    lesson_id: this.lessonId || null,
                 }),
             });
 
@@ -433,6 +434,25 @@ class CourseUploadQueueManager {
     constructor() {
         this.queue = [];
         this.activeUploader = null;
+        if (typeof window !== 'undefined') {
+            window.CourseUploadQueue = this;
+        }
+        this.initEventListeners();
+    }
+
+    initEventListeners() {
+        if (typeof document === 'undefined') return;
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-cancel-queue-id]');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = btn.getAttribute('data-cancel-queue-id');
+                if (id) {
+                    this.cancelUpload(id);
+                }
+            }
+        });
     }
 
     addUpload(item) {
@@ -490,7 +510,7 @@ class CourseUploadQueueManager {
             onProgress: (prog) => {
                 next.percent = prog.percent;
                 next.statusText = `${prog.percent}%`;
-                this.render();
+                this.updateItemProgress(next);
 
                 if (typeof next.config.onProgress === 'function') {
                     next.config.onProgress(prog);
@@ -540,6 +560,17 @@ class CourseUploadQueueManager {
         }
     }
 
+    updateItemProgress(item) {
+        const percentEl = document.getElementById(`upload-percent-${item.id}`);
+        const barEl = document.getElementById(`upload-bar-${item.id}`);
+        if (percentEl) {
+            percentEl.textContent = `${item.percent}%`;
+        }
+        if (barEl) {
+            barEl.style.width = `${item.percent}%`;
+        }
+    }
+
     cancelUpload(itemId) {
         const item = this.queue.find(i => i.id === itemId);
         if (!item) return;
@@ -551,6 +582,10 @@ class CourseUploadQueueManager {
         this.queue = this.queue.filter(i => i.id !== itemId);
         this.render();
         this.processNext();
+
+        if (window.showCurriculumToast) {
+            window.showCurriculumToast(`Đã hủy tải lên video "${item.title || item.filename}"`);
+        }
     }
 
     render() {
@@ -584,22 +619,23 @@ class CourseUploadQueueManager {
 
         activeItems.forEach(item => {
             const isUploading = item.status === 'uploading';
+            const safeTitle = typeof escapeHtml === 'function' ? escapeHtml(item.title) : item.title;
             html += `
-                <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-indigo-100 shadow-2xs text-xs">
+                <div id="upload-item-${item.id}" class="flex items-center justify-between bg-white rounded-lg p-3 border border-indigo-100 shadow-2xs text-xs">
                     <div class="min-w-0 flex-1 pr-3">
                         <div class="flex items-center justify-between font-bold text-slate-800 mb-1">
-                            <span class="truncate max-w-xs">${item.title}</span>
-                            <span class="font-mono text-indigo-600">${isUploading ? (item.percent + '%') : 'Chờ tải'}</span>
+                            <span class="truncate max-w-xs">${safeTitle}</span>
+                            <span id="upload-percent-${item.id}" class="font-mono text-indigo-600">${isUploading ? (item.percent + '%') : 'Chờ tải'}</span>
                         </div>
                         <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                            <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2 rounded-full transition-all duration-300" style="width: ${item.percent}%"></div>
+                            <div id="upload-bar-${item.id}" class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2 rounded-full transition-all duration-150" style="width: ${item.percent}%"></div>
                         </div>
                     </div>
                     <div class="shrink-0 flex items-center gap-2">
                         <span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold ${isUploading ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}">
                             ${isUploading ? 'Đang tải' : 'Đang chờ'}
                         </span>
-                        <button type="button" onclick="window.CourseUploadQueue.cancelUpload('${item.id}')" class="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer text-[11px]">Hủy</button>
+                        <button type="button" data-cancel-queue-id="${item.id}" onclick="window.CourseUploadQueue.cancelUpload('${item.id}')" class="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer text-[11px] px-1.5 py-0.5 select-none">Hủy</button>
                     </div>
                 </div>
             `;
@@ -811,28 +847,37 @@ function createLessonFormState(config) {
 
                     if (response.ok) {
                         const resData = await response.json();
+                        const lessonId = resData.lesson_id || (resData.lesson ? resData.lesson.id : this.lessonId);
+                        const lessonTitle = resData.title || (resData.lesson ? resData.lesson.title : '');
 
-                        if (isCreateForm) {
-                            // 1. Cập nhật lessonId cho item trong CourseUploadQueue và ngắt kết nối với Form cũ
-                            if (this.currentQueueId) {
-                                const qItem = CourseUploadQueue.queue.find(q => q.id === this.currentQueueId);
-                                if (qItem) {
-                                    if (resData.lesson) {
-                                        qItem.lessonId = resData.lesson.id;
-                                        qItem.title = resData.lesson.title;
-                                    }
-                                    if (qItem.config) {
-                                        qItem.config.onProgress = null;
-                                        qItem.config.onInit = null;
-                                        qItem.config.onSuccess = null;
-                                        qItem.config.onError = null;
+                        // 1. Đồng bộ và duy trì hàng chờ CourseUploadQueue cho cả Tạo mới và Sửa bài học
+                        if (this.currentQueueId) {
+                            const qItem = CourseUploadQueue.queue.find(q => q.id === this.currentQueueId);
+                            if (qItem) {
+                                if (lessonId) {
+                                    qItem.lessonId = lessonId;
+                                    if (qItem.uploader) {
+                                        qItem.uploader.lessonId = lessonId;
                                     }
                                 }
+                                if (lessonTitle) {
+                                    qItem.title = lessonTitle;
+                                }
+                                if (qItem.config) {
+                                    qItem.config.lessonId = lessonId;
+                                    qItem.config.onProgress = null;
+                                    qItem.config.onInit = null;
+                                    qItem.config.onSuccess = null;
+                                    qItem.config.onError = null;
+                                }
                             }
+                            CourseUploadQueue.render();
+                        }
 
+                        if (isCreateForm) {
                             // 2. Render ngay lập tức bài học vào danh sách Curriculum DOM
-                            if (resData.lesson) {
-                                appendLessonToCurriculumDOM(resData.lesson);
+                            if (resData.lesson || resData.html) {
+                                appendLessonToCurriculumDOM(resData);
                             }
 
                             // 3. Reset các ô nhập liệu của form tạo mới
@@ -864,10 +909,35 @@ function createLessonFormState(config) {
                                 parentDetails.removeAttribute('open');
                             }
                         } else {
-                            // Khi sửa bài học thành công, đóng accordion sửa bài học
+                            // Khi sửa bài học thành công, đóng modal sửa bài học
+                            const modal = form.closest('[id^="edit-lesson-modal-"]') || form.closest('.fixed');
+                            if (modal) {
+                                modal.classList.add('hidden');
+                            }
                             const parentDetails = form.closest('details');
                             if (parentDetails) {
                                 parentDetails.removeAttribute('open');
+                            }
+
+                            this.currentQueueId = null;
+
+                            // Cập nhật tiêu đề bài học ngoài DOM
+                            if (lessonId && lessonTitle) {
+                                const titleEl = document.querySelector(`#lesson-item-${lessonId} h4`)
+                                    || document.querySelector(`[data-lesson-title-key="lesson_${lessonId}"]`);
+                                if (titleEl) {
+                                    titleEl.textContent = lessonTitle;
+                                }
+                            }
+
+                            // Nếu video vẫn đang tải dở, hiển thị trạng thái chờ tải ở bài học ngoài danh sách
+                            if (this.isUploading && lessonId) {
+                                const statusEl = document.querySelector(`[data-hls-status-key="lesson_${lessonId}"]`);
+                                if (statusEl) {
+                                    statusEl.className = 'font-semibold text-amber-600';
+                                    statusEl.textContent = 'Video đang tải lên trong hàng chờ...';
+                                    statusEl.setAttribute('data-hls-processing', 'true');
+                                }
                             }
                         }
 
@@ -877,18 +947,29 @@ function createLessonFormState(config) {
 
                         // Hiển thị thông báo thành công
                         if (window.showCurriculumToast) {
-                            const lessonTitle = resData.lesson ? resData.lesson.title : (resData.title || '');
+                            const isStillUploading = CourseUploadQueue.queue.some(i => i.status === 'uploading' || i.status === 'queued');
                             const msg = isCreateForm
-                                ? (lessonTitle ? `Đã lưu bài học "${lessonTitle}" thành công! Video đang tiếp tục tải lên trong hàng chờ.` : 'Đã lưu bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.')
-                                : 'Đã cập nhật bài học thành công! Video đang tiếp tục tải lên trong hàng chờ.';
+                                ? (lessonTitle ? `Đã lưu bài học "${lessonTitle}" thành công! ${isStillUploading ? 'Video đang tiếp tục tải lên trong hàng chờ.' : ''}` : 'Đã lưu bài học thành công!')
+                                : `Đã cập nhật bài học thành công! ${isStillUploading ? 'Video đang tiếp tục tải lên trong hàng chờ.' : ''}`;
                             window.showCurriculumToast(msg);
                         }
                     } else {
-                        form.submit();
+                        const errData = await response.json().catch(() => ({}));
+                        let errMsg = errData.message || 'Đã có lỗi xảy ra khi lưu bài học. Vui lòng kiểm tra lại.';
+                        if (errData.errors) {
+                            errMsg = Object.values(errData.errors).flat().join(' ');
+                        }
+                        if (window.showCurriculumToast) {
+                            window.showCurriculumToast(errMsg, true);
+                        } else {
+                            alert(errMsg);
+                        }
                     }
                 } catch (e) {
-                    console.error('AJAX lesson submit error, falling back:', e);
-                    form.submit();
+                    console.error('AJAX lesson submit error:', e);
+                    if (window.showCurriculumToast) {
+                        window.showCurriculumToast('Không thể kết nối máy chủ để lưu bài học. Vui lòng thử lại.', true);
+                    }
                 } finally {
                     if (submitBtn) {
                         submitBtn.disabled = false;
@@ -1026,6 +1107,10 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
                         el.className = 'font-semibold text-emerald-600';
                         el.textContent = 'Video đã được xử lý bảo mật thành công.';
                         el.removeAttribute('data-hls-processing');
+                    } else if (info.is_uploading || info.upload_status === 'pending') {
+                        el.className = 'font-semibold text-amber-600';
+                        el.textContent = 'Video đang tải lên trong hàng chờ...';
+                        el.setAttribute('data-hls-processing', 'true');
                     } else if (info.is_failed) {
                         el.className = 'font-semibold text-rose-600';
                         el.textContent = 'Video xử lý bảo mật thất bại.';
@@ -1087,7 +1172,9 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-function appendLessonToCurriculumDOM(lesson) {
+function appendLessonToCurriculumDOM(data) {
+    const lesson = data.lesson || data;
+    const html = data.html;
     if (!lesson || !lesson.section_id) return;
 
     const container = document.getElementById('section-lessons-' + lesson.section_id)
@@ -1100,71 +1187,83 @@ function appendLessonToCurriculumDOM(lesson) {
         emptyNotice.remove();
     }
 
-    const typeLabels = {
-        'video': 'Video',
-        'document': 'Tài liệu',
-        'quiz': 'Quiz',
-        'assignment': 'Bài tập'
-    };
-    const typeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
-    const isVideo = lesson.type === 'video';
+    if (html) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html.trim();
+        const newEl = tempDiv.firstElementChild;
+        if (newEl) {
+            container.appendChild(newEl);
+            if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                window.Alpine.initTree(newEl);
+            }
+        }
+    } else {
+        const typeLabels = {
+            'video': 'Video',
+            'document': 'Tài liệu',
+            'quiz': 'Quiz',
+            'assignment': 'Bài tập'
+        };
+        const typeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+        const isVideo = lesson.type === 'video';
 
-    const lessonItem = document.createElement('div');
-    lessonItem.className = 'p-5 border-t border-slate-100 first:border-t-0';
-    lessonItem.id = 'lesson-item-' + lesson.id;
+        const lessonItem = document.createElement('div');
+        lessonItem.className = 'p-5 border-t border-slate-100 first:border-t-0';
+        lessonItem.id = 'lesson-item-' + lesson.id;
 
-    let videoBadgeHtml = '';
-    if (isVideo) {
-        videoBadgeHtml = `<span class="rounded-full border px-2.5 py-1 text-xs font-bold border-emerald-200 bg-emerald-50 text-emerald-700">Đã có video</span>`;
-    }
+        let videoBadgeHtml = '';
+        if (isVideo) {
+            videoBadgeHtml = `<span class="rounded-full border px-2.5 py-1 text-xs font-bold border-emerald-200 bg-emerald-50 text-emerald-700">Đã có video</span>`;
+        }
 
-    let previewBadgeHtml = '';
-    if (lesson.is_preview) {
-        previewBadgeHtml = `<span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>`;
-    }
+        let previewBadgeHtml = '';
+        if (lesson.is_preview) {
+            previewBadgeHtml = `<span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>`;
+        }
 
-    let hlsStatusHtml = '';
-    if (isVideo) {
-        hlsStatusHtml = `<span data-hls-status-key="lesson_${lesson.id}" data-hls-processing="true" class="font-semibold text-amber-600">Video đang tải lên...</span>`;
-    }
+        let hlsStatusHtml = '';
+        if (isVideo) {
+            hlsStatusHtml = `<span data-hls-status-key="lesson_${lesson.id}" data-hls-processing="true" class="font-semibold text-amber-600">Video đang tải lên...</span>`;
+        }
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        || document.querySelector('input[name="_token"]')?.value || '';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || document.querySelector('input[name="_token"]')?.value || '';
 
-    const durFormatted = lesson.duration_formatted || (lesson.duration > 0 ? `${lesson.duration} giây` : 'Chưa đặt');
+        const durFormatted = lesson.duration_formatted || (lesson.duration > 0 ? `${lesson.duration} giây` : 'Chưa đặt');
 
-    lessonItem.innerHTML = `
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="rounded-full border px-2.5 py-1 text-xs font-bold ${typeClass}">${typeLabels[lesson.type] || 'Video'}</span>
-                    <span class="rounded-full border px-2.5 py-1 text-xs font-bold bg-slate-100 text-slate-700 border-slate-200">Nháp</span>
-                    ${previewBadgeHtml}
-                    ${videoBadgeHtml}
+        lessonItem.innerHTML = `
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full border px-2.5 py-1 text-xs font-bold ${typeClass}">${typeLabels[lesson.type] || 'Video'}</span>
+                        <span class="rounded-full border px-2.5 py-1 text-xs font-bold bg-slate-100 text-slate-700 border-slate-200">Nháp</span>
+                        ${previewBadgeHtml}
+                        ${videoBadgeHtml}
+                    </div>
+                    <h4 class="mt-2 font-bold text-slate-950">${escapeHtml(lesson.title)}</h4>
+                    <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                        <span data-lesson-duration-key="lesson_${lesson.id}">Thời lượng: ${durFormatted}</span>
+                        <span>Bài ${lesson.sort_order ?? 0}</span>
+                        ${hlsStatusHtml}
+                    </div>
+                    ${lesson.content ? `<p class="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">${escapeHtml(lesson.content)}</p>` : ''}
                 </div>
-                <h4 class="mt-2 font-bold text-slate-950">${escapeHtml(lesson.title)}</h4>
-                <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
-                    <span data-lesson-duration-key="lesson_${lesson.id}">Thời lượng: ${durFormatted}</span>
-                    <span>Bài ${lesson.sort_order ?? 0}</span>
-                    ${hlsStatusHtml}
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    ${lesson.destroy_url ? `
+                        <form method="POST" action="${lesson.destroy_url}" onsubmit="return confirm('Bạn chắc chắn muốn xóa bài học này?')">
+                            <input type="hidden" name="_token" value="${csrfToken}">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-50 cursor-pointer">
+                                Xóa
+                            </button>
+                        </form>
+                    ` : ''}
                 </div>
-                ${lesson.content ? `<p class="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">${escapeHtml(lesson.content)}</p>` : ''}
             </div>
-            <div class="flex shrink-0 flex-wrap gap-2">
-                ${lesson.destroy_url ? `
-                    <form method="POST" action="${lesson.destroy_url}" onsubmit="return confirm('Bạn chắc chắn muốn xóa bài học này?')">
-                        <input type="hidden" name="_token" value="${csrfToken}">
-                        <input type="hidden" name="_method" value="DELETE">
-                        <button type="submit" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-50 cursor-pointer">
-                            Xóa
-                        </button>
-                    </form>
-                ` : ''}
-            </div>
-        </div>
-    `;
+        `;
 
-    container.appendChild(lessonItem);
+        container.appendChild(lessonItem);
+    }
 
     // Cập nhật số lượng bài học trên thống kê đầu trang
     const totalLessonsEl = document.getElementById('overview-total-lessons');

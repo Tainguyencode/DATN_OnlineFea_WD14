@@ -160,8 +160,8 @@ class Lesson extends Model
      */
     public function isHlsReady(): bool
     {
-        if ($this->processing_status === 'completed' && filled($this->hls_manifest_key)) {
-            return true;
+        if ($this->processing_status !== 'completed') {
+            return false;
         }
 
         if (filled($this->hls_manifest_key)) {
@@ -202,6 +202,10 @@ class Lesson extends Model
             return false;
         }
 
+        if ($this->upload_status === 'pending') {
+            return true;
+        }
+
         if (in_array($this->processing_status, ['processing', 'pending'], true)) {
             return true;
         }
@@ -217,6 +221,10 @@ class Lesson extends Model
      */
     public function hasFailedProcessing(): bool
     {
+        if ($this->upload_status === 'pending') {
+            return false;
+        }
+
         return $this->processing_status === 'failed' && ! $this->isHlsReady();
     }
 

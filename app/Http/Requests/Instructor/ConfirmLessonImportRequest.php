@@ -11,7 +11,14 @@ class ConfirmLessonImportRequest extends FormRequest
     public function authorize(): bool
     {
         $course = $this->route('course');
+        if (! ($course instanceof Course)) {
+            $course = Course::find($course);
+        }
+
         $section = $this->route('section');
+        if (! ($section instanceof CourseSection)) {
+            $section = CourseSection::find($section);
+        }
 
         return $course instanceof Course
             && $section instanceof CourseSection

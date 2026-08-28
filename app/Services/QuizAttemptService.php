@@ -25,7 +25,7 @@ class QuizAttemptService
             $attempt = QuizAttempt::query()
                 ->where('user_id', $user->id)
                 ->where('quiz_id', $quiz->id)
-                ->where('status', 'in_progress')
+                ->where('status', QuizAttempt::STATUS_IN_PROGRESS)
                 ->lockForUpdate()
                 ->with('quizVersion')
                 ->first();
@@ -38,20 +38,24 @@ class QuizAttemptService
             $completedAttempts = QuizAttempt::query()
                 ->where('user_id', $user->id)
                 ->where('quiz_id', $quiz->id)
-                ->where('status', 'completed')
+                ->whereIn('status', [
+                    QuizAttempt::STATUS_COMPLETED,
+                    QuizAttempt::STATUS_TERMINATED,
+                    QuizAttempt::STATUS_EXPIRED,
+                ])
                 ->count();
 
             abort_if(
                 $version->max_attempts !== null && $completedAttempts >= $version->max_attempts,
                 422,
-                'Ban da het so lan lam quiz nay.',
+                'Bạn đã hết số lần làm bài kiểm tra này.',
             );
 
             return QuizAttempt::create([
                 'user_id' => $user->id,
                 'quiz_id' => $quiz->id,
                 'quiz_version_id' => $version->id,
-                'status' => 'in_progress',
+                'status' => QuizAttempt::STATUS_IN_PROGRESS,
                 'presentation_order' => app(QuizAttemptPresentationService::class)->createSnapshot($version),
                 'started_at' => now(),
             ])->load('quizVersion');
@@ -61,11 +65,11 @@ class QuizAttemptService
     /**
      * @return array{attempt: QuizAttempt, graded: array<string, mixed>, completed_now: bool}
      */
-    public function submit(Course $course, Lesson $lesson, User $user, int $attemptId, array $submittedAnswers): array
+    public function submit(Course $course, Lesson $lesson, User $user, int $attemptId, array $submittedAnswers, ?int $remainingSeconds = null): array
     {
         $this->assertAccess($course, $lesson, $user);
 
-        return DB::transaction(function () use ($lesson, $user, $attemptId, $submittedAnswers): array {
+        return DB::transaction(function () use ($lesson, $user, $attemptId, $submittedAnswers, $remainingSeconds): array {
             $attempt = QuizAttempt::query()->lockForUpdate()->findOrFail($attemptId);
 
             abort_unless((int) $attempt->user_id === (int) $user->id, 403);
@@ -82,7 +86,7 @@ class QuizAttemptService
             $attempt->setRelation('quiz', $quiz);
             $attempt->setRelation('quizVersion', $version);
 
-            if ($attempt->status === 'completed') {
+            if ($attempt->isFinalized()) {
                 return [
                     'attempt' => $attempt->load('attemptAnswers'),
                     'graded' => $this->completedGrade($attempt, $version),
@@ -90,7 +94,7 @@ class QuizAttemptService
                 ];
             }
 
-            abort_unless($attempt->status === 'in_progress', 409, 'Quiz attempt is no longer in progress.');
+            abort_unless($attempt->status === QuizAttempt::STATUS_IN_PROGRESS, 409, 'Quiz attempt is no longer in progress.');
 
             $graded = app(QuizService::class)->grade($attempt, $submittedAnswers);
 
@@ -113,7 +117,9 @@ class QuizAttemptService
             }
 
             $attempt->update([
-                'status' => 'completed',
+                'status' => QuizAttempt::STATUS_COMPLETED,
+                'termination_reason' => QuizAttempt::REASON_SUBMITTED,
+                'remaining_seconds' => $remainingSeconds !== null ? max(0, $remainingSeconds) : $this->remainingTime($attempt),
                 'score' => $graded['score'],
                 'total_score' => $graded['total_score'],
                 'percent' => $graded['percent'],
@@ -130,6 +136,110 @@ class QuizAttemptService
         });
     }
 
+    /**
+     * Terminate an in-progress attempt due to proctoring violations (tab switch, window blur, fullscreen exit...)
+     *
+     * @return array{attempt: QuizAttempt, graded: array<string, mixed>, completed_now: bool}
+     */
+    public function terminate(
+        Course $course,
+        Lesson $lesson,
+        User $user,
+        int $attemptId,
+        string $reason,
+        array $answers = [],
+        ?int $remainingSeconds = null,
+        ?string $ip = null,
+        ?string $userAgent = null
+    ): array {
+        $this->assertAccess($course, $lesson, $user);
+
+        return DB::transaction(function () use ($lesson, $user, $attemptId, $reason, $answers, $remainingSeconds, $ip, $userAgent): array {
+            $attempt = QuizAttempt::query()->lockForUpdate()->findOrFail($attemptId);
+
+            abort_unless((int) $attempt->user_id === (int) $user->id, 403);
+
+            $quiz = Quiz::query()->findOrFail($attempt->quiz_id);
+            abort_unless((int) $quiz->lesson_id === (int) $lesson->id, 404);
+
+            abort_unless($attempt->quiz_version_id !== null, 409, 'Quiz attempt does not have a bound quiz version.');
+            $version = QuizVersion::query()
+                ->with('questionMappings.questionVersion.options', 'questionMappings.invalidations')
+                ->findOrFail($attempt->quiz_version_id);
+
+            $attempt->setRelation('quiz', $quiz);
+            $attempt->setRelation('quizVersion', $version);
+
+            if ($attempt->isFinalized()) {
+                return [
+                    'attempt' => $attempt->load('attemptAnswers'),
+                    'graded' => $this->completedGrade($attempt, $version),
+                    'completed_now' => false,
+                ];
+            }
+
+            // Grade current answers up to termination point
+            $answersToGrade = ! empty($answers) ? $answers : ($attempt->answers ?? []);
+            $graded = app(QuizService::class)->grade($attempt, $answersToGrade);
+
+            foreach ($graded['questions'] as $questionId => $result) {
+                $answerData = [
+                    'question_id' => (int) $questionId,
+                    'question_version_id' => (int) $result['question_version_id'],
+                    'is_correct' => (bool) $result['is_correct'],
+                ];
+
+                if ($result['selected_ids'] === []) {
+                    $attempt->attemptAnswers()->create([...$answerData, 'answer_id' => null]);
+
+                    continue;
+                }
+
+                foreach ($result['selected_ids'] as $answerId) {
+                    $attempt->attemptAnswers()->create([...$answerData, 'answer_id' => $answerId]);
+                }
+            }
+
+            $attempt->update([
+                'status' => QuizAttempt::STATUS_TERMINATED,
+                'termination_reason' => $reason,
+                'remaining_seconds' => $remainingSeconds !== null ? max(0, $remainingSeconds) : $this->remainingTime($attempt),
+                'score' => $graded['score'],
+                'total_score' => $graded['total_score'],
+                'percent' => $graded['percent'],
+                'passed' => $graded['passed'],
+                'answers' => $graded['answers'],
+                'completed_at' => now(),
+                'ip_address' => $ip,
+                'user_agent' => $userAgent,
+            ]);
+
+            return [
+                'attempt' => $attempt->fresh(['quiz', 'quizVersion', 'attemptAnswers']),
+                'graded' => $graded,
+                'completed_now' => true,
+            ];
+        });
+    }
+
+    public function saveProgress(Course $course, Lesson $lesson, User $user, int $attemptId, array $answers, ?int $remainingSeconds = null): QuizAttempt
+    {
+        $this->assertAccess($course, $lesson, $user);
+
+        return DB::transaction(function () use ($user, $attemptId, $answers, $remainingSeconds): QuizAttempt {
+            $attempt = QuizAttempt::query()->lockForUpdate()->findOrFail($attemptId);
+            abort_unless((int) $attempt->user_id === (int) $user->id, 403);
+            abort_unless($attempt->status === QuizAttempt::STATUS_IN_PROGRESS, 409, 'Quiz attempt is no longer in progress.');
+
+            $attempt->update([
+                'answers' => $answers,
+                'remaining_seconds' => $remainingSeconds !== null ? max(0, $remainingSeconds) : $this->remainingTime($attempt),
+            ]);
+
+            return $attempt;
+        });
+    }
+
     public function findInProgress(Course $course, Lesson $lesson, User $user): ?QuizAttempt
     {
         $this->assertAccess($course, $lesson, $user);
@@ -139,12 +249,25 @@ class QuizAttemptService
             return null;
         }
 
-        return QuizAttempt::query()
+        $attempt = QuizAttempt::query()
             ->where('user_id', $user->id)
             ->where('quiz_id', $quiz->id)
-            ->where('status', 'in_progress')
+            ->where('status', QuizAttempt::STATUS_IN_PROGRESS)
             ->with(['quiz', 'quizVersion'])
             ->first();
+
+        if ($attempt && $attempt->quizVersion?->time_limit_minutes && $this->remainingTime($attempt) === 0) {
+            $attempt->update([
+                'status' => QuizAttempt::STATUS_EXPIRED,
+                'termination_reason' => QuizAttempt::REASON_TIME_EXPIRED,
+                'remaining_seconds' => 0,
+                'completed_at' => now(),
+            ]);
+
+            return null;
+        }
+
+        return $attempt;
     }
 
     public function resolveVersion(Quiz $quiz): QuizVersion
@@ -180,7 +303,11 @@ class QuizAttemptService
     {
         return $quiz->attempts()
             ->where('user_id', $user->id)
-            ->where('status', 'completed')
+            ->whereIn('status', [
+                QuizAttempt::STATUS_COMPLETED,
+                QuizAttempt::STATUS_TERMINATED,
+                QuizAttempt::STATUS_EXPIRED,
+            ])
             ->count();
     }
 
@@ -253,3 +380,4 @@ class QuizAttemptService
         ];
     }
 }
+

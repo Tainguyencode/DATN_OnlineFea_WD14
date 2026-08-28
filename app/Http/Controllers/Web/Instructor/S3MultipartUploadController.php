@@ -167,19 +167,29 @@ class S3MultipartUploadController extends Controller
             'parts.*.PartNumber' => ['required', 'integer', 'min:1'],
             'parts.*.ETag' => ['required', 'string'],
             'duration' => ['nullable', 'numeric', 'min:0'],
+            'lesson_id' => ['nullable', 'integer'],
         ]);
 
         $key = $validated['key'];
         $duration = (int) round((float) ($validated['duration'] ?? 0));
+        $lessonId = $validated['lesson_id'] ?? null;
         $this->validateKeyPrefix($course, $key);
 
         try {
             $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
 
             // Kích hoạt ConvertVideoToHLS nếu lesson đã được tạo/lưu trong DB
-            $lesson = Lesson::where('original_video_key', $key)->first();
-            if ($lesson && ! $lesson->isHlsReady()) {
+            $lesson = null;
+            if ($lessonId) {
+                $lesson = Lesson::where('course_id', $course->id)->where('id', $lessonId)->first();
+            }
+            if (! $lesson) {
+                $lesson = Lesson::where('original_video_key', $key)->first();
+            }
+
+            if ($lesson) {
                 $lessonUpdateData = [
+                    'original_video_key' => $key,
                     'upload_status' => 'uploaded',
                     'processing_status' => 'pending',
                 ];
@@ -196,11 +206,20 @@ class S3MultipartUploadController extends Controller
             $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
                 ->where('course_id', $course->id)
                 ->where('status', ContentUpdate::STATUS_DRAFT)
-                ->whereJsonContains('payload->original_video_key', $key)
+                ->where(function ($q) use ($key, $lessonId) {
+                    $q->whereJsonContains('payload->original_video_key', $key);
+                    if ($lessonId) {
+                        $q->orWhere('entity_id', $lessonId);
+                    }
+                })
                 ->latest()
                 ->first();
 
             if ($contentUpdate) {
+                $p = $contentUpdate->payload ?? [];
+                $p['original_video_key'] = $key;
+                $p['upload_status'] = 'uploaded';
+                $contentUpdate->update(['payload' => $p]);
                 Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
                 ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }

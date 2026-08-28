@@ -1730,3 +1730,13 @@ span[class~="rounded-full"][class~="h-1.5"][class~="w-1.5"],
 span[class~="rounded-full"][class~="h-2"][class~="w-2"] {
     display: none !important;
 }
+
+@media print {
+    .learning-quiz-panel,
+    [data-quiz-player],
+    [data-quiz-active],
+    .quiz-print-hidden {
+        display: none !important;
+    }
+}
+

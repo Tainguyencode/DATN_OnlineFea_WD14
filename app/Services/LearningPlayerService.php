@@ -404,6 +404,10 @@ class LearningPlayerService
             ];
         })->all();
 
+        $lastTerminatedAttempt = $user
+            ? $quiz->attempts()->where('user_id', $user->id)->where('status', QuizAttempt::STATUS_TERMINATED)->orderByDesc('id')->first()
+            : null;
+
         return [
             'id' => $quiz->id,
             'title' => $quiz->title,
@@ -419,8 +423,11 @@ class LearningPlayerService
             'quiz_version_id' => $attempt?->quiz_version_id,
             'started_at' => $attempt?->started_at?->toIso8601String(),
             'remaining_seconds' => $attempt ? $attemptService->remainingTime($attempt) : null,
+            'saved_answers' => $attempt?->answers ?? [],
             'start_url' => route('courses.lessons.quiz.start', [$course, $lesson]),
             'submit_url' => route('courses.lessons.quiz.submit', [$course, $lesson]),
+            'save_progress_url' => route('courses.lessons.quiz.save-progress', [$course, $lesson]),
+            'terminate_url' => route('courses.lessons.quiz.terminate', [$course, $lesson]),
             'total_questions' => count($questions),
             'total_points' => $quiz->questions
                 ->reject(fn ($question) => $question->versionMapping?->invalidations
@@ -432,6 +439,17 @@ class LearningPlayerService
             'remaining_attempts' => $quiz->max_attempts !== null
                 ? max(0, $quiz->max_attempts - $attemptsCount)
                 : null,
+            'user_info' => $user ? [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ] : null,
+            'last_terminated' => $lastTerminatedAttempt ? [
+                'id' => $lastTerminatedAttempt->id,
+                'reason' => $lastTerminatedAttempt->termination_reason,
+                'reason_label' => $lastTerminatedAttempt->getTerminationReasonLabel(),
+                'ended_at' => $lastTerminatedAttempt->completed_at?->format('d/m/Y H:i'),
+            ] : null,
         ];
     }
 }

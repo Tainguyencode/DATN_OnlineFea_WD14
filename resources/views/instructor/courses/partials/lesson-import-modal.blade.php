@@ -37,7 +37,11 @@
 
             <div data-lesson-import-step="select" class="min-h-0 flex-1 overflow-y-auto">
                 <div class="space-y-5 px-4 py-5 sm:px-6">
-                    @if($course->courseSections->isEmpty())
+                    @php
+                        $activeSections = $curriculumSections ?? $course->courseSections;
+                    @endphp
+
+                    @if($activeSections->isEmpty())
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4" role="status">
                             <p class="text-sm font-bold text-amber-900">Bạn cần tạo ít nhất một chương trước khi nhập bài học.</p>
                             <p class="mt-1 text-xs leading-5 text-amber-800">Đóng cửa sổ này và dùng nút “+ Thêm chương” ở phía trên.</p>
@@ -51,10 +55,10 @@
                                 id="lesson-import-section"
                                 data-lesson-import-section
                                 class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                                @disabled($course->courseSections->isEmpty())
+                                @disabled($activeSections->isEmpty())
                             >
                                 <option value="">Chọn chương sẽ nhận bài học</option>
-                                @foreach($course->courseSections as $section)
+                                @foreach($activeSections as $section)
                                     @php
                                         $chapterNumber = $loop->iteration;
                                         $chapterFallback = 'Chương '.$chapterNumber;
@@ -67,8 +71,8 @@
                                     @endphp
                                     <option
                                         value="{{ $section->id }}"
-                                        data-preview-url="{{ route('instructor.courses.lessons.import.preview', [$course, $section]) }}"
-                                        data-confirm-url="{{ route('instructor.courses.lessons.import.confirm', [$course, $section]) }}"
+                                        data-preview-url="{{ route('instructor.courses.lessons.import.preview', [$course, $section->id ?? $section]) }}"
+                                        data-confirm-url="{{ route('instructor.courses.lessons.import.confirm', [$course, $section->id ?? $section]) }}"
                                     >
                                         {{ $chapterLabel }}
                                     </option>
