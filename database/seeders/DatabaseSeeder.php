@@ -265,17 +265,6 @@ class DatabaseSeeder extends Seeder
                 'created_at' => now()->subDays(3),
                 'updated_at' => now(),
             ];
-            $enrollments[] = [
-                'user_id' => $qtrung,
-                'course_id' => 5,
-                'status' => 'active',
-                'progress_percent' => 0.00,
-                'completed_lessons' => 0,
-                'total_lessons' => DB::table('lessons')->where('course_id', 5)->count() ?: 12,
-                'enrolled_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
         }
 
         foreach ($enrollments as $enrollment) {
