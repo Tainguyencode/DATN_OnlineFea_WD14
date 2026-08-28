@@ -12,22 +12,33 @@ class AssignmentSubmission extends Model
     protected $fillable = [
         'assignment_id',
         'user_id',
+        'attempt_number',
+        'allowed_attempts',
+        'started_at',
         'file_path',
         'content',
         'score',
+        'result',
         'feedback',
         'status',
         'submitted_at',
         'graded_at',
         'graded_by',
+        'granted_by',
+        'granted_at',
+        'grant_reason',
     ];
 
     protected function casts(): array
     {
         return [
+            'attempt_number' => 'integer',
+            'allowed_attempts' => 'integer',
             'score' => 'integer',
+            'started_at' => 'datetime',
             'submitted_at' => 'datetime',
             'graded_at' => 'datetime',
+            'granted_at' => 'datetime',
         ];
     }
 
@@ -48,6 +59,10 @@ class AssignmentSubmission extends Model
 
     public function isPassing(): bool
     {
+        if ($this->result !== null) {
+            return $this->result === 'pass';
+        }
+
         if ($this->score === null) {
             return false;
         }

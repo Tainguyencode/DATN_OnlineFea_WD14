@@ -345,11 +345,16 @@ class CourseController extends Controller
         $activeDiscussion = $courseDiscussion;
 
         $submission = null;
+        $assignmentSubmissions = collect();
         if (auth()->check() && $lesson->type === 'assignment' && $lesson->assignment) {
-            $submission = Submission::query()
+            $assignmentSubmissions = Submission::query()
                 ->where('assignment_id', $lesson->assignment->id)
                 ->where('user_id', auth()->id())
-                ->first();
+                ->with('granter:id,name')
+                ->orderBy('attempt_number', 'asc')
+                ->get();
+
+            $submission = $assignmentSubmissions->last();
         }
 
         $hasNewContentVersion = false;
@@ -393,6 +398,7 @@ class CourseController extends Controller
             'lesson' => $lesson,
             'hasNewContentVersion' => $hasNewContentVersion,
             'submission' => $submission,
+            'assignmentSubmissions' => $assignmentSubmissions,
             'enrollment' => $player['enrollment'],
             'isEnrolled' => $player['isEnrolled'],
             'canAccessLesson' => $player['canAccessLesson'],

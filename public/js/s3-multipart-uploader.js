@@ -434,6 +434,25 @@ class CourseUploadQueueManager {
     constructor() {
         this.queue = [];
         this.activeUploader = null;
+        if (typeof window !== 'undefined') {
+            window.CourseUploadQueue = this;
+        }
+        this.initEventListeners();
+    }
+
+    initEventListeners() {
+        if (typeof document === 'undefined') return;
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-cancel-queue-id]');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = btn.getAttribute('data-cancel-queue-id');
+                if (id) {
+                    this.cancelUpload(id);
+                }
+            }
+        });
     }
 
     addUpload(item) {
@@ -491,7 +510,7 @@ class CourseUploadQueueManager {
             onProgress: (prog) => {
                 next.percent = prog.percent;
                 next.statusText = `${prog.percent}%`;
-                this.render();
+                this.updateItemProgress(next);
 
                 if (typeof next.config.onProgress === 'function') {
                     next.config.onProgress(prog);
@@ -541,6 +560,17 @@ class CourseUploadQueueManager {
         }
     }
 
+    updateItemProgress(item) {
+        const percentEl = document.getElementById(`upload-percent-${item.id}`);
+        const barEl = document.getElementById(`upload-bar-${item.id}`);
+        if (percentEl) {
+            percentEl.textContent = `${item.percent}%`;
+        }
+        if (barEl) {
+            barEl.style.width = `${item.percent}%`;
+        }
+    }
+
     cancelUpload(itemId) {
         const item = this.queue.find(i => i.id === itemId);
         if (!item) return;
@@ -552,6 +582,10 @@ class CourseUploadQueueManager {
         this.queue = this.queue.filter(i => i.id !== itemId);
         this.render();
         this.processNext();
+
+        if (window.showCurriculumToast) {
+            window.showCurriculumToast(`Đã hủy tải lên video "${item.title || item.filename}"`);
+        }
     }
 
     render() {
@@ -585,22 +619,23 @@ class CourseUploadQueueManager {
 
         activeItems.forEach(item => {
             const isUploading = item.status === 'uploading';
+            const safeTitle = typeof escapeHtml === 'function' ? escapeHtml(item.title) : item.title;
             html += `
-                <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-indigo-100 shadow-2xs text-xs">
+                <div id="upload-item-${item.id}" class="flex items-center justify-between bg-white rounded-lg p-3 border border-indigo-100 shadow-2xs text-xs">
                     <div class="min-w-0 flex-1 pr-3">
                         <div class="flex items-center justify-between font-bold text-slate-800 mb-1">
-                            <span class="truncate max-w-xs">${item.title}</span>
-                            <span class="font-mono text-indigo-600">${isUploading ? (item.percent + '%') : 'Chờ tải'}</span>
+                            <span class="truncate max-w-xs">${safeTitle}</span>
+                            <span id="upload-percent-${item.id}" class="font-mono text-indigo-600">${isUploading ? (item.percent + '%') : 'Chờ tải'}</span>
                         </div>
                         <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                            <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2 rounded-full transition-all duration-300" style="width: ${item.percent}%"></div>
+                            <div id="upload-bar-${item.id}" class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2 rounded-full transition-all duration-150" style="width: ${item.percent}%"></div>
                         </div>
                     </div>
                     <div class="shrink-0 flex items-center gap-2">
                         <span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold ${isUploading ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}">
                             ${isUploading ? 'Đang tải' : 'Đang chờ'}
                         </span>
-                        <button type="button" onclick="window.CourseUploadQueue.cancelUpload('${item.id}')" class="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer text-[11px]">Hủy</button>
+                        <button type="button" data-cancel-queue-id="${item.id}" onclick="window.CourseUploadQueue.cancelUpload('${item.id}')" class="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer text-[11px] px-1.5 py-0.5 select-none">Hủy</button>
                     </div>
                 </div>
             `;
@@ -1048,6 +1083,10 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
                         el.className = 'font-semibold text-emerald-600';
                         el.textContent = 'Video đã được xử lý bảo mật thành công.';
                         el.removeAttribute('data-hls-processing');
+                    } else if (info.is_uploading || info.upload_status === 'pending') {
+                        el.className = 'font-semibold text-amber-600';
+                        el.textContent = 'Video đang tải lên trong hàng chờ...';
+                        el.setAttribute('data-hls-processing', 'true');
                     } else if (info.is_failed) {
                         el.className = 'font-semibold text-rose-600';
                         el.textContent = 'Video xử lý bảo mật thất bại.';

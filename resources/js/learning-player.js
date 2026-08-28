@@ -479,43 +479,119 @@ function initQuizPlayer() {
     const intro = root.querySelector('[data-quiz-intro]');
     const active = root.querySelector('[data-quiz-active]');
     const result = root.querySelector('[data-quiz-result]');
+    const terminatedEl = root.querySelector('[data-quiz-terminated]');
+    const terminatedMsg = root.querySelector('[data-quiz-terminated-msg]');
+    const terminatedAttempts = root.querySelector('[data-quiz-terminated-attempts]');
+    const terminatedRetryBtn = root.querySelector('[data-quiz-terminated-retry]');
     const questionContainer = root.querySelector('[data-quiz-question-container]');
     const progressLabel = root.querySelector('[data-quiz-progress-label]');
     const progressBar = root.querySelector('[data-quiz-progress-bar]');
     const timerEl = root.querySelector('[data-quiz-timer]');
     const prevBtn = root.querySelector('[data-quiz-prev]');
     const nextBtn = root.querySelector('[data-quiz-next]');
+    const agreeRulesCheckbox = root.querySelector('[data-quiz-agree-rules]');
+    const startButton = root.querySelector('[data-quiz-start]');
+    const watermarkLayer = root.querySelector('[data-quiz-watermark]');
+    const watermarkPattern = root.querySelector('[data-quiz-watermark-pattern]');
+    const offlineAlert = root.querySelector('[data-quiz-offline-alert]');
 
     let currentIndex = 0;
-    const answers = {};
+    const answers = quiz.saved_answers && typeof quiz.saved_answers === 'object' ? { ...quiz.saved_answers } : {};
     let timerId = null;
+    let autoSaveTimer = null;
     let remainingSeconds = quiz.remaining_seconds ?? (quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : null);
+    let isQuizActive = false;
+    let isTerminated = false;
+
+    // Checkbox đồng ý quy định
+    if (agreeRulesCheckbox && startButton) {
+        agreeRulesCheckbox.addEventListener('change', () => {
+            startButton.disabled = !agreeRulesCheckbox.checked;
+        });
+    }
+
+    // Khởi tạo Watermark động
+    const initWatermark = () => {
+        if (!watermarkLayer || !watermarkPattern) return;
+        const user = quiz.user_info || {};
+        const userName = user.name || 'Học viên';
+        const userEmail = user.email || (user.id ? `ID: ${user.id}` : '');
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.toLocaleDateString('vi-VN')}`;
+        const stamp = `${userName} • ${userEmail} • ${timeStr} • Quiz #${quiz.id}`;
+
+        let items = '';
+        for (let i = 0; i < 24; i++) {
+            items += `<span class="inline-block m-4 select-none opacity-60">${escapeHtml(stamp)}</span>`;
+        }
+        watermarkPattern.innerHTML = items;
+        watermarkLayer.hidden = false;
+    };
+
+    const formatPayloadAnswers = () => {
+        const payloadAnswers = {};
+        Object.entries(answers).forEach(([questionId, ids]) => {
+            const question = quiz.questions.find((q) => String(q.id) === String(questionId));
+            payloadAnswers[questionId] = question?.type === 'multiple' ? ids : (Array.isArray(ids) ? ids[0] : ids);
+        });
+        return payloadAnswers;
+    };
+
+    // Tự động lưu đáp án với Debounce
+    const autoSave = (delay = 400) => {
+        if (!quiz.attempt_id || !isQuizActive || !quiz.save_progress_url) return;
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+
+        autoSaveTimer = setTimeout(async () => {
+            try {
+                const payload = {
+                    attempt_id: quiz.attempt_id,
+                    answers: formatPayloadAnswers(),
+                    remaining_seconds: remainingSeconds,
+                };
+                sessionStorage.setItem(`quiz_answers_${quiz.attempt_id}`, JSON.stringify(payload.answers));
+
+                await fetch(quiz.save_progress_url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                    },
+                    body: JSON.stringify(payload),
+                });
+            } catch (err) {
+                // Tạm thời giữ trong sessionStorage nếu mất mạng
+            }
+        }, delay);
+    };
 
     const renderQuestion = () => {
         const question = quiz.questions[currentIndex];
         const isMultiple = question.type === 'multiple';
-        const selected = answers[question.id] || [];
+        const rawSelected = answers[question.id] || [];
+        const selected = Array.isArray(rawSelected) ? rawSelected : [rawSelected];
 
         progressLabel.textContent = `Câu ${currentIndex + 1} / ${quiz.questions.length}`;
         progressBar.style.width = `${((currentIndex + 1) / quiz.questions.length) * 100}%`;
         prevBtn.disabled = currentIndex === 0;
-        // Always re-enable nextBtn when rendering a question (prevents it getting stuck disabled)
         nextBtn.disabled = false;
         nextBtn.textContent = currentIndex === quiz.questions.length - 1 ? 'Nộp bài' : 'Câu tiếp theo';
 
         questionContainer.innerHTML = `
-            <div class="rounded border border-white/10 bg-white/5 p-5">
+            <div class="rounded border border-white/10 bg-white/5 p-5 relative z-20">
                 <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">${question.form_type || question.type}</p>
                 <h3 class="mt-2 text-lg font-bold"><span data-math-content>${escapeHtml(question.question)}</span></h3>
                 <p class="mt-1 text-xs text-white/60">${question.points} điểm</p>
                 ${question.is_excluded ? '<div role="status" class="mt-4 rounded border border-amber-300/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100">Câu hỏi này đã bị hủy và sẽ không được tính điểm.</div>' : ''}
                 <div class="mt-4 space-y-2">
                     ${question.options.map((option) => {
-                        const checked = selected.includes(option.id);
+                        const checked = selected.map(Number).includes(Number(option.id));
                         const inputType = isMultiple ? 'checkbox' : 'radio';
                         const name = isMultiple ? `q_${question.id}[]` : `q_${question.id}`;
                         return `
-                            <label class="flex cursor-pointer items-start gap-3 rounded border border-white/10 p-3 hover:bg-white/5">
+                            <label class="flex cursor-pointer items-start gap-3 rounded border border-white/10 p-3 hover:bg-white/5 transition">
                                 <input type="${inputType}" name="${name}" value="${option.id}" ${checked ? 'checked' : ''} class="mt-1" data-option-input data-question-id="${question.id}">
                                 <span class="text-sm leading-6" data-math-content>${escapeHtml(option.text)}</span>
                             </label>
@@ -539,6 +615,8 @@ function initQuizPlayer() {
                 } else {
                     answers[qid] = [Number(input.value)];
                 }
+
+                autoSave(300);
             });
         });
     };
@@ -548,7 +626,7 @@ function initQuizPlayer() {
         timerEl.hidden = false;
         timerEl.textContent = formatTime(remainingSeconds);
         if (remainingSeconds <= 0) {
-            submitQuiz(true);
+            terminateAttempt('time_expired');
             return;
         }
 
@@ -557,26 +635,179 @@ function initQuizPlayer() {
             timerEl.textContent = formatTime(remainingSeconds);
             if (remainingSeconds <= 0) {
                 window.clearInterval(timerId);
-                submitQuiz(true);
+                terminateAttempt('time_expired');
             }
         }, 1000);
     };
 
+    // Hủy lượt làm bài do vi phạm (Terminated)
+    const terminateAttempt = (reason = 'tab_switch') => {
+        if (!isQuizActive || isTerminated) return;
+        isTerminated = true;
+        isQuizActive = false;
+
+        if (timerId) window.clearInterval(timerId);
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            try {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            } catch (e) {}
+        }
+
+        // Ẩn vùng làm bài và hiển thị màn hình thông báo vi phạm ngay lập tức
+        active.hidden = true;
+        intro.hidden = true;
+        result.hidden = true;
+        if (terminatedEl) terminatedEl.hidden = false;
+
+        const reasonLabels = {
+            tab_switch: 'Chuyển sang tab hoặc ứng dụng khác trong quá trình làm bài.',
+            window_blur: 'Màn hình làm bài bị mất tiêu điểm (mất focus).',
+            fullscreen_exit: 'Thoát khỏi chế độ toàn màn hình (Fullscreen).',
+            page_exit: 'Rời khỏi trang làm bài.',
+            time_expired: 'Hết thời gian làm bài kiểm tra.',
+        };
+
+        if (terminatedMsg) {
+            terminatedMsg.textContent = `Hệ thống phát hiện vi phạm: ${reasonLabels[reason] || 'Không tuân thủ quy định làm bài'}. Theo quy định, lần làm bài hiện tại đã bị kết thúc và ghi nhận kết quả.`;
+        }
+
+        const payload = {
+            attempt_id: quiz.attempt_id,
+            reason: reason,
+            answers: formatPayloadAnswers(),
+            remaining_seconds: remainingSeconds,
+        };
+
+        const endpoint = quiz.terminate_url;
+        if (!endpoint) return;
+
+        // Ưu tiên dùng fetch với keepalive hoặc sendBeacon để gửi chắc chắn
+        try {
+            fetch(endpoint, {
+                method: 'POST',
+                keepalive: true,
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify(payload),
+            })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data && data.success) {
+                        const remaining = data.remaining_attempts;
+                        if (terminatedAttempts) {
+                            terminatedAttempts.textContent = remaining !== null
+                                ? `Bạn còn ${remaining}/${quiz.max_attempts ?? 3} lần làm bài.`
+                                : 'Bạn có thể làm lại bài kiểm tra.';
+                        }
+                        if (terminatedRetryBtn && (remaining === null || remaining > 0)) {
+                            terminatedRetryBtn.hidden = false;
+                        }
+                    }
+                })
+                .catch(() => {});
+        } catch (e) {
+            try {
+                const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+                navigator.sendBeacon(endpoint, blob);
+            } catch (err) {}
+        }
+    };
+
+    // Thiết lập các cơ chế giám sát vi phạm
+    const setupProctoring = () => {
+        // 1. Chống chụp màn hình / in trang (Ctrl+P, Ctrl+S)
+        document.addEventListener('keydown', (e) => {
+            if (!isQuizActive) return;
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+                e.preventDefault();
+                showToast('Thao tác này bị vô hiệu hóa trong khi làm bài kiểm tra.', 'warning');
+            }
+        });
+
+        // 2. Chặn context menu
+        root.addEventListener('contextmenu', (e) => {
+            if (isQuizActive) e.preventDefault();
+        });
+
+        // 3. Giám sát Chuyển Tab (visibilitychange)
+        document.addEventListener('visibilitychange', () => {
+            if (isQuizActive && document.visibilityState === 'hidden') {
+                terminateAttempt('tab_switch');
+            }
+        });
+
+        // 4. Giám sát Rời màn hình / Window Blur
+        window.addEventListener('blur', () => {
+            if (isQuizActive) {
+                terminateAttempt('window_blur');
+            }
+        });
+
+        // 5. Giám sát Pagehide
+        window.addEventListener('pagehide', () => {
+            if (isQuizActive) {
+                terminateAttempt('page_exit');
+            }
+        });
+
+        // 6. Giám sát Thoát Fullscreen
+        const handleFullscreenChange = () => {
+            const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (isQuizActive && !isFull) {
+                terminateAttempt('fullscreen_exit');
+            }
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+        // 7. Xử lý Mất mạng tạm thời
+        window.addEventListener('offline', () => {
+            if (offlineAlert) offlineAlert.classList.remove('hidden');
+        });
+        window.addEventListener('online', () => {
+            if (offlineAlert) offlineAlert.classList.add('hidden');
+            if (isQuizActive) autoSave(0);
+        });
+    };
+
     const activateQuiz = () => {
         intro.hidden = true;
+        if (terminatedEl) terminatedEl.hidden = true;
+        result.hidden = true;
         active.hidden = false;
         currentIndex = 0;
+        isQuizActive = true;
+        isTerminated = false;
+
+        initWatermark();
         renderQuestion();
         startTimer();
     };
 
     const startQuiz = async () => {
+        // Yêu cầu Fullscreen trước khi bắt đầu
+        try {
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+                await document.documentElement.webkitRequestFullscreen();
+            }
+        } catch (err) {
+            showToast('Vui lòng cho phép chế độ toàn màn hình để bắt đầu bài kiểm tra.', 'warning');
+        }
+
         if (quiz.attempt_id) {
             activateQuiz();
             return;
         }
 
-        const startButton = root.querySelector('[data-quiz-start]');
         if (!quiz.start_url || !startButton) return;
         startButton.disabled = true;
         try {
@@ -586,11 +817,11 @@ function initQuizPlayer() {
                 headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
             });
             const data = await response.json();
-            if (!response.ok || !data.success) throw createUserFacingError(data.message || 'Khong the bat dau quiz.');
+            if (!response.ok || !data.success) throw createUserFacingError(data.message || 'Không thể bắt đầu quiz.');
             window.location.reload();
         } catch (error) {
             startButton.disabled = false;
-            showToast(getUserFacingErrorMessage(error, 'Khong the bat dau quiz.'), 'error');
+            showToast(getUserFacingErrorMessage(error, 'Không thể bắt đầu quiz.'), 'error');
         }
     };
 
@@ -601,17 +832,25 @@ function initQuizPlayer() {
             if (!ok) return;
         }
 
-        // Disable both navigation buttons while submitting
+        isQuizActive = false;
         nextBtn.disabled = true;
         nextBtn.textContent = 'Đang nộp bài...';
         prevBtn.disabled = true;
         if (timerId) window.clearInterval(timerId);
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
 
-        const payload = { attempt_id: quiz.attempt_id, answers: {} };
-        Object.entries(answers).forEach(([questionId, ids]) => {
-            const question = quiz.questions.find((q) => String(q.id) === String(questionId));
-            payload.answers[questionId] = question?.type === 'multiple' ? ids : ids[0];
-        });
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            try {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            } catch (e) {}
+        }
+
+        const payload = {
+            attempt_id: quiz.attempt_id,
+            answers: formatPayloadAnswers(),
+            remaining_seconds: remainingSeconds,
+        };
 
         try {
             const response = await fetch(quiz.submit_url, {
@@ -638,7 +877,6 @@ function initQuizPlayer() {
                 updateHeaderProgress(data.course_progress);
             }
         } catch (error) {
-            // Restore both buttons so user can retry or navigate
             nextBtn.disabled = false;
             nextBtn.textContent = 'Nộp bài';
             prevBtn.disabled = currentIndex === 0;
@@ -676,9 +914,15 @@ function initQuizPlayer() {
         result.querySelector('[data-quiz-retry]')?.addEventListener('click', () => window.location.reload());
     };
 
-    root.querySelector('[data-quiz-start]')?.addEventListener('click', startQuiz);
+    // Khởi tạo listeners
+    setupProctoring();
 
-    if (quiz.attempt_id) startQuiz();
+    startButton?.addEventListener('click', startQuiz);
+    terminatedRetryBtn?.addEventListener('click', () => window.location.reload());
+
+    if (quiz.attempt_id) {
+        startQuiz();
+    }
 
     prevBtn?.addEventListener('click', () => {
         if (currentIndex > 0) {

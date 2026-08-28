@@ -65,7 +65,14 @@ class ConvertVideoToHLS implements ShouldQueue
 
         try {
             // ─── [BƯỚC 2] DOWNLOAD ORIGINAL ───
-            if ($hasS3Original && Storage::disk('s3')->exists($this->lesson->original_video_key)) {
+            if ($hasS3Original) {
+                if (! Storage::disk('s3')->exists($this->lesson->original_video_key)) {
+                    Log::warning("[ConvertVideoToHLS] S3 file not ready yet for Lesson {$lessonId}: {$this->lesson->original_video_key}. Waiting for upload completion.");
+                    $this->lesson->update(['processing_status' => 'pending']);
+
+                    return;
+                }
+
                 $ext = pathinfo($this->lesson->original_video_key, PATHINFO_EXTENSION) ?: 'mp4';
                 $localInputPath = $tmpDir.'/source_video.'.$ext;
 
