@@ -6,8 +6,7 @@ use App\Models\Lesson;
 use Aws\Command;
 use Aws\S3\S3Client;
 use Aws\S3\Transfer;
-use FFMpeg\FFMpeg;
-use FFMpeg\Format\Video\X264;
+use FFMpeg\FFProbe;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,6 +17,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 use Throwable;
 
 class ConvertVideoToHLS implements ShouldQueue
@@ -117,18 +117,7 @@ class ConvertVideoToHLS implements ShouldQueue
                 'threads' => $ffmpegConfig['ffmpeg.threads'],
             ]);
 
-            $ffmpeg = FFMpeg::create($ffmpegConfig);
-            $video = $ffmpeg->open($localInputPath);
-
-            $format = new X264('aac', 'libx264');
-            $format->setPasses(1);
-            $format->setAdditionalParameters([
-                '-hls_time', '10',
-                '-hls_list_size', '0',
-                '-f', 'hls',
-            ]);
-
-            $video->save($format, $playlistPath);
+            $this->convertToHls($ffmpegConfig, $localInputPath, $playlistPath);
 
             // Tạo master.m3u8
             $masterContent = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720\nplaylist.m3u8\n";
@@ -209,14 +198,14 @@ class ConvertVideoToHLS implements ShouldQueue
 
             // Trích xuất chính xác thời lượng video
             try {
-                $ffprobe = \FFMpeg\FFProbe::create($ffmpegConfig);
+                $ffprobe = FFProbe::create($ffmpegConfig);
                 $extractedDuration = (int) round((float) $ffprobe->format($localInputPath)->get('duration'));
                 if ($extractedDuration > 0) {
                     $updateData['duration_seconds'] = $extractedDuration;
                     $updateData['duration'] = $extractedDuration;
                 }
-            } catch (\Throwable $probeEx) {
-                Log::warning("[ConvertVideoToHLS] Could not probe video duration: " . $probeEx->getMessage());
+            } catch (Throwable $probeEx) {
+                Log::warning('[ConvertVideoToHLS] Could not probe video duration: '.$probeEx->getMessage());
             }
 
             if ($useS3) {
@@ -265,6 +254,39 @@ class ConvertVideoToHLS implements ShouldQueue
     /**
      * Tự động phát hiện đường dẫn binary FFmpeg & FFprobe
      */
+    /**
+     * @param  array<string, mixed>  $ffmpegConfig
+     */
+    private function convertToHls(array $ffmpegConfig, string $inputPath, string $playlistPath): void
+    {
+        $process = new Process([
+            (string) $ffmpegConfig['ffmpeg.binaries'],
+            '-hide_banner',
+            '-nostdin',
+            '-y',
+            '-i', $inputPath,
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
+            '-hls_time', '10',
+            '-hls_list_size', '0',
+            '-f', 'hls',
+            $playlistPath,
+        ]);
+        $process->setTimeout((float) $ffmpegConfig['timeout']);
+
+        $errorTail = '';
+        $process->run(function (string $type, string $buffer) use (&$errorTail): void {
+            if ($type === Process::ERR) {
+                $errorTail = substr($errorTail.$buffer, -4000);
+            }
+        });
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('FFmpeg conversion failed: '.trim($errorTail));
+        }
+    }
+
     private function getFfmpegConfig(): array
     {
         $ffmpegBin = env('FFMPEG_BINARIES') ?: env('FFMPEG_BIN');
