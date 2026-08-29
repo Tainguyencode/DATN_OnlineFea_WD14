@@ -1,6 +1,9 @@
 @props([
     'course',
     'favorited' => null,
+    'showActions' => false,
+    'cartCourseIds' => null,
+    'enrolledCourseIds' => null,
 ])
 
 @php
@@ -22,15 +25,20 @@
 
     $isEnrolled = false;
     if (auth()->check() && auth()->user()->isStudent()) {
-        static $userEnrollments = null;
-        if ($userEnrollments === null) {
-            $userEnrollments = \App\Models\Enrollment::where('user_id', auth()->id())
-                ->whereIn('status', ['active', 'completed'])
-                ->pluck('course_id')
-                ->toArray();
+        if ($enrolledCourseIds === null) {
+            static $userEnrollments = null;
+            if ($userEnrollments === null) {
+                $userEnrollments = \App\Models\Enrollment::where('user_id', auth()->id())
+                    ->whereIn('status', ['active', 'completed'])
+                    ->pluck('course_id')
+                    ->toArray();
+            }
+            $enrolledCourseIds = $userEnrollments;
         }
-        $isEnrolled = in_array($course->id, $userEnrollments);
+        $isEnrolled = in_array((int) $course->id, array_map('intval', (array) $enrolledCourseIds), true);
     }
+    $isInCart = $cartCourseIds !== null
+        && in_array((int) $course->id, array_map('intval', (array) $cartCourseIds), true);
 @endphp
 
 <article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white transition-all duration-300 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 dark:border-slate-800/80 dark:bg-[#161615] dark:hover:border-indigo-500/50 dark:hover:shadow-none">
@@ -45,7 +53,9 @@
             @endif
         </a>
 
-        <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-20" />
+        @unless($showActions)
+            <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-2 top-2 z-20" />
+        @endunless
 
         @if($course->is_featured)
             <span class="absolute left-2 top-2 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Best Seller</span>
@@ -114,5 +124,49 @@
         <a href="{{ route('courses.show', $course->slug) }}" class="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200">
             Xem chi tiết
         </a>
+
+        @if($showActions)
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                @if($isEnrolled)
+                    <a href="{{ route('courses.show', $course->slug) }}" class="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white transition hover:bg-emerald-700">
+                        Vào học
+                    </a>
+                @elseif((float) $price <= 0)
+                    <form method="POST" action="{{ route('courses.enroll', $course) }}">
+                        @csrf
+                        <button type="submit" class="inline-flex h-10 w-full items-center justify-center rounded-xl bg-indigo-600 px-3 text-sm font-bold text-white transition hover:bg-indigo-700">
+                            Đăng ký học miễn phí
+                        </button>
+                    </form>
+                @else
+                    <form method="POST" action="{{ route('student.cart.buy_now', $course) }}">
+                        @csrf
+                        <button type="submit" class="inline-flex h-10 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white transition hover:bg-emerald-700">
+                            Mua ngay
+                        </button>
+                    </form>
+                    @if($isInCart)
+                        <a href="{{ route('student.cart') }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-center text-sm font-bold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">
+                            Đã có trong giỏ
+                        </a>
+                    @else
+                        <form method="POST" action="{{ route('student.cart.add', $course) }}">
+                            @csrf
+                            <button type="submit" class="inline-flex h-10 w-full items-center justify-center rounded-xl border border-indigo-600 px-3 text-sm font-bold text-indigo-600 transition hover:bg-indigo-50 dark:border-indigo-400 dark:text-indigo-300 dark:hover:bg-indigo-950/40">
+                                Thêm vào giỏ
+                            </button>
+                        </form>
+                    @endif
+                @endif
+
+                <form method="POST" action="{{ route('courses.favorite.destroy', $course) }}" class="sm:col-span-2">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="inline-flex h-10 w-full items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-3 text-sm font-bold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20">
+                        Bỏ yêu thích
+                    </button>
+                </form>
+            </div>
+        @endif
     </div>
 </article>
