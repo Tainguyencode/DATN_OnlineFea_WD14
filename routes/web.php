@@ -415,6 +415,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
             Route::put('/courses/{course}/content-updates/{contentUpdate}', [InstructorCurriculumController::class, 'updateContentUpdate'])->name('courses.content-updates.update');
             Route::delete('/courses/{course}/content-updates/{contentUpdate}', [InstructorCurriculumController::class, 'destroyContentUpdate'])->name('courses.content-updates.destroy');
+            Route::post('/courses/{course}/content-updates/{contentUpdate}/revise', [InstructorCurriculumController::class, 'reviseRejectedContentUpdate'])->name('courses.content-updates.revise');
             Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
             Route::get('/quizzes/questions/sample-template', [InstructorQuizController::class, 'downloadSampleTemplate'])->name('quizzes.questions.sample-template');
             Route::post('/quizzes/{quiz}/import-questions', [InstructorQuizController::class, 'importQuestions'])->name('quizzes.questions.import');
@@ -504,6 +505,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/course-reviews/{course}/approve', [CourseReviewController::class, 'approve'])->name('course-reviews.approve');
     Route::post('/course-reviews/{course}/reject', [CourseReviewController::class, 'reject'])->name('course-reviews.reject');
     Route::get('/content-updates', [ContentUpdateController::class, 'index'])->name('content-updates.index');
+    Route::get('/content-updates/{contentUpdate}', [ContentUpdateController::class, 'show'])->name('content-updates.show');
     Route::post('/content-updates/{contentUpdate}/approve', [ContentUpdateController::class, 'approve'])->name('content-updates.approve');
     Route::post('/content-updates/{contentUpdate}/reject', [ContentUpdateController::class, 'reject'])->name('content-updates.reject');
     Route::get('/quiz-invalidations', [QuizQuestionInvalidationController::class, 'index'])->name('quiz-invalidations.index');

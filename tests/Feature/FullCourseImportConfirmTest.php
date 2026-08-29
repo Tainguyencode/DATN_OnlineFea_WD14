@@ -66,8 +66,12 @@ class FullCourseImportConfirmTest extends TestCase
             ->assertJsonPath('idempotent', false)
             ->assertJsonPath('batch.status', FullCourseImportBatch::STATUS_COMPLETED);
 
-        $course = Course::firstOrFail();
-        $response->assertJsonPath('redirect_url', route('instructor.courses.curriculum', $course));
+        $courseId = $response->json('batch.result.course_id');
+        $this->assertIsInt($courseId);
+        $response->assertJsonPath('redirect_url', route('instructor.courses.curriculum', $courseId));
+
+        $course = Course::query()->whereKey($courseId)->firstOrFail();
+        $this->assertSame(1, Course::query()->whereKey($courseId)->count());
         $this->assertSame('Khóa học xác nhận v3', $course->title);
         $this->assertSame($category->id, $course->category_id);
         $this->assertSame($instructor->id, $course->instructor_id);
@@ -120,8 +124,9 @@ class FullCourseImportConfirmTest extends TestCase
         $this->assertSame($draft->id, $batch->result_payload['quizzes']['QUIZ_01']['quiz_version_id']);
         $this->assertCount(5, $batch->result_payload['questions']);
 
-        $this->actingAs($instructor)->postJson(route('instructor.courses.full-import.confirm'), ['batch_token' => $batch->token])
-            ->assertOk()->assertJsonPath('idempotent', true)->assertJsonPath('batch.result.course_id', $course->id);
+        $secondResponse = $this->actingAs($instructor)->postJson(route('instructor.courses.full-import.confirm'), ['batch_token' => $batch->token]);
+        $secondResponse->assertOk()->assertJsonPath('idempotent', true);
+        $this->assertSame($courseId, $secondResponse->json('batch.result.course_id'));
         $this->assertSame(1, Course::count());
         $this->assertSame(1, Quiz::count());
     }

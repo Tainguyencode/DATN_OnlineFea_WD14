@@ -124,6 +124,47 @@ class ContentUpdateService
     }
 
     /**
+     * Creates (or reuses) the one active revision for a rejected proposal.
+     * The rejected record remains immutable audit history.
+     */
+    public function createRevisionFromRejected(ContentUpdate $rejected, User $actor): ContentUpdate
+    {
+        return DB::transaction(function () use ($rejected, $actor): ContentUpdate {
+            $rejected = ContentUpdate::query()->lockForUpdate()->findOrFail($rejected->id);
+            if (! $rejected->isRejected() || (int) $rejected->created_by !== (int) $actor->id) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Chỉ tác giả mới có thể tạo bản chỉnh sửa từ thay đổi đã bị từ chối.',
+                ]);
+            }
+
+            $existing = ContentUpdate::query()
+                ->where('course_id', $rejected->course_id)
+                ->where('type', $rejected->type)
+                ->where('action', $rejected->action)
+                ->where('entity_id', $rejected->entity_id)
+                ->where('created_by', $actor->id)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            return ContentUpdate::create([
+                'type' => $rejected->type,
+                'action' => $rejected->action,
+                'course_id' => $rejected->course_id,
+                'entity_id' => $rejected->entity_id,
+                'payload' => $rejected->payload ?? [],
+                'status' => ContentUpdate::STATUS_DRAFT,
+                'created_by' => $actor->id,
+            ]);
+        });
+    }
+
+    /**
      * Phê duyệt một ContentUpdate và áp dụng dữ liệu vào DB thật.
      * BẮT BUỘC CHẠY TRONG DB::transaction()
      */

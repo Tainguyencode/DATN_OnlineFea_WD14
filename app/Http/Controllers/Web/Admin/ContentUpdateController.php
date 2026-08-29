@@ -6,6 +6,7 @@ use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Models\ContentUpdate;
 use App\Models\QuizVersion;
+use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ use Illuminate\View\View;
 class ContentUpdateController extends Controller
 {
     public function __construct(
-        protected ContentUpdateService $contentUpdateService
+        protected ContentUpdateService $contentUpdateService,
+        protected ContentUpdateDiffService $contentUpdateDiffService,
     ) {}
 
     public function index(Request $request): View
@@ -58,6 +60,9 @@ class ContentUpdateController extends Controller
             ->get()
             ->keyBy('id');
 
+        $updateSummaries = $updates->getCollection()
+            ->mapWithKeys(fn (ContentUpdate $update) => [$update->id => $this->contentUpdateDiffService->summary($update)]);
+
         return view('admin.content-updates.index', compact(
             'updates',
             'status',
@@ -66,7 +71,18 @@ class ContentUpdateController extends Controller
             'statusOptions',
             'typeOptions',
             'quizCandidates',
+            'updateSummaries',
         ));
+    }
+
+    public function show(ContentUpdate $contentUpdate): View
+    {
+        $contentUpdate->load(['course.category', 'creator:id,name,email', 'reviewer:id,name,email']);
+
+        return view('admin.content-updates.show', [
+            'contentUpdate' => $contentUpdate,
+            'diff' => $this->contentUpdateDiffService->build($contentUpdate),
+        ]);
     }
 
     public function approve(ContentUpdate $contentUpdate): RedirectResponse

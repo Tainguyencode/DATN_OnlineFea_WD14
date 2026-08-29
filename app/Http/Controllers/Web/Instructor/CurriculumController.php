@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class CurriculumController extends Controller
@@ -646,6 +647,20 @@ class CurriculumController extends Controller
         }
 
         return back()->with('success', 'Đã xóa bản cập nhật.');
+    }
+
+    public function reviseRejectedContentUpdate(Course $course, ContentUpdate $contentUpdate): RedirectResponse
+    {
+        $this->authorizeCourse($course);
+        abort_unless((int) $contentUpdate->course_id === (int) $course->id, 404);
+
+        try {
+            $revision = app(ContentUpdateService::class)->createRevisionFromRejected($contentUpdate, auth()->user());
+        } catch (ValidationException $exception) {
+            return back()->withErrors(['content_update' => $exception->validator->errors()->first()]);
+        }
+
+        return back()->with('success', "Đã tạo bản chỉnh sửa mới #{$revision->id}. Bạn có thể cập nhật bản nháp trước khi gửi duyệt.");
     }
 
     private function authorizeCourse(Course $course): void
