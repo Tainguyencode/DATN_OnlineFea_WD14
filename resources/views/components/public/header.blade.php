@@ -39,8 +39,8 @@
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
             </button>
 
-            <a href="{{ route('home') }}" class="flex h-14 shrink-0 items-center" aria-label="FEA Learning - Trang chủ">
-                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-12 w-auto object-contain">
+            <a href="{{ route('home') }}" class="flex h-14 w-28 shrink-0 items-center justify-center overflow-hidden" aria-label="FEA Learning - Trang chủ">
+                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-full w-full scale-[1.9] object-contain">
             </a>
 
             <nav data-primary-navigation class="hidden h-[72px] items-center gap-1 xl:flex" aria-label="Điều hướng chính">
