@@ -267,11 +267,17 @@ class MiscController extends Controller
         string $message,
         int $status = 200
     ): JsonResponse|RedirectResponse {
-        if ($request->expectsJson() || $request->wantsJson()) {
+        $count = Wishlist::query()
+            ->where('user_id', $request->user()?->id)
+            ->whereHas('course', fn ($query) => $query->published())
+            ->count();
+
+        if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => $status < 400,
                 'favorited' => $favorited,
                 'message' => $message,
+                'count' => $count,
             ], $status);
         }
 

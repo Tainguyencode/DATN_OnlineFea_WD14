@@ -41,11 +41,11 @@ class InstructorController extends Controller
                 'instructorCertificates as approved_certificates_count' => fn ($q) => $q->where('status', 'approved')->whereIn('document_type', ['certificate', 'degree', 'portfolio']),
             ])
             ->with([
-                'instructorProfile:id,user_id,headline,bio,specialties',
+                'instructorProfile:id,user_id,position,specialty,teaching_field,bio,organization',
                 'instructorCertificates' => fn ($q) => $q->where('status', 'approved')
                     ->whereIn('document_type', ['certificate', 'degree', 'portfolio'])
                     ->orderByDesc('created_at')
-                    ->select(['id', 'user_id', 'name', 'document_type', 'status', 'issued_at', 'institution', 'created_at']),
+                    ->select(['id', 'user_id', 'title', 'original_name', 'document_type', 'status', 'created_at']),
                 'courses' => fn ($q) => $q->published()
                     ->with('category:id,name,slug,parent_id')
                     ->select(['id', 'instructor_id', 'category_id', 'rating_avg', 'rating_count']),
@@ -57,9 +57,11 @@ class InstructorController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhereHas('instructorProfile', function ($pq) use ($search) {
-                        $pq->where('headline', 'like', "%{$search}%")
+                        $pq->where('position', 'like', "%{$search}%")
+                            ->orWhere('specialty', 'like', "%{$search}%")
+                            ->orWhere('teaching_field', 'like', "%{$search}%")
                             ->orWhere('bio', 'like', "%{$search}%")
-                            ->orWhere('specialties', 'like', "%{$search}%");
+                            ->orWhere('organization', 'like', "%{$search}%");
                     });
             });
         }
@@ -132,15 +134,14 @@ class InstructorController extends Controller
             404
         );
 
-        $user->loadMissing(['instructorProfile', 'teachingCategories']);
+        $user->loadMissing(['instructorProfile.teachingCategories']);
 
         // ── Load chứng chỉ công khai đã được admin duyệt (STU-BE-10) ─────────
         $approvedCertificates = $user->instructorCertificates()
             ->where('status', 'approved')
             ->whereIn('document_type', ['certificate', 'degree', 'portfolio'])
-            ->orderByDesc('issued_at')
             ->orderByDesc('created_at')
-            ->get(['id', 'user_id', 'name', 'document_type', 'status', 'issued_at', 'institution', 'created_at']);
+            ->get(['id', 'user_id', 'title', 'original_name', 'document_type', 'status', 'created_at']);
 
         // ── Load courses của instructor ───────────────────────────────────────
         $coursesQuery = Course::published()

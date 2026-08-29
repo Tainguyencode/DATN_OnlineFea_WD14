@@ -603,8 +603,32 @@ class CourseController extends Controller
             ->when(is_numeric($rating), fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
             ->orderByDesc('published_at')
             ->orderByDesc('created_at')
-            ->paginate(9)
+            ->paginate(12)
             ->withQueryString();
+
+        $showCourseOverview = ! $selectedCategory
+            && ! $request->hasAny(['search', 'category', 'level', 'pricing', 'rating', 'view']);
+        $allCoursesPreview = collect();
+        $paidCoursesPreview = collect();
+        $freeCoursesPreview = collect();
+
+        if ($showCourseOverview) {
+            $previewQuery = $this->withFavoriteState($this->publishedCoursesQuery()
+                ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
+                ->withCount(['lessons', 'courseSections']))
+                ->orderByDesc('published_at')
+                ->orderByDesc('created_at');
+
+            $allCoursesPreview = (clone $previewQuery)->limit(4)->get();
+            $paidCoursesPreview = (clone $previewQuery)
+                ->whereRaw('COALESCE(discount_price, sale_price, price) > 0')
+                ->limit(4)
+                ->get();
+            $freeCoursesPreview = (clone $previewQuery)
+                ->whereRaw('COALESCE(discount_price, sale_price, price) <= 0')
+                ->limit(4)
+                ->get();
+        }
 
         $categories = Category::query()
             ->active()
@@ -636,7 +660,11 @@ class CourseController extends Controller
             'selectedCategory',
             'level',
             'pricing',
-            'rating'
+            'rating',
+            'showCourseOverview',
+            'allCoursesPreview',
+            'paidCoursesPreview',
+            'freeCoursesPreview'
         ));
     }
 

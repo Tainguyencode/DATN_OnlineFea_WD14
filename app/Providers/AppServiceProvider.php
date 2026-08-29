@@ -67,7 +67,7 @@ class AppServiceProvider extends ServiceProvider
             // Test and fresh CLI contexts may not have a database driver ready yet.
         }
 
-        View::composer(['components.layouts.dashboard', 'components.public.header', 'student.dashboard.partials.header'], function ($view): void {
+        View::composer(['components.layouts.dashboard', 'components.public.header'], function ($view): void {
             if (! Auth::check()) {
                 $view->with([
                     'unreadNotificationCount' => 0,
@@ -84,10 +84,11 @@ class AppServiceProvider extends ServiceProvider
             $favoriteCourseCount = 0;
             $isStudentDashboardHeader = $view->getName() === 'components.public.header'
                 && (bool) ($view->getData()['studentDashboard'] ?? false);
+            $isStudentPublicHeader = $view->getName() === 'components.public.header' && $user->isStudent();
             $isHeaderLayout = in_array($view->getName(), ['components.layouts.dashboard', 'components.public.header'], true);
-            $needsCartCount = $isHeaderLayout || $view->getName() === 'student.dashboard.partials.header';
+            $needsCartCount = $isHeaderLayout;
             $studentCartCount = 0;
-            if ($isHeaderLayout && ! $isStudentDashboardHeader && $user->isStudent() && Schema::hasTable('wishlists') && Schema::hasTable('courses')) {
+            if ($isHeaderLayout && $user->isStudent() && Schema::hasTable('wishlists') && Schema::hasTable('courses')) {
                 $favoriteCourseCount = Wishlist::query()
                     ->where('user_id', $user->id)
                     ->whereHas('course', fn ($query) => $query->published())
@@ -106,12 +107,12 @@ class AppServiceProvider extends ServiceProvider
                     ->value('courses_count') ?? 0;
             }
 
-            if ($view->getName() === 'student.dashboard.partials.header' || $isStudentDashboardHeader) {
+            if ($isStudentPublicHeader || $isStudentDashboardHeader) {
                 $view->with([
                     'unreadNotificationCount' => 0,
                     'recentNotifications' => collect(),
                     'unreadStudyGroupCount' => 0,
-                    'favoriteCourseCount' => 0,
+                    'favoriteCourseCount' => $favoriteCourseCount,
                     'studentCartCount' => $studentCartCount,
                 ]);
 

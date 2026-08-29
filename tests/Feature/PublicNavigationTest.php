@@ -16,7 +16,13 @@ class PublicNavigationTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('data-public-header', false);
-        $response->assertSee('Khám phá');
+        $response->assertSee('data-header-left', false);
+        $response->assertSee('data-header-right', false);
+        $response->assertSee('data-primary-navigation', false);
+        $response->assertSee('Khóa học');
+        $response->assertSee('Xếp hạng');
+        $response->assertSee('Lộ trình');
+        $response->assertSee('Giảng viên');
         $response->assertSee('Đăng nhập');
         $response->assertDontSee('id="public-nav-learning"', false);
         $response->assertDontSee('/student/orders', false);
@@ -69,8 +75,10 @@ class PublicNavigationTest extends TestCase
         $response->assertSee('aria-expanded', false);
         $response->assertSee('x-transition:enter', false);
         $response->assertSee('opacity-0 -translate-y-2', false);
-        $response->assertSee('Học tập');
-        $response->assertSee('Voucher của tôi');
+        $response->assertSee('data-student-wishlist', false);
+        $response->assertSee('data-student-cart', false);
+        $response->assertSee('Tổng quan');
+        $response->assertSee('Bảo mật tài khoản');
     }
 
     public function test_instructor_dashboard_keeps_role_specific_sidebar_shell(): void
@@ -90,5 +98,33 @@ class PublicNavigationTest extends TestCase
         $response->assertDontSee('data-public-header', false);
         $response->assertSee('instructor-shell', false);
         $response->assertSee('Quản lý khóa học');
+    }
+
+    public function test_public_instructors_page_loads_and_searches_without_query_exception(): void
+    {
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'name' => 'Nguyễn Văn Giảng Viên',
+        ]);
+
+        \App\Models\InstructorProfile::create([
+            'user_id' => $instructor->id,
+            'position' => 'Senior Backend Developer',
+            'specialty' => 'Laravel & MySQL',
+            'teaching_field' => 'Công nghệ thông tin',
+            'bio' => 'Hơn 8 năm kinh nghiệm giảng dạy và phát triển web.',
+        ]);
+
+        $response = $this->get(route('instructors.index'));
+        $response->assertOk();
+        $response->assertSee('Nguyễn Văn Giảng Viên');
+        $response->assertSee('Senior Backend Developer');
+
+        $searchResponse = $this->get(route('instructors.index', ['search' => 'Backend']));
+        $searchResponse->assertOk();
+        $searchResponse->assertSee('Nguyễn Văn Giảng Viên');
     }
 }

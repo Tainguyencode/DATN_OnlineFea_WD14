@@ -1,9 +1,9 @@
 <x-student-layout title="Tổng quan">
-    <section class="mb-6 flex flex-col gap-5 rounded-2xl border border-blue-100 bg-gradient-to-r from-white to-blue-50 p-5 shadow-sm sm:flex-row sm:items-center sm:p-6 dark:border-blue-950 dark:from-slate-900 dark:to-blue-950/30">
-        <img src="{{ $user->avatarUrl() }}" alt="Ảnh đại diện của {{ $user->name }}" class="h-20 w-20 rounded-2xl object-cover ring-4 ring-white shadow-sm dark:ring-slate-800">
+    <section class="mb-5 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-gradient-to-r from-white to-blue-50 p-4 shadow-sm sm:flex-row sm:items-center sm:p-5 dark:border-blue-950 dark:from-slate-900 dark:to-blue-950/30">
+        <img src="{{ $user->avatarUrl() }}" alt="Ảnh đại diện của {{ $user->name }}" class="h-16 w-16 rounded-xl object-cover ring-4 ring-white shadow-sm dark:ring-slate-800">
         <div class="min-w-0 flex-1">
             <p class="text-sm font-semibold text-[#0056D2] dark:text-blue-300">Chào mừng bạn trở lại</p>
-            <h1 class="mt-1 truncate text-2xl font-extrabold text-slate-950 sm:text-3xl dark:text-white">Xin chào, {{ $user->name }}</h1>
+            <h1 class="mt-0.5 truncate text-2xl font-extrabold text-slate-950 dark:text-white">Xin chào, {{ $user->name }}</h1>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <span class="break-all">{{ $user->email }}</span>
                 <span aria-hidden="true">·</span>
@@ -13,7 +13,7 @@
                 </span>
             </div>
         </div>
-        <a href="{{ route('student.profile') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white px-4 text-sm font-bold text-[#0056D2] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300">Chỉnh sửa hồ sơ</a>
+        <a href="{{ route('student.profile') }}" class="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 text-sm font-bold text-[#0056D2] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300">Chỉnh sửa hồ sơ</a>
     </section>
 
     <section aria-labelledby="student-stats-title" class="mb-6">
