@@ -9,10 +9,14 @@ class FullCourseImportBatch extends Model
 {
     public const STATUS_PREVIEWED = 'previewed';
 
+    public const STATUS_PROCESSING = 'processing';
+
+    public const STATUS_COMPLETED = 'completed';
+
     protected $fillable = [
         'token', 'user_id', 'original_filename', 'file_sha256', 'canonical_payload',
         'validation_report', 'row_count', 'valid_count', 'warning_count', 'error_count',
-        'status', 'expires_at',
+        'status', 'expires_at', 'completed_at', 'result_payload',
     ];
 
     protected function casts(): array
@@ -25,6 +29,8 @@ class FullCourseImportBatch extends Model
             'warning_count' => 'integer',
             'error_count' => 'integer',
             'expires_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'result_payload' => 'array',
         ];
     }
 

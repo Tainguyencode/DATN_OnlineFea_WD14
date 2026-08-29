@@ -38,6 +38,7 @@ function initialise(root) {
     const tabs = root.querySelector('[data-full-course-tabs]');
     const panel = root.querySelector('[data-full-course-panel]');
     const issues = root.querySelector('[data-full-course-issues]');
+    const confirm = root.querySelector('[data-full-course-confirm]');
     let response = null;
 
     file?.addEventListener('change', () => {
@@ -76,7 +77,9 @@ function initialise(root) {
             response = data; preview.classList.remove('hidden');
             root.querySelector('[data-full-course-title]').textContent = data.course.title || 'Khóa học chưa có tiêu đề';
             root.querySelector('[data-full-course-meta]').textContent = `${data.course.category_slug || '—'} · ${data.course.level || '—'} · ${data.course.language || '—'}`;
-            root.querySelector('[data-full-course-confirm-state]').textContent = data.batch.can_confirm ? 'Dữ liệu hợp lệ, sẵn sàng cho Phase 4B.' : 'Cần xử lý lỗi trước khi có thể xác nhận.';
+            root.querySelector('[data-full-course-confirm-state]').textContent = data.batch.can_confirm ? 'Dữ liệu hợp lệ, sẵn sàng tạo khóa học nháp.' : 'Cần xử lý lỗi trước khi có thể xác nhận.';
+            confirm.hidden = !data.batch.can_confirm;
+            confirm.disabled = !data.batch.can_confirm;
             const summary = root.querySelector('[data-full-course-summary]'); summary.replaceChildren();
             Object.entries(data.summary).forEach(([key, value]) => { const card = element('div', 'rounded-lg bg-slate-50 p-3 dark:bg-slate-800'); card.append(element('dt', 'text-xs font-medium text-slate-500 dark:text-slate-400', key), element('dd', 'mt-1 text-lg font-bold text-slate-900 dark:text-white', value)); summary.append(card); });
             tabs.replaceChildren(); Object.keys(views).forEach((name) => { const button = element('button', '', name); button.type = 'button'; button.dataset.fullCourseTab = name; button.setAttribute('role', 'tab'); button.addEventListener('click', () => show(name)); tabs.append(button); });
@@ -87,6 +90,34 @@ function initialise(root) {
         } catch (error) {
             window.AppToast?.show({ type: 'error', message: error.message }); live.textContent = error.message;
         } finally { submit.disabled = false; submit.textContent = 'Xem trước'; }
+    });
+
+    confirm?.addEventListener('click', async () => {
+        if (!response?.batch?.can_confirm || !response?.batch?.token) return;
+        const originalLabel = confirm.textContent;
+        confirm.disabled = true;
+        confirm.textContent = 'Đang tạo khóa học…';
+        try {
+            const result = await fetch(form.dataset.confirmUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value,
+                },
+                body: JSON.stringify({ batch_token: response.batch.token }),
+            });
+            const data = await result.json();
+            if (!result.ok || !data.success) throw new Error(data.message || 'Không thể tạo khóa học.');
+            live.textContent = data.message;
+            window.AppToast?.show({ type: 'success', message: data.message });
+            window.location.assign(data.redirect_url);
+        } catch (error) {
+            window.AppToast?.show({ type: 'error', message: error.message });
+            live.textContent = error.message;
+            confirm.disabled = false;
+            confirm.textContent = originalLabel;
+        }
     });
 }
 

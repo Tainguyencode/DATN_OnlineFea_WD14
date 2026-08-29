@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\LessonImportException;
 use App\Models\Category;
 use App\Models\CourseSection;
 use App\Models\Lesson;
@@ -110,6 +111,73 @@ class FullCourseImportValidator
             'warning_count' => $summary['warnings'],
             'error_count' => $summary['errors'],
         ];
+    }
+
+    /**
+     * Rebuild the workbook-shaped data from a persisted preview and validate it
+     * again immediately before confirm writes.  This makes a browser payload
+     * irrelevant and catches stale categories or tampered batch rows.
+     *
+     * @return array<string, mixed>
+     */
+    public function validateCanonicalPayload(mixed $payload): array
+    {
+        if (! is_array($payload)
+            || ($payload['template_version'] ?? null) !== Schema::VERSION
+            || ($payload['schema'] ?? null) !== Schema::SCHEMA) {
+            throw $this->invalidCanonicalPayload();
+        }
+
+        $definitions = [
+            'course' => [Schema::COURSE_SHEET, Schema::COURSE_HEADERS, []],
+            'sections' => [Schema::SECTIONS_SHEET, Schema::SECTION_HEADERS, ['order']],
+            'lessons' => [Schema::LESSONS_SHEET, Schema::LESSON_HEADERS, ['duration', 'status', 'is_preview', 'relative_order', 'order']],
+            'quizzes' => [Schema::QUIZZES_SHEET, LessonImportWorkbookSchema::QUIZ_HEADERS, []],
+            'questions' => [Schema::QUIZ_QUESTIONS_SHEET, LessonImportWorkbookSchema::QUIZ_QUESTION_HEADERS, ['relative_order']],
+            'options' => [Schema::QUIZ_OPTIONS_SHEET, LessonImportWorkbookSchema::QUIZ_OPTION_HEADERS, ['relative_order']],
+        ];
+        $sheets = [];
+
+        foreach ($definitions as $key => [$sheet, $headers, $extra]) {
+            $items = $key === 'course' ? [$payload[$key] ?? null] : ($payload[$key] ?? null);
+            if (! is_array($items) || ($key !== 'course' && ! array_is_list($items))) {
+                throw $this->invalidCanonicalPayload();
+            }
+
+            $sheets[$sheet] = [];
+            foreach ($items as $row) {
+                if (! is_array($row) || ! isset($row['row_number']) || ! is_int($row['row_number']) || $row['row_number'] < 2) {
+                    throw $this->invalidCanonicalPayload();
+                }
+                if (array_diff(array_keys($row), array_merge(['row_number'], $headers, $extra)) !== []) {
+                    throw $this->invalidCanonicalPayload();
+                }
+
+                $values = [];
+                foreach ($headers as $header) {
+                    if (! array_key_exists($header, $row)) {
+                        throw $this->invalidCanonicalPayload();
+                    }
+                    $values[$header] = $row[$header];
+                }
+                $sheets[$sheet][] = ['row_number' => $row['row_number'], 'values' => $values];
+            }
+        }
+
+        $validated = $this->validate($sheets);
+        if ($validated['error_count'] > 0) {
+            throw $this->invalidCanonicalPayload();
+        }
+
+        return $validated;
+    }
+
+    private function invalidCanonicalPayload(): LessonImportException
+    {
+        return new LessonImportException(
+            'invalid_canonical_payload',
+            'Dữ liệu xem trước không còn hợp lệ. Vui lòng tải lại workbook và xem trước lại.',
+        );
     }
 
     /** @param array<int, array{row_number:int, values:array<string,mixed>}> $rows */

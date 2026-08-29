@@ -341,6 +341,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/courses/import', [FullCourseImportController::class, 'create'])->name('courses.full-import.create');
         Route::get('/courses/import/template', [FullCourseImportController::class, 'downloadTemplate'])->name('courses.full-import.template');
         Route::post('/courses/import/preview', [FullCourseImportController::class, 'preview'])->name('courses.full-import.preview');
+        Route::post('/courses/import/confirm', [FullCourseImportController::class, 'confirm'])->name('courses.full-import.confirm');
         Route::get('/courses/import/previews/{batch}', [FullCourseImportController::class, 'show'])->name('courses.full-import.show');
         Route::get('/courses/create', [InstructorCourseController::class, 'create'])->name('courses.create');
         Route::get('/courses/{course}/curriculum', [InstructorCurriculumController::class, 'index'])->name('courses.curriculum');
