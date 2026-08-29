@@ -13,6 +13,12 @@
         <div class="pointer-events-none absolute -top-40 right-0 h-96 w-96 rounded-full bg-indigo-600/10 blur-3xl"></div>
 
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="mb-4">
+                <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('learning-paths.index') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-indigo-300 hover:text-white cursor-pointer transition py-1">
+                    ← Quay lại
+                </button>
+            </div>
+
             {{-- Breadcrumb --}}
             <nav class="mb-5 flex items-center gap-2 text-xs font-semibold text-slate-400">
                 <a href="{{ route('home') }}" class="hover:text-white transition">Trang chủ</a>

@@ -1,6 +1,6 @@
 @props([
-    'title' => 'Student Dashboard',
-    'pageTitle' => 'Student Dashboard',
+    'title' => 'FEA Learning',
+    'pageTitle' => null,
     'breadcrumb' => null,
 ])
 
@@ -26,12 +26,23 @@
 
     <main class="flex-1">
         <div class="ui-container py-6 sm:py-8">
-            <div class="mb-6">
-                <h1 class="text-2xl font-extrabold leading-tight text-slate-950 dark:text-white sm:text-3xl">{{ $pageTitle }}</h1>
-                @if($breadcrumb)
-                    <p class="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{{ $breadcrumb }}</p>
-                @endif
+            <div class="mb-4">
+                <button type="button"
+                        onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('student.dashboard') }}'; }"
+                        class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 transition cursor-pointer py-1"
+                        aria-label="Quay lại">
+                    ← Quay lại
+                </button>
             </div>
+
+            @if($pageTitle)
+                <div class="mb-6">
+                    <h1 class="text-2xl font-extrabold leading-tight text-slate-950 dark:text-white sm:text-3xl">{{ $pageTitle }}</h1>
+                    @if($breadcrumb)
+                        <p class="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{{ $breadcrumb }}</p>
+                    @endif
+                </div>
+            @endif
 
             {{ $slot }}
         </div>

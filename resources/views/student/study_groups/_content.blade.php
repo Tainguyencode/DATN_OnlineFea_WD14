@@ -1,5 +1,11 @@
 <div class="ui-container py-8">
-    <div class="mx-auto max-w-7xl space-y-8">
+    <div class="mx-auto max-w-7xl space-y-6">
+        <div>
+            <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('student.dashboard') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 cursor-pointer transition py-1">
+                ← Quay lại
+            </button>
+        </div>
+
         {{-- Header area --}}
         <div>
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Nhóm học tập</h1>

@@ -1,4 +1,4 @@
-<x-student-layout title="Khóa học yêu thích" page-title="Khóa học yêu thích">
+<x-student-layout title="Khóa học yêu thích">
 <div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
         <h2 class="text-2xl font-extrabold tracking-tight text-slate-950">Khóa học yêu thích</h2>

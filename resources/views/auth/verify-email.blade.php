@@ -93,18 +93,18 @@
 
             <nav class="mt-6 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 @foreach([
-                    ['href' => '#overview', 'label' => 'Tổng quan'],
-                    ['href' => '#courses', 'label' => 'Khóa học'],
-                    ['href' => '#recently-viewed', 'label' => 'Đã xem gần đây'],
-                    ['href' => '#cart', 'label' => 'Giỏ hàng'],
-                    ['href' => '#wishlist', 'label' => 'Yêu thích'],
-                    ['href' => '#certificates', 'label' => 'Chứng chỉ'],
-                    ['href' => route('student.orders'), 'label' => 'Đơn hàng', 'external' => true],
-                    ['href' => route('student.vouchers.index'), 'label' => 'Kho Voucher', 'external' => true],
-                    ['href' => route('study-groups.index'), 'label' => 'Nhóm học tập', 'external' => true],
-                    ['href' => route('student.profile'), 'label' => 'Hồ sơ', 'external' => true],
+                    ['href' => route('student.dashboard'), 'label' => 'Tổng quan', 'active' => true],
+                    ['href' => route('student.courses'), 'label' => 'Khóa học'],
+                    ['href' => route('student.recently-viewed.index'), 'label' => 'Đã xem gần đây'],
+                    ['href' => route('student.cart'), 'label' => 'Giỏ hàng'],
+                    ['href' => route('favorites.index'), 'label' => 'Yêu thích'],
+                    ['href' => route('student.certificates'), 'label' => 'Chứng chỉ'],
+                    ['href' => route('student.orders'), 'label' => 'Đơn hàng'],
+                    ['href' => route('student.vouchers.index'), 'label' => 'Kho Voucher'],
+                    ['href' => route('study-groups.index'), 'label' => 'Nhóm học tập'],
+                    ['href' => route('student.profile'), 'label' => 'Hồ sơ'],
                 ] as $item)
-                    <a href="{{ $item['href'] }}" class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
+                    <a href="{{ $item['href'] }}" class="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold transition {{ ($item['active'] ?? false) ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}">
                         {{ $item['label'] }}
                     </a>
                 @endforeach
@@ -140,307 +140,70 @@
                         <div class="h-full rounded-full bg-[#0056D2]" style="width: {{ min(100, $avgProgress) }}%"></div>
                     </div>
                 </div>
-            </section>
 
-            <section id="courses" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Khóa học của tôi</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $courseEnrollments->count() }} khóa học gần nhất</p>
-                    </div>
-                    <a href="{{ route('courses.index') }}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Khám phá thêm</a>
-                </div>
+                <div class="mt-8">
+                    <h2 class="text-xl font-bold text-slate-950 dark:text-white mb-4">Lối tắt học tập</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <a href="{{ route('student.courses') }}" class="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] transition group-hover:bg-[#0056D2] group-hover:text-white dark:bg-blue-950/40 dark:text-blue-300">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253"/></svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-extrabold text-slate-900 transition group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">Khóa học của tôi</h3>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Xem {{ $stats['enrolled'] }} khóa học và tiếp tục bài học đang dang dở</p>
+                            </div>
+                        </a>
 
-                @if($courseEnrollments->isEmpty())
-                    <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                        Bạn chưa đăng ký khóa học nào.
-                    </div>
-                @else
-                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        @foreach($courseEnrollments as $enrollment)
-                            @php
-                                $course = $enrollment->course;
-                                $progress = (float) ($enrollment->progress_percent ?? 0);
-                            @endphp
-                            @continue(! $course)
+                        <a href="{{ route('student.recently-viewed.index') }}" class="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition group-hover:bg-indigo-600 group-hover:text-white dark:bg-indigo-950/40 dark:text-indigo-300">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-extrabold text-slate-900 transition group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-300">Đã xem gần đây</h3>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Xem lại các khóa học bạn vừa truy cập</p>
+                            </div>
+                        </a>
 
-                            <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-                                <a href="{{ route('courses.show', $course->slug) }}" class="block aspect-video overflow-hidden bg-slate-900">
-                                    @if($course->thumbnail)
-                                        <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 hover:scale-105">
-                                    @else
-                                        <div class="flex h-full w-full items-center justify-center text-4xl font-extrabold text-white/70">FEA</div>
-                                    @endif
-                                </a>
-                                <div class="p-5">
-                                    <div class="flex items-center justify-between gap-3">
-                                        <span class="truncate text-xs font-bold uppercase text-[#0056D2] dark:text-blue-300">{{ $course->category?->name ?? 'Khóa học' }}</span>
-                                        @if($enrollment->status === \App\Models\Enrollment::STATUS_COMPLETED || $enrollment->completed_at !== null)
-                                            <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">Hoàn thành</span>
-                                        @else
-                                            <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900">Đang học</span>
-                                        @endif
-                                    </div>
-                                    <h3 class="mt-3 line-clamp-2 text-lg font-extrabold leading-snug text-slate-950 dark:text-white">{{ $course->title }}</h3>
-                                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Giảng viên: {{ $course->instructor?->name ?? 'FEA Instructor' }}</p>
-                                    <div class="mt-5">
-                                        <div class="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                            <span>Tiến độ</span>
-                                            <span>{{ number_format($progress, 0) }}%</span>
-                                        </div>
-                                        <div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                                            <div class="h-full rounded-full bg-[#0056D2]" style="width: {{ min(100, $progress) }}%"></div>
-                                        </div>
-                                    </div>
-                                    <a href="{{ $course->learningEntryUrl() ?? route('courses.show', $course->slug) }}" class="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-[#0056D2] dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100">
-                                        Tiếp tục học
-                                    </a>
-                                </div>
-                            </article>
-                        @endforeach
-                    </div>
-                @endif
-            </section>
+                        <a href="{{ route('favorites.index') }}" class="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition group-hover:bg-rose-600 group-hover:text-white dark:bg-rose-950/40 dark:text-rose-300">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-extrabold text-slate-900 transition group-hover:text-rose-600 dark:text-white dark:group-hover:text-rose-300">Khóa học yêu thích</h3>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $stats['wishlist'] }} khóa học bạn đã đánh dấu lưu</p>
+                            </div>
+                        </a>
 
-            <section id="recently-viewed" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Khóa học đã xem gần đây</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $recentlyViewedCourses->count() }} khóa học mới truy cập</p>
-                    </div>
-                    <a href="{{ route('student.recently-viewed.index') }}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Xem tất cả</a>
-                </div>
+                        <a href="{{ route('student.certificates') }}" class="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition group-hover:bg-amber-600 group-hover:text-white dark:bg-amber-950/40 dark:text-amber-300">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-extrabold text-slate-900 transition group-hover:text-amber-600 dark:text-white dark:group-hover:text-amber-300">Chứng chỉ</h3>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $stats['certificates'] }} chứng chỉ hoàn thành đã được cấp</p>
+                            </div>
+                        </a>
 
-                @if($recentlyViewedCourses->isEmpty())
-                    <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                        <p class="font-medium">Bạn chưa xem khóa học nào gần đây</p>
-                        <a href="{{ route('courses.index') }}" class="mt-5 inline-flex h-10 items-center justify-center rounded-xl bg-[#0056D2] px-5 text-sm font-bold text-white transition hover:bg-[#0046B8]">
-                            Khám phá khóa học
+                        <a href="{{ route('student.orders') }}" class="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-600 group-hover:text-white dark:bg-emerald-950/40 dark:text-emerald-300">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-extrabold text-slate-900 transition group-hover:text-emerald-600 dark:text-white dark:group-hover:text-emerald-300">Đơn hàng & Giao dịch</h3>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Theo dõi trạng thái và lịch sử thanh toán</p>
+                            </div>
+                        </a>
+
+                        <a href="{{ route('student.vouchers.index') }}" class="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 transition group-hover:bg-purple-600 group-hover:text-white dark:bg-purple-950/40 dark:text-purple-300">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-extrabold text-slate-900 transition group-hover:text-purple-600 dark:text-white dark:group-hover:text-purple-300">Kho Voucher</h3>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Các mã ưu đãi giảm giá dành riêng cho bạn</p>
+                            </div>
                         </a>
                     </div>
-                @else
-                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        @foreach($recentlyViewedCourses as $history)
-                            <x-recently-viewed-course-card
-                                :history="$history"
-                                :enrollment="$recentEnrollmentMap->get($history->course_id)"
-                            />
-                        @endforeach
-                    </div>
-                @endif
-            </section>
-
-            <section id="cart" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Giỏ hàng</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $stats['cart_items'] }} khóa học trong giỏ</p>
-                    </div>
-                </div>
-
-                @if($cart->courses->isEmpty())
-                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                        Giỏ hàng trống.
-                    </div>
-                @else
-                    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                        <div class="space-y-4 lg:col-span-2">
-                            @foreach($cart->courses as $course)
-                                @php
-                                    $price = $course ? ($course->discount_price ?? $course->sale_price ?? $course->price) : 0;
-                                @endphp
-                                @continue(! $course)
-
-                                <div class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-50 font-bold text-[#0056D2] dark:bg-blue-950/40 dark:text-blue-200">
-                                        {{ strtoupper(substr($course->title, 0, 1)) }}
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <h3 class="truncate font-bold text-slate-950 dark:text-white">{{ $course->title }}</h3>
-                                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ $course->instructor?->name }}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="font-extrabold text-[#0056D2] dark:text-blue-300">{{ number_format($price, 0, ',', '.') }}đ</p>
-                                        <form method="POST" action="{{ route('student.cart.remove', $course->id) }}" class="mt-1">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" @if(! $canUseStudentActions) disabled @endif class="text-xs font-semibold text-rose-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50">Xóa</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-
-                        <div class="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                            <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Thanh toán</h3>
-                            <div class="mt-5 space-y-3 text-sm">
-                                <div class="flex justify-between text-slate-500 dark:text-slate-400">
-                                    <span>Tạm tính</span>
-                                    <span>{{ number_format($cartTotal, 0, ',', '.') }}đ</span>
-                                </div>
-                                <div class="flex justify-between border-t border-slate-200 pt-4 text-lg font-extrabold text-slate-950 dark:border-slate-800 dark:text-white">
-                                    <span>Tổng cộng</span>
-                                    <span class="text-[#0056D2] dark:text-blue-300">{{ number_format($cartTotal, 0, ',', '.') }}đ</span>
-                                </div>
-                            </div>
-                            <form method="POST" action="{{ route('student.cart.checkout') }}" class="mt-6 space-y-4">
-                                @csrf
-                                <input type="hidden" name="idempotency_key" value="{{ (string) Str::uuid() }}">
-                                <input type="text" name="coupon_code" placeholder="Mã giảm giá" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                                <select name="payment_method" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
-                                    <option value="payos">PayOS (VietQR)</option>
-                                    <option value="bank_transfer">Chuyển khoản</option>
-                                </select>
-                                <button type="submit" @if(! $canUseStudentActions) disabled @endif class="h-11 w-full rounded-xl bg-[#0056D2] text-sm font-bold text-white transition hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60">
-                                    Thanh toán ngay
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                @endif
-            </section>
-
-            <section id="wishlist" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Khóa học yêu thích</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $stats['wishlist'] }} khóa học đã lưu</p>
-                    </div>
-                </div>
-
-                @if($wishlistItems->isEmpty())
-                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                        Chưa có khóa học yêu thích.
-                    </div>
-                @else
-                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        @foreach($wishlistItems as $item)
-                            @php $course = $item->course; @endphp
-                            @continue(! $course)
-
-                            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                                <span class="text-xs font-bold uppercase text-[#0056D2] dark:text-blue-300">{{ $course->category?->name ?? 'Khóa học' }}</span>
-                                <h3 class="mt-2 line-clamp-2 text-lg font-extrabold text-slate-950 dark:text-white">{{ $course->title }}</h3>
-                                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ $course->instructor?->name ?? 'FEA Instructor' }}</p>
-                                <div class="mt-5 flex gap-3">
-                                    <a href="{{ route('courses.show', $course->slug) }}" class="flex h-10 flex-1 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-[#0056D2] dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100">Chi tiết</a>
-                                    <form method="POST" action="{{ route('courses.favorite.destroy', $course) }}">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" @if(! $canUseStudentActions) disabled @endif class="h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Bỏ lưu</button>
-                                    </form>
-                                </div>
-                            </article>
-                        @endforeach
-                    </div>
-                @endif
-            </section>
-
-            <section id="certificates" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Chứng chỉ</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Các chứng chỉ đã được cấp</p>
-                    </div>
-                </div>
-
-                @if($certificates->isEmpty())
-                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                        Hoàn thành khóa học để nhận chứng chỉ.
-                    </div>
-                @else
-                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-                        @foreach($certificates as $cert)
-                            <article class="relative overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30">
-                                <span class="text-xs font-extrabold uppercase text-amber-700 dark:text-amber-200">Chứng chỉ hoàn thành</span>
-                                <h3 class="mt-2 text-xl font-extrabold text-slate-950 dark:text-white">{{ $cert->course?->title }}</h3>
-                                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Mã: <span class="font-mono font-bold">{{ $cert->certificate_code }}</span></p>
-                                <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 mb-4">Cấp ngày: {{ $cert->issued_at?->format('d/m/Y') }}</p>
-                                <a
-                                    href="{{ route('certificates.public', $cert->certificate_code) }}"
-                                    target="_blank"
-                                    class="inline-flex h-9 items-center justify-center rounded-xl bg-purple-600 px-4 text-xs font-bold text-white transition hover:bg-purple-700 shadow-sm"
-                                >
-                                    Xem chứng chỉ
-                                </a>
-                            </article>
-                        @endforeach
-                    </div>
-                @endif
-            </section>
-
-            <section id="orders" class="scroll-mt-24 pt-8">
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-slate-950 dark:text-white">Đơn hàng</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $stats['orders'] }} giao dịch đã tạo</p>
-                    </div>
-                </div>
-
-                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    @if($orders->isEmpty())
-                        <div class="p-12 text-center text-slate-500 dark:text-slate-400">Chưa có đơn hàng nào.</div>
-                    @else
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
-                                    <tr>
-                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Mã đơn</th>
-                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Khóa học</th>
-                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Tổng tiền</th>
-                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Trạng thái</th>
-                                        <th class="px-5 py-4 text-left font-bold text-slate-600 dark:text-slate-300">Ngày tạo</th>
-                                        <th class="px-5 py-4 text-center font-bold text-slate-600 dark:text-slate-300">Thao tác</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                                    @foreach($orders as $order)
-                                        @php
-                                            $orderTitles = collect($order->items ?? [])->pluck('title')->filter()->join(', ');
-                                        @endphp
-                                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                                            <td class="px-5 py-4 font-mono font-bold text-[#0056D2] dark:text-blue-300">{{ $order->order_code }}</td>
-                                            <td class="px-5 py-4 text-slate-700 dark:text-slate-200">{{ $orderTitles ?: 'Khóa học' }}</td>
-                                            <td class="px-5 py-4 font-bold text-slate-950 dark:text-white">{{ number_format($order->total_amount, 0, ',', '.') }}đ</td>
-                                            <td class="px-5 py-4">
-                                                @if($order->status === 'paid')
-                                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200">
-                                                        Đã thanh toán
-                                                    </span>
-                                                @elseif($order->status === 'pending')
-                                                    <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
-                                                        Chờ thanh toán
-                                                    </span>
-                                                @elseif($order->status === 'failed')
-                                                    <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-700 dark:bg-rose-950/50 dark:text-rose-200">
-                                                        Thất bại
-                                                    </span>
-                                                @elseif($order->status === 'cancelled')
-                                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
-                                                        Đã hủy
-                                                    </span>
-                                                @else
-                                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-950/50 dark:text-slate-200">
-                                                        {{ ucfirst($order->status) }}
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td class="px-5 py-4 text-slate-500 dark:text-slate-400">{{ $order->created_at->format('d/m/Y') }}</td>
-                                            <td class="px-5 py-4 text-center">
-                                                @if($order->status === 'pending')
-                                                    <a href="{{ route('student.checkout.pay', $order->order_code) }}" class="inline-flex items-center justify-center rounded-xl bg-[#0056D2] px-4 py-1.5 text-xs font-bold text-white transition hover:bg-[#0046B8] shadow-sm">
-                                                        Thanh toán ngay
-                                                    </a>
-                                                @else
-                                                    <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endif
                 </div>
             </section>
         </div>
