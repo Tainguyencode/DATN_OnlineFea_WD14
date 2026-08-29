@@ -68,6 +68,10 @@ class StudentDashboardRefactorTest extends TestCase
 
         $response->assertOk()
             ->assertViewIs('student.dashboard.overview.index')
+            ->assertSee('data-public-header', false)
+            ->assertSee('data-student-dashboard-header', false)
+            ->assertSee('sticky left-0 top-20', false)
+            ->assertSee('Mở menu học viên')
             ->assertViewHas('continueLearning', fn ($items) => $items->count() === 3)
             ->assertViewHas('stats', fn ($stats) => $stats === [
                 'enrolled' => 4,

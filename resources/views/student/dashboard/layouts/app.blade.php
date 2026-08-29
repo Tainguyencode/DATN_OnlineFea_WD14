@@ -17,22 +17,24 @@
       x-on:close-student-sidebar.window="studentSidebarOpen = false; document.body.classList.remove('overflow-hidden')"
       x-on:keydown.escape.window="$dispatch('close-student-sidebar')"
       class="min-h-screen overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-    @include('student.dashboard.partials.header')
+    <x-public.header :student-dashboard="true" />
     <x-toast-container />
 
-    <div class="mx-auto flex w-full max-w-[1600px]">
-        <aside class="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex w-full">
+        <aside class="sticky left-0 top-20 hidden h-[calc(100vh-5rem)] w-72 shrink-0 border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
             @include('student.dashboard.partials.sidebar', ['mobile' => false])
         </aside>
 
         @include('student.dashboard.partials.mobile-menu')
 
         <main id="student-main-content" class="min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-7 xl:px-10 xl:py-9">
-            @if($pageTitle ?? false)
-                <x-student.dashboard.page-header :title="$pageTitle" :description="$breadcrumb" />
-            @endif
+            <div class="mx-auto w-full max-w-[1440px]">
+                @if($pageTitle ?? false)
+                    <x-student.dashboard.page-header :title="$pageTitle" :description="$breadcrumb" />
+                @endif
 
-            {{ $slot }}
+                {{ $slot }}
+            </div>
         </main>
     </div>
 

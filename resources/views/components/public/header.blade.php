@@ -1,3 +1,5 @@
+@props(['studentDashboard' => false])
+
 @php
     $user = auth()->user();
     $studentCartCount = $studentCartCount ?? 0;
@@ -9,6 +11,7 @@
     $learningActive = $user?->isStudent() && (
         request()->routeIs('my-courses')
         || request()->routeIs('student.courses')
+        || request()->routeIs('student.recently-viewed')
         || request()->routeIs('student.recently-viewed.*')
         || request()->routeIs('student.lesson-notes.*')
         || request()->routeIs('student.reviews.*')
@@ -16,10 +19,14 @@
     );
     $supportActive = $user && (
         request()->routeIs('study-groups.*')
+        || request()->routeIs('student.study-groups.*')
         || request()->routeIs('support.tickets.*')
         || request()->routeIs('student.vouchers.*')
     );
-    $favoriteActive = $user?->isStudent() && request()->routeIs('favorites.*');
+    $favoriteActive = $user?->isStudent() && (
+        request()->routeIs('favorites.*')
+        || request()->routeIs('student.wishlist*')
+    );
     $accountActive = $user && (
         request()->routeIs('student.dashboard')
         || request()->routeIs('student.orders.*')
@@ -36,6 +43,7 @@
 
 <header
     data-public-header
+    @if($studentDashboard) data-student-dashboard-header @endif
     class="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
     x-data="publicHeader()"
     x-on:keydown.escape.window="closeMenus(); mobileOpen = false"
@@ -45,9 +53,14 @@
         <div class="flex min-h-20 items-center gap-2 sm:gap-3 lg:gap-4">
             <button
                 type="button"
-                x-on:click="mobileOpen = true"
+                @if($studentDashboard)
+                    x-on:click="$dispatch('open-student-sidebar')"
+                    aria-controls="student-mobile-sidebar"
+                @else
+                    x-on:click="mobileOpen = true"
+                @endif
                 class="inline-flex shrink-0 cursor-pointer rounded-lg p-2 text-slate-900 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-white dark:hover:bg-slate-800 lg:hidden"
-                aria-label="Mở menu"
+                aria-label="{{ $studentDashboard ? 'Mở menu học viên' : 'Mở menu' }}"
             >
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
             </button>
