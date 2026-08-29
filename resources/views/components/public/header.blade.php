@@ -15,7 +15,7 @@
         || request()->routeIs('student.recently-viewed.*')
         || request()->routeIs('student.lesson-notes.*')
         || request()->routeIs('student.reviews.*')
-        || request()->routeIs('student.certificates')
+        || request()->routeIs('student.certificates*')
     );
     $supportActive = $user && (
         request()->routeIs('study-groups.*')
@@ -28,13 +28,9 @@
         || request()->routeIs('student.wishlist*')
     );
     $accountActive = $user && (
-        request()->routeIs('student.dashboard')
-        || request()->routeIs('student.orders.*')
-        || request()->routeIs('student.profile*')
-        || request()->routeIs('instructor.dashboard')
-        || request()->routeIs('instructor.profile*')
-        || request()->routeIs('admin.dashboard')
-        || request()->routeIs('admin.profile*')
+        ($user->isStudent() && request()->routeIs('student.profile*'))
+        || ($user->isInstructor() && request()->routeIs('instructor.profile*'))
+        || ($user->isAdmin() && request()->routeIs('admin.profile*'))
     );
 
     $navItemClass = 'inline-flex h-full items-center gap-1.5 border-b-2 border-transparent px-1 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-4 dark:focus-visible:ring-offset-slate-900';
@@ -255,7 +251,7 @@
                             aria-haspopup="true"
                             aria-label="Mở menu tài khoản"
                         >
-                            <span class="{{ $studentDashboard ? 'hidden 2xl:inline' : 'hidden xl:inline' }}">Dashboard</span>
+                            <span class="hidden max-w-28 truncate xl:inline">{{ $user->name }}</span>
                             <span class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-300 bg-slate-50 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                 @if($user->avatar)
                                     <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-full w-full object-cover">
@@ -263,7 +259,7 @@
                                     {{ strtoupper(substr($user->name, 0, 1)) }}
                                 @endif
                             </span>
-                            <svg class="{{ $studentDashboard ? 'hidden 2xl:block' : 'hidden xl:block' }} h-4 w-4 text-slate-400 transition-transform duration-200" :class="isOpen('account') ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"/></svg>
+                            <svg class="hidden h-4 w-4 text-slate-400 transition-transform duration-200 xl:block" :class="isOpen('account') ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"/></svg>
                         </button>
                         <div
                             id="public-nav-account"
@@ -276,14 +272,28 @@
                             x-transition:leave-start="opacity-100 translate-y-0"
                             x-transition:leave-end="opacity-0 -translate-y-2"
                             x-on:mouseenter="activate('account')"
-                            class="public-nav-dropdown absolute right-0 top-full z-50 w-56 origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+                            class="public-nav-dropdown absolute right-0 top-full z-50 w-72 origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
                             :class="isOpen('account') ? 'visible pointer-events-auto translate-y-0 opacity-100' : 'invisible pointer-events-none -translate-y-2 opacity-0'"
                             role="menu"
                         >
+                            <div class="mb-2 flex items-center gap-3 border-b border-slate-100 px-2 py-2.5 dark:border-slate-800">
+                                <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                    @if($user->avatar)
+                                        <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-full w-full object-cover">
+                                    @else
+                                        {{ strtoupper(substr($user->name, 0, 1)) }}
+                                    @endif
+                                </span>
+                                <span class="min-w-0">
+                                    <span class="block truncate text-sm font-bold text-slate-900 dark:text-white">{{ $user->name }}</span>
+                                    <span class="block truncate text-xs text-slate-500 dark:text-slate-400">{{ $user->email }}</span>
+                                </span>
+                            </div>
                             @if($user->isStudent())
                                 <a href="{{ route('student.dashboard') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.dashboard') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Tổng quan</a>
-                                <a href="{{ route('student.orders') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.orders.*') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Đơn hàng</a>
-                                <a href="{{ route('student.profile') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.profile*') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Hồ sơ</a>
+                                <a href="{{ route('student.profile') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.profile') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Hồ sơ cá nhân</a>
+                                <a href="{{ route('student.profile.security') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.profile.security') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Bảo mật tài khoản</a>
+                                <a href="{{ route('student.orders') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.orders') || request()->routeIs('student.orders.*') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Đơn hàng</a>
                             @elseif($user->isInstructor())
                                 <a href="{{ $user->dashboardUrl() }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }}" role="menuitem">Dashboard</a>
                                 <a href="{{ route('instructor.profile') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }}" role="menuitem">Hồ sơ</a>

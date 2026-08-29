@@ -101,7 +101,10 @@ class StudentDashboardRefactorTest extends TestCase
         ];
 
         foreach ($routes as $url) {
-            $this->actingAsStudent($student)->get($url)->assertOk();
+            $this->actingAsStudent($student)
+                ->get($url)
+                ->assertOk()
+                ->assertSee('data-student-dashboard-header', false);
         }
     }
 
