@@ -1,13 +1,5 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PayOS Sandbox - {{ $order->order_code }}</title>
-    @vite(['resources/css/app.css'])
-</head>
-<body class="min-h-screen bg-slate-100 p-6 text-slate-900">
-    <main class="mx-auto max-w-lg rounded-3xl bg-white p-8 shadow-xl">
+<x-student-layout title="PayOS Sandbox - {{ $order->order_code }}" page-title="Thanh toán VietQR" breadcrumb="PayOS Sandbox">
+    <div class="mx-auto max-w-lg rounded-3xl bg-white p-8 shadow-xl">
         <div class="mb-6 text-center">
             <div class="text-sm font-bold uppercase tracking-widest text-blue-600">PayOS Sandbox</div>
             <h1 class="mt-2 text-2xl font-black">Thanh toán VietQR</h1>
@@ -45,6 +37,5 @@
                 <button class="w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white">Giả lập thành công</button>
             </form>
         </div>
-    </main>
-</body>
-</html>
+</div>
+</x-student-layout>

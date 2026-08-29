@@ -210,6 +210,42 @@ window.AppToast = {
     show: showAppToast,
 };
 
+function publicHeader() {
+    return {
+        openMenu: null,
+        mobileOpen: false,
+
+        isDesktop() {
+            return window.matchMedia('(min-width: 1024px)').matches;
+        },
+
+        isOpen(menu) {
+            return this.openMenu === menu;
+        },
+
+        activate(menu) {
+            if (this.isDesktop()) {
+                this.openMenu = menu;
+            }
+        },
+
+        toggleMenu(menu) {
+            this.openMenu = this.openMenu === menu ? null : menu;
+        },
+
+        closeMenus() {
+            this.openMenu = null;
+        },
+
+        closeMobile() {
+            this.openMenu = null;
+            this.mobileOpen = false;
+        },
+    };
+}
+
+window.publicHeader = publicHeader;
+
 Alpine.start();
 
 if (document.readyState === 'loading') {

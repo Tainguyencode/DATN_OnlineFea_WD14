@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Listeners\AwardLoginPoints;
+use App\Models\Cart;
 use App\Models\Permission;
 use App\Models\Wishlist;
 use App\Services\NotificationService;
@@ -66,13 +67,14 @@ class AppServiceProvider extends ServiceProvider
             // Test and fresh CLI contexts may not have a database driver ready yet.
         }
 
-        View::composer(['layouts.app', 'components.layouts.dashboard', 'components.notifications.bell'], function ($view): void {
+        View::composer(['components.layouts.dashboard', 'components.public.header'], function ($view): void {
             if (! Auth::check()) {
                 $view->with([
                     'unreadNotificationCount' => 0,
                     'recentNotifications' => collect(),
                     'unreadStudyGroupCount' => 0,
                     'favoriteCourseCount' => 0,
+                    'studentCartCount' => 0,
                 ]);
 
                 return;
@@ -80,7 +82,8 @@ class AppServiceProvider extends ServiceProvider
 
             $user = Auth::user();
             $favoriteCourseCount = 0;
-            $isHeaderLayout = in_array($view->getName(), ['layouts.app', 'components.layouts.dashboard'], true);
+            $isHeaderLayout = in_array($view->getName(), ['components.layouts.dashboard', 'components.public.header'], true);
+            $studentCartCount = 0;
             if ($isHeaderLayout && $user->isStudent() && Schema::hasTable('wishlists') && Schema::hasTable('courses')) {
                 $favoriteCourseCount = Wishlist::query()
                     ->where('user_id', $user->id)
@@ -90,12 +93,23 @@ class AppServiceProvider extends ServiceProvider
                     ->count();
             }
 
+            if ($isHeaderLayout && $user->isStudent()
+                && Schema::hasTable('carts')
+                && Schema::hasTable('cart_items')
+                && Schema::hasTable('courses')) {
+                $studentCartCount = Cart::query()
+                    ->where('user_id', $user->id)
+                    ->withCount('courses')
+                    ->value('courses_count') ?? 0;
+            }
+
             if (! Schema::hasTable('push_notifications')) {
                 $view->with([
                     'unreadNotificationCount' => 0,
                     'recentNotifications' => collect(),
                     'unreadStudyGroupCount' => 0,
                     'favoriteCourseCount' => $favoriteCourseCount,
+                    'studentCartCount' => $studentCartCount,
                 ]);
 
                 return;
@@ -108,6 +122,7 @@ class AppServiceProvider extends ServiceProvider
                 'recentNotifications' => $user->pushNotifications()->latest()->limit(5)->get(),
                 'unreadStudyGroupCount' => $user->pushNotifications()->where('is_read', false)->where('type', 'study_group')->count(),
                 'favoriteCourseCount' => $favoriteCourseCount,
+                'studentCartCount' => $studentCartCount,
             ]);
         });
     }
