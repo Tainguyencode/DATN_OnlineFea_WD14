@@ -70,7 +70,7 @@ class PublicNavigationTest extends TestCase
         $response->assertSee('x-transition:enter', false);
         $response->assertSee('opacity-0 -translate-y-2', false);
         $response->assertSee('Học tập');
-        $response->assertSee('Kho Voucher');
+        $response->assertSee('Voucher của tôi');
     }
 
     public function test_instructor_dashboard_keeps_role_specific_sidebar_shell(): void
