@@ -181,7 +181,7 @@
                                 <a href="{{ route('support.tickets.index') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('support.tickets.*') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Ticket hỗ trợ</a>
                             @endif
                             @if($user->isStudent())
-                                <a href="{{ route('student.vouchers.index') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.vouchers.*') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Kho Voucher</a>
+                                <a href="{{ route('student.vouchers.index') }}" x-on:click="closeMenus()" class="{{ $dropdownItemClass }} {{ request()->routeIs('student.vouchers.*') ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" role="menuitem">Voucher của tôi</a>
                             @endif
                         </div>
                     </div>
@@ -367,7 +367,7 @@
                                 <a href="{{ route('support.tickets.index') }}" x-on:click="closeMobile()" class="block rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">Ticket hỗ trợ</a>
                             @endif
                             @if($user->isStudent())
-                                <a href="{{ route('student.vouchers.index') }}" x-on:click="closeMobile()" class="block rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">Kho Voucher</a>
+                                <a href="{{ route('student.vouchers.index') }}" x-on:click="closeMobile()" class="block rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">Voucher của tôi</a>
                             @endif
                         </div>
                     </div>

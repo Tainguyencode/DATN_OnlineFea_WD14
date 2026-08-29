@@ -67,7 +67,7 @@ class AppServiceProvider extends ServiceProvider
             // Test and fresh CLI contexts may not have a database driver ready yet.
         }
 
-        View::composer(['components.layouts.dashboard', 'components.public.header'], function ($view): void {
+        View::composer(['components.layouts.dashboard', 'components.public.header', 'student.dashboard.partials.header'], function ($view): void {
             if (! Auth::check()) {
                 $view->with([
                     'unreadNotificationCount' => 0,
@@ -83,6 +83,7 @@ class AppServiceProvider extends ServiceProvider
             $user = Auth::user();
             $favoriteCourseCount = 0;
             $isHeaderLayout = in_array($view->getName(), ['components.layouts.dashboard', 'components.public.header'], true);
+            $needsCartCount = $isHeaderLayout || $view->getName() === 'student.dashboard.partials.header';
             $studentCartCount = 0;
             if ($isHeaderLayout && $user->isStudent() && Schema::hasTable('wishlists') && Schema::hasTable('courses')) {
                 $favoriteCourseCount = Wishlist::query()
@@ -93,7 +94,7 @@ class AppServiceProvider extends ServiceProvider
                     ->count();
             }
 
-            if ($isHeaderLayout && $user->isStudent()
+            if ($needsCartCount && $user->isStudent()
                 && Schema::hasTable('carts')
                 && Schema::hasTable('cart_items')
                 && Schema::hasTable('courses')) {
@@ -101,6 +102,18 @@ class AppServiceProvider extends ServiceProvider
                     ->where('user_id', $user->id)
                     ->withCount('courses')
                     ->value('courses_count') ?? 0;
+            }
+
+            if ($view->getName() === 'student.dashboard.partials.header') {
+                $view->with([
+                    'unreadNotificationCount' => 0,
+                    'recentNotifications' => collect(),
+                    'unreadStudyGroupCount' => 0,
+                    'favoriteCourseCount' => 0,
+                    'studentCartCount' => $studentCartCount,
+                ]);
+
+                return;
             }
 
             if (! Schema::hasTable('push_notifications')) {

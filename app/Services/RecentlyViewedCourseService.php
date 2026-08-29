@@ -75,6 +75,7 @@ class RecentlyViewedCourseService
                     'instructor:id,name,avatar,instructor_status,is_active,account_status,locked_at',
                     'category:id,parent_id,name,slug',
                     'category.parent:id,name,slug',
+                    'lessons:id,course_id,sort_order',
                     'courseSections.lessons' => fn ($lessonQuery) => $lessonQuery
                         ->select('id', 'course_id', 'section_id', 'chapter_id', 'title', 'sort_order')
                         ->orderBy('sort_order'),
