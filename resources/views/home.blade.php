@@ -763,21 +763,4 @@
             }
         });
     </script>
-@endsectionargetId = href.substring(hashIndex + 1);
-                                if (targetId !== 'courses') {
-                                    const targetElement = document.getElementById(targetId);
-                                    if (targetElement) {
-                                        e.preventDefault();
-                                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        const newUrl = window.location.pathname + window.location.search + '#' + targetId;
-                                        history.pushState(null, '', newUrl);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        });
-    </script>
 @endsection
