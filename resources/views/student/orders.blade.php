@@ -15,9 +15,9 @@
                 <span class="font-bold text-slate-800 dark:text-slate-200">Lịch sử giao dịch & đơn hàng</span>
             </div>
 
-            <a href="{{ route('student.dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
-                ← Quay lại Trang học viên
-            </a>
+            <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('student.dashboard') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 cursor-pointer transition py-1">
+                ← Quay lại
+            </button>
         </div>
 
         <!-- TIÊU ĐỀ VÀ BỘ LỌC TÌM KIẾM -->

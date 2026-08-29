@@ -55,6 +55,7 @@ use App\Http\Controllers\Web\ReviewHelpfulController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\AssignmentController as StudentAssignmentController;
 use App\Http\Controllers\Web\Student\CartController;
+use App\Http\Controllers\Web\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Web\Student\LessonAiController;
 use App\Http\Controllers\Web\Student\LessonNoteController;
 use App\Http\Controllers\Web\Student\LessonNoteLibraryController;
@@ -95,7 +96,7 @@ Route::get('/certificates/{code}', [StudentMiscController::class, 'publicCertifi
 Route::get('/certificates/{code}/pdf', [StudentMiscController::class, 'publicCertificatePdf'])->name('certificates.public.pdf');
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/courses/{course}/enroll', [CourseController::class, 'enroll'])->name('courses.enroll');
-    Route::get('/my-courses', fn () => redirect(route('student.dashboard').'#courses'))->name('my-courses');
+    Route::get('/my-courses', [StudentCourseController::class, 'index'])->name('my-courses');
 
     // Study Groups
     Route::get('/study-groups', [StudyGroupController::class, 'index'])->name('study-groups.index');
@@ -265,7 +266,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student,instructor
 // ─── HỌC VIÊN ───
 Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'studentDashboard'])->name('dashboard');
-    Route::get('/courses', fn () => redirect(route('student.dashboard').'#courses'))->name('courses');
+    Route::get('/courses', [StudentCourseController::class, 'index'])->name('courses');
     Route::get('/recently-viewed-courses', [RecentlyViewedCourseController::class, 'index'])->name('recently-viewed.index');
     Route::get('/lesson-notes', [LessonNoteLibraryController::class, 'index'])->name('lesson-notes.index');
     Route::get('/reviews', [StudentReviewController::class, 'index'])->name('reviews.index');
@@ -288,7 +289,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->middleware('throttle:10,1')->name('checkout.simulate');
     Route::get('/checkout/{order_code}/success', [CartController::class, 'successPage'])->name('checkout.success');
     Route::get('/checkout/{order_code}/failed', [CartController::class, 'failedPage'])->name('checkout.failed');
-    Route::get('/wishlist', fn () => redirect(route('student.dashboard').'#wishlist'))->name('wishlist');
+    Route::get('/wishlist', [StudentMiscController::class, 'wishlist'])->name('wishlist');
     Route::post('/wishlist/{courseId}', [StudentMiscController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::get('/certificates', [StudentMiscController::class, 'certificates'])->name('certificates');
     Route::get('/certificates/{certificate}/pdf', [StudentMiscController::class, 'viewCertificatePdf'])->name('certificates.pdf');

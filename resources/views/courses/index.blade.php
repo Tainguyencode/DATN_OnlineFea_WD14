@@ -22,7 +22,12 @@
 @endphp
 
 <section class="bg-slate-950 text-white">
-    <div class="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-16">
+    <div class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-blue-300 hover:text-white cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
+    </div>
+    <div class="mx-auto grid max-w-7xl gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-12">
         <div>
             <span class="inline-flex rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-200">
                 Fea Course Catalog
