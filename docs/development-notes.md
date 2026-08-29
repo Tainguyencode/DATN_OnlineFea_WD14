@@ -105,3 +105,6 @@
 ### Commit 35: refactor: dong bo tinh nang va chuan hoa giao dien nguoi dung (2026-08-26 15:00:00 +0700)
 - Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
 
+### Commit 36: feat & refactor: toi uu giao dien admin, student shell va dong bo tinh nang (2026-08-30 04:00:00 +0700)
+- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+
