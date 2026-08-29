@@ -7,7 +7,7 @@
     <section class="bg-slate-50 py-4 sm:py-5 dark:bg-slate-950">
         <div class="ui-container">
             <div class="grid grid-cols-12 gap-2 sm:gap-3">
-                <div class="relative col-span-12 aspect-[1942/809] overflow-hidden rounded-xl bg-slate-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 lg:col-span-8 dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
+                <div class="relative col-span-12 aspect-video overflow-hidden rounded-xl bg-slate-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 sm:aspect-[1942/809] dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
             <style>
                 #banner-track,
                 .banner-slide {
@@ -77,17 +77,6 @@
                 </svg>
                     </button>
                 </div>
-
-                <aside class="col-span-12 hidden grid-cols-2 gap-2 sm:grid sm:gap-3 lg:col-span-4 lg:h-full lg:grid-cols-1 lg:grid-rows-2" aria-label="Nội dung nổi bật">
-                    <a href="{{ route('learning-paths.index') }}" class="group relative aspect-[1942/809] overflow-hidden rounded-xl bg-slate-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 lg:aspect-auto dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950">
-                        <img src="{{ asset('images/banner3.png') }}" alt="Khám phá lộ trình học tập nổi bật" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
-                        <span class="absolute bottom-2 left-2 rounded-lg bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm sm:bottom-3 sm:left-3">Lộ trình nổi bật</span>
-                    </a>
-                    <a href="{{ route('instructors.index') }}" class="group relative aspect-[1942/809] overflow-hidden rounded-xl bg-slate-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 lg:aspect-auto dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950">
-                        <img src="{{ asset('images/banner2.png') }}" alt="Khám phá đội ngũ giảng viên FEA Learning" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
-                        <span class="absolute bottom-2 left-2 rounded-lg bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm sm:bottom-3 sm:left-3">Đội ngũ giảng viên</span>
-                    </a>
-                </aside>
             </div>
         </div>
     </section>
