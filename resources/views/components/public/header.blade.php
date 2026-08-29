@@ -39,6 +39,11 @@
 
     $navItemClass = 'inline-flex h-full items-center gap-1.5 border-b-2 border-transparent px-1 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-4 dark:focus-visible:ring-offset-slate-900';
     $dropdownItemClass = 'flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-blue-50 hover:text-[#0056D2] focus-visible:bg-blue-50 focus-visible:text-[#0056D2] focus-visible:outline-none dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-blue-300 dark:focus-visible:bg-slate-800 dark:focus-visible:text-blue-300';
+    $headerContainerClass = $studentDashboard ? 'w-full px-3 sm:px-4 lg:px-5 xl:px-6' : 'ui-container';
+    $headerRowClass = $studentDashboard ? 'flex min-h-16 items-center gap-2 lg:gap-3' : 'flex min-h-20 items-center gap-2 sm:gap-3 lg:gap-4';
+    $headerLogoClass = $studentDashboard ? 'h-10 w-auto object-contain sm:h-11' : 'h-14 w-auto object-contain sm:h-16';
+    $headerNavClass = $studentDashboard ? 'hidden h-16 items-center gap-1 text-slate-700 xl:flex dark:text-slate-300' : 'hidden h-20 items-center gap-2 text-slate-700 lg:flex dark:text-slate-300';
+    $headerSearchClass = $studentDashboard ? 'hidden min-w-0 max-w-md flex-1 items-center md:flex' : 'hidden min-w-0 flex-1 items-center lg:flex';
 @endphp
 
 <header
@@ -49,27 +54,28 @@
     x-on:keydown.escape.window="closeMenus(); mobileOpen = false"
     x-on:click.outside="closeMenus()"
 >
-    <div class="ui-container">
-        <div class="flex min-h-20 items-center gap-2 sm:gap-3 lg:gap-4">
+    <div class="{{ $headerContainerClass }}">
+        <div class="{{ $headerRowClass }}">
             <button
                 type="button"
                 @if($studentDashboard)
-                    x-on:click="$dispatch('open-student-sidebar')"
-                    aria-controls="student-mobile-sidebar"
+                    x-on:click="$dispatch('toggle-student-sidebar')"
+                    :aria-controls="window.matchMedia('(min-width: 1024px)').matches ? 'student-desktop-sidebar' : 'student-mobile-sidebar'"
+                    :aria-expanded="(window.matchMedia('(min-width: 1024px)').matches ? studentSidebarDesktopOpen : studentSidebarOpen).toString()"
                 @else
                     x-on:click="mobileOpen = true"
                 @endif
-                class="inline-flex shrink-0 cursor-pointer rounded-lg p-2 text-slate-900 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-white dark:hover:bg-slate-800 lg:hidden"
-                aria-label="{{ $studentDashboard ? 'Mở menu học viên' : 'Mở menu' }}"
+                class="inline-flex shrink-0 cursor-pointer rounded-lg p-2 text-slate-900 transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-white dark:hover:bg-slate-800 {{ $studentDashboard ? '' : 'lg:hidden' }}"
+                aria-label="{{ $studentDashboard ? 'Ẩn/hiện menu học viên' : 'Mở menu' }}"
             >
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
             </button>
 
             <a href="{{ route('home') }}" class="flex shrink-0 items-center text-lg font-extrabold text-slate-900 dark:text-white" aria-label="FEA Learning - Trang chủ">
-                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-14 w-auto object-contain sm:h-16">
+                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="{{ $headerLogoClass }}">
             </a>
 
-            <nav class="hidden h-20 items-center gap-2 text-slate-700 dark:text-slate-300 lg:flex" aria-label="Điều hướng chính">
+            <nav class="{{ $headerNavClass }}" aria-label="Điều hướng chính">
                 <a href="{{ route('home') }}" class="{{ $navItemClass }} {{ request()->routeIs('home') ? 'border-[#0056D2] text-[#0056D2] dark:border-blue-400 dark:text-blue-300' : 'hover:border-blue-200 hover:text-[#0056D2] dark:hover:border-slate-600 dark:hover:text-blue-300' }}">Trang chủ</a>
 
                 <div class="public-nav-group relative flex h-full items-center" :class="isOpen('explore') ? 'public-nav-group--open' : ''" x-on:mouseenter="activate('explore')" x-on:mouseleave="closeMenus()">
@@ -201,7 +207,7 @@
                 @endauth
             </nav>
 
-            <form method="GET" action="{{ route('home') }}" class="hidden min-w-0 flex-1 items-center lg:flex">
+            <form method="GET" action="{{ route('home') }}" class="{{ $headerSearchClass }}">
                 <label class="relative block w-full">
                     <span class="sr-only">Tìm kiếm khóa học</span>
                     <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>
@@ -210,19 +216,21 @@
             </form>
 
             <div class="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
-                <button type="button" data-theme-toggle onclick="toggleTheme()" class="inline-flex cursor-pointer rounded-lg p-2 text-slate-600 transition-colors duration-200 hover:bg-slate-50 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300" aria-label="Đổi giao diện" aria-pressed="false">
+                <button type="button" data-theme-toggle onclick="toggleTheme()" class="{{ $studentDashboard ? 'hidden sm:inline-flex' : 'inline-flex' }} cursor-pointer rounded-lg p-2 text-slate-600 transition-colors duration-200 hover:bg-slate-50 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300" aria-label="Đổi giao diện" aria-pressed="false">
                     <svg class="hidden h-5 w-5 dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364-.707.707M6.343 17.657l-.707.707m0-12.728.707.707m12.728 12.728-.707-.707M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
                     <svg class="block h-5 w-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646Z"/></svg>
                 </button>
 
                 @auth
-                    <x-notifications.bell
-                        :recent-notifications="$recentNotifications ?? collect()"
-                        :unread-count="$unreadNotificationCount ?? 0"
-                    />
+                    <div class="{{ $studentDashboard ? 'hidden sm:block' : 'contents' }}">
+                        <x-notifications.bell
+                            :recent-notifications="$recentNotifications ?? collect()"
+                            :unread-count="$unreadNotificationCount ?? 0"
+                        />
+                    </div>
 
                     @if($user->isStudent())
-                        <a href="{{ route('favorites.index') }}" data-favorite-count="{{ $favoriteCourseCount ?? 0 }}" class="relative inline-flex cursor-pointer rounded-lg p-2 text-slate-600 transition-colors duration-200 hover:bg-slate-50 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300 {{ $favoriteActive ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" aria-label="Khóa học yêu thích" title="Khóa học yêu thích">
+                        <a href="{{ route('favorites.index') }}" data-favorite-count="{{ $favoriteCourseCount ?? 0 }}" class="relative {{ $studentDashboard ? 'hidden md:inline-flex' : 'inline-flex' }} cursor-pointer rounded-lg p-2 text-slate-600 transition-colors duration-200 hover:bg-slate-50 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300 {{ $favoriteActive ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}" aria-label="Khóa học yêu thích" title="Khóa học yêu thích">
                             <svg class="h-5 w-5" fill="{{ ($favoriteCourseCount ?? 0) > 0 ? 'currentColor' : 'none' }}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 0 1 6.364 0L12 7.636l1.318-1.318a4.5 4.5 0 1 1 6.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 0 1 0-6.364Z"/></svg>
                             @if(($favoriteCourseCount ?? 0) > 0)
                                 <span data-favorite-badge class="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">{{ $favoriteCourseCount > 99 ? '99+' : $favoriteCourseCount }}</span>
@@ -247,7 +255,7 @@
                             aria-haspopup="true"
                             aria-label="Mở menu tài khoản"
                         >
-                            <span class="hidden xl:inline">Dashboard</span>
+                            <span class="{{ $studentDashboard ? 'hidden 2xl:inline' : 'hidden xl:inline' }}">Dashboard</span>
                             <span class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-300 bg-slate-50 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                 @if($user->avatar)
                                     <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-full w-full object-cover">
@@ -255,7 +263,7 @@
                                     {{ strtoupper(substr($user->name, 0, 1)) }}
                                 @endif
                             </span>
-                            <svg class="hidden h-4 w-4 text-slate-400 transition-transform duration-200 xl:block" :class="isOpen('account') ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"/></svg>
+                            <svg class="{{ $studentDashboard ? 'hidden 2xl:block' : 'hidden xl:block' }} h-4 w-4 text-slate-400 transition-transform duration-200" :class="isOpen('account') ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"/></svg>
                         </button>
                         <div
                             id="public-nav-account"
@@ -305,6 +313,7 @@
         </div>
     </div>
 
+    @unless($studentDashboard)
     <div class="border-t border-slate-200 px-4 py-3 dark:border-slate-800 lg:hidden">
         <form method="GET" action="{{ route('home') }}">
             <label class="relative block">
@@ -314,6 +323,7 @@
             </label>
         </form>
     </div>
+    @endunless
 
     <div x-show="mobileOpen" x-cloak class="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="Menu chính">
         <div class="absolute inset-0 bg-slate-950/45" x-on:click="mobileOpen = false"></div>

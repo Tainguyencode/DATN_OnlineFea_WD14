@@ -1,4 +1,4 @@
-<div x-cloak x-show="studentSidebarOpen" class="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu học viên">
+<div x-cloak x-show="studentSidebarOpen" class="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="Menu học viên">
     <button type="button" x-show="studentSidebarOpen" x-transition.opacity x-on:click="$dispatch('close-student-sidebar')" class="absolute inset-0 bg-slate-950/50" aria-label="Đóng menu"></button>
     <aside id="student-mobile-sidebar" x-show="studentSidebarOpen"
            x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
