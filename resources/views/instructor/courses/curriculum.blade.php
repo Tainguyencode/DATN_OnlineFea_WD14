@@ -128,7 +128,7 @@
                         @if($hasVideoReadinessBlockers)
                             Còn video chưa sẵn sàng: {{ $videoBlockerTitle }}.
                         @elseif($totalVideoLessons > 0)
-                            Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.
+                            Tất cả video đã được xử lý bảo mật thành công.
                         @endif
                     </p>
                 </div>
@@ -153,6 +153,17 @@
             </div>
         </div>
     </div>
+
+    @if(! $submissionCheck->passes())
+        <div class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs">
+            <p class="text-sm font-bold">Video đã sẵn sàng, nhưng khóa học vẫn chưa đủ điều kiện gửi duyệt.</p>
+            <p class="mt-1 text-xs leading-5">Hoàn tất các mục trong checklist bên dưới để gửi khóa học cho admin duyệt.</p>
+        </div>
+
+        @include('instructor.courses.partials.submission-readiness', [
+            'submissionCheck' => $submissionCheck,
+        ])
+    @endif
 
     <form method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

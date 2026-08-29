@@ -254,8 +254,11 @@ class CourseController extends Controller
             return back()->with('error', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
         }
 
-        if (! $course->submissionCheck()->passes()) {
-            return back()->with('error', 'Khóa học chưa đủ điều kiện để gửi duyệt.');
+        $submissionCheck = $course->submissionCheck();
+        if (! $submissionCheck->passes()) {
+            return back()
+                ->with('error', $submissionCheck->summaryMessage())
+                ->withErrors(['submission' => $submissionCheck->errorMessages()]);
         }
 
         $reviewService->submitForReview($course, auth()->user());
