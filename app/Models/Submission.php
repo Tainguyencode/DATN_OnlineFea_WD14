@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -9,6 +10,7 @@ class Submission extends Model
 {
     protected $fillable = [
         'assignment_id',
+        'assignment_version_id',
         'user_id',
         'attempt_number',
         'allowed_attempts',
@@ -47,6 +49,11 @@ class Submission extends Model
         return $this->belongsTo(Assignment::class);
     }
 
+    public function assignmentVersion(): BelongsTo
+    {
+        return $this->belongsTo(AssignmentVersion::class);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -62,7 +69,7 @@ class Submission extends Model
         return $this->belongsTo(User::class, 'granted_by');
     }
 
-    public function getDeadline(): ?\Carbon\Carbon
+    public function getDeadline(): ?Carbon
     {
         return $this->started_at ? $this->started_at->copy()->addHours(6) : null;
     }

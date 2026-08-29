@@ -61,6 +61,21 @@ class Course extends Model
         'rejected_update',
     ];
 
+    public function versions(): HasMany
+    {
+        return $this->hasMany(CourseVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseVersion::class, 'draft_version_id');
+    }
+
     /** Nhãn tiếng Việt cho từng trạng thái */
     public const STATUS_LABELS = [
         'draft' => 'Nháp',
