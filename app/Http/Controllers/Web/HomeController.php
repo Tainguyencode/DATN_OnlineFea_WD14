@@ -3,35 +3,47 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Badge;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Faq;
 use App\Models\LearningPath;
+use App\Models\Review;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class HomeController extends Controller
 {
     public function index(Request $request): View
     {
-        $selectedCategory = $this->resolveCategoryFilter($request->get('category'));
         $banner = [
             'title' => 'Học mọi lúc, mọi nơi',
             'subtitle' => 'Nền tảng học trực tuyến hàng đầu Việt Nam',
         ];
 
-        $featuredCourses = $this->withFavoriteState(Course::published()
-            ->where('is_featured', true)
+        // 1. Khóa học nổi bật (STU-FE-04, STU-BE-01)
+        $featuredCoursesQuery = Course::published()
             ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-            ->withCount('lessons'))
+            ->withCount('lessons');
+
+        $featuredCourses = $this->withFavoriteState((clone $featuredCoursesQuery)->where('is_featured', true))
+            ->orderByDesc('rating_avg')
             ->orderByDesc('updated_at')
             ->limit(8)
             ->get();
 
+        // Fallback: nếu chưa có khóa học nào được đánh dấu is_featured, lấy các khóa có rating hoặc học viên cao nhất
+        if ($featuredCourses->isEmpty()) {
+            $featuredCourses = $this->withFavoriteState((clone $featuredCoursesQuery))
+                ->orderByDesc('rating_avg')
+                ->orderByDesc('enrollment_count')
+                ->orderByDesc('published_at')
+                ->limit(8)
+                ->get();
+        }
+
+        // 2. Danh mục môn học (STU-FE-03, STU-BE-01)
         $categories = Category::query()
             ->active()
             ->parent()
@@ -42,107 +54,39 @@ class HomeController extends Controller
                     ->orderBy('sort_order')
                     ->orderBy('name'),
             ])
+            ->withCount(['courses' => fn ($q) => $q->published()])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
-        $query = $this->withFavoriteState(Course::with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-            ->withCount('lessons')
-            ->published());
-
-        if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('instructor', fn ($iq) => $iq->where('name', 'like', "%{$search}%"));
-            });
-        }
-
-        if ($level = $request->get('level')) {
-            $query->where('level', $level);
-        }
-
-        if ($selectedCategory) {
-            if ($selectedCategory->parent_id) {
-                $query->where('category_id', $selectedCategory->id);
-            } else {
-                $query->whereIn('category_id', $selectedCategory->children()->active()->pluck('id'));
-            }
-        }
-
-        if ($minRating = $request->get('min_rating')) {
-            $query->where('rating_avg', '>=', $minRating);
-        }
-
-        $sort = $request->get('sort', 'newest');
-        match ($sort) {
-            'price_asc' => $query->orderByRaw('COALESCE(discount_price, sale_price, price) ASC'),
-            'price_desc' => $query->orderByRaw('COALESCE(discount_price, sale_price, price) DESC'),
-            'rating' => $query->orderByDesc('rating_avg'),
-            'popular' => $query->orderByDesc('enrollment_count'),
-            default => $query->orderByDesc('published_at'),
-        };
-
-        $courses = $query->paginate(8)->withQueryString();
-
-        $learningPaths = LearningPath::limit(3)->get();
-
-        $faqs = Faq::where('is_active', true)->orderBy('sort_order')->limit(5)->get();
-
+        // 3. Số liệu thống kê thực tế (STU-FE-02, STU-BE-01)
         $stats = [
             'courses' => Course::published()->count(),
             'students' => Enrollment::distinct('user_id')->count('user_id'),
-            'instructors' => User::where('role', 'instructor')->count(),
+            'instructors' => User::where('role', 'instructor')
+                ->where('instructor_status', 'approved')
+                ->where('is_active', true)
+                ->count(),
+            'categories' => Category::active()->parent()->count(),
         ];
 
-        $badges = Badge::all();
+        // 4. Lộ trình học tập & FAQ
+        $learningPaths = LearningPath::withCount('courses')->limit(3)->get();
+        $faqs = Faq::where('is_active', true)->orderBy('sort_order')->limit(5)->get();
 
-        // Lấy bảng xếp hạng tuần thực tế từ cơ sở dữ liệu
-        $startOfWeek = now()->startOfWeek();
-        $weeklyLeaderboard = User::query()
-            ->where('role', 'student')
-            ->joinSub(
-                DB::table('user_points')
-                    ->select('user_id', DB::raw('SUM(points) as total_points'))
-                    ->where('created_at', '>=', $startOfWeek)
-                    ->groupBy('user_id'),
-                'points_table',
-                'users.id',
-                '=',
-                'points_table.user_id'
-            )
-            ->select('users.*', 'points_table.total_points')
-            ->orderByDesc('points_table.total_points')
-            ->limit(5)
+        // 5. Đánh giá thực tế của học viên đã được duyệt (STU-FE-06)
+        $testimonials = Review::visible()
+            ->whereNull('parent_id')
+            ->where('rating', '>=', 4)
+            ->with(['user:id,name,avatar', 'course:id,title,slug'])
+            ->latest()
+            ->limit(6)
             ->get();
 
         return view('home', compact(
-            'banner', 'featuredCourses', 'categories', 'courses', 'selectedCategory',
-            'learningPaths', 'faqs', 'stats', 'badges', 'weeklyLeaderboard'
+            'banner', 'featuredCourses', 'categories',
+            'learningPaths', 'faqs', 'stats', 'testimonials'
         ));
-    }
-
-    private function resolveCategoryFilter(mixed $value): ?Category
-    {
-        if (! filled($value)) {
-            return null;
-        }
-
-        $category = Category::query()
-            ->active()
-            ->with('parent:id,name,slug,status')
-            ->when(
-                is_numeric($value),
-                fn ($query) => $query->whereKey((int) $value),
-                fn ($query) => $query->where('slug', (string) $value),
-            )
-            ->first();
-
-        if ($category?->parent_id && ! $category->parent?->status) {
-            return null;
-        }
-
-        return $category;
     }
 
     private function withFavoriteState($query)

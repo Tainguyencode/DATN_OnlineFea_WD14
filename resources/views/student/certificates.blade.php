@@ -1,5 +1,20 @@
 <x-student-layout title="Chứng chỉ" page-title="Chứng chỉ của tôi">
 
+{{-- Context-aware Breadcrumb & Back Navigation (STU-FE-13) --}}
+<div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <nav class="flex items-center gap-2 text-xs text-slate-500">
+        <a href="{{ route('student.dashboard') }}" class="hover:text-indigo-600 font-medium">Học viên</a>
+        <span>/</span>
+        <a href="{{ route('student.profile') }}" class="hover:text-indigo-600 font-medium">Hồ sơ cá nhân</a>
+        <span>/</span>
+        <span class="font-bold text-slate-800 dark:text-slate-200">Chứng chỉ hoàn thành</span>
+    </nav>
+
+    <a href="{{ route('student.profile') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
+        ← Quay lại Hồ sơ cá nhân
+    </a>
+</div>
+
 @if($certificates->isEmpty())
     <div class="bg-white rounded-2xl border border-slate-200 p-16 text-center">
         <p class="text-slate-600">Hoàn thành khóa học để nhận chứng chỉ.</p>

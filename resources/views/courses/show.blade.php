@@ -223,7 +223,6 @@
                                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $section->description }}</p>
                                     @endif
                                 </div>
-                                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ $section->lessons->count() }} bài</span>
                             </div>
 
 

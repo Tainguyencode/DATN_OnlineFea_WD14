@@ -155,17 +155,45 @@ class QuizController extends Controller
         ]);
     }
 
-    public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse
+    public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse|JsonResponse
     {
         $this->authorizePublishedLesson($course, $lesson);
         abort_unless($request->user()?->isStudent(), 403);
         if (! $this->isEnrolled($course)) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Enrollment is required to submit this quiz.'], 403);
+            }
             return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson])->with('error', 'Enrollment is required to submit this quiz.');
         }
 
         [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
         if ($completedNow) {
             $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService);
+        }
+
+        if ($request->expectsJson()) {
+            $gradedPayload = $graded;
+            if (isset($gradedPayload['questions'])) {
+                $gradedPayload['questions'] = array_values($gradedPayload['questions']);
+            }
+
+            return response()->json([
+                'success' => true,
+                'attempt' => [
+                    'id' => $attempt->id,
+                    'score' => $attempt->score,
+                    'total_score' => $attempt->total_score,
+                    'percent' => (float) $attempt->percent,
+                    'passed' => (bool) $attempt->passed,
+                    'pass_score' => $attempt->quizVersion?->pass_score ?? $quiz->pass_score,
+                    'quiz_version_id' => $attempt->quiz_version_id,
+                ],
+                'graded' => $gradedPayload,
+                'quiz' => [
+                    'id' => $quiz->id,
+                    'version' => $quiz->version,
+                ],
+            ]);
         }
 
         return redirect()->route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]);
