@@ -133,7 +133,7 @@
                     <h1 class="text-lg font-extrabold text-slate-950 dark:text-white">Phương thức thanh toán</h1>
                     <p class="mt-1 text-xs text-slate-500">Chọn cổng thanh toán để hoàn tất đơn hàng</p>
 
-                    <form method="POST" action="{{ route('student.checkout.process_payment', $order->order_code) }}" class="mt-6 space-y-4" x-data="{ selectedGateway: 'bank_transfer' }">
+                    <form method="POST" action="{{ route('student.checkout.process_payment', $order->order_code) }}" class="mt-6 space-y-4" x-data="{ selectedGateway: 'bank_transfer', submitting: false }" x-on:submit="if (submitting) { $event.preventDefault(); return; } submitting = true">
                         @csrf
 
                         <!-- CỔNG THANH TOÁN -->
@@ -152,9 +152,10 @@
                         </label>
 
                         <div class="pt-4">
-                            <button type="submit" class="h-12 w-full rounded-xl bg-indigo-600 text-xs font-extrabold text-white transition hover:bg-indigo-700 shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                                <span>Tiến hành quét mã QR (<span x-text="formatMoney(totalAmount)"></span>)</span>
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <button type="submit" :disabled="submitting" :class="submitting ? 'cursor-wait bg-indigo-400' : 'cursor-pointer bg-indigo-600 hover:bg-indigo-700'" class="h-12 w-full rounded-xl text-xs font-extrabold text-white transition shadow-md flex items-center justify-center gap-2">
+                                <span x-show="!submitting">Tiến hành quét mã QR (<span x-text="formatMoney(totalAmount)"></span>)</span>
+                                <span x-show="submitting">Đang tạo liên kết thanh toán...</span>
+                                <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
                         </div>
                     </form>

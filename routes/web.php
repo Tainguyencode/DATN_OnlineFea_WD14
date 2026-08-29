@@ -298,7 +298,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::get('/checkout/{order_code}/status', [CartController::class, 'checkStatus'])->name('checkout.status');
     Route::post('/checkout/{order_code}/apply-coupon', [CartController::class, 'applyCouponToOrder'])->middleware('throttle:20,1')->name('checkout.apply_coupon');
     Route::delete('/checkout/{order_code}/remove-coupon', [CartController::class, 'removeCouponFromOrder'])->middleware('throttle:20,1')->name('checkout.remove_coupon');
-    Route::post('/checkout/{order_code}/pay', [CartController::class, 'processPayment'])->middleware('throttle:10,1')->name('checkout.process_payment');
+    Route::post('/checkout/{order_code}/pay', [CartController::class, 'processPayment'])->middleware('throttle:checkout-payment')->name('checkout.process_payment');
     Route::get('/checkout/mock-gateway/{order_code}', [CartController::class, 'mockGateway'])->name('checkout.mock_gateway');
     Route::post('/checkout/{order_code}/simulate', [CartController::class, 'simulatePayment'])->middleware('throttle:10,1')->name('checkout.simulate');
     Route::get('/checkout/{order_code}/success', [CartController::class, 'successPage'])->name('checkout.success');

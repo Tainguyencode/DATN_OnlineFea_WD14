@@ -68,6 +68,14 @@
                             :unread-count="$unreadNotificationCount ?? 0"
                         />
                         @if(Auth::user()->isStudent())
+                            <a href="{{ route('favorites.index') }}" class="relative hidden rounded-lg p-2 text-slate-600 transition duration-200 hover:bg-slate-50 hover:text-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300 sm:inline-flex" aria-label="Khóa học yêu thích" title="Khóa học yêu thích" data-favorite-count="{{ $favoriteCourseCount ?? 0 }}">
+                                <svg class="h-5 w-5" fill="{{ ($favoriteCourseCount ?? 0) > 0 ? 'currentColor' : 'none' }}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 0 1 6.364 0L12 7.636l1.318-1.318a4.5 4.5 0 1 1 6.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 0 1 0-6.364Z"/></svg>
+                                @if(($favoriteCourseCount ?? 0) > 0)
+                                    <span data-favorite-badge class="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
+                                        {{ $favoriteCourseCount > 99 ? '99+' : $favoriteCourseCount }}
+                                    </span>
+                                @endif
+                            </a>
                             @php
                                 $studentCart = \App\Models\Cart::where('user_id', Auth::id())->first();
                                 $studentCartCount = $studentCart ? $studentCart->courses()->count() : 0;

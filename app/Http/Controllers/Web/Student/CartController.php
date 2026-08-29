@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -354,7 +355,18 @@ class CartController extends Controller
         });
 
         // Lấy URL thanh toán tương ứng và chuyển hướng người dùng tới trang quét mã QR (PayOS / VietQR)
-        $paymentUrl = $paymentService->getPaymentUrl($order);
+        try {
+            $paymentUrl = $paymentService->getPaymentUrl($order);
+        } catch (\RuntimeException $exception) {
+            Log::warning('Student payment-link creation failed', [
+                'order_id' => $order->id,
+                'payment_method' => $validated['payment_method'],
+                'exception_class' => $exception::class,
+            ]);
+
+            return redirect()->route('student.checkout.pay', $orderCode)
+                ->with('error', 'Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại sau.');
+        }
 
         return redirect($paymentUrl);
     }
@@ -645,7 +657,18 @@ class CartController extends Controller
             ]);
         }
 
-        $paymentUrl = $paymentService->getPaymentUrl($order);
+        try {
+            $paymentUrl = $paymentService->getPaymentUrl($order);
+        } catch (\RuntimeException $exception) {
+            Log::warning('Student payment-link creation failed', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'exception_class' => $exception::class,
+            ]);
+
+            return redirect()->route('student.checkout.pay', $orderCode)
+                ->with('error', 'Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại sau.');
+        }
 
         return redirect($paymentUrl);
     }

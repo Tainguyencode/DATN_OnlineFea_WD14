@@ -3,14 +3,15 @@
 namespace App\Http\Controllers\Web\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Cart;
 use App\Models\Certificate;
 use App\Models\Course;
-use App\Models\Order;
 use App\Models\Enrollment;
-use App\Services\PayoutService;
+use App\Models\Order;
 use App\Models\Wishlist;
 use App\Notifications\CertificateIssuedNotification;
 use App\Services\CertificatePdfService;
+use App\Services\PayoutService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -23,15 +24,30 @@ class MiscController extends Controller
 {
     public function wishlist(): View
     {
-        $items = Wishlist::where('user_id', auth()->id())
+        $userId = auth()->id();
+        $items = Wishlist::query()
+            ->where('user_id', $userId)
             ->whereHas('course', fn ($query) => $query->published())
             ->with(['course' => fn ($query) => $query
                 ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-                ->withCount(['lessons', 'courseSections'])])
+                ->withCount('lessons')])
             ->orderByDesc('created_at')
-            ->paginate(9);
+            ->orderByDesc('id')
+            ->paginate(9)
+            ->withQueryString();
 
-        return view('student.wishlist', compact('items'));
+        $cartCourseIds = Cart::query()
+            ->where('user_id', $userId)
+            ->first()?->courses()
+            ->pluck('courses.id')
+            ->all() ?? [];
+        $enrolledCourseIds = Enrollment::query()
+            ->where('user_id', $userId)
+            ->withLearningAccess()
+            ->pluck('course_id')
+            ->all();
+
+        return view('student.wishlist', compact('items', 'cartCourseIds', 'enrolledCourseIds'));
     }
 
     public function storeFavorite(Request $request, Course $course): JsonResponse|RedirectResponse
