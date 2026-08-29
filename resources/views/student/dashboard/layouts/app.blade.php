@@ -32,13 +32,13 @@
       x-on:resize.window="if (window.innerWidth >= 1024 && studentSidebarOpen) { studentSidebarOpen = false; document.body.classList.remove('overflow-hidden'); }"
       x-on:keydown.escape.window="$dispatch('close-student-sidebar')"
       class="min-h-screen overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-    <x-public.header :student-dashboard="true" />
+    @include('student.dashboard.partials.header')
     <x-toast-container />
 
     <div class="flex w-full">
         <aside id="student-desktop-sidebar" x-cloak x-show="studentSidebarDesktopOpen"
                x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-x-4 opacity-0" x-transition:enter-end="translate-x-0 opacity-100"
-               class="sticky left-0 top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
+               class="sticky left-0 top-16 hidden h-[calc(100vh-4rem)] w-[72px] shrink-0 border-r border-slate-200 bg-white lg:block xl:w-56 dark:border-slate-800 dark:bg-slate-900">
             @include('student.dashboard.partials.sidebar', ['mobile' => false])
         </aside>
 

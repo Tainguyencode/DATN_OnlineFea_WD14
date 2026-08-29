@@ -82,12 +82,14 @@ class AppServiceProvider extends ServiceProvider
 
             $user = Auth::user();
             $favoriteCourseCount = 0;
+            $isStudentHeader = $view->getName() === 'student.dashboard.partials.header';
             $isStudentDashboardHeader = $view->getName() === 'components.public.header'
                 && (bool) ($view->getData()['studentDashboard'] ?? false);
             $isHeaderLayout = in_array($view->getName(), ['components.layouts.dashboard', 'components.public.header'], true);
-            $needsCartCount = $isHeaderLayout || $view->getName() === 'student.dashboard.partials.header';
+            $needsCartCount = $isHeaderLayout || $isStudentHeader;
             $studentCartCount = 0;
-            if ($isHeaderLayout && ! $isStudentDashboardHeader && $user->isStudent() && Schema::hasTable('wishlists') && Schema::hasTable('courses')) {
+            if (($isStudentHeader || ($isHeaderLayout && ! $isStudentDashboardHeader))
+                && $user->isStudent() && Schema::hasTable('wishlists') && Schema::hasTable('courses')) {
                 $favoriteCourseCount = Wishlist::query()
                     ->where('user_id', $user->id)
                     ->whereHas('course', fn ($query) => $query->published())
@@ -106,12 +108,12 @@ class AppServiceProvider extends ServiceProvider
                     ->value('courses_count') ?? 0;
             }
 
-            if ($view->getName() === 'student.dashboard.partials.header' || $isStudentDashboardHeader) {
+            if ($isStudentHeader || $isStudentDashboardHeader) {
                 $view->with([
                     'unreadNotificationCount' => 0,
                     'recentNotifications' => collect(),
                     'unreadStudyGroupCount' => 0,
-                    'favoriteCourseCount' => 0,
+                    'favoriteCourseCount' => $favoriteCourseCount,
                     'studentCartCount' => $studentCartCount,
                 ]);
 

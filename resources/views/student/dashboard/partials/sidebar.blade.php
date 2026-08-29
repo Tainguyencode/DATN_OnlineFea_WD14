@@ -24,18 +24,39 @@
     ];
 @endphp
 
-<div class="flex h-full flex-col overflow-y-auto px-4 py-5">
-    <nav aria-label="Điều hướng học viên" class="space-y-5">
+<div class="flex h-full flex-col overflow-y-auto px-3 py-4">
+    <nav aria-label="Điều hướng học viên" class="space-y-4">
+        @if($mobile)
+            <section aria-labelledby="student-public-nav">
+                <h2 id="student-public-nav" class="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Điều hướng chính</h2>
+                <div class="space-y-0.5">
+                    @foreach([
+                        ['Trang chủ', 'home'],
+                        ['Khóa học', 'courses.index'],
+                        ['Xếp hạng', 'leaderboard'],
+                        ['Lộ trình', 'learning-paths.index'],
+                        ['Giảng viên', 'instructors.index'],
+                    ] as [$label, $routeName])
+                        <a href="{{ route($routeName) }}" x-on:click="$dispatch('close-student-sidebar')"
+                           class="flex min-h-10 items-center rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800">
+                            {{ $label }}
+                        </a>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         @foreach($groups as $groupLabel => $items)
             <section aria-labelledby="student-nav-{{ $loop->index }}">
-                <h2 id="student-nav-{{ $loop->index }}" class="mb-1.5 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-400">{{ $groupLabel }}</h2>
-                <div class="space-y-1">
+                <h2 id="student-nav-{{ $loop->index }}" class="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 {{ $mobile ? '' : 'lg:hidden xl:block' }}">{{ $groupLabel }}</h2>
+                <div class="space-y-0.5">
                     @foreach($items as $item)
                         @php $active = request()->routeIs(...$item['active']); @endphp
                         <a href="{{ route($item['route']) }}" @if($mobile) x-on:click="$dispatch('close-student-sidebar')" @endif
                            @if($active) aria-current="page" @endif
-                           class="group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition {{ $active ? 'bg-[#0056D2] text-white shadow-sm shadow-blue-600/20' : 'text-slate-600 hover:bg-blue-50 hover:text-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300' }}">
-                            <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true">
+                           aria-label="{{ $item['label'] }}" title="{{ $item['label'] }}"
+                           class="group flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] {{ $mobile ? '' : 'lg:justify-center xl:justify-start' }} {{ $active ? 'bg-[#0056D2] text-white shadow-sm shadow-blue-600/15' : 'text-slate-600 hover:bg-blue-50 hover:text-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300' }}">
+                            <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true">
                                 @switch($item['icon'])
                                     @case('home') <path stroke-linecap="round" stroke-linejoin="round" d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9Z"/> @break
                                     @case('book') <path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/> @break
@@ -49,7 +70,7 @@
                                     @case('users') <path stroke-linecap="round" d="M16 20a5 5 0 0 0-10 0M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 20a5 5 0 0 0-7-4.6M16 5.2a3 3 0 0 1 0 5.6"/> @break
                                 @endswitch
                             </svg>
-                            <span>{{ $item['label'] }}</span>
+                            <span class="{{ $mobile ? '' : 'lg:hidden xl:inline' }}">{{ $item['label'] }}</span>
                         </a>
                     @endforeach
                 </div>
@@ -57,11 +78,11 @@
         @endforeach
     </nav>
 
-    <form method="POST" action="{{ route('logout') }}" class="mt-auto border-t border-slate-200 pt-4 dark:border-slate-800">
+    <form method="POST" action="{{ route('logout') }}" class="mt-auto border-t border-slate-200 pt-3 dark:border-slate-800">
         @csrf
-        <button type="submit" class="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17l5-5-5-5M15 12H3M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg>
-            Đăng xuất
+        <button type="submit" title="Đăng xuất" aria-label="Đăng xuất" class="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 {{ $mobile ? '' : 'lg:justify-center xl:justify-start' }} dark:text-slate-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-300">
+            <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17l5-5-5-5M15 12H3M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg>
+            <span class="{{ $mobile ? '' : 'lg:hidden xl:inline' }}">Đăng xuất</span>
         </button>
     </form>
 </div>

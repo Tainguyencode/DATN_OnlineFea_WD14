@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
+use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Certificate;
 use App\Models\Course;
@@ -45,6 +46,8 @@ class StudentDashboardRefactorTest extends TestCase
         }
 
         Wishlist::create(['user_id' => $student->id, 'course_id' => $courses->last()->id]);
+        $cart = Cart::create(['user_id' => $student->id]);
+        $cart->courses()->attach($courses->first()->id);
         Order::create([
             'user_id' => $student->id,
             'order_code' => 'ORDER-MUST-NOT-BE-LOADED',
@@ -69,10 +72,16 @@ class StudentDashboardRefactorTest extends TestCase
         $response->assertOk()
             ->assertViewIs('student.dashboard.overview.index')
             ->assertSee('data-public-header', false)
+            ->assertSee('data-student-header', false)
             ->assertSee('data-student-dashboard-header', false)
             ->assertSee('x-on:toggle-student-sidebar.window', false)
             ->assertSee('student-desktop-sidebar', false)
             ->assertSee('Ẩn/hiện menu học viên')
+            ->assertSee('data-favorite-count="1"', false)
+            ->assertSee('data-cart-count="1"', false)
+            ->assertSee('href="'.route('student.wishlist').'"', false)
+            ->assertSee('href="'.route('cart').'"', false)
+            ->assertDontSee('aria-label="Thông báo"', false)
             ->assertViewHas('continueLearning', fn ($items) => $items->count() === 3)
             ->assertViewHas('stats', fn ($stats) => $stats === [
                 'enrolled' => 4,
@@ -83,6 +92,11 @@ class StudentDashboardRefactorTest extends TestCase
             ->assertSee('Hoàn thành bài học kiểm thử')
             ->assertDontSee('ORDER-MUST-NOT-BE-LOADED')
             ->assertDontSee('Khóa giới hạn 4');
+
+        $html = $response->getContent();
+        $this->assertTrue(strpos($html, 'data-student-search') < strpos($html, 'data-student-wishlist'));
+        $this->assertTrue(strpos($html, 'data-student-wishlist') < strpos($html, 'data-student-cart'));
+        $this->assertTrue(strpos($html, 'data-student-cart') < strpos($html, 'data-student-account'));
     }
 
     public function test_all_separated_student_pages_render_their_compact_empty_state(): void
