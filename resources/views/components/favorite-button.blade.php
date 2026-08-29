@@ -70,12 +70,18 @@
                     }));
 
                     if (window.AppToast && data.message) {
-                        window.AppToast.show(data.message, this.favorited ? 'success' : 'info');
+                        window.AppToast.show({
+                            message: data.message,
+                            type: this.favorited ? 'success' : 'info'
+                        });
                     }
                 } catch (err) {
                     this.favorited = prev;
                     if (window.AppToast) {
-                        window.AppToast.show('Không thể cập nhật yêu thích. Vui lòng thử lại.', 'error');
+                        window.AppToast.show({
+                            message: 'Không thể cập nhật yêu thích. Vui lòng thử lại.',
+                            type: 'error'
+                        });
                     }
                 } finally {
                     this.loading = false;

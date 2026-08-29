@@ -4,33 +4,21 @@
 
 @section('content')
     {{-- HERO BANNER CAROUSEL --}}
-    <section class="bg-white dark:bg-slate-950">
-        <div class="relative overflow-hidden shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
+    <section class="bg-slate-50 py-4 sm:py-5 dark:bg-slate-950">
+        <div class="ui-container">
+            <div class="grid grid-cols-12 gap-2 sm:gap-3">
+                <div class="relative col-span-12 aspect-[1942/809] overflow-hidden rounded-xl bg-slate-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 lg:col-span-8 dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
             <style>
-                #banner-slider {
-                    max-height: clamp(21rem, 37vw, 39rem);
+                #banner-track,
+                .banner-slide {
+                    height: 100%;
                 }
 
                 .banner-img-custom {
                     width: 100%;
-                    height: clamp(21rem, 37vw, 39rem);
+                    height: 100%;
                     object-fit: cover;
                     object-position: center;
-                }
-
-                @media (max-width: 768px) {
-                    #banner-slider,
-                    .banner-img-custom {
-                        height: clamp(15rem, 58vw, 25rem);
-                        max-height: none;
-                    }
-                }
-
-                @media (max-width: 480px) {
-                    #banner-slider,
-                    .banner-img-custom {
-                        height: 15rem;
-                    }
                 }
             </style>
             {{-- Slides --}}
@@ -74,20 +62,33 @@
                 </div>
             </div>
 
-            <button id="prev-banner"
-                class="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:h-12 md:w-12 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                aria-label="Previous slide">
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button id="prev-banner"
+                class="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm transition hover:bg-white sm:left-3 sm:h-10 sm:w-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2]"
+                aria-label="Slide trước">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
             </button>
-            <button id="next-banner"
-                class="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:h-12 md:w-12 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                aria-label="Next slide">
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button id="next-banner"
+                class="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm transition hover:bg-white sm:right-3 sm:h-10 sm:w-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2]"
+                aria-label="Slide tiếp theo">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
-            </button>
+                    </button>
+                </div>
+
+                <aside class="col-span-12 hidden grid-cols-2 gap-2 sm:grid sm:gap-3 lg:col-span-4 lg:h-full lg:grid-cols-1 lg:grid-rows-2" aria-label="Nội dung nổi bật">
+                    <a href="{{ route('learning-paths.index') }}" class="group relative aspect-[1942/809] overflow-hidden rounded-xl bg-slate-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 lg:aspect-auto dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950">
+                        <img src="{{ asset('images/banner3.png') }}" alt="Khám phá lộ trình học tập nổi bật" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
+                        <span class="absolute bottom-2 left-2 rounded-lg bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm sm:bottom-3 sm:left-3">Lộ trình nổi bật</span>
+                    </a>
+                    <a href="{{ route('instructors.index') }}" class="group relative aspect-[1942/809] overflow-hidden rounded-xl bg-slate-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2 lg:aspect-auto dark:bg-slate-800 dark:focus-visible:ring-offset-slate-950">
+                        <img src="{{ asset('images/banner2.png') }}" alt="Khám phá đội ngũ giảng viên FEA Learning" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
+                        <span class="absolute bottom-2 left-2 rounded-lg bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm sm:bottom-3 sm:left-3">Đội ngũ giảng viên</span>
+                    </a>
+                </aside>
+            </div>
         </div>
     </section>
 

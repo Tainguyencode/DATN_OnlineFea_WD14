@@ -52,11 +52,17 @@
                         }));
 
                         if (window.AppToast && data.message) {
-                            window.AppToast.show(data.message, 'info');
+                            window.AppToast.show({
+                                message: data.message,
+                                type: 'info'
+                            });
                         }
                     } catch (err) {
                         if (window.AppToast) {
-                            window.AppToast.show('Không thể bỏ lưu khóa học. Vui lòng thử lại.', 'error');
+                            window.AppToast.show({
+                                message: 'Không thể bỏ lưu khóa học. Vui lòng thử lại.',
+                                type: 'error'
+                            });
                         }
                     }
                 }
