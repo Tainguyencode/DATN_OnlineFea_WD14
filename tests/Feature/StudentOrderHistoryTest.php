@@ -6,6 +6,8 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Payment;
+use App\Models\Refund;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -13,6 +15,90 @@ use Tests\TestCase;
 class StudentOrderHistoryTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_student_can_cancel_own_pending_order(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $order = Order::create([
+            'user_id' => $student->id,
+            'order_code' => 'ORD-CANCEL-1',
+            'subtotal' => 200000,
+            'total_amount' => 200000,
+            'status' => 'pending',
+            'payment_method' => 'payos',
+        ]);
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'bank_transfer',
+            'amount' => 200000,
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($student)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->delete(route('student.orders.cancel', $order))
+            ->assertRedirect(route('student.orders.show', $order))
+            ->assertSessionHas('success');
+
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame('failed', $payment->fresh()->status);
+    }
+
+    public function test_student_cannot_cancel_paid_or_another_students_order(): void
+    {
+        $owner = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $other = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $paidOrder = Order::create([
+            'user_id' => $owner->id,
+            'order_code' => 'ORD-CANCEL-PAID',
+            'subtotal' => 200000,
+            'total_amount' => 200000,
+            'status' => 'paid',
+            'payment_method' => 'payos',
+        ]);
+
+        $this->actingAs($owner)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->delete(route('student.orders.cancel', $paidOrder))
+            ->assertSessionHas('error');
+        $this->assertSame('paid', $paidOrder->fresh()->status);
+
+        $this->actingAs($other)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->delete(route('student.orders.cancel', $paidOrder))
+            ->assertForbidden();
+    }
+
+    public function test_pending_order_does_not_show_stale_refund_message(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $order = Order::create([
+            'user_id' => $student->id,
+            'order_code' => 'ORD-PENDING-STALE-REFUND',
+            'subtotal' => 200000,
+            'total_amount' => 200000,
+            'status' => 'pending',
+            'payment_method' => 'payos',
+        ]);
+        Refund::create([
+            'order_id' => $order->id,
+            'user_id' => $student->id,
+            'amount' => 0,
+            'reason' => 'Dữ liệu cũ không hợp lệ',
+            'status' => 'approved',
+            'refund_method' => 'manual',
+            'bank_code' => 'VCB',
+            'bank_account_number' => '1234567890',
+            'bank_account_name' => 'TEST USER',
+        ]);
+
+        $this->actingAs($student)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('student.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Đơn hàng chưa hoàn tất thanh toán')
+            ->assertDontSee('Đã hoàn tiền thành công');
+    }
 
     public function test_student_can_view_order_history_list(): void
     {

@@ -32,6 +32,33 @@ class ContentUpdateService
         User $user,
         string $status = ContentUpdate::STATUS_DRAFT
     ): ContentUpdate {
+        // Editing the same canonical entity repeatedly should replace its current
+        // draft candidate. Creating another active draft leaves stale HLS failures
+        // competing with the newly uploaded video in curriculum/status responses.
+        if ($entityId !== null && $status === ContentUpdate::STATUS_DRAFT) {
+            $existingDraft = ContentUpdate::query()
+                ->where('type', $type)
+                ->where('action', $action)
+                ->where('course_id', $courseId)
+                ->where('entity_id', $entityId)
+                ->where('created_by', $user->id)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->latest('id')
+                ->first();
+
+            if ($existingDraft) {
+                $existingDraft->update([
+                    'payload' => $payload,
+                    'submitted_at' => null,
+                    'reviewed_by' => null,
+                    'reviewed_at' => null,
+                    'rejection_reason' => null,
+                ]);
+
+                return $existingDraft->refresh();
+            }
+        }
+
         return ContentUpdate::create([
             'type' => $type,
             'action' => $action,
@@ -128,6 +155,7 @@ class ContentUpdateService
         if ($course) {
             $course->update(array_intersect_key($payload, array_flip([
                 'title', 'short_description', 'description', 'objectives',
+                'target_audience', 'requirements', 'tags',
                 'thumbnail', 'preview_video', 'price', 'discount_price',
                 'level', 'language', 'category_id',
             ])));
@@ -421,6 +449,9 @@ class ContentUpdateService
         // records are history: the former has already been applied to the real lesson
         // and the latter must not override a later accepted/re-uploaded video.
         $activeUpdates = ContentUpdate::where('course_id', $course->id)
+            // Approved updates have already been materialized in the canonical tables.
+            // Merging them again duplicates sections/lessons and can make an update id
+            // collide with a real section id owned by another course.
             ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
             ->orderBy('id')
             ->get();

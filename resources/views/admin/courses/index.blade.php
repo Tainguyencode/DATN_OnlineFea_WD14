@@ -5,7 +5,7 @@
     $sortLabels = ['newest' => 'Mới nhất', 'oldest' => 'Cũ nhất', 'students' => 'Nhiều học viên nhất'];
 @endphp
 
-<div class="space-y-5">
+<div class="min-w-0 space-y-5">
     <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         @foreach($statusLabels as $status => $label)
             <a href="{{ route('admin.courses.index', ['status' => $status]) }}"
@@ -16,8 +16,8 @@
         @endforeach
     </section>
 
-    <form method="GET" class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 lg:grid-cols-[minmax(220px,1.2fr)_repeat(5,minmax(150px,1fr))_auto]">
+    <form method="GET" class="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.2fr)_repeat(5,minmax(150px,1fr))_auto]">
             <label class="sr-only" for="course-search">Tìm khóa học</label>
             <input id="course-search" type="text" name="search" value="{{ $filters['search'] }}"
                    placeholder="Tìm theo tên hoặc slug..."

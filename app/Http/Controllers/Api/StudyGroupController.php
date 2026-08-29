@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\StudyGroupMessageBroadcasted;
 use App\Http\Controllers\Controller;
 use App\Mail\StudyGroupInvitationMail;
 use App\Models\Course;
@@ -408,6 +409,18 @@ class StudyGroupController extends Controller
 
         $studyGroupMessage->load(['user', 'replyTo.user']);
 
+        try {
+            broadcast(new StudyGroupMessageBroadcasted($studyGroupMessage))->toOthers();
+        } catch (\Throwable $e) {
+            // The database write is authoritative. Polling can recover the UI
+            // when Reverb is temporarily unavailable.
+            Log::warning('Failed to broadcast study group message.', [
+                'study_group_id' => $studyGroup->id,
+                'message_id' => $studyGroupMessage->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $messageText = 'Gửi tin nhắn thành công.';
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -473,6 +486,16 @@ class StudyGroupController extends Controller
         ]);
 
         $message->load(['user', 'replyTo.user']);
+
+        try {
+            broadcast(new StudyGroupMessageBroadcasted($message, 'recalled'))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Failed to broadcast recalled study group message.', [
+                'study_group_id' => $studyGroup->id,
+                'message_id' => $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $successMessage = 'Đã thu hồi tin nhắn thành công.';
         if ($request->wantsJson() || $request->ajax()) {

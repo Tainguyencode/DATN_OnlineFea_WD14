@@ -33,10 +33,10 @@ class StoreCourseRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
             'short_description' => ['nullable', 'string', 'max:500'],
-            'description' => ['nullable', 'string'],
-            'objectives' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'objectives' => ['nullable', 'string', 'max:5000'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:2048'],
-            'preview_video' => ['nullable', 'string', 'max:2048'],
+            'preview_video' => ['nullable', 'url:http,https', 'max:2048'],
             'price' => ['required', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000'],
             'discount_price' => ['nullable', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000', 'lte:price'],
             'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
@@ -99,7 +99,7 @@ class StoreCourseRequest extends FormRequest
             'thumbnail.mimes' => 'Ảnh thumbnail chỉ chấp nhận định dạng JPG, JPEG, PNG, WebP hoặc GIF.',
             'thumbnail.max' => 'Ảnh thumbnail không được vượt quá 2MB.',
 
-            'preview_video.string' => 'Link video giới thiệu phải là chuỗi ký tự.',
+            'preview_video.url' => 'Link video giới thiệu phải là địa chỉ HTTP hoặc HTTPS hợp lệ.',
             'preview_video.max' => 'Link video giới thiệu không được vượt quá :max ký tự.',
 
             'price.required' => 'Vui lòng nhập giá gốc khóa học.',

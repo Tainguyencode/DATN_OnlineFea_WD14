@@ -8,22 +8,22 @@
         "bold": "montserrat_bold_251805f22f376c685d401bff71e8e1d4"
     },
     "inter": {
-        "normal": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/inter_normal_5a66f8ceb794f00a7f54c797a21283b3",
-        "500": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/inter_500_efef4d9d61ac26570557ad601dea222a",
-        "600": "inter_600_3604d9d49b61fc3b7c29c4259c86ff89",
-        "bold": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/inter_bold_02384cdf43e3d24b76c57c66dfd114bf"
+        "normal": "D:\\DATN\\storage\\fonts\/inter_normal_5a66f8ceb794f00a7f54c797a21283b3",
+        "500": "D:\\DATN\\storage\\fonts\/inter_500_efef4d9d61ac26570557ad601dea222a",
+        "600": "D:\\DATN\\storage\\fonts\/inter_600_3604d9d49b61fc3b7c29c4259c86ff89",
+        "bold": "inter_bold_02384cdf43e3d24b76c57c66dfd114bf"
     },
     "poppins": {
-        "normal": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/poppins_normal_41eae6f88194706e4cb26de3ac737d8a",
-        "500": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/poppins_500_2a496847b9018af565e71324a9cbc097",
-        "600": "poppins_600_154dcc58b1e77916e556017f33cbcd2e",
-        "bold": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/poppins_bold_c611dfa86762dbed0a7fd1e3d5f1a36c"
+        "normal": "D:\\DATN\\storage\\fonts\/poppins_normal_41eae6f88194706e4cb26de3ac737d8a",
+        "500": "D:\\DATN\\storage\\fonts\/poppins_500_2a496847b9018af565e71324a9cbc097",
+        "600": "D:\\DATN\\storage\\fonts\/poppins_600_154dcc58b1e77916e556017f33cbcd2e",
+        "bold": "poppins_bold_c611dfa86762dbed0a7fd1e3d5f1a36c"
     },
     "dancing script": {
-        "600": "dancing_script_600_ef56bfe89581a6a77e37b6d5cdf908c7",
-        "normal": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/dancing_script_normal_3d540ce61be3387cc1d68ad55ced41b6",
-        "500": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/dancing_script_500_d217c253aba219fb4bcc7a60e024b0c8",
-        "bold": "D:\\DATN_OnlineFea_WD14\\storage\\fonts\/dancing_script_bold_473c916ba1dadd24a2c92fc1a1461a97"
+        "600": "D:\\DATN\\storage\\fonts\/dancing_script_600_ef56bfe89581a6a77e37b6d5cdf908c7",
+        "normal": "D:\\DATN\\storage\\fonts\/dancing_script_normal_3d540ce61be3387cc1d68ad55ced41b6",
+        "500": "D:\\DATN\\storage\\fonts\/dancing_script_500_d217c253aba219fb4bcc7a60e024b0c8",
+        "bold": "dancing_script_bold_473c916ba1dadd24a2c92fc1a1461a97"
     },
     "alex brush": {
         "normal": "alex_brush_normal_a0eda777a3dbd98173f168db380e3824"

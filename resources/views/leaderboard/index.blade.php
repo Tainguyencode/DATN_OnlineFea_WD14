@@ -439,17 +439,27 @@
                     </div>
                 </div>
 
-                {{-- Badges row --}}
-                @if(count($currentUserData['badges']) > 0)
-                    <div class="mt-4 pt-4 border-t border-white/15 flex items-center gap-2 flex-wrap text-xs">
-                        <span class="text-blue-100 font-semibold">Huy hiệu đã đạt:</span>
-                        @foreach($currentUserData['badges'] as $badge)
-                            <span class="inline-flex items-center gap-1 bg-white/20 px-2.5 py-1 rounded-full text-white font-bold border border-white/30" title="{{ $badge->description }}">
-                                🎖️ {{ $badge->name }}
-                            </span>
-                        @endforeach
-                    </div>
-                @endif
+                {{-- Badges row & Points History Button --}}
+                <div class="mt-4 pt-4 border-t border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    @if(count($currentUserData['badges']) > 0)
+                        <div class="flex items-center gap-2 flex-wrap text-xs">
+                            <span class="text-blue-100 font-semibold">Huy hiệu đã đạt:</span>
+                            @foreach($currentUserData['badges'] as $badge)
+                                <span class="inline-flex items-center gap-1 bg-white/20 px-2.5 py-1 rounded-full text-white font-bold border border-white/30" title="{{ $badge->description }}">
+                                    🎖️ {{ $badge->name }}
+                                </span>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-xs text-blue-100/80 italic">Chưa đạt huy hiệu nào. Hãy tiếp tục học tập và làm quiz để mở khóa!</div>
+                    @endif
+
+                    <button type="button" 
+                            onclick="openPointsModal()" 
+                            class="inline-flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 active:scale-95 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition duration-150 border border-white/30 shadow-sm cursor-pointer shrink-0">
+                        <span>📜</span> Xem Lịch Sử Nguồn Điểm XP ({{ $myPointsHistory->count() }})
+                    </button>
+                </div>
             </div>
         @endif
 
@@ -536,7 +546,15 @@
 
                                     {{-- Period XP --}}
                                     <td class="px-6 py-4 text-center font-extrabold text-blue-600 dark:text-blue-400 text-base">
-                                        {{ $student->period_xp }} XP
+                                        <div>{{ $student->period_xp }} XP</div>
+                                        @if($isSelf)
+                                            <button type="button" 
+                                                    onclick="openPointsModal()" 
+                                                    class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer mt-0.5" 
+                                                    title="Xem chi tiết nguồn điểm của bạn">
+                                                <span>Chi tiết điểm</span> ↗
+                                            </button>
+                                        @endif
                                     </td>
 
                                     {{-- Total XP --}}
@@ -582,7 +600,186 @@
     </div>
 </div>
 
-{{-- Live Countdown JavaScript --}}
+{{-- Points History Modal (Chỉ dành cho học viên đăng nhập) --}}
+@if($currentUserData)
+    <div id="points-history-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        {{-- Backdrop --}}
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" onclick="closePointsModal()"></div>
+
+        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative w-full max-w-3xl transform overflow-hidden rounded-2xl bg-white dark:bg-slate-900 text-left shadow-2xl transition-all border border-slate-200 dark:border-slate-800 my-8">
+                
+                {{-- Modal Header --}}
+                <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-6 py-5 text-white flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-2xl shadow-inner">
+                            📜
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black tracking-tight" id="modal-title">
+                                Lịch Sử & Nguồn Tích Lũy Điểm XP
+                            </h3>
+                            <p class="text-xs text-blue-100 mt-0.5">
+                                Chi tiết tất cả hoạt động học tập được cộng điểm của bạn
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" 
+                            onclick="closePointsModal()" 
+                            class="rounded-xl bg-white/10 p-2 text-white hover:bg-white/20 transition cursor-pointer">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                {{-- Quick Summary Stats Inside Modal --}}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-center">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Tổng Điểm XP</div>
+                        <div class="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">{{ $currentUserData['total_xp'] }} XP</div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Bài Học</div>
+                        <div class="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                            +{{ $myPointsHistory->where('category', 'lesson')->sum('points') }} XP
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Quiz & Bài Thi</div>
+                        <div class="text-xl font-black text-amber-600 dark:border-amber-400 mt-0.5">
+                            +{{ $myPointsHistory->where('category', 'quiz')->sum('points') }} XP
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Thảo Luận / Khác</div>
+                        <div class="text-xl font-black text-purple-600 dark:text-purple-400 mt-0.5">
+                            +{{ $myPointsHistory->whereIn('category', ['community', 'streak', 'other'])->sum('points') }} XP
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Filter Tabs & Search --}}
+                <div class="px-6 pt-4 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800">
+                    {{-- Filter Category Pills --}}
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold" id="points-filter-tabs">
+                        <button type="button" 
+                                onclick="filterPoints('all')" 
+                                data-tab="all" 
+                                class="px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow-xs transition">
+                            Tất cả ({{ $myPointsHistory->count() }})
+                        </button>
+                        <button type="button" 
+                                onclick="filterPoints('lesson')" 
+                                data-tab="lesson" 
+                                class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                            📚 Bài học
+                        </button>
+                        <button type="button" 
+                                onclick="filterPoints('quiz')" 
+                                data-tab="quiz" 
+                                class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                            📝 Quiz
+                        </button>
+                        <button type="button" 
+                                onclick="filterPoints('community')" 
+                                data-tab="community" 
+                                class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                            💬 Thảo luận
+                        </button>
+                        <button type="button" 
+                                onclick="filterPoints('streak')" 
+                                data-tab="streak" 
+                                class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                            🔥 Streak
+                        </button>
+                    </div>
+
+                    {{-- Search Input in modal --}}
+                    <div class="relative w-full sm:w-48">
+                        <input type="text" 
+                               id="points-search-input" 
+                               oninput="searchPoints(this.value)" 
+                               placeholder="Tìm hoạt động..." 
+                               class="w-full h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 pl-8 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-600">
+                        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                    </div>
+                </div>
+
+                {{-- Points List --}}
+                <div class="max-h-[420px] overflow-y-auto p-6 space-y-3" id="points-list-container">
+                    @forelse($myPointsHistory as $point)
+                        <div class="point-item flex items-center justify-between gap-4 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition" 
+                             data-category="{{ $point->category }}" 
+                             data-text="{{ mb_strtolower($point->clean_description . ' ' . $point->source_label . ' ' . ($point->course?->title ?? '')) }}">
+                            
+                            {{-- Left Icon & Info --}}
+                            <div class="flex items-center gap-3.5 min-w-0">
+                                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-xl border border-slate-200 dark:border-slate-700">
+                                    {{ $point->source_icon }}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs font-extrabold text-slate-900 dark:text-white">
+                                            {{ $point->clean_description }}
+                                        </span>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                            {{ $point->source_label }}
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="mt-1 flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                                        @if($point->course)
+                                            <span class="truncate max-w-[200px] text-blue-600 dark:text-blue-400 font-medium">
+                                                📖 {{ $point->course->title }}
+                                            </span>
+                                            <span>•</span>
+                                        @endif
+                                        <span>🕒 {{ $point->created_at->format('H:i, d/m/Y') }}</span>
+                                        <span>({{ $point->created_at->diffForHumans() }})</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Right XP Badge --}}
+                            <div class="shrink-0 text-right">
+                                <span class="inline-flex items-center gap-1 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 text-sm font-black border border-emerald-500/30 shadow-xs">
+                                    +{{ $point->points }} XP
+                                </span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="py-12 text-center text-slate-500 dark:text-slate-400" id="empty-state">
+                            <div class="text-3xl mb-2">🌱</div>
+                            <div class="text-sm font-bold text-slate-700 dark:text-slate-300">Chưa có lịch sử cộng điểm</div>
+                            <div class="text-xs mt-1 text-slate-500">Hoàn thành các bài học, làm quiz và tương tác thảo luận để nhận điểm thưởng XP!</div>
+                        </div>
+                    @endforelse
+
+                    <div class="hidden py-8 text-center text-slate-500 dark:text-slate-400" id="no-filter-match">
+                        <div class="text-2xl mb-1">🔍</div>
+                        <div class="text-xs font-semibold">Không tìm thấy hoạt động nào phù hợp với bộ lọc.</div>
+                    </div>
+                </div>
+
+                {{-- Modal Footer --}}
+                <div class="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span class="flex items-center gap-1">
+                        <span>💡</span> Điểm XP tự động đồng bộ thời gian thực khi bạn học tập.
+                    </span>
+                    <button type="button" 
+                            onclick="closePointsModal()" 
+                            class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition cursor-pointer">
+                        Đóng
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+@endif
+
+{{-- Live Countdown & Points Modal JavaScript --}}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const targetDate = new Date("{{ $countdownTarget->toIso8601String() }}").getTime();
@@ -614,6 +811,84 @@
 
         updateCountdown();
         setInterval(updateCountdown, 1000);
+    });
+
+    // Points History Modal Functions
+    function openPointsModal() {
+        const modal = document.getElementById('points-history-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+    }
+
+    function closePointsModal() {
+        const modal = document.getElementById('points-history-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+    }
+
+    // Filter by Category
+    let currentCategory = 'all';
+    let currentSearchTerm = '';
+
+    function filterPoints(category) {
+        currentCategory = category;
+        
+        // Update active tab style
+        const tabs = document.querySelectorAll('#points-filter-tabs button');
+        tabs.forEach(tab => {
+            if (tab.getAttribute('data-tab') === category) {
+                tab.className = 'px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow-xs transition';
+            } else {
+                tab.className = 'px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition';
+            }
+        });
+
+        applyFilterAndSearch();
+    }
+
+    function searchPoints(query) {
+        currentSearchTerm = (query || '').toLowerCase().trim();
+        applyFilterAndSearch();
+    }
+
+    function applyFilterAndSearch() {
+        const items = document.querySelectorAll('#points-list-container .point-item');
+        let visibleCount = 0;
+
+        items.forEach(item => {
+            const itemCategory = item.getAttribute('data-category');
+            const itemText = item.getAttribute('data-text') || '';
+
+            const matchesCategory = (currentCategory === 'all' || itemCategory === currentCategory);
+            const matchesSearch = (!currentSearchTerm || itemText.includes(currentSearchTerm));
+
+            if (matchesCategory && matchesSearch) {
+                item.style.display = 'flex';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        const noMatchEl = document.getElementById('no-filter-match');
+        if (noMatchEl) {
+            if (visibleCount === 0 && items.length > 0) {
+                noMatchEl.classList.remove('hidden');
+            } else {
+                noMatchEl.classList.add('hidden');
+            }
+        }
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closePointsModal();
+        }
     });
 </script>
 @endsection

@@ -15,6 +15,7 @@ class Submission extends Model
         'started_at',
         'file_path',
         'content',
+        'code_language',
         'score',
         'result',
         'feedback',

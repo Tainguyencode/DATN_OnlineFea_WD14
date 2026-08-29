@@ -220,7 +220,21 @@ class Course extends Model
      */
     public function getEffectivePriceAttribute(): float
     {
-        return (float) ($this->discount_price ?? $this->sale_price ?? $this->price);
+        return (float) ($this->discount_price ?? $this->sale_price ?? $this->price ?? 0);
+    }
+
+    /**
+     * Khóa học miễn phí mặc định (giá gốc <= 0).
+     * Khóa học có phí (> 0đ) kể cả khi áp voucher về 0đ vẫn là khóa học có phí và được tính điểm.
+     */
+    public function isFree(): bool
+    {
+        return (float) ($this->price ?? 0) <= 0;
+    }
+
+    public function getIsFreeAttribute(): bool
+    {
+        return $this->isFree();
     }
 
     /**
@@ -516,6 +530,16 @@ class Course extends Model
     {
         if (! $lesson->hasVideoSource()) {
             return ['title' => $lesson->title, 'state' => 'missing_source'];
+        }
+
+        // Legacy/external videos are streamed from their remote URL and never enter
+        // our HLS conversion pipeline. Requiring an HLS manifest for them would keep
+        // otherwise valid courses permanently blocked from review.
+        if (filled($lesson->video_url)
+            && blank($lesson->original_video_key)
+            && blank($lesson->video_path)
+            && blank($lesson->hls_manifest_key)) {
+            return null;
         }
 
         if ($lesson->isHlsReady()) {

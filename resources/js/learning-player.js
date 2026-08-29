@@ -583,6 +583,7 @@ function initQuizPlayer() {
             <div class="rounded border border-white/10 bg-white/5 p-5 relative z-20">
                 <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">${question.form_type || question.type}</p>
                 <h3 class="mt-2 text-lg font-bold"><span data-math-content>${escapeHtml(question.question)}</span></h3>
+                ${question.image_url ? `<img src="${escapeHtml(question.image_url)}" alt="Minh họa câu hỏi" class="mt-4 max-h-80 w-full rounded-lg object-contain bg-black/20">` : ''}
                 <p class="mt-1 text-xs text-white/60">${question.points} điểm</p>
                 ${question.is_excluded ? '<div role="status" class="mt-4 rounded border border-amber-300/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100">Câu hỏi này đã bị hủy và sẽ không được tính điểm.</div>' : ''}
                 <div class="mt-4 space-y-2">
@@ -600,6 +601,7 @@ function initQuizPlayer() {
                 </div>
             </div>
         `;
+        window.MathJax?.typesetPromise?.([questionContainer]);
 
         renderMath(questionContainer);
 

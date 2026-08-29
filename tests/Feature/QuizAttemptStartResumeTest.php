@@ -125,6 +125,58 @@ class QuizAttemptStartResumeTest extends TestCase
         $this->assertSame(1, QuizAttempt::where('user_id', $other->id)->count());
     }
 
+    public function test_each_attempt_has_a_stable_private_question_and_option_order(): void
+    {
+        [$student, $course, $lesson] = $this->publishedQuiz();
+        $other = User::factory()->create(['role' => 'student']);
+        $this->enroll($other, $course);
+
+        $first = app(QuizAttemptService::class)->startOrResume($course, $lesson, $student);
+        $second = app(QuizAttemptService::class)->startOrResume($course, $lesson, $other);
+
+        $this->assertNotNull($first->random_seed);
+        $this->assertNotSame($first->random_seed, $second->random_seed);
+
+        $firstProjection = app(QuizAttemptService::class)->projectQuiz($first);
+        $reloadedProjection = app(QuizAttemptService::class)->projectQuiz($first->fresh());
+
+        $this->assertSame($firstProjection->questions->pluck('id')->all(), $reloadedProjection->questions->pluck('id')->all());
+        $this->assertSame($firstProjection->questions->first()->options->pluck('id')->all(), $reloadedProjection->questions->first()->options->pluck('id')->all());
+    }
+
+    public function test_focus_violation_is_recorded_only_for_attempt_owner(): void
+    {
+        [$student, $course, $lesson] = $this->publishedQuiz();
+        $attempt = app(QuizAttemptService::class)->startOrResume($course, $lesson, $student);
+        $other = User::factory()->create(['role' => 'student']);
+
+        $this->actingAs($other)->postJson(route('courses.lessons.quiz.focus-violation', [$course, $lesson, $attempt]))->assertForbidden();
+        $this->actingAs($student)->postJson(route('courses.lessons.quiz.focus-violation', [$course, $lesson, $attempt]))
+            ->assertOk()
+            ->assertJsonPath('count', 1);
+    }
+
+    public function test_configured_question_count_draws_and_grades_only_attempt_subset(): void
+    {
+        [$student, $course, $lesson, $quiz, $version] = $this->publishedQuiz();
+        $version->update(['question_count' => 3]);
+        $quiz->update(['question_count' => 3]);
+
+        $attempt = app(QuizAttemptService::class)->startOrResume($course, $lesson, $student);
+        $projection = app(QuizAttemptService::class)->projectQuiz($attempt);
+
+        $this->assertCount(3, $attempt->question_ids);
+        $this->assertCount(3, $projection->questions);
+
+        $answers = $projection->questions->mapWithKeys(fn ($question) => [
+            $question->id => $question->options->firstWhere('is_correct', true)->id,
+        ])->all();
+        $result = app(QuizAttemptService::class)->submit($course, $lesson, $student, $attempt->id, $answers);
+
+        $this->assertSame(3, $result['attempt']->total_score);
+        $this->assertSame(100.0, (float) $result['attempt']->percent);
+    }
+
     /** @return array{0: User, 1: Course, 2: Lesson, 3: Quiz, 4: QuizVersion} */
     private function publishedQuiz(): array
     {

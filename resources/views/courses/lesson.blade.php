@@ -323,8 +323,14 @@
                                 </h3>
 
                                 <div>
+                                    <label for="code_language" class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Ngôn ngữ nội dung</label>
+                                    <select name="code_language" id="code_language" class="mb-3 w-full rounded-xl border-white/10 bg-slate-900 text-sm text-white">
+                                        @foreach(['plaintext' => 'Văn bản thường', 'php' => 'PHP', 'javascript' => 'JavaScript', 'typescript' => 'TypeScript', 'python' => 'Python', 'java' => 'Java', 'c' => 'C', 'cpp' => 'C++', 'csharp' => 'C#', 'html' => 'HTML', 'css' => 'CSS', 'sql' => 'SQL', 'json' => 'JSON', 'bash' => 'Bash'] as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('code_language', $submission?->code_language ?? 'plaintext') === $value)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
                                     <label for="content" class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Nội dung / Ghi chú bài làm</label>
-                                    <textarea name="content" id="content" rows="5" class="w-full rounded-xl bg-slate-900 border-white/10 text-sm text-white placeholder-slate-500 focus:border-[#0056D2] focus:ring-0" placeholder="Mô tả tóm tắt bài làm hoặc dán link/mã nguồn của bạn...">{{ old('content') }}</textarea>
+                                    <textarea name="content" id="content" rows="6" class="w-full rounded-xl bg-slate-900 border-white/10 font-mono text-sm text-white placeholder-slate-500 focus:border-[#0056D2] focus:ring-0" placeholder="Viết mô tả hoặc dán mã nguồn bài làm của bạn vào đây (nếu có)...">{{ old('content', $submission?->content) }}</textarea>
                                     @error('content')
                                         <p class="text-xs text-rose-500 mt-1">{{ $message }}</p>
                                     @enderror

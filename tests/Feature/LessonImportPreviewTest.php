@@ -303,6 +303,15 @@ class LessonImportPreviewTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('error_code', 'macro_workbook');
 
+        $archiveBomb = $this->workbookUpload([['Q3', 'Quiz oversized archive', 'quiz']]);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($archiveBomb->getRealPath()) === true);
+        $this->assertTrue($zip->addFromString('xl/oversized.xml', str_repeat('A', (20 * 1024 * 1024) + 1)));
+        $zip->close();
+        $this->postJson($route, ['file' => $archiveBomb])
+            ->assertUnprocessable()
+            ->assertJsonPath('error_code', 'xlsx_archive_too_large');
+
         $this->postJson($route, [
             'file' => UploadedFile::fake()->create(
                 'large.xlsx',

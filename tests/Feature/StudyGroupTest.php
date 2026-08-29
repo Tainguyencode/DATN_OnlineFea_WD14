@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\StudyGroupMessageBroadcasted;
 use App\Mail\StudyGroupInvitationMail;
 use App\Models\Category;
 use App\Models\Course;
@@ -11,7 +12,9 @@ use App\Models\StudyGroupInvitation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -672,5 +675,87 @@ class StudyGroupTest extends TestCase
             ->get(route('study-groups.messages.download', [$group, $messageData['id']]));
 
         $downloadRes->assertOk();
+    }
+
+    public function test_sending_a_message_dispatches_the_realtime_event_with_loaded_payload(): void
+    {
+        Event::fake([StudyGroupMessageBroadcasted::class]);
+
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+        $group = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Realtime Group',
+        ]);
+        $group->members()->attach($student->id, ['role' => 'moderator']);
+
+        $response = $this->actingAs($student)
+            ->postJson(route('study-groups.messages.store', $group), [
+                'message' => 'Realtime message',
+            ]);
+
+        $response->assertCreated();
+        Event::assertDispatched(StudyGroupMessageBroadcasted::class, function ($event) use ($group, $student): bool {
+            return $event->action === 'created'
+                && $event->message['study_group_id'] === $group->id
+                && $event->message['user_id'] === $student->id
+                && $event->message['message'] === 'Realtime message'
+                && $event->message['user']['id'] === $student->id;
+        });
+    }
+
+    public function test_only_group_members_and_admins_can_authorize_the_private_chat_channel(): void
+    {
+        config([
+            'broadcasting.default' => 'reverb',
+            'broadcasting.connections.reverb.key' => 'test-key',
+            'broadcasting.connections.reverb.secret' => 'test-secret',
+            'broadcasting.connections.reverb.app_id' => 'test-app',
+        ]);
+        Broadcast::getFacadeRoot()->purge();
+        require base_path('routes/channels.php');
+        $member = User::factory()->create(['role' => 'student']);
+        $outsider = User::factory()->create(['role' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $course = $this->createCourseWithEnrollment($member);
+        $group = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $member->id,
+            'name' => 'Private Realtime Group',
+        ]);
+        $group->members()->attach($member->id, ['role' => 'moderator']);
+        $payload = [
+            'socket_id' => '1234.5678',
+            'channel_name' => 'private-study-group.'.$group->id,
+        ];
+
+        $this->actingAs($member)->postJson('/broadcasting/auth', $payload)->assertOk();
+        auth()->logout();
+        $this->app['session']->flush();
+        $this->actingAs($outsider)->postJson('/broadcasting/auth', $payload)->assertForbidden();
+        auth()->logout();
+        $this->app['session']->flush();
+        $this->actingAs($admin)->postJson('/broadcasting/auth', $payload)->assertOk();
+    }
+
+    public function test_chat_page_prevents_native_submission_and_binds_echo(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->createCourseWithEnrollment($student);
+        $group = StudyGroup::create([
+            'course_id' => $course->id,
+            'creator_id' => $student->id,
+            'name' => 'Browser Chat Group',
+        ]);
+        $group->members()->attach($student->id, ['role' => 'moderator']);
+
+        $this->actingAs($student)
+            ->get(route('study-groups.show', $group))
+            ->assertOk()
+            ->assertSee('onsubmit="event.preventDefault(); handleSendMessage(event); return false;"', false)
+            ->assertSee('event.preventDefault(); event.stopPropagation(); recallMessage(', false)
+            ->assertSee('window.Echo.private(`study-group.${groupId}`)', false)
+            ->assertDontSee('sendForm.addEventListener', false);
     }
 }

@@ -35,6 +35,7 @@ class StoreQuizRequest extends FormRequest
             'pass_score' => ['required', 'integer', 'min:0', 'max:100'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'max_attempts' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'question_count' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

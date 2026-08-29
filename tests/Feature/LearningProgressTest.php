@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\Discussion;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
@@ -443,6 +444,58 @@ class LearningProgressTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('success', true);
+    }
+
+    public function test_course_chat_reply_and_recall_return_json_without_redirecting(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->publishedCourse();
+        $lesson = $course->lessons->first();
+        $this->enroll($student, $course);
+        $discussion = Discussion::create([
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+            'user_id' => $student->id,
+            'title' => 'Course chat',
+            'content' => 'First message',
+        ]);
+
+        $replyResponse = $this->actingAs($student)->postJson(
+            route('discussions.replies.store', $discussion),
+            ['content' => 'AJAX reply', 'lesson_id' => $lesson->id]
+        );
+
+        $replyResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('kind', 'reply')
+            ->assertJsonPath('data.content', 'AJAX reply');
+
+        $replyId = $replyResponse->json('data.id');
+        $this->actingAs($student)
+            ->postJson(route('discussions.replies.recall', $replyId))
+            ->assertOk()
+            ->assertJson(['success' => true, 'kind' => 'reply', 'id' => $replyId]);
+
+        $this->actingAs($student)
+            ->getJson(route('discussions.messages', $discussion))
+            ->assertOk()
+            ->assertJsonPath('data.1.id', $replyId)
+            ->assertJsonPath('data.1.is_recalled', true);
+    }
+
+    public function test_course_chat_drawer_uses_ajax_handlers_instead_of_native_submission(): void
+    {
+        $view = file_get_contents(resource_path('views/components/learning/course-chat-drawer.blade.php'));
+        $instructorView = file_get_contents(resource_path('views/instructor/discussions/show.blade.php'));
+        $script = file_get_contents(resource_path('js/course-chat.js'));
+
+        $this->assertStringContainsString('data-course-chat-send', $view);
+        $this->assertStringContainsString('data-course-chat-recall', $view);
+        $this->assertStringContainsString('data-course-chat-send', $instructorView);
+        $this->assertStringContainsString('data-course-chat-recall', $instructorView);
+        $this->assertStringContainsString("event.stopImmediatePropagation()", $script);
+        $this->assertStringContainsString('window.Echo.private(`course-discussion.${discussionId}`)', $script);
+        $this->assertStringContainsString('window.setInterval(() => syncCourseChat(root), 1500)', $script);
     }
 
     /** @return array{0: User, 1: Course, 2: Lesson, 3: Quiz, 4: array<int, int>, 5: array<int, int>} */

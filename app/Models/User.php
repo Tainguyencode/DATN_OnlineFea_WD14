@@ -451,10 +451,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function avatarUrl(): string
     {
         if (! $this->avatar) {
-            return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
+            return $this->avatarPlaceholderDataUri();
         }
 
         if (str_starts_with($this->avatar, 'http://') || str_starts_with($this->avatar, 'https://')) {
+            $host = strtolower((string) parse_url($this->avatar, PHP_URL_HOST));
+
+            if (in_array($host, ['api.dicebear.com', 'ui-avatars.com'], true)) {
+                return $this->avatarPlaceholderDataUri();
+            }
+
             return $this->avatar;
         }
 
@@ -462,7 +468,29 @@ class User extends Authenticatable implements MustVerifyEmail
             return Storage::disk('public')->url($this->avatar);
         }
 
-        return 'https://ui-avatars.com/api/?name='.urlencode($this->name ?? 'User').'&background=4f46e5&color=fff';
+        return $this->avatarPlaceholderDataUri();
+    }
+
+    private function avatarPlaceholderDataUri(): string
+    {
+        $name = trim((string) ($this->name ?: 'User'));
+        $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: ['User'];
+        $initials = collect($parts)
+            ->take(2)
+            ->map(fn (string $part): string => mb_strtoupper(mb_substr($part, 0, 1)))
+            ->implode('');
+        $initials = htmlspecialchars($initials ?: 'U', ENT_QUOTES | ENT_XML1, 'UTF-8');
+
+        $palette = ['4f46e5', '0369a1', '047857', 'b45309', 'be123c', '7e22ce'];
+        $checksum = array_sum(unpack('C*', $name) ?: [0]);
+        $background = $palette[$checksum % count($palette)];
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">'
+            .'<rect width="128" height="128" rx="24" fill="#'.$background.'"/>'
+            .'<text x="64" y="68" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-family="Arial,sans-serif" font-size="44" font-weight="700">'
+            .$initials
+            .'</text></svg>';
+
+        return 'data:image/svg+xml;base64,'.base64_encode($svg);
     }
 
     public function getAvatarUrlAttribute(): string

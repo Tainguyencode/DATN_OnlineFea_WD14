@@ -2,16 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ConvertContentUpdateVideoToHLS;
 use App\Jobs\ConvertVideoToHLS;
 use App\Models\Category;
+use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\AwsS3UploadService;
+use App\Services\HlsVideoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Mockery\MockInterface;
 use Tests\TestCase;
 
@@ -69,6 +74,27 @@ class S3MultipartUploadTest extends TestCase
                 'key' => "originals/courses/{$course->id}/lessons/new/test-uuid.mp4",
                 'bucket' => 'test-bucket',
             ]);
+    }
+
+    public function test_multipart_initialization_rejects_video_over_configured_limit(): void
+    {
+        config()->set('video.upload.max_bytes', 1024);
+
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('generateVideoObjectKey');
+            $mock->shouldNotReceive('createMultipartUpload');
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
+            'filename' => 'too-large.mp4',
+            'content_type' => 'video/mp4',
+            'file_size' => 1025,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file_size');
     }
 
     public function test_instructor_can_sign_s3_parts(): void
@@ -248,6 +274,54 @@ class S3MultipartUploadTest extends TestCase
             ->assertJsonPath('common_message', 'Còn 1 video đang xử lý bảo mật: Bài đang xử lý.');
     }
 
+    public function test_hls_status_ignores_non_video_and_approved_lesson_updates(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+
+        ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => ['type' => Lesson::TYPE_DOCUMENT, 'title' => 'Tài liệu'],
+        ]);
+
+        ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'status' => ContentUpdate::STATUS_APPROVED,
+            'created_by' => $instructor->id,
+            'payload' => [
+                'type' => Lesson::TYPE_VIDEO,
+                'original_video_key' => 'originals/old.mp4',
+                'processing_status' => 'pending',
+            ],
+        ]);
+
+        ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => [
+                'type' => Lesson::TYPE_VIDEO,
+                'original_video_key' => 'originals/new.mp4',
+                'hls_manifest_key' => 'hls/updates/new/master.m3u8',
+                'processing_status' => 'completed',
+            ],
+        ]);
+
+        $this->getJson(route('instructor.courses.hls-status', $course))
+            ->assertOk()
+            ->assertJsonPath('total_videos', 1)
+            ->assertJsonPath('common_state', 'incomplete')
+            ->assertJsonPath('can_submit', false);
+    }
+
     public function test_course_submit_is_rejected_when_video_hls_is_incomplete(): void
     {
         $instructor = $this->signInInstructor();
@@ -272,6 +346,84 @@ class S3MultipartUploadTest extends TestCase
         ]);
 
         $response->assertSessionHas('error', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
+    }
+
+    public function test_hls_publication_replaces_local_output_without_leaving_stale_segments(): void
+    {
+        Storage::fake('local');
+        config()->set('filesystems.disks.s3.key');
+        config()->set('filesystems.disks.s3.secret');
+        config()->set('filesystems.disks.s3.bucket');
+
+        $outputDirectory = storage_path('framework/testing/hls-output-'.Str::uuid());
+        File::ensureDirectoryExists($outputDirectory);
+        File::put($outputDirectory.'/master.m3u8', "#EXTM3U\nplaylist.m3u8\n");
+        File::put($outputDirectory.'/playlist.m3u8', "#EXTM3U\nsegment_00000.ts\n");
+        File::put($outputDirectory.'/segment_00000.ts', 'segment');
+        Storage::disk('local')->put('lesson-hls/99/stale.ts', 'stale');
+
+        try {
+            $result = app(HlsVideoService::class)->publish(
+                $outputDirectory,
+                'hls/lessons/99',
+                'lesson-hls/99',
+            );
+
+            $this->assertFalse($result['use_s3']);
+            $this->assertTrue($result['mirrored_locally']);
+            $this->assertSame(3, $result['file_count']);
+            Storage::disk('local')->assertExists('lesson-hls/99/master.m3u8');
+            Storage::disk('local')->assertExists('lesson-hls/99/playlist.m3u8');
+            Storage::disk('local')->assertExists('lesson-hls/99/segment_00000.ts');
+            Storage::disk('local')->assertMissing('lesson-hls/99/stale.ts');
+        } finally {
+            File::deleteDirectory($outputDirectory);
+        }
+    }
+
+    public function test_hls_job_marks_a_video_without_source_as_failed(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course, $section] = $this->courseWithSection($instructor);
+        $lesson = Lesson::create([
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'title' => 'Video không có nguồn',
+            'type' => Lesson::TYPE_VIDEO,
+            'processing_status' => 'pending',
+            'status' => 'draft',
+        ]);
+
+        (new ConvertVideoToHLS($lesson))->handle(app(HlsVideoService::class));
+
+        $this->assertDatabaseHas('lessons', [
+            'id' => $lesson->id,
+            'processing_status' => 'failed',
+        ]);
+    }
+
+    public function test_content_update_hls_job_marks_missing_source_failed_without_losing_payload(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $contentUpdate = ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => [
+                'type' => Lesson::TYPE_VIDEO,
+                'title' => 'Video nháp không có nguồn',
+                'processing_status' => 'pending',
+            ],
+        ]);
+
+        (new ConvertContentUpdateVideoToHLS($contentUpdate))->handle(app(HlsVideoService::class));
+
+        $payload = $contentUpdate->fresh()->payload;
+        $this->assertSame('failed', $payload['processing_status']);
+        $this->assertSame('Video nháp không có nguồn', $payload['title']);
     }
 
     private function signInInstructor(?User $user = null): User

@@ -180,6 +180,27 @@
     .support-ticket-page input[type='file'].support-ticket-control::file-selector-button:hover {
         background: #e0e7ff;
     }
+
+    .public-nav-dropdown {
+        transition: opacity 200ms ease, transform 200ms ease, visibility 200ms ease;
+    }
+
+    /* Keeps the trigger and its absolute dropdown inside one continuous hover region. */
+    .public-nav-group--open::after {
+        position: absolute;
+        top: 100%;
+        right: -0.5rem;
+        left: -0.5rem;
+        z-index: 40;
+        height: 15rem;
+        content: '';
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .public-nav-dropdown {
+            transition: none;
+        }
+    }
 }
 
 .toast-container {

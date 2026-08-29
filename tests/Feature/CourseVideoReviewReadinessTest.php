@@ -59,6 +59,12 @@ class CourseVideoReviewReadinessTest extends TestCase
     {
         [$course, $section] = $this->courseWithSection();
         $lesson = $this->readyVideo($course, $section, 'Current ready video');
+        $course->update(['thumbnail' => 'course-thumbnails/readiness.jpg']);
+        $lesson->update(['duration' => 360, 'duration_seconds' => 360]);
+        foreach (range(2, Course::MIN_LESSON_COUNT) as $index) {
+            $extra = $this->readyVideo($course, $section, 'Ready video '.$index);
+            $extra->update(['duration' => 360, 'duration_seconds' => 360]);
+        }
 
         ContentUpdate::create([
             'course_id' => $course->id,

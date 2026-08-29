@@ -376,6 +376,7 @@ class LearningPlayerService
         $questions = $quiz->questions->map(fn ($question) => [
             'id' => $question->id,
             'question' => $question->question,
+            'image_url' => $question->image_path ? asset('storage/'.$question->image_path) : null,
             'type' => $question->type,
             'form_type' => $question->form_type,
             'points' => (int) $question->points,
@@ -420,6 +421,8 @@ class LearningPlayerService
             'can_take' => $user?->isStudent() && $isEnrolled && ! $attemptLimitReached,
             'quiz_status' => $quizStatus,
             'attempt_id' => $attempt?->id,
+            'focus_violation_url' => $attempt ? route('courses.lessons.quiz.focus-violation', [$course, $lesson, $attempt]) : null,
+            'student_watermark' => $user ? trim($user->name.' · '.$user->email) : null,
             'quiz_version_id' => $attempt?->quiz_version_id,
             'started_at' => $attempt?->started_at?->toIso8601String(),
             'remaining_seconds' => $attempt ? $attemptService->remainingTime($attempt) : null,

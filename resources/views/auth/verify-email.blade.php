@@ -285,6 +285,7 @@
                             </div>
                             <form method="POST" action="{{ route('student.cart.checkout') }}" class="mt-6 space-y-4">
                                 @csrf
+                                <input type="hidden" name="idempotency_key" value="{{ (string) Str::uuid() }}">
                                 <input type="text" name="coupon_code" placeholder="Mã giảm giá" @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
                                 <select name="payment_method" required @if(! $canUseStudentActions) disabled @endif class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0056D2] disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800">
                                     <option value="payos">PayOS (VietQR)</option>
