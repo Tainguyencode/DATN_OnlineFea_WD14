@@ -518,6 +518,18 @@ class Course extends Model
             return ['title' => $lesson->title, 'state' => 'missing_source'];
         }
 
+        // External video URLs do not enter the local/S3 HLS pipeline. They
+        // are already playable and should not block course submission while
+        // uploaded sources are still being transcoded.
+        if (filled($lesson->video_url)
+            && ! filled($lesson->original_video_key)
+            && ! filled($lesson->hls_manifest_key)
+            && ! filled($lesson->video_path)
+            && ! filled($lesson->hls_playlist)
+            && ! filled($lesson->hls_path)) {
+            return null;
+        }
+
         if ($lesson->isHlsReady()) {
             return null;
         }

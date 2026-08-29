@@ -15,6 +15,7 @@ use App\Models\Certificate;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
 use App\Models\Course;
+use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
@@ -26,6 +27,7 @@ use App\Models\User;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
+use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
 use App\Services\NotificationService;
 use App\Services\QuizService;
@@ -202,6 +204,19 @@ class CourseController extends Controller
         $this->ensureOwned($course);
         $validated = $request->validated();
 
+        if ($course->isPublished()) {
+            app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_CHAPTER,
+                ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, ['sort_order' => $course->courseSections()->count()]),
+                $request->user(),
+            );
+
+            return back()->with('success', 'Đã lưu bản cập nhật chương học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
+        }
+
         Chapter::create([
             'course_id' => $course->id,
             'title' => $validated['title'],
@@ -211,11 +226,40 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm chương mới.');
     }
 
-    public function addLesson(StoreLessonRequest $request, Chapter $chapter): RedirectResponse
+    public function addLesson(StoreLessonRequest $request, Chapter $chapter, CurriculumLessonService $lessonService): RedirectResponse
     {
         $this->ensureOwned($chapter->course);
 
         $validated = $request->validated();
+        $course = $chapter->course;
+
+        if ($course->isPublished()) {
+            $sectionId = Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('chapter_id', $chapter->id)
+                ->whereNotNull('section_id')
+                ->value('section_id');
+            $section = $sectionId
+                ? CourseSection::query()
+                    ->where('course_id', $course->id)
+                    ->find($sectionId)
+                : CourseSection::query()
+                    ->where('course_id', $course->id)
+                    ->where('title', $chapter->title)
+                    ->where('sort_order', $chapter->sort_order)
+                    ->first();
+            $contentUpdate = $lessonService->createForManual(
+                $course,
+                $section ?? $chapter->id,
+                $validated,
+                $request->user(),
+            );
+            app(ContentUpdateService::class)->updateDraft($contentUpdate, [
+                'chapter_id' => $chapter->id,
+            ]);
+
+            return back()->with('success', 'Đã lưu bản cập nhật bài học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
+        }
 
         Lesson::create([
             ...$validated,

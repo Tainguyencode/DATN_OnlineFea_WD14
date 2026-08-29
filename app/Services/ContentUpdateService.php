@@ -17,6 +17,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ContentUpdateService
 {
@@ -32,16 +33,66 @@ class ContentUpdateService
         User $user,
         string $status = ContentUpdate::STATUS_DRAFT
     ): ContentUpdate {
-        return ContentUpdate::create([
-            'type' => $type,
-            'action' => $action,
-            'course_id' => $courseId,
-            'entity_id' => $entityId,
-            'payload' => $payload,
-            'status' => $status,
-            'created_by' => $user->id,
-            'submitted_at' => $status === ContentUpdate::STATUS_PENDING ? now() : null,
-        ]);
+        if (! in_array($status, [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING], true)) {
+            throw ValidationException::withMessages([
+                'content_update' => 'Bản cập nhật mới chỉ có thể bắt đầu ở trạng thái nháp hoặc chờ duyệt.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($type, $action, $courseId, $entityId, $payload, $user, $status): ContentUpdate {
+            Course::query()->lockForUpdate()->findOrFail($courseId);
+
+            return ContentUpdate::create([
+                'type' => $type,
+                'action' => $action,
+                'course_id' => $courseId,
+                'entity_id' => $entityId,
+                'payload' => $payload,
+                'status' => $status,
+                'created_by' => $user->id,
+                'submitted_at' => $status === ContentUpdate::STATUS_PENDING ? now() : null,
+            ]);
+        });
+    }
+
+    /**
+     * Update a staged payload while it is still a draft.
+     *
+     * Once an update has been submitted, its payload is immutable. This
+     * boundary is deliberately server-side so UI state cannot be bypassed.
+     *
+     * @param  array<string, mixed>  $changes
+     */
+    public function updateDraft(ContentUpdate $update, array $changes): ContentUpdate
+    {
+        return DB::transaction(function () use ($update, $changes): ContentUpdate {
+            $locked = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
+            $this->assertDraft($locked, 'Thay đổi đã được gửi duyệt và không thể chỉnh sửa.');
+
+            $locked->update([
+                'payload' => array_merge($locked->payload ?? [], $changes),
+            ]);
+
+            return $locked->fresh();
+        });
+    }
+
+    /**
+     * Delete a staged draft and return its payload so callers can clean up
+     * temporary files only after the state transition succeeds.
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteDraft(ContentUpdate $update): array
+    {
+        return DB::transaction(function () use ($update): array {
+            $locked = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
+            $this->assertDraft($locked, 'Thay đổi đã được gửi duyệt và không thể xóa.');
+            $payload = $locked->payload ?? [];
+            $locked->delete();
+
+            return $payload;
+        });
     }
 
     /**
@@ -53,6 +104,14 @@ class ContentUpdateService
         DB::transaction(function () use ($update, $admin) {
             $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $payload = $update->payload ?? [];
+
+            // A second approval is only idempotent for an already activated
+            // quiz candidate. Every other terminal state must be immutable.
+            if (! $update->isPending() && ! ($update->isApproved() && $update->type === ContentUpdate::TYPE_QUIZ)) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Chỉ thay đổi đang chờ duyệt mới có thể được phê duyệt.',
+                ]);
+            }
 
             if ($update->type === ContentUpdate::TYPE_QUIZ) {
                 $this->approveQuizCandidate($update, $payload, $admin);
@@ -101,6 +160,13 @@ class ContentUpdateService
     public function rejectUpdate(ContentUpdate $update, User $admin, string $reason): void
     {
         DB::transaction(function () use ($update, $admin, $reason) {
+            $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
+            if (! $update->isPending()) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Chỉ thay đổi đang chờ duyệt mới có thể bị từ chối.',
+                ]);
+            }
+
             $update->update([
                 'status' => ContentUpdate::STATUS_REJECTED,
                 'rejection_reason' => $reason,
@@ -120,6 +186,13 @@ class ContentUpdateService
                 }
             }
         });
+    }
+
+    private function assertDraft(ContentUpdate $update, string $message): void
+    {
+        if (! $update->isDraft()) {
+            throw ValidationException::withMessages(['content_update' => $message]);
+        }
     }
 
     private function applyCourseUpdate(ContentUpdate $update, array $payload): void
@@ -245,24 +318,80 @@ class ContentUpdateService
 
             $update->update(['entity_id' => $section->id]);
         } elseif ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
-            $section = CourseSection::find($update->entity_id);
+            $section = CourseSection::query()
+                ->where('course_id', $update->course_id)
+                ->find($update->entity_id);
             if ($section) {
                 $section->update(array_intersect_key($payload, array_flip(['title', 'description', 'sort_order'])));
             }
-            $chapter = Chapter::find($update->entity_id);
+
+            // Legacy chapters and new course sections have independent IDs.
+            // Prefer an explicit mapping captured when the update was staged;
+            // otherwise derive legacy chapter IDs from lessons in this course.
+            $chapterQuery = Chapter::query()->where('course_id', $update->course_id);
+            $legacyChapterId = $payload['legacy_chapter_id'] ?? null;
+            if ($legacyChapterId) {
+                $chapterQuery->whereKey($legacyChapterId);
+            } elseif ($section) {
+                $chapterIds = Lesson::query()
+                    ->where('course_id', $update->course_id)
+                    ->where('section_id', $section->id)
+                    ->whereNotNull('chapter_id')
+                    ->pluck('chapter_id');
+                if ($chapterIds->isNotEmpty()) {
+                    $chapterQuery->whereIn('id', $chapterIds->all());
+                } else {
+                    $chapterQuery->whereRaw('1 = 0');
+                }
+            } else {
+                $chapterQuery->whereRaw('1 = 0');
+            }
+
+            $chapter = $chapterQuery->first();
             if ($chapter) {
                 $chapter->update(array_intersect_key($payload, array_flip(['title', 'sort_order'])));
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
-            app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($update->entity_id);
-            CourseSection::destroy($update->entity_id);
-            Chapter::destroy($update->entity_id);
+            $section = CourseSection::query()
+                ->where('course_id', $update->course_id)
+                ->find($update->entity_id);
+            $legacyChapterId = $payload['legacy_chapter_id'] ?? null;
+            if (! $legacyChapterId && $section) {
+                $legacyChapterId = Lesson::query()
+                    ->where('course_id', $update->course_id)
+                    ->where('section_id', $section->id)
+                    ->whereNotNull('chapter_id')
+                    ->value('chapter_id');
+            }
+
+            if ($section) {
+                app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($section);
+                $section->delete();
+            }
+
+            if ($legacyChapterId) {
+                Chapter::query()
+                    ->where('course_id', $update->course_id)
+                    ->whereKey($legacyChapterId)
+                    ->delete();
+            }
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
             $orders = $payload['chapter_orders'] ?? [];
             foreach ($orders as $order) {
-                if (isset($order['id'], $order['sort_order'])) {
-                    CourseSection::where('id', $order['id'])->update(['sort_order' => $order['sort_order']]);
-                    Chapter::where('id', $order['id'])->update(['sort_order' => $order['sort_order']]);
+                if (isset($order['sort_order'])) {
+                    $sectionId = $order['section_id'] ?? $order['id'] ?? null;
+                    $chapterId = $order['chapter_id'] ?? $order['legacy_chapter_id'] ?? null;
+
+                    if ($sectionId) {
+                        CourseSection::where('course_id', $update->course_id)
+                            ->where('id', $sectionId)
+                            ->update(['sort_order' => $order['sort_order']]);
+                    }
+                    if ($chapterId) {
+                        Chapter::where('course_id', $update->course_id)
+                            ->where('id', $chapterId)
+                            ->update(['sort_order' => $order['sort_order']]);
+                    }
                 }
             }
         }
@@ -273,8 +402,12 @@ class ContentUpdateService
         if ($update->action === ContentUpdate::ACTION_CREATE) {
             $secId = $payload['section_id'] ?? null;
 
-            if ($secId && ! CourseSection::where('id', $secId)->exists()) {
-                $chapterUpdate = ContentUpdate::find($secId);
+            if ($secId && ! CourseSection::where('course_id', $update->course_id)->where('id', $secId)->exists()) {
+                $chapterUpdate = ContentUpdate::query()
+                    ->whereKey($secId)
+                    ->where('course_id', $update->course_id)
+                    ->where('type', ContentUpdate::TYPE_CHAPTER)
+                    ->first();
                 if ($chapterUpdate && $chapterUpdate->entity_id) {
                     $secId = $chapterUpdate->entity_id;
                 } else {
@@ -285,8 +418,18 @@ class ContentUpdateService
             }
 
             $chapId = $payload['chapter_id'] ?? null;
-            if ($chapId && ! Chapter::where('id', $chapId)->exists()) {
-                if ($secId && Chapter::where('id', $secId)->exists()) {
+            if (! $secId && $chapId) {
+                $secId = Lesson::query()
+                    ->where('course_id', $update->course_id)
+                    ->where('chapter_id', $chapId)
+                    ->whereNotNull('section_id')
+                    ->value('section_id');
+                if ($secId) {
+                    $payload['section_id'] = $secId;
+                }
+            }
+            if ($chapId && ! Chapter::where('course_id', $update->course_id)->where('id', $chapId)->exists()) {
+                if ($secId && Chapter::where('course_id', $update->course_id)->where('id', $secId)->exists()) {
                     $chapId = $secId;
                 } else {
                     $matchingChapter = Chapter::where('course_id', $update->course_id)->orderBy('sort_order')->first();
@@ -338,7 +481,9 @@ class ContentUpdateService
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
-            $lesson = Lesson::find($update->entity_id);
+            $lesson = Lesson::query()
+                ->where('course_id', $update->course_id)
+                ->find($update->entity_id);
             if ($lesson) {
                 $hasMediaChange = isset($payload['video_path']) || isset($payload['original_video_key']) || isset($payload['video_url']) || isset($payload['document_file']);
 
@@ -391,13 +536,20 @@ class ContentUpdateService
                 }
             }
         } elseif ($update->action === ContentUpdate::ACTION_DELETE && $update->entity_id) {
-            app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($update->entity_id);
-            Lesson::destroy($update->entity_id);
+            $lesson = Lesson::query()
+                ->where('course_id', $update->course_id)
+                ->find($update->entity_id);
+            if ($lesson) {
+                app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($lesson);
+                $lesson->delete();
+            }
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
             $orders = $payload['lesson_orders'] ?? [];
             foreach ($orders as $order) {
                 if (isset($order['id'], $order['sort_order'])) {
-                    Lesson::where('id', $order['id'])->update(['sort_order' => $order['sort_order']]);
+                    Lesson::where('course_id', $update->course_id)
+                        ->where('id', $order['id'])
+                        ->update(['sort_order' => $order['sort_order']]);
                 }
             }
         }
@@ -445,6 +597,24 @@ class ContentUpdateService
                 $newSection->draft_update = $cUpdate;
                 $newSection->update_status = $cUpdate->status;
                 $sections->push($newSection);
+            } elseif ($cUpdate->entity_id) {
+                $section = $sections->first(fn ($candidate) => (string) $candidate->id === (string) $cUpdate->entity_id);
+
+                if ($section) {
+                    $payload = $cUpdate->payload ?? [];
+                    if ($cUpdate->action === ContentUpdate::ACTION_UPDATE) {
+                        foreach ($payload as $key => $value) {
+                            if (in_array($key, ['title', 'description', 'sort_order'], true)) {
+                                $section->{$key} = $value;
+                            }
+                        }
+                    } elseif ($cUpdate->action === ContentUpdate::ACTION_DELETE) {
+                        $section->is_pending_deletion = true;
+                    }
+
+                    $section->draft_update = $cUpdate;
+                    $section->update_status = $cUpdate->status;
+                }
             }
         }
 
@@ -453,7 +623,15 @@ class ContentUpdateService
 
         foreach ($lessonUpdates as $lUpdate) {
             $payload = $lUpdate->payload ?? [];
-            $secId = $payload['section_id'] ?? $payload['chapter_id'] ?? null;
+            $secId = $payload['section_id'] ?? null;
+            if (! $secId && ! empty($payload['chapter_id'])) {
+                $secId = Lesson::query()
+                    ->where('course_id', $course->id)
+                    ->where('chapter_id', $payload['chapter_id'])
+                    ->whereNotNull('section_id')
+                    ->value('section_id');
+            }
+            $secId ??= $payload['chapter_id'] ?? null;
 
             if ($lUpdate->action === ContentUpdate::ACTION_CREATE) {
                 $draftLesson = new Lesson([

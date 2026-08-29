@@ -48,6 +48,7 @@
                     $lessonUpdate = $lesson->draft_update ?? null;
                     if (!$lessonUpdate && isset($lesson->id)) {
                         $lessonUpdate = \App\Models\ContentUpdate::where('course_id', $course->id)
+                            ->where('type', \App\Models\ContentUpdate::TYPE_LESSON)
                             ->where('entity_id', $lesson->id)
                             ->latest()
                             ->first();
@@ -59,7 +60,9 @@
                         elseif ($lesson->update_status === 'approved') $effectiveReviewStatus = 'pass';
                     }
                 @endphp
-                @if($effectiveReviewStatus === 'pass')
+                @if($lessonUpdate?->isPending())
+                    <span class="rounded-full border border-blue-300 bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">Thay đổi đang chờ Admin duyệt và không thể chỉnh sửa.</span>
+                @elseif($effectiveReviewStatus === 'pass')
                     <span class="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">Đạt</span>
                 @elseif($effectiveReviewStatus === 'need_revision')
                     <span class="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">Cần chỉnh sửa</span>
@@ -195,6 +198,9 @@
 
         @php
             $isDraftCreate = !empty($lesson->is_draft_create) && isset($lesson->draft_update);
+            $isPendingUpdate = $lessonUpdate?->isPending() ?? false;
+            $isDraftCreateReadOnly = $isDraftCreate && $lessonUpdate && ! $lessonUpdate->isDraft();
+            $isReadOnly = $isPendingUpdate || $isDraftCreateReadOnly;
             $updateActionUrl = $isDraftCreate
                 ? route('instructor.courses.content-updates.update', [$course, $lesson->draft_update])
                 : route('instructor.courses.lessons.update', [$course, $lesson->id]);
@@ -205,12 +211,18 @@
         @endphp
 
         <div class="flex shrink-0 flex-wrap gap-2">
-            @if($lesson->type === 'quiz' && ! $isDraftCreate)
+            @if($lesson->type === 'quiz' && ! $isDraftCreate && ! $isPendingUpdate)
                 <a href="{{ route('instructor.courses.lessons.quiz.show', [$course, $lesson]) }}"
                    class="inline-flex min-h-10 items-center justify-center rounded-lg border border-violet-200 px-4 py-2 text-sm font-bold text-violet-700 transition-colors duration-200 hover:bg-violet-50 cursor-pointer">
                     Quản lý câu hỏi
                 </a>
             @endif
+
+            @if($isReadOnly)
+                <span class="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-800">
+                    {{ $isPendingUpdate ? 'Thay đổi đang chờ Admin duyệt và không thể chỉnh sửa.' : 'Không thể chỉnh sửa' }}
+                </span>
+            @else
 
             {{-- Nút Sửa bài học --}}
             <button type="button"
@@ -233,9 +245,11 @@
                     Xóa
                 </button>
             </form>
+            @endif
         </div>
 
         {{-- Modal Sửa bài học --}}
+        @unless($isReadOnly)
         <div id="edit-lesson-modal-{{ $lesson->id }}"
              class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 {{ isset($errors) && $errors->hasBag($errorBagKey) ? '' : 'hidden' }}"
              onclick="if(event.target===this) this.classList.add('hidden')">
@@ -271,5 +285,6 @@
                 </div>
             </div>
         </div>
+        @endunless
     </div>
 </div>

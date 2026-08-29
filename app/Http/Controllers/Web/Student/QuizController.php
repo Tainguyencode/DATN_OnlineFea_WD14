@@ -148,7 +148,7 @@ class QuizController extends Controller
                 'total_score' => $attempt->total_score,
                 'percent' => (float) $attempt->percent,
                 'passed' => (bool) $attempt->passed,
-                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]),
+                'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]),
             ],
             'attempts_count' => $completedAttempts,
             'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
@@ -211,7 +211,7 @@ class QuizController extends Controller
                     ->count(),
                 'total_questions' => count($graded['questions']),
                 'pass_score' => (int) $quiz->pass_score,
-                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]),
+                'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]),
             ],
             'graded' => ['questions' => collect($graded['questions'])->map(fn ($result, $questionId) => [
                 'question_id' => (int) $questionId,

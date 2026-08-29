@@ -9,10 +9,12 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Services\AwsS3UploadService;
+use App\Services\ContentUpdateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class S3MultipartUploadController extends Controller
@@ -184,7 +186,48 @@ class S3MultipartUploadController extends Controller
                 $lesson = Lesson::where('course_id', $course->id)->where('id', $lessonId)->first();
             }
             if (! $lesson) {
-                $lesson = Lesson::where('original_video_key', $key)->first();
+                $lesson = Lesson::where('course_id', $course->id)
+                    ->where('original_video_key', $key)
+                    ->first();
+            }
+
+            $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
+                ->where('course_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->where(function ($q) use ($key, $lessonId) {
+                    $q->whereJsonContains('payload->original_video_key', $key);
+                    if ($lessonId) {
+                        $q->orWhere('entity_id', $lessonId);
+                    }
+                })
+                ->latest()
+                ->first();
+
+            if ($course->isPublished()) {
+                if (! $contentUpdate) {
+                    return response()->json([
+                        'message' => 'Video của khóa học đã xuất bản phải được lưu qua bản cập nhật nháp trước khi xử lý.',
+                    ], 422);
+                }
+
+                $payload = $contentUpdate->payload ?? [];
+                $changes = [
+                    'original_video_key' => $key,
+                    'upload_status' => 'uploaded',
+                ];
+                if ($duration > 0 && empty($payload['duration']) && empty($payload['duration_seconds'])) {
+                    $changes['duration'] = $duration;
+                    $changes['duration_seconds'] = $duration;
+                }
+                $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, $changes);
+                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
+                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+
+                return response()->json([
+                    'status' => 'success',
+                    'key' => $key,
+                    'location' => $result['location'] ?? null,
+                ]);
             }
 
             if ($lesson) {
@@ -216,10 +259,10 @@ class S3MultipartUploadController extends Controller
                 ->first();
 
             if ($contentUpdate) {
-                $p = $contentUpdate->payload ?? [];
-                $p['original_video_key'] = $key;
-                $p['upload_status'] = 'uploaded';
-                $contentUpdate->update(['payload' => $p]);
+                $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, [
+                    'original_video_key' => $key,
+                    'upload_status' => 'uploaded',
+                ]);
                 Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
                 ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
@@ -229,6 +272,10 @@ class S3MultipartUploadController extends Controller
                 'key' => $key,
                 'location' => $result['location'] ?? null,
             ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => $e->validator->errors()->first() ?: $e->getMessage(),
+            ], 422);
         } catch (Throwable $e) {
             Log::error('S3 multipart upload completion failed.', [
                 'exception' => $e,

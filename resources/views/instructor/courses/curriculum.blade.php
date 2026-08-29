@@ -210,6 +210,8 @@
                 $hasInvalidSectionDescription = filled($section->description)
                     && \App\Models\CourseSection::descriptionContainsMarkup($section->description);
                 $safeSectionDescription = $hasInvalidSectionDescription ? null : $section->description;
+                $sectionUpdate = $section->draft_update ?? null;
+                $sectionReadOnly = $sectionUpdate?->isPending() ?? false;
             @endphp
             <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-100 bg-slate-50 px-5 py-4">
@@ -234,6 +236,11 @@
                             @endif
                         </div>
                         <div class="flex shrink-0 flex-wrap gap-2">
+                            @if($sectionReadOnly)
+                                <span class="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-800">
+                                    Thay đổi đang chờ Admin duyệt và không thể chỉnh sửa.
+                                </span>
+                            @else
                             <details class="group">
                                 <summary class="inline-flex min-h-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-white">
                                     Sửa chương
@@ -266,6 +273,7 @@
                                     Xóa chương
                                 </button>
                             </form>
+                            @endif
                         </div>
                     </div>
                 </div>

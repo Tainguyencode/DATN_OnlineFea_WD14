@@ -5,11 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
 use App\Models\Chapter;
+use App\Models\ContentUpdate;
 use App\Models\Course;
+use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Services\ActivityLogService;
+use App\Services\ContentUpdateService;
+use App\Services\CourseReviewService;
+use App\Services\CurriculumLessonService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -69,20 +74,29 @@ class InstructorController extends Controller
             'tags' => 'nullable|array',
         ]);
 
+        if ($course->isContentApproved()) {
+            $update = app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_COURSE,
+                ContentUpdate::ACTION_UPDATE,
+                $course->id,
+                $course->id,
+                $validated,
+                $request->user(),
+            );
+
+            return $this->success($update, 'Đã lưu bản cập nhật khóa học, chờ Admin duyệt.', 202);
+        }
+
         $course->update($validated);
 
         return $this->success($course->fresh(), 'Cập nhật khóa học thành công');
     }
 
-    public function submitForReview(Request $request, Course $course): JsonResponse
+    public function submitForReview(Request $request, Course $course, CourseReviewService $reviewService): JsonResponse
     {
         $this->authorizeCourse($request, $course);
 
-        if ($course->chapters()->count() === 0) {
-            return $this->error('Khóa học cần có ít nhất 1 chương', 422);
-        }
-
-        $course->update(['status' => 'pending']);
+        $reviewService->submitForReview($course, $request->user());
 
         return $this->success($course, 'Đã gửi khóa học để duyệt');
     }
@@ -96,6 +110,19 @@ class InstructorController extends Controller
             'sort_order' => 'sometimes|integer|min:0',
         ]);
 
+        if ($course->isContentApproved()) {
+            $update = app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_CHAPTER,
+                ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, ['sort_order' => $validated['sort_order'] ?? $course->courseSections()->count()]),
+                $request->user(),
+            );
+
+            return $this->success($update, 'Đã lưu bản cập nhật chương, chờ Admin duyệt.', 202);
+        }
+
         $chapter = Chapter::create([
             ...$validated,
             'course_id' => $course->id,
@@ -105,7 +132,7 @@ class InstructorController extends Controller
         return $this->success($chapter, 'Thêm chương thành công', 201);
     }
 
-    public function storeLesson(Request $request, Chapter $chapter): JsonResponse
+    public function storeLesson(Request $request, Chapter $chapter, CurriculumLessonService $lessonService): JsonResponse
     {
         $this->authorizeCourse($request, $chapter->course);
 
@@ -118,6 +145,31 @@ class InstructorController extends Controller
             'is_preview' => 'sometimes|boolean',
             'sort_order' => 'sometimes|integer|min:0',
         ]);
+
+        $course = $chapter->course;
+        if ($course->isContentApproved()) {
+            $sectionId = Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('chapter_id', $chapter->id)
+                ->whereNotNull('section_id')
+                ->value('section_id');
+            $section = $sectionId
+                ? CourseSection::query()->where('course_id', $course->id)->find($sectionId)
+                : CourseSection::query()
+                    ->where('course_id', $course->id)
+                    ->where('title', $chapter->title)
+                    ->where('sort_order', $chapter->sort_order)
+                    ->first();
+            $update = $lessonService->createForManual(
+                $course,
+                $section ?? $chapter->id,
+                $validated,
+                $request->user(),
+            );
+            app(ContentUpdateService::class)->updateDraft($update, ['chapter_id' => $chapter->id]);
+
+            return $this->success($update, 'Đã lưu bản cập nhật bài học, chờ Admin duyệt.', 202);
+        }
 
         $lesson = Lesson::create([
             ...$validated,
