@@ -12,7 +12,6 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
-use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
 use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
@@ -626,11 +625,13 @@ class CurriculumController extends Controller
 
         $lessons = Lesson::where('course_id', $course->id)
             ->where('type', 'video')
-            ->select(['id', 'processing_status', 'upload_status', 'hls_manifest_key', 'video_path', 'original_video_key', 'duration', 'duration_seconds'])
+            ->select(['id', 'title', 'type', 'processing_status', 'upload_status', 'hls_manifest_key', 'video_path', 'video_url', 'hls_playlist', 'hls_path', 'original_video_key', 'duration', 'duration_seconds'])
             ->get();
 
         $updates = ContentUpdate::where('course_id', $course->id)
             ->where('type', ContentUpdate::TYPE_LESSON)
+            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+            ->latest('id')
             ->get();
 
         $statuses = [];
@@ -638,6 +639,7 @@ class CurriculumController extends Controller
             $isReady = $lesson->isHlsReady();
             $isProcessing = $lesson->isProcessing();
             $isFailed = $lesson->hasFailedProcessing();
+            $isMissingSource = ! $lesson->hasVideoSource();
             $isUploading = $lesson->upload_status === 'pending' && ! $isReady;
             $durationSec = (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0);
 
@@ -648,11 +650,13 @@ class CurriculumController extends Controller
 
             $statuses['lesson_'.$lesson->id] = [
                 'id' => $lesson->id,
+                'title' => $lesson->title,
                 'upload_status' => $lesson->upload_status,
                 'processing_status' => $lesson->processing_status,
                 'is_ready' => $isReady,
                 'is_processing' => $isProcessing,
                 'is_failed' => $isFailed,
+                'is_missing_source' => $isMissingSource,
                 'is_uploading' => $isUploading,
                 'duration' => $durationSec,
                 'duration_formatted' => $this->formatDuration($durationSec),
@@ -668,13 +672,34 @@ class CurriculumController extends Controller
             ];
         }
 
+        $seenUpdatedLessonIds = [];
         foreach ($updates as $update) {
+            if ($update->action === ContentUpdate::ACTION_DELETE) {
+                continue;
+            }
+
+            if ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
+                if (isset($seenUpdatedLessonIds[$update->entity_id])) {
+                    continue;
+                }
+                $seenUpdatedLessonIds[$update->entity_id] = true;
+            }
+
             $payload = $update->payload ?? [];
-            $pStatus = $payload['processing_status'] ?? 'pending';
-            $pManifest = $payload['hls_manifest_key'] ?? null;
-            $isReady = $pStatus === 'completed' || filled($pManifest);
-            $isFailed = $pStatus === 'failed' && ! $isReady;
-            $isProcessing = in_array($pStatus, ['processing', 'pending'], true) && ! $isReady;
+            $effectiveType = $payload['type'] ?? $lessons->firstWhere('id', $update->entity_id)?->type;
+            if ($effectiveType !== Lesson::TYPE_VIDEO) {
+                continue;
+            }
+
+            $video = new Lesson([
+                ...$payload,
+                'type' => Lesson::TYPE_VIDEO,
+            ]);
+            $pStatus = $video->processing_status ?? 'pending';
+            $isReady = $video->isHlsReady();
+            $isFailed = $video->hasFailedProcessing();
+            $isProcessing = $video->isProcessing();
+            $isMissingSource = ! $video->hasVideoSource();
             $durationSec = (int) ($payload['duration'] ?? $payload['duration_seconds'] ?? 0);
 
             $key = $update->action === ContentUpdate::ACTION_CREATE
@@ -684,10 +709,12 @@ class CurriculumController extends Controller
             $statuses[$key] = [
                 'id' => $update->entity_id ?? $update->id,
                 'update_id' => $update->id,
+                'title' => $payload['title'] ?? 'Video lesson',
                 'processing_status' => $pStatus,
                 'is_ready' => $isReady,
                 'is_processing' => $isProcessing,
                 'is_failed' => $isFailed,
+                'is_missing_source' => $isMissingSource,
                 'duration' => $durationSec,
                 'duration_formatted' => $this->formatDuration($durationSec),
                 'status_message' => $isReady
@@ -704,24 +731,39 @@ class CurriculumController extends Controller
         $hasIncompleteHls = $course->hasIncompleteHlsVideos();
         $hasFailed = false;
         $hasProcessing = false;
+        $missingSources = [];
+        $uploadingTitles = [];
+        $processingTitles = [];
 
         foreach ($statuses as $st) {
-            if ($st['is_failed']) {
+            if (! empty($st['is_missing_source'])) {
+                $missingSources[] = $st['title'] ?? 'Video lesson';
+            } elseif ($st['is_failed']) {
                 $hasFailed = true;
             } elseif ($st['is_processing'] || ! $st['is_ready']) {
                 $hasProcessing = true;
+                if (! empty($st['is_uploading'])) {
+                    $uploadingTitles[] = $st['title'] ?? 'Video lesson';
+                } else {
+                    $processingTitles[] = $st['title'] ?? 'Video lesson';
+                }
             }
         }
 
         if ($totalVideos === 0) {
             $commonState = 'no_videos';
             $commonMessage = '';
+        } elseif ($missingSources !== []) {
+            $commonState = 'missing_source';
+            $commonMessage = 'Còn '.count($missingSources).' video chưa có nguồn: '.implode(', ', $missingSources).'.';
         } elseif ($hasFailed) {
             $commonState = 'failed';
             $commonMessage = 'Video chưa xử lý hoàn tất. Vui lòng chờ quá trình xử lý video hoàn tất trước khi gửi duyệt.';
         } elseif ($hasProcessing || $hasIncompleteHls) {
             $commonState = 'processing';
-            $commonMessage = 'Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.';
+            $commonMessage = $uploadingTitles !== []
+                ? 'Còn '.count($uploadingTitles).' video đang chờ tải lên: '.implode(', ', $uploadingTitles).'.'
+                : 'Còn '.count($processingTitles).' video đang xử lý bảo mật: '.implode(', ', $processingTitles).'.';
         } else {
             $commonState = 'completed';
             $commonMessage = 'Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.';
@@ -731,7 +773,7 @@ class CurriculumController extends Controller
             'total_videos' => $totalVideos,
             'statuses' => $statuses,
             'has_incomplete_hls' => $hasIncompleteHls,
-            'can_submit' => $totalVideos > 0 ? (! $hasIncompleteHls && ! $hasFailed && ! $hasProcessing) : true,
+            'can_submit' => $totalVideos > 0 ? (! $hasIncompleteHls && $missingSources === [] && ! $hasFailed && ! $hasProcessing) : true,
             'common_state' => $commonState,
             'common_message' => $commonMessage,
         ]);

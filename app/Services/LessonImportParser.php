@@ -189,7 +189,12 @@ class LessonImportParser
             }
             $this->assertHeadersForSheet($sheet, $headers, $sheetName);
             $this->assertNoFormulasForSheet($sheet, $headers, $sheetName);
-            $sheets[$sheetName] = $this->extractRowsForSheet($sheet, $headers, $sheetName);
+            $sheets[$sheetName] = $this->extractRowsForSheet(
+                $sheet,
+                $headers,
+                $sheetName,
+                FullCourseImportWorkbookSchema::dataRowLimit($sheetName),
+            );
         }
 
         return [
@@ -540,8 +545,12 @@ class LessonImportParser
      * @param  array<int, string>  $headers
      * @return array<int, array{row_number: int, values: array<string, mixed>}>
      */
-    private function extractRowsForSheet(Worksheet $sheet, array $headers, string $sheetName): array
-    {
+    private function extractRowsForSheet(
+        Worksheet $sheet,
+        array $headers,
+        string $sheetName,
+        int $maxDataRows = self::MAX_DATA_ROWS,
+    ): array {
         $rows = [];
         $dataRowNumbers = [];
 
@@ -573,10 +582,10 @@ class LessonImportParser
                 'values' => $values,
             ];
 
-            if (count($rows) > self::MAX_DATA_ROWS) {
+            if (count($rows) > $maxDataRows) {
                 throw new LessonImportException(
                     'too_many_rows',
-                    "Sheet {$sheetName} chỉ hỗ trợ tối đa 100 dòng dữ liệu mỗi lần preview.",
+                    "Sheet {$sheetName} chỉ hỗ trợ tối đa {$maxDataRows} dòng dữ liệu mỗi lần preview.",
                 );
             }
         }
