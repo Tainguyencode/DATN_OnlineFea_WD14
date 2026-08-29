@@ -17,6 +17,7 @@ class Quiz extends Model
         'pass_score',
         'time_limit_minutes',
         'max_attempts',
+        'question_count',
         'is_active',
     ];
 
@@ -26,6 +27,7 @@ class Quiz extends Model
             'pass_score' => 'integer',
             'time_limit_minutes' => 'integer',
             'max_attempts' => 'integer',
+            'question_count' => 'integer',
             'is_active' => 'boolean',
         ];
     }

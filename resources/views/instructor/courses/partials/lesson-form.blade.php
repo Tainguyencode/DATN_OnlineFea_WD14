@@ -42,6 +42,7 @@
           videoPath: @js($lesson?->video_path ?? ''),
           courseId: @js($courseModel?->id),
           lessonId: @js($lesson?->id),
+          maxVideoBytes: @js((int) config('video.upload.max_bytes')),
           createUrl: @js($createMultipartUrl),
           signPartUrl: @js($signPartUrl),
           completeUrl: @js($completeMultipartUrl),
@@ -142,7 +143,7 @@
                             </svg>
                         </div>
                         <span class="text-sm font-bold text-slate-800">Nhấn để chọn video cho bài học này</span>
-                        <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV (Dung lượng khuyến nghị: 100MB - 2GB+)</span>
+                        <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV — tối đa {{ number_format(config('video.upload.max_bytes') / 1048576, 0) }}MB</span>
                         <input type="file"
                                x-ref="s3FileInput"
                                accept=".mp4,.mov,.avi,.webm,.m4v,.mkv,video/*"

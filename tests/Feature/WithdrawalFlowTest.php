@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Withdrawal;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class WithdrawalFlowTest extends TestCase
@@ -78,6 +79,19 @@ class WithdrawalFlowTest extends TestCase
         ])->assertSessionHasErrors('amount');
 
         $this->assertSame(1, Withdrawal::where('user_id', $instructor->id)->count());
+    }
+
+    public function test_repeated_withdrawal_key_creates_only_one_request(): void
+    {
+        $instructor = $this->createInstructorWithEarnings(bankConfigured: true);
+        $key = (string) Str::uuid();
+        $payload = ['amount' => 10000, 'idempotency_key' => $key];
+
+        $this->actingAs($instructor)->post(route('instructor.wallet.withdraw'), $payload)->assertSessionHasNoErrors();
+        $this->actingAs($instructor)->post(route('instructor.wallet.withdraw'), $payload)->assertSessionHasNoErrors();
+
+        $this->assertSame(1, Withdrawal::where('user_id', $instructor->id)->where('idempotency_key', $key)->count());
+        $this->assertSame(30000.0, $instructor->fresh()->available_balance);
     }
 
     public function test_admin_can_approve_withdrawal_once_and_instructor_is_notified(): void

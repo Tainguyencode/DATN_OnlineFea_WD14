@@ -18,6 +18,7 @@ use App\Models\QuizVersion;
 use App\Models\QuizVersionQuestion;
 use App\Models\User;
 use App\Services\ContentUpdateService;
+use App\Services\HistoricalQuizDeletionGuard;
 use App\Services\QuizContentService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -130,6 +131,29 @@ class QuizHistoricalForeignKeyHardeningTest extends TestCase
         $this->assertSame(ContentUpdate::STATUS_PENDING, $update->fresh()->status);
         $this->assertDatabaseCount('quiz_attempts', 1);
         $this->assertDatabaseCount('quiz_attempt_answers', 1);
+    }
+
+    public function test_section_and_course_preflight_reject_published_quiz_without_attempts(): void
+    {
+        [$course, , $section, $quiz] = $this->historicalQuiz();
+        QuizAttemptAnswer::query()->delete();
+        QuizAttempt::query()->delete();
+
+        $guard = app(HistoricalQuizDeletionGuard::class);
+
+        foreach ([
+            fn () => $guard->assertSectionCanBeHardDeleted($section),
+            fn () => $guard->assertCourseCanBeHardDeleted($course),
+        ] as $assertDeletionAllowed) {
+            try {
+                $assertDeletionAllowed();
+                $this->fail('Published quiz content was allowed to be deleted.');
+            } catch (HistoricalQuizDeletionException $exception) {
+                $this->assertSame(HistoricalQuizDeletionGuard::MESSAGE, $exception->getMessage());
+            }
+        }
+
+        $this->assertDatabaseHas('quizzes', ['id' => $quiz->id]);
     }
 
     /** @return array{Course, Lesson, CourseSection, Quiz, QuizQuestion, QuizVersion, QuestionVersion, QuizOption} */

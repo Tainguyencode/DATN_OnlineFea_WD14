@@ -87,6 +87,69 @@ class PayOSPaymentSecurityTest extends TestCase
         $this->assertSame('pending', $order->payment->fresh()->status);
     }
 
+    public function test_existing_payos_request_reuses_its_checkout_url(): void
+    {
+        Config::set('services.payos.mode', 'live');
+        [$order, , $user] = $this->pendingOrder();
+        $checkoutUrl = 'https://pay.payos.vn/web/existing-link';
+
+        Http::fake(function ($request) use ($checkoutUrl) {
+            if ($request->method() === 'POST') {
+                return Http::response(['code' => '231', 'desc' => 'Mã đơn hàng đã tồn tại', 'data' => null], 200);
+            }
+
+            return Http::response(['code' => '00', 'data' => ['checkoutUrl' => $checkoutUrl]], 200);
+        });
+
+        $this->actingAs($user)
+            ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
+            ->assertRedirect($checkoutUrl);
+    }
+
+    public function test_expired_existing_payos_request_is_recreated_with_a_new_order_code(): void
+    {
+        Config::set('services.payos.mode', 'live');
+        [$order, $payment, $user] = $this->pendingOrder();
+        $oldGatewayOrderCode = $payment->gateway_order_code;
+        $checkoutUrl = 'https://pay.payos.vn/web/recreated-link';
+        $postCount = 0;
+
+        Http::fake(function ($request) use (&$postCount, $checkoutUrl) {
+            if ($request->method() === 'GET') {
+                return Http::response(['code' => '00', 'data' => ['status' => 'CANCELLED']], 200);
+            }
+
+            $postCount++;
+
+            return $postCount === 1
+                ? Http::response(['code' => '231', 'desc' => 'Đơn thanh toán đã tồn tại', 'data' => null], 200)
+                : Http::response(['code' => '00', 'data' => ['checkoutUrl' => $checkoutUrl]], 200);
+        });
+
+        $this->actingAs($user)
+            ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
+            ->assertRedirect($checkoutUrl);
+
+        $this->assertNotSame($oldGatewayOrderCode, $payment->fresh()->gateway_order_code);
+        $this->assertLessThanOrEqual(9007199254740991, (int) $payment->fresh()->gateway_order_code);
+        $this->assertSame(2, $postCount);
+    }
+
+    public function test_payos_error_returns_to_payment_page_instead_of_500(): void
+    {
+        Config::set('services.payos.mode', 'live');
+        [$order, , $user] = $this->pendingOrder();
+
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response(['code' => '20', 'desc' => 'Thông tin tài khoản không hợp lệ'], 200),
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
+            ->assertRedirect(route('student.checkout.pay', $order->order_code))
+            ->assertSessionHas('error', 'PayOS từ chối yêu cầu: Thông tin tài khoản không hợp lệ');
+    }
+
     public function test_removed_payment_gateway_routes_are_not_registered(): void
     {
         $this->get('/payments/momo/callback')->assertNotFound();

@@ -176,6 +176,9 @@ class QuizAttemptPresentationService
             fn (QuizVersionQuestion $mapping): int => (int) $mapping->question_version_id,
         );
 
+        $allowedQuestionIds = collect($attempt->question_ids ?? [])
+            ->map(fn ($questionId): int => (int) $questionId);
+
         return collect($this->presentationOrder($attempt)['questions'])
             ->map(function (array $snapshotQuestion) use ($mappingsByQuestionVersion): array {
                 $mapping = $mappingsByQuestionVersion->get((int) $snapshotQuestion['question_version_id']);
@@ -191,6 +194,13 @@ class QuizAttemptPresentationService
                     'options' => $options,
                 ];
             })
+            ->when(
+                $allowedQuestionIds->isNotEmpty(),
+                fn (Collection $questions): Collection => $questions
+                    ->filter(fn (array $data): bool => $allowedQuestionIds->contains(
+                        (int) $data['mapping']->question_id,
+                    )),
+            )
             ->values();
     }
 

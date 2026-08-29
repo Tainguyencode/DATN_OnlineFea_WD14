@@ -39,16 +39,16 @@ class HistoricalQuizDeletionGuard
 
     public function assertSectionCanBeHardDeleted(CourseSection|int $section): void
     {
-        if ($this->hasHistoricalAttemptsForSection($section)) {
-            throw new HistoricalQuizDeletionException(self::MESSAGE);
-        }
+        Quiz::query()
+            ->whereHas('lesson', fn ($query) => $query->where('section_id', $this->id($section)))
+            ->each(fn (Quiz $quiz) => $this->assertQuizCanBeHardDeleted($quiz));
     }
 
     public function assertCourseCanBeHardDeleted(Course|int $course): void
     {
-        if ($this->hasHistoricalAttemptsForCourse($course)) {
-            throw new HistoricalQuizDeletionException(self::MESSAGE);
-        }
+        Quiz::query()
+            ->whereHas('lesson', fn ($query) => $query->where('course_id', $this->id($course)))
+            ->each(fn (Quiz $quiz) => $this->assertQuizCanBeHardDeleted($quiz));
     }
 
     public function assertQuizCanBeHardDeleted(Quiz $quiz): void

@@ -17,6 +17,7 @@ class QuestionVersion extends Model
         'question_id',
         'version',
         'question',
+        'image_path',
         'type',
         'points',
         'explanation',

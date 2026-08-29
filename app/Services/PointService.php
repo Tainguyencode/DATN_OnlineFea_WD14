@@ -33,7 +33,10 @@ class PointService
         $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
 
         DB::transaction(function () use ($userId, $points, $source, $description, $courseId, $referenceId, $timestamp) {
-            $userPoint = new UserPoint([
+            $attributes = $referenceId !== null
+                ? ['user_id' => $userId, 'source' => $source, 'reference_id' => $referenceId]
+                : ['id' => null];
+            $values = [
                 'user_id' => $userId,
                 'points' => $points,
                 'type' => 'earn',
@@ -41,10 +44,17 @@ class PointService
                 'description' => $description,
                 'course_id' => $courseId,
                 'reference_id' => $referenceId,
-            ]);
-            $userPoint->created_at = $timestamp;
-            $userPoint->updated_at = $timestamp;
-            $userPoint->save();
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ];
+
+            $userPoint = $referenceId !== null
+                ? UserPoint::firstOrCreate($attributes, $values)
+                : UserPoint::create($values);
+
+            if (! $userPoint->wasRecentlyCreated) {
+                return;
+            }
 
             $this->checkAndAwardBadges($userId);
         });
@@ -462,26 +472,37 @@ class PointService
      */
     public function getUserRank(int $userId, string $period = 'week'): int
     {
-        $userPoints = match ($period) {
-            'week' => $this->getUserWeeklyPoints($userId),
-            'month' => $this->getUserMonthlyPoints($userId),
-            default => $this->getUserTotalPoints($userId),
-        };
-
         $dateConstraint = match ($period) {
             'week' => now()->startOfWeek(),
             'month' => now()->startOfMonth(),
             default => null,
         };
 
-        $higherUsersCount = DB::table('user_points')
+        $periodPoints = DB::table('user_points')
             ->select('user_id', DB::raw('SUM(points) as period_points'))
-            ->when($dateConstraint, fn ($q) => $q->where('created_at', '>=', $dateConstraint))
-            ->groupBy('user_id')
-            ->having('period_points', '>', $userPoints)
-            ->get()
-            ->count();
+            ->when($dateConstraint, fn ($query) => $query->where('created_at', '>=', $dateConstraint))
+            ->groupBy('user_id');
+        $completedCourses = DB::table('enrollments')
+            ->select('user_id', DB::raw('COUNT(*) as completed_courses'))
+            ->where('status', 'completed')
+            ->groupBy('user_id');
+        $totalPoints = DB::table('user_points')
+            ->select('user_id', DB::raw('SUM(points) as total_points'))
+            ->groupBy('user_id');
 
-        return $higherUsersCount + 1;
+        $orderedIds = DB::table('users')
+            ->where('role', 'student')
+            ->joinSub($periodPoints, 'period_scores', 'users.id', '=', 'period_scores.user_id')
+            ->leftJoinSub($completedCourses, 'completed_scores', 'users.id', '=', 'completed_scores.user_id')
+            ->leftJoinSub($totalPoints, 'total_scores', 'users.id', '=', 'total_scores.user_id')
+            ->orderByDesc('period_scores.period_points')
+            ->orderByDesc(DB::raw('COALESCE(completed_scores.completed_courses, 0)'))
+            ->orderByDesc(DB::raw('COALESCE(total_scores.total_points, 0)'))
+            ->orderBy('users.id')
+            ->pluck('users.id');
+
+        $index = $orderedIds->search($userId);
+
+        return $index === false ? $orderedIds->count() + 1 : $index + 1;
     }
 }

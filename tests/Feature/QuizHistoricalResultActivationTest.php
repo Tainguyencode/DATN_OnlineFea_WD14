@@ -56,6 +56,14 @@ class QuizHistoricalResultActivationTest extends TestCase
             ->assertDontSee('V2 question 1')
             ->assertDontSee('V2 option 1-1');
 
+        $this->actingAs($student)
+            ->get(route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]))
+            ->assertOk()
+            ->assertSee('V1 question 1')
+            ->assertSee('V1 Correct 1')
+            ->assertDontSee('V2 question 1')
+            ->assertDontSee('V2 option 1-1');
+
         $this->assertSame($v1->id, $attempt->fresh()->quiz_version_id);
     }
 

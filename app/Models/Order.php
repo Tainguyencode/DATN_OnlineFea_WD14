@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Order extends Model
 {
     protected $fillable = [
-        'order_code', 'user_id', 'coupon_id', 'subtotal', 'discount_amount',
+        'order_code', 'idempotency_key', 'user_id', 'coupon_id', 'subtotal', 'discount_amount',
         'total_amount', 'status', 'payment_method', 'transaction_id',
     ];
 

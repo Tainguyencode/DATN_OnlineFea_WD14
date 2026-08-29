@@ -58,10 +58,10 @@ class FullCourseImportConfirmTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('idempotent', false)
-            ->assertJsonPath('batch.status', FullCourseImportBatch::STATUS_COMPLETED)
-            ->assertJsonPath('redirect_url', route('instructor.courses.curriculum', 1));
+            ->assertJsonPath('batch.status', FullCourseImportBatch::STATUS_COMPLETED);
 
         $course = Course::firstOrFail();
+        $response->assertJsonPath('redirect_url', route('instructor.courses.curriculum', $course));
         $this->assertSame('Khóa học xác nhận v3', $course->title);
         $this->assertSame($category->id, $course->category_id);
         $this->assertSame($instructor->id, $course->instructor_id);

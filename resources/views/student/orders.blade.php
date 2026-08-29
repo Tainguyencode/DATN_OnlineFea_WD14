@@ -156,7 +156,12 @@
                                             </span>
                                         @else
                                             <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 border border-rose-200">
-                                                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span> {{ ucfirst($order->status) }}
+                                                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                                {{ match ($order->status) {
+                                                    'cancelled' => 'Đã hủy',
+                                                    'failed' => 'Thanh toán thất bại',
+                                                    default => ucfirst($order->status),
+                                                } }}
                                             </span>
                                         @endif
                                     </td>

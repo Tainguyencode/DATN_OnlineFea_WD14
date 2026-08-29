@@ -16,6 +16,8 @@ class QuizService
     {
         $attempt->loadMissing([
             'quiz.questions.options',
+            'quizVersion.questionMappings.question',
+            'quizVersion.questionMappings.questionVersion.options',
             'attemptAnswers',
             'user',
             'quiz.lesson.course',
@@ -24,6 +26,9 @@ class QuizService
         ]);
 
         $quiz = $attempt->quiz;
+        if ($quiz && $attempt->quizVersion && (int) $attempt->quizVersion->quiz_id === (int) $quiz->id) {
+            $quiz = app(QuizAttemptService::class)->projectQuiz($attempt);
+        }
         $attemptAnswersGrouped = $attempt->attemptAnswers->groupBy('question_id');
         $rawSavedAnswers = is_array($attempt->answers) ? $attempt->answers : [];
 
@@ -117,8 +122,8 @@ class QuizService
         $currentAttemptIndex = collect($allAttempts)->search(fn ($a) => $a['is_current']);
         $attemptNumber = $currentAttemptIndex !== false ? $currentAttemptIndex + 1 : 1;
 
-        $course = $quiz?->lesson?->course 
-            ?? $quiz?->lesson?->section?->course 
+        $course = $quiz?->lesson?->course
+            ?? $quiz?->lesson?->section?->course
             ?? $quiz?->lesson?->chapter?->course;
 
         return [
@@ -146,7 +151,7 @@ class QuizService
                 ]);
             }
 
-            return $this->gradeVersion($subject->quizVersion, $submittedAnswers);
+            return $this->gradeVersion($subject->quizVersion, $submittedAnswers, $subject->question_ids);
         }
 
         if ($subject instanceof QuizVersion) {
@@ -169,7 +174,7 @@ class QuizService
         return $this->gradeLegacyQuiz($subject, $submittedAnswers);
     }
 
-    private function gradeVersion(QuizVersion $version, array $submittedAnswers): array
+    private function gradeVersion(QuizVersion $version, array $submittedAnswers, ?array $allowedQuestionIds = null): array
     {
         $score = 0;
         $totalScore = 0;
@@ -178,7 +183,11 @@ class QuizService
 
         $version->loadMissing('questionMappings.questionVersion.options', 'questionMappings.invalidations');
 
-        foreach ($version->questionMappings as $mapping) {
+        $allowedQuestionIds = collect($allowedQuestionIds ?? [])->map(fn ($id) => (int) $id);
+        $mappings = $version->questionMappings
+            ->when($allowedQuestionIds->isNotEmpty(), fn ($items) => $items->whereIn('question_id', $allowedQuestionIds));
+
+        foreach ($mappings as $mapping) {
             $questionVersion = $mapping->questionVersion;
 
             if (! $questionVersion || (int) $questionVersion->question_id !== (int) $mapping->question_id) {

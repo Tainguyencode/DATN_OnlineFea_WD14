@@ -19,6 +19,19 @@ class InstructorCurriculumLessonTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_legacy_section_lessons_url_redirects_owner_to_the_sections_actual_course(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$wrongCourse] = $this->courseWithSection($instructor);
+        [$actualCourse, $section] = $this->courseWithSection($instructor);
+
+        $this->get("/instructor/courses/{$wrongCourse->id}/sections/{$section->id}/lessons")
+            ->assertRedirect(route('instructor.courses.curriculum', $actualCourse))
+            ->assertSessionHas('error');
+
+        $this->get(route('instructor.courses.curriculum', $actualCourse))->assertOk();
+    }
+
     public function test_lesson_form_starts_with_common_fields_and_type_panels_are_exclusive(): void
     {
         $instructor = $this->signInInstructor();

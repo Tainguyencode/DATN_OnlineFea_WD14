@@ -74,6 +74,9 @@ class CartController extends Controller
                 ->keyBy('course_id')
             : collect();
 
+        $orderItemRows = [];
+        $timestamp = now();
+
         foreach ($courses as $course) {
             $price = $this->getEffectivePrice($course);
             $isEligible = $coupon ? $coupon->isEligibleForCourse($course) : false;
@@ -82,14 +85,16 @@ class CartController extends Controller
 
             $financials = $this->calculateItemFinancials($course, $itemNetPrice, $coupon);
 
-            OrderItem::create([
+            $orderItemRows[] = [
                 'order_id' => $order->id,
                 'course_id' => $course->id,
                 'price' => $price,
                 'commission_rate' => $financials['commission_rate'],
                 'commission_amount' => $financials['commission_amount'],
                 'instructor_earning' => $financials['instructor_earning'],
-            ]);
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ];
 
             if ($shouldEnroll) {
                 $enrollment = $existingEnrollments->get($course->id)
@@ -121,6 +126,10 @@ class CartController extends Controller
                 }
             }
         }
+
+        if ($orderItemRows !== []) {
+            OrderItem::query()->insert($orderItemRows);
+        }
     }
 
     /**
@@ -147,6 +156,12 @@ class CartController extends Controller
 
         // Lấy danh sách mã giảm giá khả dụng để hiển thị trên UI
         $activeCoupons = Coupon::where('is_active', true)
+            ->whereDoesntHave('userCoupons', function ($query) {
+                $query->where('user_id', auth()->id())->whereNotNull('used_at');
+            })
+            ->whereDoesntHave('orders', function ($query) {
+                $query->where('user_id', auth()->id())->where('status', 'paid');
+            })
             ->where(function ($q) {
                 $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
             })
@@ -220,11 +235,24 @@ class CartController extends Controller
     public function checkout(Request $request, PaymentGatewayService $paymentService): RedirectResponse
     {
         $validated = $request->validate([
+            'idempotency_key' => ['nullable', 'uuid'],
             'payment_method' => 'required|in:payos,bank_transfer',
             'coupon_code' => 'nullable|string',
             'course_ids' => 'required|array',
             'course_ids.*' => 'required|integer|exists:courses,id',
         ]);
+
+        $existingOrder = ! empty($validated['idempotency_key'])
+            ? Order::query()
+                ->where('user_id', auth()->id())
+                ->where('idempotency_key', $validated['idempotency_key'])
+                ->first()
+            : null;
+        if ($existingOrder) {
+            return $existingOrder->status === 'paid'
+                ? redirect()->route('student.checkout.success', $existingOrder->order_code)
+                : redirect($paymentService->getPaymentUrl($existingOrder));
+        }
 
         $selectedCourseIds = $validated['course_ids'];
         $cart = $this->getCart()->load(['courses' => function ($query) use ($selectedCourseIds) {
@@ -288,6 +316,7 @@ class CartController extends Controller
 
                 $order = Order::create([
                     'order_code' => $orderCode,
+                    'idempotency_key' => $validated['idempotency_key'] ?? null,
                     'user_id' => auth()->id(),
                     'coupon_id' => $coupon?->id,
                     'subtotal' => $subtotal,
@@ -312,6 +341,10 @@ class CartController extends Controller
                 $this->createOrderItemsAndEnrollments($order, $cart->courses, $coupon, $discount, $eligibleSubtotal, true);
 
                 $lockedCoupon?->increment('used_count');
+                $lockedCoupon?->userCoupons()
+                    ->where('user_id', auth()->id())
+                    ->whereNull('used_at')
+                    ->update(['used_at' => now()]);
 
                 // Xóa các khóa học đã mua khỏi giỏ hàng
                 $cart->courses()->detach($selectedCourseIds);
@@ -331,6 +364,7 @@ class CartController extends Controller
         $order = DB::transaction(function () use ($cart, $subtotal, $discount, $total, $coupon, $validated, $orderCode, $itemsSnapshot, $eligibleSubtotal) {
             $order = Order::create([
                 'order_code' => $orderCode,
+                'idempotency_key' => $validated['idempotency_key'] ?? null,
                 'user_id' => auth()->id(),
                 'coupon_id' => $coupon?->id,
                 'subtotal' => $subtotal,
@@ -354,7 +388,12 @@ class CartController extends Controller
         });
 
         // Lấy URL thanh toán tương ứng và chuyển hướng người dùng tới trang quét mã QR (PayOS / VietQR)
-        $paymentUrl = $paymentService->getPaymentUrl($order);
+        try {
+            $paymentUrl = $paymentService->getPaymentUrl($order);
+        } catch (\RuntimeException $exception) {
+            return redirect()->route('student.checkout.pay', $order->order_code)
+                ->with('error', $exception->getMessage());
+        }
 
         return redirect($paymentUrl);
     }
@@ -535,17 +574,33 @@ class CartController extends Controller
                 $order->payment->update(['amount' => $total]);
             }
 
+            $itemUpdates = [];
+            $timestamp = now();
             foreach ($orderItems as $item) {
                 $isEligible = $coupon->isEligibleForCourse($item->course);
                 $itemDiscount = ($isEligible && $eligibleSubtotal > 0) ? ($item->price / $eligibleSubtotal) * $discount : 0;
                 $itemNetPrice = max(0, $item->price - $itemDiscount);
                 $financials = $this->calculateItemFinancials($item->course, $itemNetPrice, $coupon);
 
-                $item->update([
+                $itemUpdates[] = [
+                    'id' => $item->id,
+                    'order_id' => $item->order_id,
+                    'course_id' => $item->course_id,
+                    'price' => $item->price,
                     'commission_rate' => $financials['commission_rate'],
                     'commission_amount' => $financials['commission_amount'],
                     'instructor_earning' => $financials['instructor_earning'],
-                ]);
+                    'created_at' => $item->created_at,
+                    'updated_at' => $timestamp,
+                ];
+            }
+
+            if ($itemUpdates !== []) {
+                OrderItem::query()->upsert(
+                    $itemUpdates,
+                    ['id'],
+                    ['commission_rate', 'commission_amount', 'instructor_earning', 'updated_at']
+                );
             }
         });
 
@@ -589,13 +644,29 @@ class CartController extends Controller
                 $order->payment->update(['amount' => $subtotal]);
             }
 
+            $itemUpdates = [];
+            $timestamp = now();
             foreach ($order->items()->with('course')->get() as $item) {
                 $financials = $this->calculateItemFinancials($item->course, $item->price, null);
-                $item->update([
+                $itemUpdates[] = [
+                    'id' => $item->id,
+                    'order_id' => $item->order_id,
+                    'course_id' => $item->course_id,
+                    'price' => $item->price,
                     'commission_rate' => $financials['commission_rate'],
                     'commission_amount' => $financials['commission_amount'],
                     'instructor_earning' => $financials['instructor_earning'],
-                ]);
+                    'created_at' => $item->created_at,
+                    'updated_at' => $timestamp,
+                ];
+            }
+
+            if ($itemUpdates !== []) {
+                OrderItem::query()->upsert(
+                    $itemUpdates,
+                    ['id'],
+                    ['commission_rate', 'commission_amount', 'instructor_earning', 'updated_at']
+                );
             }
         });
 
@@ -645,7 +716,12 @@ class CartController extends Controller
             ]);
         }
 
-        $paymentUrl = $paymentService->getPaymentUrl($order);
+        try {
+            $paymentUrl = $paymentService->getPaymentUrl($order);
+        } catch (\RuntimeException $exception) {
+            return redirect()->route('student.checkout.pay', $orderCode)
+                ->with('error', $exception->getMessage());
+        }
 
         return redirect($paymentUrl);
     }

@@ -35,6 +35,13 @@ class QuizAttemptService
             }
 
             $version = $this->resolveVersion($quiz);
+            $seed = bin2hex(random_bytes(16));
+            $questionIds = $version->questionMappings()->pluck('question_id')
+                ->sortBy(fn ($questionId) => hash('sha256', $seed.':question:'.$questionId))
+                ->values();
+            if ($version->question_count) {
+                $questionIds = $questionIds->take(min($version->question_count, $questionIds->count()));
+            }
             $completedAttempts = QuizAttempt::query()
                 ->where('user_id', $user->id)
                 ->where('quiz_id', $quiz->id)
@@ -55,6 +62,8 @@ class QuizAttemptService
                 'user_id' => $user->id,
                 'quiz_id' => $quiz->id,
                 'quiz_version_id' => $version->id,
+                'random_seed' => $seed,
+                'question_ids' => $questionIds->map(fn ($id) => (int) $id)->all(),
                 'status' => QuizAttempt::STATUS_IN_PROGRESS,
                 'presentation_order' => app(QuizAttemptPresentationService::class)->createSnapshot($version),
                 'started_at' => now(),
@@ -340,7 +349,11 @@ class QuizAttemptService
         $answers = [];
         $questions = [];
 
-        foreach ($version->questionMappings as $mapping) {
+        $allowedQuestionIds = collect($attempt->question_ids ?? [])->map(fn ($id) => (int) $id);
+        $mappings = $version->questionMappings
+            ->when($allowedQuestionIds->isNotEmpty(), fn ($items) => $items->whereIn('question_id', $allowedQuestionIds));
+
+        foreach ($mappings as $mapping) {
             $questionId = (int) $mapping->question_id;
             $questionVersion = $mapping->questionVersion;
             abort_unless($questionVersion && (int) $questionVersion->question_id === $questionId, 409, 'Quiz version has an invalid question composition.');

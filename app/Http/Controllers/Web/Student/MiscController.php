@@ -5,16 +5,17 @@ namespace App\Http\Controllers\Web\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\Course;
-use App\Models\Order;
 use App\Models\Enrollment;
-use App\Services\PayoutService;
+use App\Models\Order;
 use App\Models\Wishlist;
 use App\Notifications\CertificateIssuedNotification;
 use App\Services\CertificatePdfService;
+use App\Services\PayoutService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Throwable;
@@ -200,6 +201,30 @@ class MiscController extends Controller
         $banks = app(PayoutService::class)->getVietNamBanks();
 
         return view('student.orders.show', compact('order', 'banks', 'refundEligibility'));
+    }
+
+    public function cancelOrder(Order $order): RedirectResponse
+    {
+        abort_unless((int) $order->user_id === (int) auth()->id(), 403, 'Bạn không có quyền hủy đơn hàng này.');
+
+        $cancelled = DB::transaction(function () use ($order): bool {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if ($lockedOrder->status !== 'pending') {
+                return false;
+            }
+
+            $lockedOrder->update(['status' => 'cancelled']);
+            $lockedOrder->payment()->where('status', 'pending')->update([
+                'status' => 'failed',
+                'gateway_response' => ['message' => 'Đơn hàng đã được học viên hủy.'],
+            ]);
+
+            return true;
+        });
+
+        return $cancelled
+            ? redirect()->route('student.orders.show', $order)->with('success', 'Đã hủy đơn hàng thành công.')
+            : redirect()->route('student.orders.show', $order)->with('error', 'Chỉ có thể hủy đơn hàng đang chờ thanh toán.');
     }
 
     public function profile(): View
