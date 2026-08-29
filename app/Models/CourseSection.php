@@ -25,6 +25,21 @@ class CourseSection extends Model
         return $this->hasMany(Lesson::class, 'section_id')->orderBy('sort_order');
     }
 
+    public function versions(): HasMany
+    {
+        return $this->hasMany(CourseSectionVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseSectionVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseSectionVersion::class, 'draft_version_id');
+    }
+
     public static function descriptionContainsMarkup(mixed $description): bool
     {
         if (! is_string($description) || trim($description) === '') {

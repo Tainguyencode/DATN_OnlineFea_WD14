@@ -105,6 +105,21 @@ class Lesson extends Model
         return $this->hasOne(Assignment::class);
     }
 
+    public function versions(): HasMany
+    {
+        return $this->hasMany(LessonVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(LessonVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(LessonVersion::class, 'draft_version_id');
+    }
+
     public function discussions(): HasMany
     {
         return $this->hasMany(Discussion::class);
