@@ -89,6 +89,14 @@
         @apply animate-pulse rounded bg-slate-200 dark:bg-slate-800;
     }
 
+    .course-actions {
+        z-index: 1;
+    }
+
+    .course-actions.is-open {
+        z-index: 70;
+    }
+
     .auth-input {
         @apply h-[50px] w-full rounded-lg border border-slate-300 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition duration-200 hover:border-slate-400 focus:border-[#0056D2] focus:ring-2 focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 dark:hover:border-slate-600;
     }
@@ -1739,4 +1747,3 @@ span[class~="rounded-full"][class~="h-2"][class~="w-2"] {
         display: none !important;
     }
 }
-
