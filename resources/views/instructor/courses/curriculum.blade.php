@@ -112,21 +112,21 @@
     {{-- THÔNG BÁO BẢO MẬT HLS CHUNG DUY NHẤT VÀ NÚT GỬI DUYỆT (Requirement 7, 8, 14, 15, 16, 18) --}}
     @php
         $totalVideoLessons = $course->lessons()->where('type', 'video')->count();
+        $videoReadinessBlockers = $course->videoReadinessBlockers();
+        $hasVideoReadinessBlockers = $videoReadinessBlockers !== [];
         $hasIncompleteHls = $course->hasIncompleteHlsVideos();
-        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasIncompleteHls;
+        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasVideoReadinessBlockers;
+        $videoBlockerTitle = $videoReadinessBlockers[0]['title'] ?? null;
     @endphp
 
     <div id="common-hls-banner-wrapper"
-         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasIncompleteHls ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900') }}">
+         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasVideoReadinessBlockers ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900') }}">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-3">
-                <span id="common-hls-icon" class="text-xl shrink-0">
-                    {{ $hasIncompleteHls ? '⏳' : '✅' }}
-                </span>
                 <div>
                     <p id="common-hls-message" class="text-sm font-bold">
-                        @if($hasIncompleteHls)
-                            Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.
+                        @if($hasVideoReadinessBlockers)
+                            Còn video chưa sẵn sàng: {{ $videoBlockerTitle }}.
                         @elseif($totalVideoLessons > 0)
                             Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.
                         @endif
@@ -141,11 +141,11 @@
                         <input type="hidden" name="copyright_agreed" value="1">
                         <button type="submit"
                                 id="curriculum-submit-review-btn"
-                                {{ $hasIncompleteHls ? 'disabled' : '' }}
-                                @if($hasIncompleteHls)
-                                    title="Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật."
+                                {{ $hasVideoReadinessBlockers ? 'disabled' : '' }}
+                                @if($hasVideoReadinessBlockers)
+                                    title="Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: {{ $videoBlockerTitle }}."
                                 @endif
-                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasIncompleteHls ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
+                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasVideoReadinessBlockers ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
                             {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
                         </button>
                     </form>

@@ -44,13 +44,18 @@ final class FullCourseImportWorkbookSchema
         'assignment_due_days', 'assignment_max_score', 'assignment_passing_score',
     ];
 
-    public const MAX_SECTIONS = 50;
+    public const DATA_ROW_LIMITS = [
+        self::COURSE_SHEET => 1,
+        self::SECTIONS_SHEET => 50,
+        self::LESSONS_SHEET => 500,
+        self::QUIZZES_SHEET => 100,
+        self::QUIZ_QUESTIONS_SHEET => 2000,
+        self::QUIZ_OPTIONS_SHEET => 10000,
+    ];
 
-    public const MAX_LESSONS = 500;
-
-    public const MAX_QUIZZES = 100;
-
-    public const MAX_QUESTIONS = 2000;
-
-    public const MAX_OPTIONS = 10000;
+    public static function dataRowLimit(string $sheet): int
+    {
+        return self::DATA_ROW_LIMITS[$sheet]
+            ?? throw new \InvalidArgumentException("No v3 row limit is configured for {$sheet}.");
+    }
 }

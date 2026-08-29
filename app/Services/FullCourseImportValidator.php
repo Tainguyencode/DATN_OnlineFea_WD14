@@ -25,11 +25,9 @@ class FullCourseImportValidator
             unset($issues[array_key_last($issues)]['row']);
         };
         $rows = fn (string $sheet): array => $sheets[$sheet] ?? [];
-        $this->assertLimit($rows(Schema::SECTIONS_SHEET), Schema::MAX_SECTIONS, Schema::SECTIONS_SHEET, $add);
-        $this->assertLimit($rows(Schema::LESSONS_SHEET), Schema::MAX_LESSONS, Schema::LESSONS_SHEET, $add);
-        $this->assertLimit($rows(Schema::QUIZZES_SHEET), Schema::MAX_QUIZZES, Schema::QUIZZES_SHEET, $add);
-        $this->assertLimit($rows(Schema::QUIZ_QUESTIONS_SHEET), Schema::MAX_QUESTIONS, Schema::QUIZ_QUESTIONS_SHEET, $add);
-        $this->assertLimit($rows(Schema::QUIZ_OPTIONS_SHEET), Schema::MAX_OPTIONS, Schema::QUIZ_OPTIONS_SHEET, $add);
+        foreach (Schema::DATA_ROW_LIMITS as $sheet => $limit) {
+            $this->assertLimit($rows($sheet), $limit, $sheet, $add);
+        }
 
         $course = $this->course($rows(Schema::COURSE_SHEET), $add);
         $sections = $this->sections($rows(Schema::SECTIONS_SHEET), $add);

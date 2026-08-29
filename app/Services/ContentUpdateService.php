@@ -417,8 +417,11 @@ class ContentUpdateService
             ? $course->courseSections
             : $course->chapters;
 
+        // Only draft/pending records are candidate curriculum. Approved and rejected
+        // records are history: the former has already been applied to the real lesson
+        // and the latter must not override a later accepted/re-uploaded video.
         $activeUpdates = ContentUpdate::where('course_id', $course->id)
-            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED, ContentUpdate::STATUS_APPROVED])
+            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
             ->orderBy('id')
             ->get();
 

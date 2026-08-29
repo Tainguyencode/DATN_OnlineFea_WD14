@@ -22,6 +22,8 @@ class CourseSubmissionValidator
 
     public const KEY_VIDEO_DURATION = 'video_duration';
 
+    public const KEY_VIDEO_SOURCE = 'video_source';
+
     public const KEY_QUIZ_CONTENT = 'quiz_content';
 
     public function __construct(
@@ -36,6 +38,11 @@ class CourseSubmissionValidator
         $durationMinutes = $course->totalVideoDurationMinutes();
         $categoryReady = $course->category?->isSelectableForCourse() ?? false;
         $quizErrors = $this->quizReadinessErrors($course);
+        $missingVideoSources = collect($course->videoReadinessBlockers())
+            ->where('state', 'missing_source')
+            ->pluck('title')
+            ->values()
+            ->all();
 
         $items = [
             $this->makeItem(
@@ -91,6 +98,14 @@ class CourseSubmissionValidator
                         $durationMinutes,
                         Course::MIN_VIDEO_DURATION_MINUTES,
                     ),
+            ),
+            $this->makeItem(
+                self::KEY_VIDEO_SOURCE,
+                'Nguồn video bài giảng',
+                $missingVideoSources === [],
+                $missingVideoSources === []
+                    ? null
+                    : 'Chưa có video cho: '.implode(', ', $missingVideoSources),
             ),
             $this->makeItem(
                 self::KEY_QUIZ_CONTENT,
