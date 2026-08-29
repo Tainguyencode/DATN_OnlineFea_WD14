@@ -99,4 +99,32 @@ class PublicNavigationTest extends TestCase
         $response->assertSee('instructor-shell', false);
         $response->assertSee('Quản lý khóa học');
     }
+
+    public function test_public_instructors_page_loads_and_searches_without_query_exception(): void
+    {
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'name' => 'Nguyễn Văn Giảng Viên',
+        ]);
+
+        \App\Models\InstructorProfile::create([
+            'user_id' => $instructor->id,
+            'position' => 'Senior Backend Developer',
+            'specialty' => 'Laravel & MySQL',
+            'teaching_field' => 'Công nghệ thông tin',
+            'bio' => 'Hơn 8 năm kinh nghiệm giảng dạy và phát triển web.',
+        ]);
+
+        $response = $this->get(route('instructors.index'));
+        $response->assertOk();
+        $response->assertSee('Nguyễn Văn Giảng Viên');
+        $response->assertSee('Senior Backend Developer');
+
+        $searchResponse = $this->get(route('instructors.index', ['search' => 'Backend']));
+        $searchResponse->assertOk();
+        $searchResponse->assertSee('Nguyễn Văn Giảng Viên');
+    }
 }

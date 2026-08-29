@@ -24,8 +24,8 @@
         x-data="publicHeader()"
         x-on:keydown.escape.window="closeMenus(); mobileOpen = false"
         class="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-    <div class="flex h-16 w-full items-center gap-2 px-3 sm:px-4 lg:gap-3 lg:px-6 xl:px-8">
-        <div data-header-left class="flex min-w-0 shrink-0 items-center gap-2 lg:gap-3">
+    <div class="mx-auto flex h-[72px] w-full max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:gap-4 lg:px-8">
+        <div data-header-left class="flex min-w-0 shrink-0 items-center gap-2.5 lg:gap-4">
             <button type="button"
                     @if($studentDashboard)
                         x-on:click="$dispatch('toggle-student-sidebar')"
@@ -34,45 +34,45 @@
                     @else
                         x-on:click="mobileOpen = true"
                     @endif
-                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-200 dark:hover:bg-slate-800 {{ $studentDashboard ? '' : 'lg:hidden' }}"
+                    class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-200 dark:hover:bg-slate-800 {{ $studentDashboard ? '' : 'xl:hidden' }}"
                     aria-label="{{ $studentDashboard ? 'Ẩn/hiện menu học viên' : 'Mở menu điều hướng' }}">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
             </button>
 
-            <a href="{{ route('home') }}" class="flex h-12 shrink-0 items-center" aria-label="FEA Learning - Trang chủ">
-                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-10 w-auto object-contain">
+            <a href="{{ route('home') }}" class="flex h-14 shrink-0 items-center" aria-label="FEA Learning - Trang chủ">
+                <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-12 w-auto object-contain">
             </a>
 
-            <nav data-primary-navigation class="hidden h-16 items-center gap-0.5 lg:flex" aria-label="Điều hướng chính">
+            <nav data-primary-navigation class="hidden h-[72px] items-center gap-1 xl:flex" aria-label="Điều hướng chính">
                 @foreach($primaryNav as $item)
                     @php $active = request()->routeIs(...$item['active']); @endphp
                     <a href="{{ route($item['route']) }}"
                        @if($active) aria-current="page" @endif
-                       class="inline-flex h-full items-center border-b-2 px-2 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0056D2] {{ $active ? 'border-[#0056D2] text-[#0056D2] dark:border-blue-400 dark:text-blue-300' : 'border-transparent text-slate-600 hover:border-blue-200 hover:text-[#0056D2] dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-blue-300' }}">
+                       class="inline-flex h-full items-center border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0056D2] {{ $active ? 'border-[#0056D2] text-[#0056D2] dark:border-blue-400 dark:text-blue-300' : 'border-transparent text-slate-600 hover:border-blue-200 hover:text-[#0056D2] dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-blue-300' }}">
                         {{ $item['label'] }}
                     </a>
                 @endforeach
             </nav>
         </div>
 
-        <div data-header-right class="ml-auto flex min-w-0 shrink-0 items-center gap-1 sm:gap-1.5">
-            <form data-student-search method="GET" action="{{ route('courses.index') }}" class="hidden w-[clamp(17.5rem,23vw,22.5rem)] min-w-0 lg:block">
+        <div data-header-right class="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+            <form data-student-search method="GET" action="{{ route('courses.index') }}" class="hidden w-[clamp(20rem,25vw,25rem)] min-w-0 lg:block">
                 <label class="relative block">
                     <span class="sr-only">Tìm kiếm khóa học</span>
                     <svg class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>
                     <input type="search" name="search" value="{{ request('search') }}" placeholder="Tìm kiếm khóa học…"
-                           class="h-10 w-full rounded-full border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-[#0056D2] focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-blue-950">
+                           class="h-11 w-full rounded-full border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-[#0056D2] focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-blue-950">
                 </label>
             </form>
 
             <button type="button" x-on:click="toggleMenu('search')"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
+                    class="inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
                     aria-label="Tìm kiếm khóa học" aria-controls="header-mobile-search" :aria-expanded="isOpen('search').toString()">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>
             </button>
 
             <button type="button" data-theme-toggle onclick="toggleTheme()"
-                    class="hidden h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] sm:inline-flex dark:text-slate-300 dark:hover:bg-slate-800"
+                    class="hidden h-11 w-11 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] sm:inline-flex dark:text-slate-300 dark:hover:bg-slate-800"
                     aria-label="Đổi giao diện" aria-pressed="false">
                 <svg class="hidden h-5 w-5 dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364-.707.707M6.343 17.657l-.707.707m0-12.728.707.707m12.728 12.728-.707-.707M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
                 <svg class="block h-5 w-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646Z"/></svg>
@@ -85,10 +85,10 @@
 
                 <div data-student-account class="relative" x-on:click.outside="if (isOpen('account')) closeMenus()">
                     <button type="button" x-on:click="toggleMenu('account')"
-                            class="flex h-10 items-center gap-2 rounded-lg px-1.5 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:hover:bg-slate-800 {{ $accountActive ? 'bg-blue-50 dark:bg-slate-800' : '' }}"
+                            class="flex h-11 items-center gap-2.5 rounded-xl px-2 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:hover:bg-slate-800 {{ $accountActive ? 'bg-blue-50 dark:bg-slate-800' : '' }}"
                             aria-haspopup="true" :aria-expanded="isOpen('account').toString()" aria-controls="public-nav-account" aria-label="Mở menu tài khoản">
                         <span class="hidden max-w-32 truncate text-sm font-semibold text-[#0056D2] xl:block dark:text-blue-300">{{ $user->name }}</span>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-[#0878B8] text-xs font-bold text-white dark:border-slate-700">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-[#0878B8] text-xs font-bold text-white dark:border-slate-700">
                             @if($user->avatar)
                                 <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-full w-full object-cover">
                             @else
@@ -185,7 +185,7 @@
         </form>
     </div>
 
-    <div x-show="mobileOpen" x-cloak class="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="Menu chính">
+    <div x-show="mobileOpen" x-cloak class="fixed inset-0 z-[60] xl:hidden" role="dialog" aria-modal="true" aria-label="Menu chính">
         <div class="absolute inset-0 bg-slate-950/45" x-on:click="mobileOpen = false"></div>
         <aside x-show="mobileOpen"
                x-transition:enter="transition ease-out duration-200" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
