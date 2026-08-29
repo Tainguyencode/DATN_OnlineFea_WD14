@@ -1,4 +1,4 @@
-<x-student-layout title="Đã xem gần đây" page-title="Khóa học đã xem gần đây" breadcrumb="Các khóa học bạn vừa truy cập">
+<x-student-layout title="Khóa học đã xem gần đây">
 
 <div class="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
     <div>

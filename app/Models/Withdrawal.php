@@ -18,6 +18,7 @@ class Withdrawal extends Model
 
     protected $fillable = [
         'user_id',
+        'idempotency_key',
         'amount',
         'bank_code',
         'bank_name',

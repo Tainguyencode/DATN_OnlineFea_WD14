@@ -15,7 +15,7 @@
 @endphp
 
 <!-- COURSE CHAT DRAWER / PANEL (SLIDE-OVER FROM RIGHT) -->
-<div x-show="chatOpen" 
+<div x-show="chatOpen" data-course-chat-root data-current-user-id="{{ auth()->id() }}" data-discussion-id="{{ $activeDiscussion?->id }}" data-messages-url="{{ $activeDiscussion ? route('discussions.messages', $activeDiscussion) : '' }}"
      x-cloak
      class="fixed inset-0 z-50 overflow-hidden pointer-events-none" 
      role="dialog" 
@@ -149,7 +149,7 @@
 
                                         <!-- NÚT THU HỒI CHỈ HIỂN THỊ KHI <= 24 GIỜ -->
                                         @if($canRecallOriginal)
-                                            <form action="{{ route('discussions.recall', $activeDiscussion) }}" method="POST" class="inline" onsubmit="return confirm('Bạn có chắc muốn thu hồi tin nhắn này?')">
+                                            <form action="{{ route('discussions.recall', $activeDiscussion) }}" method="POST" class="inline" data-course-chat-recall data-chat-target="msg-disc-{{ $activeDiscussion->id }}">
                                                 @csrf
                                                 <button type="submit" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition cursor-pointer" title="Thu hồi tin nhắn (trong vòng 24 giờ)">
                                                     <span>Thu hồi</span>
@@ -255,7 +255,7 @@
 
                                             <!-- NÚT THU HỒI CHỈ HIỂN THỊ KHI <= 24 GIỜ -->
                                             @if($canRecallReply)
-                                                <form action="{{ route('discussions.replies.recall', $reply) }}" method="POST" class="inline" onsubmit="return confirm('Bạn có chắc muốn thu hồi tin nhắn này?')">
+                                                <form action="{{ route('discussions.replies.recall', $reply) }}" method="POST" class="inline" data-course-chat-recall data-chat-target="msg-reply-{{ $reply->id }}">
                                                     @csrf
                                                     <button type="submit" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition cursor-pointer" title="Thu hồi tin nhắn (trong vòng 24 giờ)">
                                                         <span>Thu hồi</span>
@@ -357,7 +357,7 @@
                             <button type="button" onclick="cancelReplyContext()" class="text-slate-400 hover:text-slate-700 text-lg font-bold leading-none p-1 rounded-full hover:bg-blue-100 shrink-0 cursor-pointer" title="Hủy trả lời tin nhắn này">&times;</button>
                         </div>
 
-                        <form id="student-reply-form" action="{{ route('discussions.replies.store', $activeDiscussion) }}" method="POST" enctype="multipart/form-data" class="space-y-2.5" onsubmit="return validateStudentReplyForm()">
+                        <form id="student-reply-form" data-course-chat-send data-chat-messages="student-chat-body" action="{{ route('discussions.replies.store', $activeDiscussion) }}" method="POST" enctype="multipart/form-data" class="space-y-2.5">
                             @csrf
                             <input type="hidden" name="reply_to_message_id" id="reply-to-message-id" value="">
                             <input type="hidden" name="lesson_id" value="{{ $lesson->id }}">
@@ -418,7 +418,7 @@
 
                         <!-- FORM NHẬP CÂU HỎI BAN ĐẦU -->
                         <div class="bg-white p-3.5 border-t border-slate-200 shrink-0">
-                            <form id="initial-qa-form" action="{{ route('courses.lessons.discussions.store', [$course, $lesson]) }}" method="POST" enctype="multipart/form-data" class="space-y-3" onsubmit="return validateInitialQaForm()">
+                            <form id="initial-qa-form" data-course-chat-send data-chat-messages="student-chat-body" action="{{ route('courses.lessons.discussions.store', [$course, $lesson]) }}" method="POST" enctype="multipart/form-data" class="space-y-3">
                                 @csrf
                                 <div class="relative">
                                     <textarea id="initial-qa-content" 
@@ -612,6 +612,133 @@
         if (studentChatBody) {
             studentChatBody.scrollTop = studentChatBody.scrollHeight;
         }
+    }
+
+    function escapeCourseChatHtml(value) {
+        const element = document.createElement('div');
+        element.textContent = value || '';
+        return element.innerHTML;
+    }
+
+    function showCourseChatError(message) {
+        if (window.AppToast?.show) {
+            window.AppToast.show({ type: 'error', message });
+        } else {
+            console.error(message);
+        }
+    }
+
+    function appendCourseChatMessage(message, form = null, replyUrl = null, kind = 'reply') {
+        const messagePrefix = kind === 'discussion' ? 'msg-disc' : 'msg-reply';
+        let body = document.getElementById('student-chat-body');
+        if (!body && form) {
+            const footer = form.parentElement;
+            const shell = footer?.parentElement;
+            const welcome = shell?.firstElementChild;
+            if (shell && welcome && footer) {
+                body = document.createElement('div');
+                body.id = 'student-chat-body';
+                body.className = 'flex-1 p-4 bg-[#f8fafc] overflow-y-auto space-y-4';
+                shell.replaceChild(body, welcome);
+                if (replyUrl) form.action = replyUrl;
+                form.id = 'student-reply-form';
+                if (!form.querySelector('[name="reply_to_message_id"]')) {
+                    const replyInput = document.createElement('input');
+                    replyInput.type = 'hidden';
+                    replyInput.name = 'reply_to_message_id';
+                    replyInput.id = 'reply-to-message-id';
+                    form.prepend(replyInput);
+                }
+            }
+        }
+        if (!body || document.getElementById(`${messagePrefix}-${message.id}`)) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.id = `${messagePrefix}-${message.id}`;
+        wrapper.className = 'group flex items-end gap-2.5 justify-end transition-all duration-300 rounded-2xl p-1.5';
+        const time = new Date(message.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        const lesson = message.lesson?.title
+            ? `<span class="text-[9px] font-medium px-1.5 rounded bg-slate-200 text-slate-700">Bài: ${escapeCourseChatHtml(message.lesson.title)}</span>`
+            : '';
+        const attachment = message.attachment_url
+            ? `<a href="${escapeCourseChatHtml(message.attachment_url)}" target="_blank" class="block mt-2 text-xs font-bold underline">📎 ${escapeCourseChatHtml(message.attachment_name || 'Tệp đính kèm')}</a>`
+            : '';
+
+        wrapper.innerHTML = `
+            <div class="max-w-[85%] sm:max-w-[80%] space-y-1 items-end text-right">
+                <div class="flex flex-wrap items-center gap-1.5 px-1 justify-end">
+                    <span class="text-[11px] font-bold text-slate-700">Bạn</span>${lesson}
+                    <span class="text-[10px] text-slate-400">${time}</span>
+                    <form action="${kind === 'discussion' ? `/discussions/${message.id}/recall` : `/discussion-replies/${message.id}/recall`}" method="POST" class="inline" data-chat-target="${messagePrefix}-${message.id}" onsubmit="return submitCourseChatRecall(event, this)">
+                        <input type="hidden" name="_token" value="${escapeCourseChatHtml(document.querySelector('meta[name=csrf-token]')?.content || '')}">
+                        <button type="submit" class="px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 hover:text-amber-600">Thu hồi</button>
+                    </form>
+                </div>
+                <div class="rounded-2xl rounded-br-xs bg-[#0056D2] text-white px-4 py-2.5 text-sm text-left shadow-xs">
+                    ${message.content ? `<p class="whitespace-pre-line">${escapeCourseChatHtml(message.content)}</p>` : ''}${attachment}
+                </div>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-[#0056D2] text-white font-bold flex items-center justify-center text-xs">${escapeCourseChatHtml((message.user?.name || 'B').charAt(0).toUpperCase())}</div>`;
+        body.appendChild(wrapper);
+        scrollStudentChatToBottom();
+    }
+
+    async function submitCourseChatForm(event, form) {
+        event.preventDefault();
+        event.stopPropagation();
+        const valid = form.id === 'student-reply-form' ? validateStudentReplyForm() : validateInitialQaForm();
+        if (!valid || form.dataset.sending === '1') return false;
+
+        form.dataset.sending = '1';
+        const submitButton = form.querySelector('[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.success) throw new Error(result.message || 'Không thể gửi tin nhắn.');
+
+            appendCourseChatMessage(result.data, form, result.reply_url || null, result.kind || 'reply');
+            const textarea = form.querySelector('textarea');
+            const fileInput = form.querySelector('input[type="file"]');
+            if (textarea) textarea.value = '';
+            if (fileInput) fileInput.value = '';
+            cancelReplyContext();
+            const preview = form.querySelector('[id$="file-preview"]');
+            preview?.classList.add('hidden');
+        } catch (error) {
+            showCourseChatError(error.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.');
+        } finally {
+            form.dataset.sending = '0';
+            if (submitButton) submitButton.disabled = false;
+        }
+        return false;
+    }
+
+    async function submitCourseChatRecall(event, form) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!confirm('Bạn có chắc muốn thu hồi tin nhắn này?')) return false;
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.success) throw new Error(result.message || 'Không thể thu hồi tin nhắn.');
+            const target = document.getElementById(form.dataset.chatTarget);
+            if (target) {
+                target.innerHTML = '<div class="ml-auto rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs italic text-blue-400">Tin nhắn đã được thu hồi</div>';
+            }
+        } catch (error) {
+            showCourseChatError(error.message || 'Không thể thu hồi tin nhắn.');
+        }
+        return false;
     }
 
     document.addEventListener('DOMContentLoaded', () => {

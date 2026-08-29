@@ -78,6 +78,7 @@ class QuizVersioningService
                 'pass_score' => $published->pass_score,
                 'time_limit_minutes' => $published->time_limit_minutes,
                 'max_attempts' => $published->max_attempts,
+                'question_count' => $published->question_count,
                 'status' => QuizVersion::STATUS_DRAFT,
                 'created_by' => $creator?->id,
             ]);
@@ -252,6 +253,7 @@ class QuizVersioningService
             $clone = $question->versions()->create([
                 'version' => $nextVersion,
                 'question' => $source->question,
+                'image_path' => $source->image_path,
                 'type' => $source->type,
                 'points' => $source->points,
                 'explanation' => $source->explanation,
@@ -333,11 +335,13 @@ class QuizVersioningService
         $projected->setAttribute('pass_score', $version->pass_score);
         $projected->setAttribute('time_limit_minutes', $version->time_limit_minutes);
         $projected->setAttribute('max_attempts', $version->max_attempts);
+        $projected->setAttribute('question_count', $version->question_count);
 
         $questions = $version->questionMappings->map(function (QuizVersionQuestion $mapping): QuizQuestion {
             $identity = clone $mapping->question;
             $questionVersion = $mapping->questionVersion;
             $identity->setAttribute('question', $questionVersion->question);
+            $identity->setAttribute('image_path', $questionVersion->image_path);
             $identity->setAttribute('type', $questionVersion->type);
             $identity->setAttribute('points', $questionVersion->points);
             $identity->setAttribute('explanation', $questionVersion->explanation);
@@ -509,6 +513,7 @@ class QuizVersioningService
             'pass_score' => $quiz->pass_score,
             'time_limit_minutes' => $quiz->time_limit_minutes,
             'max_attempts' => $quiz->max_attempts,
+            'question_count' => $quiz->question_count,
         ];
     }
 

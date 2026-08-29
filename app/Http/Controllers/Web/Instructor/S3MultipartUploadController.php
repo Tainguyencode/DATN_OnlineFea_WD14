@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class S3MultipartUploadController extends Controller
@@ -28,17 +29,31 @@ class S3MultipartUploadController extends Controller
     {
         $this->authorizeCourse($course);
 
+        $maxVideoBytes = max(1, (int) config('video.upload.max_bytes'));
+        $maxVideoMegabytes = (int) ceil($maxVideoBytes / 1048576);
         $validated = $request->validate([
-            'filename' => ['required', 'string'],
-            'content_type' => ['nullable', 'string'],
-            'lesson_id' => ['nullable', 'integer'],
-            'file_size' => ['nullable', 'integer', 'min:1'],
-            'key' => ['nullable', 'string'],
+            'filename' => ['required', 'string', 'max:255'],
+            'content_type' => ['nullable', 'string', 'max:100'],
+            'lesson_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('lessons', 'id')->where('course_id', $course->id),
+            ],
+            'file_size' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:'.$maxVideoBytes,
+            ],
+            'key' => ['nullable', 'string', 'max:1024'],
+        ], [
+            'file_size.required' => 'Không xác định được dung lượng video.',
+            'file_size.max' => "Dung lượng video tối đa là {$maxVideoMegabytes}MB.",
         ]);
 
         $filename = $validated['filename'];
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        $allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
+        $allowedExtensions = (array) config('video.upload.allowed_extensions', []);
 
         if (! in_array($extension, $allowedExtensions, true)) {
             return response()->json([
@@ -84,10 +99,10 @@ class S3MultipartUploadController extends Controller
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
-            'key' => ['required', 'string'],
-            'uploadId' => ['required', 'string'],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
             'partNumbers' => ['required', 'array', 'min:1', 'max:100'],
-            'partNumbers.*' => ['required', 'integer', 'min:1', 'max:10000'],
+            'partNumbers.*' => ['required', 'integer', 'min:1', 'max:10000', 'distinct'],
         ]);
 
         $key = $validated['key'];
@@ -126,8 +141,8 @@ class S3MultipartUploadController extends Controller
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
-            'key' => ['required', 'string'],
-            'uploadId' => ['required', 'string'],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
             'partNumber' => ['required', 'integer', 'min:1', 'max:10000'],
         ]);
 
@@ -161,13 +176,17 @@ class S3MultipartUploadController extends Controller
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
-            'key' => ['required', 'string'],
-            'uploadId' => ['required', 'string'],
-            'parts' => ['required', 'array', 'min:1'],
-            'parts.*.PartNumber' => ['required', 'integer', 'min:1'],
-            'parts.*.ETag' => ['required', 'string'],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
+            'parts' => ['required', 'array', 'min:1', 'max:10000'],
+            'parts.*.PartNumber' => ['required', 'integer', 'min:1', 'max:10000', 'distinct'],
+            'parts.*.ETag' => ['required', 'string', 'max:255'],
             'duration' => ['nullable', 'numeric', 'min:0'],
-            'lesson_id' => ['nullable', 'integer'],
+            'lesson_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('lessons', 'id')->where('course_id', $course->id),
+            ],
         ]);
 
         $key = $validated['key'];
@@ -184,7 +203,9 @@ class S3MultipartUploadController extends Controller
                 $lesson = Lesson::where('course_id', $course->id)->where('id', $lessonId)->first();
             }
             if (! $lesson) {
-                $lesson = Lesson::where('original_video_key', $key)->first();
+                $lesson = Lesson::where('course_id', $course->id)
+                    ->where('original_video_key', $key)
+                    ->first();
             }
 
             if ($lesson) {
@@ -250,8 +271,8 @@ class S3MultipartUploadController extends Controller
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
-            'key' => ['required', 'string'],
-            'uploadId' => ['required', 'string'],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
         ]);
 
         $key = $validated['key'];

@@ -259,6 +259,18 @@ class QuizController extends Controller
         ]);
     }
 
+    public function recordFocusViolation(Request $request, Course $course, Lesson $lesson, QuizAttempt $attempt): JsonResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless((int) $attempt->user_id === (int) $request->user()?->id, 403);
+        abort_unless($attempt->status === 'in_progress', 409);
+        abort_unless($attempt->quiz?->lesson_id === $lesson->id, 404);
+
+        $attempt->increment('focus_violation_count');
+
+        return response()->json(['count' => $attempt->fresh()->focus_violation_count]);
+    }
+
     public function reviewAttempt(
         Request $request,
         Course $course,
@@ -269,7 +281,7 @@ class QuizController extends Controller
         $this->authorizePublishedLesson($course, $lesson);
         abort_unless($lesson->type === 'quiz', 404);
 
-        $quiz = $this->activeQuiz($lesson);
+        $quiz = $lesson->quiz()->firstOrFail();
         abort_unless((int) $attempt->quiz_id === (int) $quiz->id, 404);
 
         $user = $request->user();
@@ -282,6 +294,7 @@ class QuizController extends Controller
         abort_unless($canAccess, 403, 'Bạn không có quyền xem lại bài làm này.');
 
         $review = $quizService->buildAttemptReview($attempt);
+        $quiz = $review['quiz'];
 
         return view('courses.quiz-result', [
             'course' => $course,

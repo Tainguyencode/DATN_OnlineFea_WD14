@@ -38,6 +38,11 @@ class Coupon extends Model
         return $this->hasMany(UserCoupon::class);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function isInstructorCoupon(): bool
     {
         return $this->creator_type === 'instructor';
@@ -114,7 +119,11 @@ class Coupon extends Model
      */
     public function isUsedByUser(int $userId): bool
     {
-        return Order::where('user_id', $userId)
+        return $this->userCoupons()
+            ->where('user_id', $userId)
+            ->whereNotNull('used_at')
+            ->exists()
+            || Order::where('user_id', $userId)
             ->where('coupon_id', $this->id)
             ->where('status', 'paid')
             ->exists();

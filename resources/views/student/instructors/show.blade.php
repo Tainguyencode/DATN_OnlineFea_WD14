@@ -22,7 +22,7 @@
      BREADCRUMB
 ══════════════════════════════════════════════════════════════ --}}
 <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-    <div style="max-width:1280px;margin:0 auto;padding:14px 32px;">
+    <div style="max-width:1280px;margin:0 auto;padding:14px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <nav style="display:flex;align-items:center;gap:6px;font-size:13px;color:#64748b;">
             <a href="{{ route('home') }}" style="color:#64748b;text-decoration:none;transition:color .2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#64748b';">Trang chủ</a>
             <svg style="width:14px;height:14px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/></svg>
@@ -30,6 +30,9 @@
             <svg style="width:14px;height:14px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/></svg>
             <span style="color:#1e293b;font-weight:500;">{{ $user->name }}</span>
         </nav>
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('instructors.index') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
     </div>
 </div>
 

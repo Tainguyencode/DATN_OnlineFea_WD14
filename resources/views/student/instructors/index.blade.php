@@ -87,11 +87,17 @@
 </style>
 
 {{-- HERO --}}
-<section style="background: #F0F7FF; padding: 60px 0; position: relative; overflow: hidden; border-bottom: 1px solid #E5E7EB;">
+<section style="background: #F0F7FF; padding: 40px 0 60px; position: relative; overflow: hidden; border-bottom: 1px solid #E5E7EB;">
     {{-- Decorative Background on the right (Wave/Blob) --}}
     <div style="position: absolute; right: -5%; top: -20%; bottom: -20%; width: 55%; background: #E0ECFF; border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; z-index: 0; transform: rotate(-5deg);"></div>
     <div style="position: absolute; right: -10%; bottom: -40%; width: 40%; height: 60%; background: #D1E0FF; border-radius: 50%; z-index: 0; opacity: 0.5;"></div>
     
+    <div style="max-width: 1400px; margin: 0 auto; padding: 0 32px 16px; position: relative; z-index: 1;">
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
+    </div>
+
     <div style="max-width: 1400px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 40px;">
         
         {{-- Left: Text & Stats --}}

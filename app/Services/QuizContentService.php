@@ -122,6 +122,7 @@ class QuizContentService
             'pass_score' => (int) $metadata['pass_score'],
             'time_limit_minutes' => $this->nullableInteger($metadata['time_limit_minutes'] ?? null),
             'max_attempts' => $this->nullableInteger($metadata['max_attempts'] ?? null),
+            'question_count' => $this->nullableInteger($metadata['question_count'] ?? null),
         ];
     }
 
@@ -989,6 +990,7 @@ class QuizContentService
     {
         $projected = clone $question;
         $projected->setAttribute('question', $version->question);
+        $projected->setAttribute('image_path', $version->image_path);
         $projected->setAttribute('type', $version->type);
         $projected->setAttribute('points', $version->points);
         $projected->setAttribute('explanation', $version->explanation);
@@ -1004,6 +1006,7 @@ class QuizContentService
     {
         return [
             'question' => trim((string) $data['question_text']),
+            'image_path' => $data['image_path'] ?? null,
             'type' => $this->canonicalType((string) $data['question_type']),
             'points' => (int) $data['score'],
             'explanation' => $this->nullableTrimmedString($data['explanation'] ?? null),
@@ -1114,6 +1117,7 @@ class QuizContentService
 
         return [
             'question' => trim((string) $data['question_text']),
+            'image_path' => $data['image_path'] ?? $question?->image_path,
             'type' => $this->canonicalType((string) $data['question_type']),
             'points' => (int) $data['score'],
             'explanation' => $this->nullableTrimmedString($data['explanation'] ?? null),

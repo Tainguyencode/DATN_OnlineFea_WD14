@@ -15,9 +15,9 @@
                 <span class="font-bold text-slate-800 dark:text-slate-200">Lịch sử giao dịch & đơn hàng</span>
             </div>
 
-            <a href="{{ route('student.dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
-                ← Quay lại Trang học viên
-            </a>
+            <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('student.dashboard') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 cursor-pointer transition py-1">
+                ← Quay lại
+            </button>
         </div>
 
         <!-- TIÊU ĐỀ VÀ BỘ LỌC TÌM KIẾM -->
@@ -156,7 +156,12 @@
                                             </span>
                                         @else
                                             <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 border border-rose-200">
-                                                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span> {{ ucfirst($order->status) }}
+                                                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                                {{ match ($order->status) {
+                                                    'cancelled' => 'Đã hủy',
+                                                    'failed' => 'Thanh toán thất bại',
+                                                    default => ucfirst($order->status),
+                                                } }}
                                             </span>
                                         @endif
                                     </td>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Events\CourseDiscussionMessageBroadcasted;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Learning\StoreDiscussionReplyRequest;
 use App\Http\Requests\Learning\StoreDiscussionRequest;
@@ -10,9 +11,11 @@ use App\Models\Discussion;
 use App\Models\DiscussionReply;
 use App\Models\Lesson;
 use App\Models\UserPoint;
+use App\Services\LessonNoteAccessService;
 use App\Services\NotificationService;
 use App\Services\PointService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -20,15 +23,33 @@ use Illuminate\Support\Str;
 class DiscussionController extends Controller
 {
     public function __construct(
-        protected NotificationService $notificationService
+        protected NotificationService $notificationService,
+        protected LessonNoteAccessService $lessonAccess
     ) {}
+
+    public function messages(Discussion $discussion): JsonResponse
+    {
+        Gate::authorize('view', $discussion);
+        $discussion->load(['user', 'lesson', 'replies.user', 'replies.lesson', 'replies.replyTo.user']);
+
+        $messages = [[
+            'kind' => 'discussion',
+            ...$this->chatMessagePayload($discussion),
+        ]];
+        foreach ($discussion->replies as $reply) {
+            $messages[] = ['kind' => 'reply', ...$this->chatMessagePayload($reply)];
+        }
+
+        return response()->json(['success' => true, 'data' => $messages]);
+    }
 
     /**
      * Store a new student question (discussion) or append as reply to existing course conversation.
      */
-    public function store(StoreDiscussionRequest $request, Course $course, Lesson $lesson): RedirectResponse
+    public function store(StoreDiscussionRequest $request, Course $course, Lesson $lesson): RedirectResponse|JsonResponse
     {
         Gate::authorize('create', [Discussion::class, $course]);
+        abort_unless($this->lessonAccess->lessonBelongsToCourse($course, $lesson), 404);
 
         $attachmentPath = null;
         $attachmentName = null;
@@ -62,6 +83,7 @@ class DiscussionController extends Controller
             // Đã có conversation của Course -> Gửi dưới dạng DiscussionReply kèm context lesson_id
             $reply = DiscussionReply::create([
                 'discussion_id' => $discussion->id,
+                'messages_url' => route('discussions.messages', $discussion),
                 'reply_to_message_id' => null,
                 'lesson_id' => $lesson->id,
                 'user_id' => auth()->id(),
@@ -110,6 +132,20 @@ class DiscussionController extends Controller
             );
         }
 
+        $message = isset($reply) ? $reply->load(['user', 'lesson', 'replyTo.user']) : $discussion->load(['user', 'lesson']);
+        $this->broadcastChat($discussion->id, 'created', $this->chatMessagePayload($message));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'kind' => isset($reply) ? 'reply' : 'discussion',
+                'discussion_id' => $discussion->id,
+                'messages_url' => route('discussions.messages', $discussion),
+                'data' => $this->chatMessagePayload($message),
+                'reply_url' => route('discussions.replies.store', $discussion),
+            ], 201);
+        }
+
         return redirect()->route('courses.lessons.show', [
             'course' => $course,
             'lesson' => $lesson,
@@ -120,7 +156,7 @@ class DiscussionController extends Controller
     /**
      * Store a response to a discussion.
      */
-    public function storeReply(StoreDiscussionReplyRequest $request, Discussion $discussion): RedirectResponse
+    public function storeReply(StoreDiscussionReplyRequest $request, Discussion $discussion): RedirectResponse|JsonResponse
     {
         Gate::authorize('reply', $discussion);
 
@@ -157,7 +193,11 @@ class DiscussionController extends Controller
 
         $course = $discussion->course ?: $discussion->lesson?->course;
         $isInstructor = $course && (int) $course->instructor_id === (int) auth()->id();
-        $lessonId = $request->input('lesson_id') ?: $discussion->lesson_id;
+        $lessonId = $request->validated('lesson_id') ?: $discussion->lesson_id;
+        if ($lessonId) {
+            $replyLesson = Lesson::findOrFail($lessonId);
+            abort_unless($course && $this->lessonAccess->lessonBelongsToCourse($course, $replyLesson), 404);
+        }
 
         $reply = DiscussionReply::create([
             'discussion_id' => $discussion->id,
@@ -215,6 +255,18 @@ class DiscussionController extends Controller
             );
         }
 
+        $reply->load(['user', 'lesson', 'replyTo.user']);
+        $this->broadcastChat($discussion->id, 'created', $this->chatMessagePayload($reply));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'kind' => 'reply',
+                'discussion_id' => $discussion->id,
+                'data' => $this->chatMessagePayload($reply->load(['user', 'lesson', 'replyTo.user'])),
+            ], 201);
+        }
+
         return back()->with('success', 'Đã gửi phản hồi.');
     }
 
@@ -261,7 +313,7 @@ class DiscussionController extends Controller
     /**
      * Thu hồi tin nhắn phản hồi (Chỉ trong vòng 24 giờ).
      */
-    public function recallReply(DiscussionReply $reply): RedirectResponse
+    public function recallReply(DiscussionReply $reply): RedirectResponse|JsonResponse
     {
         $user = auth()->user();
         $isOwner = (int) $reply->user_id === (int) $user->id;
@@ -288,6 +340,11 @@ class DiscussionController extends Controller
             'attachment_name' => null,
             'attachment_type' => null,
         ]);
+        $this->broadcastChat($reply->discussion_id, 'recalled', ['id' => $reply->id, 'kind' => 'reply']);
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'kind' => 'reply', 'id' => $reply->id]);
+        }
 
         return back()->with('success', 'Đã thu hồi tin nhắn thành công.');
     }
@@ -315,7 +372,7 @@ class DiscussionController extends Controller
     /**
      * Thu hồi câu hỏi gốc (Chỉ trong vòng 24 giờ).
      */
-    public function recallDiscussion(Discussion $discussion): RedirectResponse
+    public function recallDiscussion(Discussion $discussion): RedirectResponse|JsonResponse
     {
         $user = auth()->user();
         $isOwner = (int) $discussion->user_id === (int) $user->id;
@@ -342,8 +399,50 @@ class DiscussionController extends Controller
             'attachment_name' => null,
             'attachment_type' => null,
         ]);
+        $this->broadcastChat($discussion->id, 'recalled', ['id' => $discussion->id, 'kind' => 'discussion']);
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'kind' => 'discussion', 'id' => $discussion->id]);
+        }
 
         return back()->with('success', 'Đã thu hồi tin nhắn thành công.');
+    }
+
+    private function chatMessagePayload(Discussion|DiscussionReply $message): array
+    {
+        return [
+            'id' => $message->id,
+            'user_id' => $message->user_id,
+            'content' => $message->content,
+            'is_recalled' => (bool) $message->is_recalled,
+            'created_at' => $message->created_at?->toISOString(),
+            'user' => $message->user ? [
+                'id' => $message->user->id,
+                'name' => $message->user->name,
+                'avatar_url' => $message->user->avatarUrl(),
+            ] : null,
+            'lesson' => $message->lesson ? [
+                'id' => $message->lesson->id,
+                'title' => $message->lesson->title,
+            ] : null,
+            'reply_to' => $message instanceof DiscussionReply && $message->replyTo ? [
+                'id' => $message->replyTo->id,
+                'content' => $message->replyTo->content,
+                'user' => $message->replyTo->user ? ['name' => $message->replyTo->user->name] : null,
+            ] : null,
+            'attachment_url' => $message->attachmentUrl(),
+            'attachment_name' => $message->attachment_name,
+            'attachment_type' => $message->attachment_type,
+        ];
+    }
+
+    private function broadcastChat(int $discussionId, string $action, array $message): void
+    {
+        try {
+            broadcast(new CourseDiscussionMessageBroadcasted($discussionId, $action, $message))->toOthers();
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 
     /**

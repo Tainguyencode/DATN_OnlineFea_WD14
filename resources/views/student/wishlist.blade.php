@@ -1,8 +1,11 @@
-<x-student-layout title="Khóa học yêu thích" page-title="Khóa học yêu thích">
-@php
-    $levelLabels = ['beginner' => 'Cơ bản', 'intermediate' => 'Trung cấp', 'advanced' => 'Nâng cao'];
-    $formatPrice = fn ($value) => (float) $value <= 0 ? 'Miễn phí' : number_format((float) $value, 0, ',', '.').'đ';
-@endphp
+<x-student-layout title="Khóa học yêu thích">
+<div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <h2 class="text-2xl font-extrabold tracking-tight text-slate-950">Khóa học yêu thích</h2>
+        <p class="mt-1 max-w-2xl text-sm text-slate-500">Lưu những khóa học bạn quan tâm để xem lại hoặc đăng ký sau.</p>
+    </div>
+    <p class="text-sm font-semibold text-slate-500">{{ $items->total() }} khóa học yêu thích</p>
+</div>
 
 {{-- Context-aware Breadcrumb & Back Navigation (STU-FE-13) --}}
 <div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -25,7 +28,6 @@
             <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 0 1 6.364 0L12 7.636l1.318-1.318a4.5 4.5 0 1 1 6.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 0 1 0-6.364Z"/>
             </svg>
-        </div>
         <h2 class="mt-4 text-lg font-bold text-slate-950 dark:text-white">Bạn chưa có khóa học yêu thích nào</h2>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Lưu lại những khóa học bạn quan tâm để dễ dàng theo dõi và đăng ký học sau.</p>
         <a href="{{ route('courses.index') }}" class="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-indigo-600 px-6 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700">
@@ -41,6 +43,7 @@
 
     <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         @foreach($items as $item)
+<<<<<<< HEAD
             @php
                 $course = $item->course;
                 $discountPrice = $course->discount_price ?? $course->sale_price;

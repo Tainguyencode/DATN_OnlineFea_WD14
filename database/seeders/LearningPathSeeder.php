@@ -8,23 +8,20 @@ use Illuminate\Support\Str;
 
 class LearningPathSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // 1. Tạo lộ trình học tập nâng cao (Enhanced Learning Paths)
+        // 1. Tạo các Lộ trình học tập đa dạng (Learning Paths)
         $paths = [
             [
                 'title' => 'Lộ trình trở thành Web Fullstack Developer',
                 'slug' => Str::slug('Lộ trình trở thành Web Fullstack Developer'),
-                'description' => 'Chương trình đào tạo toàn diện từ A-Z giúp bạn làm chủ cả Frontend và Backend, xây dựng ứng dụng Web thực tế chuẩn doanh nghiệp và tự tin ứng tuyển vị trí Fullstack Developer.',
+                'description' => 'Chương trình đào tạo toàn diện từ A-Z giúp bạn làm chủ cả Frontend (React.js) và Backend (Laravel Framework), xây dựng ứng dụng Web thực tế chuẩn doanh nghiệp.',
                 'thumbnail' => null,
                 'level' => 'intermediate',
                 'target_role' => 'Fullstack Web Developer',
                 'salary_range' => '15 - 35 triệu/tháng',
                 'estimated_duration' => '6 - 8 tháng (180h học)',
-                'skills' => json_encode(['HTML5/CSS3', 'JavaScript ES6+', 'Vue.js/React', 'Laravel Framework', 'RESTful API', 'MySQL Database', 'Docker & CI/CD', 'Git']),
+                'skills' => json_encode(['HTML5/CSS3', 'JavaScript ES6+', 'React.js', 'Laravel Framework', 'RESTful API', 'MySQL Database', 'Git']),
                 'is_featured' => true,
             ],
             [
@@ -40,16 +37,40 @@ class LearningPathSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'title' => 'Lộ trình Lập trình Chuyên sâu & Kiến trúc Phần mềm',
-                'slug' => Str::slug('Lộ trình Lập trình Chuyên sâu Kiến trúc Phần mềm'),
-                'description' => 'Dành cho các lập trình viên đã có nền tảng muốn nâng cao trình độ lên Senior / Lead Developer. Làm chủ Kiến trúc Microservices, Clean Architecture, Tối ưu hóa hiệu năng & Bảo mật nâng cao.',
+                'title' => 'Lộ trình Phân tích dữ liệu & AI Application Engineer',
+                'slug' => Str::slug('Lộ trình Phân tích dữ liệu AI Application Engineer'),
+                'description' => 'Làm chủ ngôn ngữ Python, các thư viện xử lý dữ liệu Pandas, NumPy, trực quan hóa dữ liệu và huấn luyện mô hình Machine Learning thực tế.',
                 'thumbnail' => null,
-                'level' => 'advanced',
-                'target_role' => 'Software Architect / Senior Backend Engineer',
-                'salary_range' => '30 - 60 triệu/tháng',
-                'estimated_duration' => '8 - 10 tháng (240h học)',
-                'skills' => json_encode(['Clean Code & Design Patterns', 'Microservices Architecture', 'High Performance Database', 'Redis Caching', 'System Security & Scalability']),
-                'is_featured' => false,
+                'level' => 'intermediate',
+                'target_role' => 'Data Analyst / AI Engineer',
+                'salary_range' => '18 - 40 triệu/tháng',
+                'estimated_duration' => '6 - 7 tháng (160h học)',
+                'skills' => json_encode(['Python Programming', 'Pandas & NumPy', 'SQL Database', 'Matplotlib & Seaborn', 'Scikit-Learn Machine Learning']),
+                'is_featured' => true,
+            ],
+            [
+                'title' => 'Lộ trình Digital Marketing & Growth Hacking',
+                'slug' => Str::slug('Lộ trình Digital Marketing Growth Hacking'),
+                'description' => 'Trở thành Marketer toàn diện nắm vững quy trình SEO Google top 1, tối ưu hóa các chiến dịch quảng cáo Facebook/TikTok Ads và chiến lược thương hiệu.',
+                'thumbnail' => null,
+                'level' => 'beginner',
+                'target_role' => 'Digital Marketing Specialist / Growth Marketer',
+                'salary_range' => '10 - 25 triệu/tháng',
+                'estimated_duration' => '3 - 4 tháng (90h học)',
+                'skills' => json_encode(['Keyword Research & SEO', 'Facebook & TikTok Ads', 'Content Strategy', 'Google Analytics', 'Conversion Rate Optimization']),
+                'is_featured' => true,
+            ],
+            [
+                'title' => 'Lộ trình Chinh phục IELTS 7.0+ & Tiếng Anh Công sở',
+                'slug' => Str::slug('Lộ trình Chinh phục IELTS 7 0 Tiếng Anh Công sở'),
+                'description' => 'Lộ trình bứt phá kỹ năng giao tiếp tiếng Anh chuyên nghiệp và hoàn thiện 4 kỹ năng Listening, Reading, Writing Task 1-2, Speaking đạt band điểm 7.0+.',
+                'thumbnail' => null,
+                'level' => 'intermediate',
+                'target_role' => 'IELTS Candidates / Global Professional',
+                'salary_range' => 'Không giới hạn',
+                'estimated_duration' => '5 - 6 tháng (150h học)',
+                'skills' => json_encode(['IELTS Academic Writing', 'Fluent English Speaking', 'Business Communication', 'Academic Vocabulary']),
+                'is_featured' => true,
             ],
         ];
 
@@ -60,58 +81,60 @@ class LearningPathSeeder extends Seeder
             );
         }
 
-        // 2. Đảm bảo các khóa học trong database được đánh dấu xuất bản (published)
+        // 2. Đảm bảo tất cả các khóa học mẫu đều ở trạng thái xuất bản (published)
         DB::table('courses')->update(['status' => 'published', 'is_published' => 1]);
 
-        // 3. Liên kết các khóa học với từng giai đoạn (Stages)
-        $courseIds = DB::table('courses')->where('status', 'published')->orderBy('id')->pluck('id')->values();
-        if ($courseIds->isNotEmpty()) {
-            $fullstackPathId = DB::table('learning_paths')->where('slug', $paths[0]['slug'])->value('id');
-            $designPathId = DB::table('learning_paths')->where('slug', $paths[1]['slug'])->value('id');
-            $advancedPathId = DB::table('learning_paths')->where('slug', $paths[2]['slug'])->value('id');
+        // 3. Liên kết các khóa học vào từng Lộ trình
+        $laravelCourse = DB::table('courses')->where('slug', Str::slug('Laravel từ Zero đến Hero'))->value('id');
+        $reactCourse = DB::table('courses')->where('slug', Str::slug('React.js Masterclass'))->value('id');
+        $figmaCourse = DB::table('courses')->where('slug', Str::slug('Figma Prototype Design System'))->value('id');
+        $pythonCourse = DB::table('courses')->where('slug', Str::slug('Python cho Phân tích dữ liệu Machine Learning'))->value('id');
+        $marketingCourse = DB::table('courses')->where('slug', Str::slug('Digital Marketing SEO Performance Mastery'))->value('id');
+        $ieltsCourse = DB::table('courses')->where('slug', Str::slug('Luyen thi IELTS 7 0 4 Ky nang Speaking Practical'))->value('id');
 
-            // Gán giai đoạn cho Fullstack path
-            $fullstackStages = [
-                'Giai đoạn 1: Nền tảng & Cấu trúc Web',
-                'Giai đoạn 2: Lập trình Chuyên sâu & Backend API',
-                'Giai đoạn 3: Đồ án Thực chiến & Triển khai',
-            ];
-            foreach ($courseIds->take(3) as $sortOrder => $courseId) {
-                $stageName = $fullstackStages[$sortOrder] ?? 'Giai đoạn '.($sortOrder + 1);
-                DB::table('learning_path_courses')->updateOrInsert(
-                    ['learning_path_id' => $fullstackPathId, 'course_id' => $courseId],
-                    ['sort_order' => $sortOrder + 1, 'stage_name' => $stageName]
-                );
-            }
+        $fullstackPathId = DB::table('learning_paths')->where('slug', $paths[0]['slug'])->value('id');
+        $uiuxPathId = DB::table('learning_paths')->where('slug', $paths[1]['slug'])->value('id');
+        $dataPathId = DB::table('learning_paths')->where('slug', $paths[2]['slug'])->value('id');
+        $marketingPathId = DB::table('learning_paths')->where('slug', $paths[3]['slug'])->value('id');
+        $ieltsPathId = DB::table('learning_paths')->where('slug', $paths[4]['slug'])->value('id');
 
-            // Gán giai đoạn cho UI/UX path
-            $uiuxStages = [
-                'Giai đoạn 1: Nền tảng Nghiên cứu & UX Design',
-                'Giai đoạn 2: Thiết kế Giao diện UI & Prototype Figma',
-            ];
-            if ($courseIds->count() >= 2) {
-                foreach ($courseIds->slice(1, 2)->values() as $sortOrder => $courseId) {
-                    $stageName = $uiuxStages[$sortOrder] ?? 'Giai đoạn '.($sortOrder + 1);
-                    DB::table('learning_path_courses')->updateOrInsert(
-                        ['learning_path_id' => $designPathId, 'course_id' => $courseId],
-                        ['sort_order' => $sortOrder + 1, 'stage_name' => $stageName]
-                    );
-                }
-            }
+        if ($laravelCourse && $reactCourse && $fullstackPathId) {
+            DB::table('learning_path_courses')->updateOrInsert(
+                ['learning_path_id' => $fullstackPathId, 'course_id' => $reactCourse],
+                ['sort_order' => 1, 'stage_name' => 'Giai đoạn 1: Frontend Single Page Application với React.js']
+            );
+            DB::table('learning_path_courses')->updateOrInsert(
+                ['learning_path_id' => $fullstackPathId, 'course_id' => $laravelCourse],
+                ['sort_order' => 2, 'stage_name' => 'Giai đoạn 2: Backend RESTful API & Cơ sở dữ liệu với Laravel']
+            );
+        }
 
-            // Gán giai đoạn cho Advanced path
-            foreach ($courseIds as $sortOrder => $courseId) {
-                $stageIndex = min((int) floor($sortOrder / 2) + 1, 3);
-                $stageName = match ($stageIndex) {
-                    1 => 'Giai đoạn 1: Kiến trúc Mã nguồn & Pattern',
-                    2 => 'Giai đoạn 2: Hệ thống Microservices & Tối ưu Database',
-                    default => 'Giai đoạn 3: Triển khai Quy mô lớn & Bảo mật'
-                };
-                DB::table('learning_path_courses')->updateOrInsert(
-                    ['learning_path_id' => $advancedPathId, 'course_id' => $courseId],
-                    ['sort_order' => $sortOrder + 1, 'stage_name' => $stageName]
-                );
-            }
+        if ($figmaCourse && $uiuxPathId) {
+            DB::table('learning_path_courses')->updateOrInsert(
+                ['learning_path_id' => $uiuxPathId, 'course_id' => $figmaCourse],
+                ['sort_order' => 1, 'stage_name' => 'Giai đoạn 1: Nền tảng UI/UX & Wireframing với Figma']
+            );
+        }
+
+        if ($pythonCourse && $dataPathId) {
+            DB::table('learning_path_courses')->updateOrInsert(
+                ['learning_path_id' => $dataPathId, 'course_id' => $pythonCourse],
+                ['sort_order' => 1, 'stage_name' => 'Giai đoạn 1: Phân tích dữ liệu & Machine Learning với Python']
+            );
+        }
+
+        if ($marketingCourse && $marketingPathId) {
+            DB::table('learning_path_courses')->updateOrInsert(
+                ['learning_path_id' => $marketingPathId, 'course_id' => $marketingCourse],
+                ['sort_order' => 1, 'stage_name' => 'Giai đoạn 1: Chiến lược Digital Marketing & SEO Mastery']
+            );
+        }
+
+        if ($ieltsCourse && $ieltsPathId) {
+            DB::table('learning_path_courses')->updateOrInsert(
+                ['learning_path_id' => $ieltsPathId, 'course_id' => $ieltsCourse],
+                ['sort_order' => 1, 'stage_name' => 'Giai đoạn 1: Bứt phá Band điểm IELTS 7.0+ 4 Kỹ năng']
+            );
         }
     }
 }

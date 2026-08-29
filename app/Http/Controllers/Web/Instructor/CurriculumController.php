@@ -18,6 +18,7 @@ use App\Services\HistoricalQuizDeletionGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -30,15 +31,10 @@ class CurriculumController extends Controller
 
         $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
 
-        $pendingContentUpdates = ContentUpdate::where('course_id', $course->id)
-            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
-            ->get();
-
         return view('instructor.courses.curriculum', [
             'course' => $course,
             'submissionCheck' => $course->submissionCheck(),
             'curriculumSections' => $curriculumSections,
-            'pendingContentUpdates' => $pendingContentUpdates,
             'lessonTypes' => $this->lessonTypes(),
             'lessonStatuses' => $this->lessonStatuses(),
         ]);
@@ -166,12 +162,18 @@ class CurriculumController extends Controller
             }
 
             try {
+                $lessons = $sectionModel->lessons()->get();
                 app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($sectionModel);
+
+                DB::transaction(function () use ($sectionModel, $lessons): void {
+                    $lessons->each(fn (Lesson $lesson) => $lesson->delete());
+                    $sectionModel->delete();
+                });
             } catch (HistoricalQuizDeletionException $exception) {
                 return back()->withErrors(['section' => $exception->getMessage()]);
             }
 
-            $sectionModel->delete();
+            $lessons->each(fn (Lesson $lesson) => $this->deleteLessonFiles($lesson));
         }
 
         return back()->with('success', 'Đã xóa chương học.');
@@ -312,8 +314,15 @@ class CurriculumController extends Controller
             );
 
             if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
-                if ($request->hasFile('video_file')) {
-                    Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate Update Local)', ['content_update_id' => $contentUpdate->id]);
+                $hasReadyS3Upload = filled($payload['original_video_key'] ?? null)
+                    && ($payload['upload_status'] ?? null) === 'uploaded'
+                    && blank($payload['hls_manifest_key'] ?? null);
+
+                if ($request->hasFile('video_file') || $hasReadyS3Upload) {
+                    Log::info('[UPLOAD TRACE] DISPATCH HLS JOB (ContentUpdate Update)', [
+                        'content_update_id' => $contentUpdate->id,
+                        'source' => $request->hasFile('video_file') ? 'local' : 's3',
+                    ]);
                     ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
                 }
             }
@@ -415,6 +424,13 @@ class CurriculumController extends Controller
 
         $payload = $contentUpdate->payload ?? [];
         $newPayload = array_merge($payload, $request->except(['_token', '_method']));
+
+        // Forms submit the canonical duration field, while lesson payloads retain
+        // duration_seconds for compatibility with persisted lessons/imports.
+        if ($request->exists('duration')) {
+            $newPayload['duration_seconds'] = (int) $request->input('duration', 0);
+        }
+
         $contentUpdate->update(['payload' => $newPayload]);
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -632,7 +648,9 @@ class CurriculumController extends Controller
         $updates = ContentUpdate::where('course_id', $course->id)
             ->where('type', ContentUpdate::TYPE_LESSON)
             ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
-            ->latest('id')
+            // The newest candidate is authoritative when legacy data contains
+            // more than one active draft for the same lesson.
+            ->orderByDesc('id')
             ->get();
 
         $statuses = [];
@@ -751,6 +769,8 @@ class CurriculumController extends Controller
             }
         }
 
+        $submissionCheck = $course->submissionCheck();
+
         if ($totalVideos === 0) {
             $commonState = 'no_videos';
             $commonMessage = '';
@@ -765,6 +785,9 @@ class CurriculumController extends Controller
             $commonMessage = $uploadingTitles !== []
                 ? 'Còn '.count($uploadingTitles).' video đang chờ tải lên: '.implode(', ', $uploadingTitles).'.'
                 : 'Còn '.count($processingTitles).' video đang xử lý bảo mật: '.implode(', ', $processingTitles).'.';
+        } elseif (! $submissionCheck->passes()) {
+            $commonState = 'incomplete';
+            $commonMessage = $submissionCheck->summaryMessage();
         } else {
             $commonState = 'completed';
             $commonMessage = 'Tất cả video đã được xử lý bảo mật thành công.';
@@ -774,7 +797,13 @@ class CurriculumController extends Controller
             'total_videos' => $totalVideos,
             'statuses' => $statuses,
             'has_incomplete_hls' => $hasIncompleteHls,
-            'can_submit' => $totalVideos > 0 ? (! $hasIncompleteHls && $missingSources === [] && ! $hasFailed && ! $hasProcessing) : true,
+            'can_submit' => $course->canBeSubmittedForReview()
+                && $submissionCheck->passes()
+                && ! $hasIncompleteHls
+                && $missingSources === []
+                && ! $hasFailed
+                && ! $hasProcessing,
+            'submission_message' => $submissionCheck->summaryMessage(),
             'common_state' => $commonState,
             'common_message' => $commonMessage,
         ]);

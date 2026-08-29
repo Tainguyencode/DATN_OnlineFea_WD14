@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CartCheckoutTest extends TestCase
@@ -163,6 +164,27 @@ class CartCheckoutTest extends TestCase
         $payment = Payment::where('order_id', $order->id)->first();
         $this->assertNotNull($payment);
         $this->assertEquals('pending', $payment->status);
+    }
+
+    public function test_repeated_checkout_with_same_idempotency_key_reuses_order(): void
+    {
+        $cart = Cart::firstOrCreate(['user_id' => $this->student->id]);
+        $cart->courses()->attach($this->course->id);
+        $key = (string) Str::uuid();
+        $payload = [
+            'idempotency_key' => $key,
+            'payment_method' => 'bank_transfer',
+            'course_ids' => [$this->course->id],
+        ];
+
+        $first = $this->actingAs($this->student)->post(route('student.cart.checkout'), $payload);
+        $second = $this->actingAs($this->student)->post(route('student.cart.checkout'), $payload);
+
+        $order = Order::where('user_id', $this->student->id)->where('idempotency_key', $key)->sole();
+        $first->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $second->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $this->assertSame(1, Order::where('idempotency_key', $key)->count());
+        $this->assertSame(1, Payment::where('order_id', $order->id)->count());
     }
 
     /**

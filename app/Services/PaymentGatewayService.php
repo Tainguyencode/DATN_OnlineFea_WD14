@@ -9,6 +9,7 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Refund;
+use App\Models\UserCoupon;
 use App\Models\Withdrawal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -40,6 +41,14 @@ class PaymentGatewayService
         $checksumKey = (string) config('services.payos.checksum_key');
 
         if ($clientId === '' || $apiKey === '' || $checksumKey === '') {
+            Log::error('PayOS configuration is incomplete', [
+                'missing' => array_keys(array_filter([
+                    'client_id' => $clientId === '',
+                    'api_key' => $apiKey === '',
+                    'checksum_key' => $checksumKey === '',
+                ])),
+            ]);
+
             throw new RuntimeException('Chưa cấu hình tài khoản PayOS.');
         }
 
@@ -49,7 +58,7 @@ class PaymentGatewayService
             throw new RuntimeException('Số tiền thanh toán PayOS phải lớn hơn 0.');
         }
 
-        $description = substr(preg_replace('/[^a-zA-Z0-9 ]/', '', 'Thanh toan '.$order->order_code), 0, 25);
+        $description = $this->buildPayOSDescription($order);
         $params = [
             'amount' => $amount,
             'cancelUrl' => route('student.checkout.failed', $order->order_code),
@@ -57,12 +66,7 @@ class PaymentGatewayService
             'orderCode' => $gatewayOrderCode,
             'returnUrl' => route('student.checkout.success', $order->order_code),
         ];
-        ksort($params);
-        $params['signature'] = hash_hmac(
-            'sha256',
-            collect($params)->map(fn ($value, $key) => $key.'='.$value)->implode('&'),
-            $checksumKey
-        );
+        $params['signature'] = $this->signPayOSData($params, $checksumKey);
 
         $payment = $order->payment()->firstOrCreate(
             ['order_id' => $order->id],
@@ -74,24 +78,162 @@ class PaymentGatewayService
             'amount' => $order->total_amount,
         ]);
 
-        $response = $this->payOSHttpClient(15)
-            ->withHeaders([
-                'x-client-id' => $clientId,
-                'x-api-key' => $apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->post('https://api-merchant.payos.vn/v2/payment-requests', $params);
+        try {
+            $response = $this->payOSHttpClient(15)
+                ->withHeaders([
+                    'x-client-id' => $clientId,
+                    'x-api-key' => $apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://api-merchant.payos.vn/v2/payment-requests', $params);
+        } catch (\Throwable $exception) {
+            Log::error('PayOS payment-link request failed', [
+                'order_id' => $order->id,
+                'gateway_order_code' => $gatewayOrderCode,
+                'exception_class' => $exception::class,
+            ]);
 
-        if ($response->failed()) {
-            throw new RuntimeException('Lỗi từ PayOS API: '.($response->json('desc') ?? 'Không thể tạo liên kết thanh toán.'));
+            throw new RuntimeException('Không thể kết nối đến PayOS.');
         }
 
-        $checkoutUrl = $response->json('data.checkoutUrl');
-        if (! is_string($checkoutUrl) || ! str_starts_with($checkoutUrl, 'https://')) {
-            throw new RuntimeException('PayOS không trả về liên kết thanh toán hợp lệ.');
+        $checkoutUrl = $this->extractPayOSCheckoutUrl($response->json());
+
+        // PayOS may return HTTP 200 without data when the orderCode already exists.
+        // Reusing the existing payment link makes repeated clicks idempotent.
+        if ($checkoutUrl === null) {
+            $existingResponse = $this->payOSHttpClient(10)
+                ->withHeaders([
+                    'x-client-id' => $clientId,
+                    'x-api-key' => $apiKey,
+                ])
+                ->get("https://api-merchant.payos.vn/v2/payment-requests/{$gatewayOrderCode}");
+
+            $checkoutUrl = $this->extractPayOSCheckoutUrl($existingResponse->json());
+        }
+
+        // An old PayOS request can exist without a reusable checkout URL
+        // (expired/cancelled links are a common case). Create a fresh request
+        // with another numeric orderCode instead of trapping the user in a loop.
+        if ($checkoutUrl === null && (string) $response->json('code') === '231') {
+            $gatewayOrderCode = $this->newPayOSOrderCode();
+            $params['orderCode'] = $gatewayOrderCode;
+            unset($params['signature']);
+            ksort($params);
+            $params['signature'] = hash_hmac(
+                'sha256',
+                collect($params)->map(fn ($value, $key) => $key.'='.$value)->implode('&'),
+                $checksumKey
+            );
+
+            $payment->update(['gateway_order_code' => (string) $gatewayOrderCode]);
+
+            $response = $this->payOSHttpClient(15)
+                ->withHeaders([
+                    'x-client-id' => $clientId,
+                    'x-api-key' => $apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://api-merchant.payos.vn/v2/payment-requests', $params);
+
+            $checkoutUrl = $this->extractPayOSCheckoutUrl($response->json());
+        }
+
+        if ($checkoutUrl === null || ! $this->isValidPayOSCheckoutUrl($checkoutUrl)) {
+            $descriptionText = $response->json('desc') ?: 'Không thể tạo liên kết thanh toán.';
+
+            Log::warning('PayOS payment link creation failed', [
+                'order_id' => $order->id,
+                'http_status' => $response->status(),
+                'payos_code' => $response->json('code'),
+                'payos_description' => $descriptionText,
+            ]);
+
+            throw new RuntimeException('PayOS từ chối yêu cầu: '.$descriptionText);
         }
 
         return $checkoutUrl;
+    }
+
+    private function extractPayOSCheckoutUrl(mixed $payload): ?string
+    {
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $checkoutUrl = data_get($payload, 'data.checkoutUrl');
+
+        return is_string($checkoutUrl) && str_starts_with($checkoutUrl, 'https://')
+            ? $checkoutUrl
+            : null;
+    }
+
+    private function newPayOSOrderCode(): int
+    {
+        // PayOS orderCode is transported as a JSON number. Keep it below
+        // JavaScript's safe-integer limit (16 digits) to preserve the signature.
+        return (int) now()->format('ymdHisv');
+    }
+
+    /**
+     * PayOS limits descriptions to nine characters for channels without a linked PayOS bank account.
+     * The numeric orderCode remains the authoritative payment identifier.
+     */
+    private function buildPayOSDescription(Order $order): string
+    {
+        $orderId = (string) $order->id;
+
+        return strlen($orderId) <= 7
+            ? 'OD'.str_pad($orderId, 7, '0', STR_PAD_LEFT)
+            : 'OD'.substr(hash('sha256', $orderId), 0, 7);
+    }
+
+    private function isSuccessfulPayOSResponse(array $responseData): bool
+    {
+        if ((string) ($responseData['code'] ?? '') !== '00') {
+            return false;
+        }
+
+        return ! array_key_exists('success', $responseData) || $responseData['success'] === true;
+    }
+
+    private function isValidPayOSCheckoutUrl(mixed $checkoutUrl): bool
+    {
+        if (! is_string($checkoutUrl) || filter_var($checkoutUrl, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        $parts = parse_url($checkoutUrl);
+
+        return is_array($parts)
+            && strtolower((string) ($parts['scheme'] ?? '')) === 'https'
+            && filled($parts['host'] ?? null);
+    }
+
+    private function payOSResponseSummary($response, Order $order, string $description): array
+    {
+        $responseData = $response->json();
+        $data = is_array($responseData) && is_array($responseData['data'] ?? null)
+            ? $responseData['data']
+            : null;
+        $checkoutUrl = is_array($data) ? ($data['checkoutUrl'] ?? null) : null;
+        $message = is_array($responseData)
+            ? ($responseData['desc'] ?? $responseData['message'] ?? null)
+            : null;
+
+        return [
+            'order_id' => $order->id,
+            'gateway_order_code' => $order->id,
+            'amount' => (int) round((float) $order->total_amount),
+            'description_length' => strlen($description),
+            'http_status' => $response->status(),
+            'response_keys' => is_array($responseData) ? array_keys($responseData) : [],
+            'code' => is_array($responseData) ? ($responseData['code'] ?? null) : null,
+            'message' => is_scalar($message) ? Str::limit((string) $message, 200) : null,
+            'data_exists' => $data !== null,
+            'data_keys' => $data !== null ? array_keys($data) : [],
+            'checkout_url_present' => is_string($checkoutUrl) && $checkoutUrl !== '',
+            'checkout_url_host' => is_string($checkoutUrl) ? parse_url($checkoutUrl, PHP_URL_HOST) : null,
+        ];
     }
 
     public function checkAndUpdatePayOSStatus(Order $order): bool
@@ -117,11 +259,15 @@ class PaymentGatewayService
                 ->withHeaders(['x-client-id' => $clientId, 'x-api-key' => $apiKey])
                 ->get("https://api-merchant.payos.vn/v2/payment-requests/{$gatewayOrderCode}");
 
-            if (! $response->successful() || $response->json('data.status') !== 'PAID') {
+            $responseData = $response->json();
+            if (! is_array($responseData)
+                || ! $response->successful()
+                || ! $this->isSuccessfulPayOSResponse($responseData)
+                || ($responseData['data']['status'] ?? null) !== 'PAID') {
                 return false;
             }
 
-            $responseData = (array) $response->json('data', []);
+            $responseData = (array) ($responseData['data'] ?? []);
             $responseSignature = (string) $response->json('signature', '');
             $checksumKey = (string) config('services.payos.checksum_key');
             if ($responseSignature !== '' && ! hash_equals($this->signPayOSData($responseData, $checksumKey), $responseSignature)) {
@@ -206,6 +352,9 @@ class PaymentGatewayService
             if ($lockedOrder->status === 'paid') {
                 return true;
             }
+            if ($lockedOrder->status !== 'pending') {
+                return false;
+            }
 
             $payment = $lockedOrder->payment()->lockForUpdate()->first();
             if (! $payment || (int) round((float) $payment->amount) !== (int) round((float) $lockedOrder->total_amount)) {
@@ -240,6 +389,13 @@ class PaymentGatewayService
             $this->enrollStudent($lockedOrder);
             $this->clearCart($lockedOrder);
             $coupon?->increment('used_count');
+            if ($coupon) {
+                UserCoupon::query()
+                    ->where('user_id', $lockedOrder->user_id)
+                    ->where('coupon_id', $coupon->id)
+                    ->whereNull('used_at')
+                    ->update(['used_at' => now()]);
+            }
 
             return true;
         });

@@ -372,8 +372,6 @@
                 </div>
             @endif
         </div>
-    </section>
-
     {{-- LEARNING PATHS SECTION --}}
     @if ($learningPaths->isNotEmpty())
         <section id="paths" class="border-t border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">

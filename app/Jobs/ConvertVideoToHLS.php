@@ -3,11 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\Lesson;
-use Aws\Command;
-use Aws\S3\S3Client;
-use Aws\S3\Transfer;
-use FFMpeg\FFProbe;
+use App\Services\HlsVideoService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -17,341 +15,163 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Symfony\Component\Process\Process;
+use RuntimeException;
 use Throwable;
 
-class ConvertVideoToHLS implements ShouldQueue
+class ConvertVideoToHLS implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
 
-    public $timeout = 3600; // 1 hour max
+    public $timeout = 3600;
+
+    public $uniqueFor = 3600;
 
     public function __construct(
         public Lesson $lesson
     ) {}
 
-    public function handle(): void
+    public function uniqueId(): string
+    {
+        return 'lesson:'.$this->lesson->getKey();
+    }
+
+    public function handle(HlsVideoService $hlsVideo): void
     {
         $startTime = microtime(true);
-        $lessonId = $this->lesson->id;
+        $this->lesson = $this->lesson->fresh() ?? $this->lesson;
+        $lessonId = (int) $this->lesson->id;
         $hasS3Original = filled($this->lesson->original_video_key);
         $hasLocalPath = filled($this->lesson->video_path);
 
-        // ─── [BƯỚC 1] JOB START ───
-        Log::info("[ConvertVideoToHLS] [JOB START] Lesson ID: {$lessonId}", [
+        Log::info('[ConvertVideoToHLS] Job started.', [
             'lesson_id' => $lessonId,
-            'original_video_key' => $this->lesson->original_video_key,
-            'video_path' => $this->lesson->video_path,
             'has_s3_original' => $hasS3Original,
             'has_local_path' => $hasLocalPath,
             'queue_attempts' => $this->attempts(),
         ]);
 
         if (! $hasS3Original && ! $hasLocalPath) {
-            Log::warning("[ConvertVideoToHLS] Skipped: Lesson {$lessonId} has no video source.");
+            $this->markFailed();
+            Log::warning('[ConvertVideoToHLS] Lesson has no video source.', ['lesson_id' => $lessonId]);
 
             return;
         }
 
         $this->lesson->update(['processing_status' => 'processing']);
-
         $tmpDir = storage_path('app/tmp_ffmpeg/lesson_'.$lessonId.'_'.Str::random(8));
-        File::makeDirectory($tmpDir, 0755, true, true);
-
-        $localInputPath = null;
-        $downloadedFromS3 = false;
+        File::ensureDirectoryExists($tmpDir);
 
         try {
-            // ─── [BƯỚC 2] DOWNLOAD ORIGINAL ───
-            if ($hasS3Original) {
-                if (! Storage::disk('s3')->exists($this->lesson->original_video_key)) {
-                    Log::warning("[ConvertVideoToHLS] S3 file not ready yet for Lesson {$lessonId}: {$this->lesson->original_video_key}. Waiting for upload completion.");
-                    $this->lesson->update(['processing_status' => 'pending']);
+            $localInputPath = $this->resolveInputPath($tmpDir);
+            $hlsOutputDirectory = $tmpDir.'/hls_out';
+            $encodeStartedAt = microtime(true);
+            $conversion = $hlsVideo->transcode($localInputPath, $hlsOutputDirectory);
 
-                    return;
-                }
-
-                $ext = pathinfo($this->lesson->original_video_key, PATHINFO_EXTENSION) ?: 'mp4';
-                $localInputPath = $tmpDir.'/source_video.'.$ext;
-
-                Log::info("[ConvertVideoToHLS] [DOWNLOAD ORIGINAL] Downloading from S3: {$this->lesson->original_video_key} to {$localInputPath}");
-
-                $s3Stream = Storage::disk('s3')->readStream($this->lesson->original_video_key);
-                if (! $s3Stream) {
-                    throw new \RuntimeException('Cannot read stream from S3: '.$this->lesson->original_video_key);
-                }
-
-                $localFile = fopen($localInputPath, 'wb');
-                stream_copy_to_stream($s3Stream, $localFile);
-                fclose($localFile);
-                if (is_resource($s3Stream)) {
-                    fclose($s3Stream);
-                }
-
-                $sourceSize = file_exists($localInputPath) ? filesize($localInputPath) : 0;
-                Log::info('[ConvertVideoToHLS] [DOWNLOAD ORIGINAL] S3 download completed', [
-                    'local_path' => $localInputPath,
-                    'file_size_bytes' => $sourceSize,
-                ]);
-
-                $downloadedFromS3 = true;
-            } elseif ($hasLocalPath) {
-                $mp4PathLocal = Storage::disk('local')->path($this->lesson->video_path);
-                $mp4PathPublic = Storage::disk('public')->path($this->lesson->video_path);
-                $localInputPath = file_exists($mp4PathLocal) ? $mp4PathLocal : (file_exists($mp4PathPublic) ? $mp4PathPublic : null);
-
-                Log::info("[ConvertVideoToHLS] [DOWNLOAD ORIGINAL] Using local source video: {$localInputPath}");
-            }
-
-            if (! $localInputPath || ! file_exists($localInputPath)) {
-                throw new \RuntimeException("Source video not found for Lesson ID: {$lessonId}");
-            }
-
-            // ─── [BƯỚC 3] FFMPEG START ───
-            $hlsOutDir = $tmpDir.'/hls_out';
-            File::makeDirectory($hlsOutDir, 0755, true, true);
-            $playlistPath = $hlsOutDir.'/playlist.m3u8';
-
-            $ffmpegConfig = $this->getFfmpegConfig();
-            $ffmpegBin = $ffmpegConfig['ffmpeg.binaries'];
-            Log::info('[ConvertVideoToHLS] [FFMPEG START] Starting HLS conversion (Stream Copy mode)', [
+            Log::info('[ConvertVideoToHLS] FFmpeg conversion completed.', [
                 'lesson_id' => $lessonId,
-                'input' => $localInputPath,
-                'output_playlist' => $playlistPath,
-                'ffmpeg_binary' => $ffmpegBin,
-                'ffprobe_binary' => $ffmpegConfig['ffprobe.binaries'],
+                'files_generated' => $conversion['file_count'],
+                'segments_generated' => $conversion['segment_count'],
+                'duration_seconds' => round(microtime(true) - $encodeStartedAt, 2),
             ]);
 
-            $this->convertToHls($ffmpegConfig, $localInputPath, $playlistPath);
+            $s3Directory = 'hls/lessons/'.$lessonId;
+            $localDirectory = 'lesson-hls/'.$lessonId;
+            $publication = $hlsVideo->publish($hlsOutputDirectory, $s3Directory, $localDirectory);
 
-            // Tạo master.m3u8
-            $masterContent = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720\nplaylist.m3u8\n";
-            file_put_contents($hlsOutDir.'/master.m3u8', $masterContent);
-
-            $hlsFiles = File::files($hlsOutDir);
-            $segmentCount = count($hlsFiles);
-
-            // ─── [BƯỚC 4] FFMPEG SUCCESS ───
-            Log::info('[ConvertVideoToHLS] [FFMPEG SUCCESS] Conversion completed successfully', [
-                'lesson_id' => $lessonId,
-                'total_files_generated' => $segmentCount,
-                'playlist_size_bytes' => file_exists($playlistPath) ? filesize($playlistPath) : 0,
-            ]);
-
-            // ─── [BƯỚC 5] UPLOAD HLS ───
-            $s3HlsDir = 'hls/lessons/'.$lessonId;
-            $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
-
-            Log::info("[ConvertVideoToHLS] [UPLOAD HLS] Uploading {$segmentCount} files to destination", [
-                'use_s3' => $useS3,
-                's3_target_dir' => $s3HlsDir,
-            ]);
-
-            if ($useS3) {
-                try {
-                    $s3Config = [
-                        'version' => 'latest',
-                        'region' => config('filesystems.disks.s3.region', 'ap-southeast-1'),
-                        'credentials' => [
-                            'key' => config('filesystems.disks.s3.key'),
-                            'secret' => config('filesystems.disks.s3.secret'),
-                        ],
-                    ];
-                    $s3Client = new S3Client($s3Config);
-                    $bucket = config('filesystems.disks.s3.bucket');
-
-                    $manager = new Transfer($s3Client, $hlsOutDir, 's3://'.$bucket.'/'.$s3HlsDir, [
-                        'concurrency' => 20,
-                        'before' => function (Command $command) {
-                            $key = $command['Key'] ?? '';
-                            $mimeType = str_ends_with($key, '.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t';
-                            $command['ContentType'] = $mimeType;
-                        },
-                    ]);
-                    $manager->transfer();
-                } catch (Throwable $e) {
-                    Log::warning('[ConvertVideoToHLS] S3 Transfer pool fallback to sequential: '.$e->getMessage());
-                    foreach ($hlsFiles as $file) {
-                        $filename = $file->getFilename();
-                        $filePath = $file->getRealPath();
-                        $fileContent = file_get_contents($filePath);
-                        $mimeType = str_ends_with($filename, '.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t';
-
-                        Storage::disk('s3')->put($s3HlsDir.'/'.$filename, $fileContent, [
-                            'ContentType' => $mimeType,
-                        ]);
-                    }
-                }
-            }
-
-            // Sync sang local storage mirror
-            $localMirrorDir = Storage::disk('local')->path('lesson-hls/'.$lessonId);
-            File::makeDirectory($localMirrorDir, 0755, true, true);
-            File::copyDirectory($hlsOutDir, $localMirrorDir);
-
-            Log::info('[ConvertVideoToHLS] [UPLOAD HLS] Upload completed', [
-                'lesson_id' => $lessonId,
-                'files_uploaded' => $segmentCount,
-            ]);
-
-            // ─── [BƯỚC 6] SAVE DATABASE ───
             $updateData = [
                 'processing_status' => 'completed',
                 'upload_status' => 'uploaded',
                 'status' => 'published',
+                'hls_manifest_key' => $publication['use_s3'] ? $s3Directory.'/master.m3u8' : null,
+                'video_path' => $publication['mirrored_locally'] ? $localDirectory.'/playlist.m3u8' : null,
             ];
-
-            // Trích xuất chính xác thời lượng video
-            try {
-                $ffprobe = FFProbe::create($ffmpegConfig);
-                $extractedDuration = (int) round((float) $ffprobe->format($localInputPath)->get('duration'));
-                if ($extractedDuration > 0) {
-                    $updateData['duration_seconds'] = $extractedDuration;
-                    $updateData['duration'] = $extractedDuration;
-                }
-            } catch (Throwable $probeEx) {
-                Log::warning('[ConvertVideoToHLS] Could not probe video duration: '.$probeEx->getMessage());
+            if ($conversion['duration_seconds']) {
+                $updateData['duration_seconds'] = $conversion['duration_seconds'];
+                $updateData['duration'] = $conversion['duration_seconds'];
             }
-
-            if ($useS3) {
-                $updateData['hls_manifest_key'] = $s3HlsDir.'/master.m3u8';
-            }
-
-            $updateData['video_path'] = 'lesson-hls/'.$lessonId.'/playlist.m3u8';
-
             $this->lesson->update($updateData);
 
-            Log::info('[ConvertVideoToHLS] [SAVE DATABASE] Database updated successfully', [
+            Log::info('[ConvertVideoToHLS] Job completed.', [
                 'lesson_id' => $lessonId,
-                'duration_seconds' => $updateData['duration_seconds'] ?? $this->lesson->duration_seconds,
-                'hls_manifest_key' => $updateData['hls_manifest_key'] ?? null,
-                'video_path' => $updateData['video_path'],
-                'processing_status' => 'completed',
+                'obsolete_s3_files_removed' => $publication['obsolete_s3_files_removed'],
+                'duration_seconds' => round(microtime(true) - $startTime, 2),
             ]);
-
-            // ─── [BƯỚC 7] JOB COMPLETED ───
-            $durationSeconds = round(microtime(true) - $startTime, 2);
-            Log::info("[ConvertVideoToHLS] [JOB COMPLETED] Full pipeline finished in {$durationSeconds}s for Lesson ID {$lessonId}");
-
-        } catch (Throwable $e) {
-            Log::error("[ConvertVideoToHLS] Conversion failed for Lesson ID {$lessonId}: ".$e->getMessage(), [
+        } catch (Throwable $exception) {
+            $this->markFailed();
+            Log::error('[ConvertVideoToHLS] Conversion failed.', [
                 'lesson_id' => $lessonId,
-                'error_message' => $e->getMessage(),
-                'error_file' => $e->getFile(),
-                'error_line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
+                'message' => $exception->getMessage(),
+                'exception' => $exception,
             ]);
 
-            $this->lesson->update([
-                'processing_status' => 'failed',
-            ]);
-
-            throw $e;
+            throw $exception;
         } finally {
-            if (File::exists($tmpDir)) {
+            if (File::isDirectory($tmpDir)) {
                 File::deleteDirectory($tmpDir);
             }
-
             Cache::forget('video_processing_'.$lessonId);
         }
     }
 
-    /**
-     * @param  array<string, mixed>  $ffmpegConfig
-     */
-    private function convertToHls(array $ffmpegConfig, string $inputPath, string $playlistPath): void
+    public function failed(?Throwable $exception): void
     {
-        $hlsOutDir = dirname($playlistPath);
-        $segmentFilename = $hlsOutDir.'/segment_%03d.ts';
+        $this->markFailed();
+        Cache::forget('video_processing_'.$this->lesson->getKey());
 
-        $streamCopyProcess = new Process([
-            (string) $ffmpegConfig['ffmpeg.binaries'],
-            '-hide_banner',
-            '-nostdin',
-            '-y',
-            '-i', $inputPath,
-            '-c', 'copy',
-            '-hls_time', '10',
-            '-hls_list_size', '0',
-            '-hls_segment_filename', $segmentFilename,
-            '-f', 'hls',
-            $playlistPath,
+        Log::error('[ConvertVideoToHLS] Job exhausted all attempts.', [
+            'lesson_id' => $this->lesson->getKey(),
+            'message' => $exception?->getMessage(),
         ]);
-        $streamCopyProcess->setTimeout((float) $ffmpegConfig['timeout']);
-        $streamCopyProcess->run();
-
-        if ($streamCopyProcess->isSuccessful() && file_exists($playlistPath) && filesize($playlistPath) > 0) {
-            return;
-        }
-
-        Log::warning('[ConvertVideoToHLS] Stream copy fallback to ultrafast re-encode: '.trim($streamCopyProcess->getErrorOutput()));
-        File::cleanDirectory($hlsOutDir);
-
-        $process = new Process([
-            (string) $ffmpegConfig['ffmpeg.binaries'],
-            '-hide_banner',
-            '-nostdin',
-            '-y',
-            '-i', $inputPath,
-            '-c:v', 'libx264',
-            '-preset', 'ultrafast',
-            '-c:a', 'aac',
-            '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
-            '-hls_time', '10',
-            '-hls_list_size', '0',
-            '-hls_segment_filename', $segmentFilename,
-            '-f', 'hls',
-            $playlistPath,
-        ]);
-        $process->setTimeout((float) $ffmpegConfig['timeout']);
-
-        $errorTail = '';
-        $process->run(function (string $type, string $buffer) use (&$errorTail): void {
-            if ($type === Process::ERR) {
-                $errorTail = substr($errorTail.$buffer, -4000);
-            }
-        });
-
-        if (! $process->isSuccessful()) {
-            throw new \RuntimeException('FFmpeg conversion failed: '.trim($errorTail));
-        }
     }
 
-    /**
-     * Tự động phát hiện đường dẫn binary FFmpeg & FFprobe
-     */
-    private function getFfmpegConfig(): array
+    private function resolveInputPath(string $tmpDir): string
     {
-        $ffmpegBin = env('FFMPEG_BINARIES') ?: env('FFMPEG_BIN');
-        $ffprobeBin = env('FFPROBE_BINARIES') ?: env('FFPROBE_BIN');
+        if (filled($this->lesson->original_video_key)) {
+            $extension = pathinfo($this->lesson->original_video_key, PATHINFO_EXTENSION) ?: 'mp4';
+            $target = $tmpDir.'/source_video.'.$extension;
+            $source = Storage::disk('s3')->readStream($this->lesson->original_video_key);
+            if (! is_resource($source)) {
+                throw new RuntimeException('Cannot read the lesson source stream from S3.');
+            }
 
-        if (! $ffmpegBin) {
-            if (file_exists('C:/laragon/bin/ffmpeg/bin/ffmpeg.exe')) {
-                $ffmpegBin = 'C:/laragon/bin/ffmpeg/bin/ffmpeg.exe';
-            } elseif (file_exists('C:/ffmpeg/bin/ffmpeg.exe')) {
-                $ffmpegBin = 'C:/ffmpeg/bin/ffmpeg.exe';
-            } else {
-                $ffmpegBin = 'ffmpeg';
+            $destination = fopen($target, 'wb');
+            if (! is_resource($destination)) {
+                fclose($source);
+                throw new RuntimeException('Cannot create the local lesson source file.');
+            }
+
+            try {
+                if (stream_copy_to_stream($source, $destination) === false) {
+                    throw new RuntimeException('Cannot copy the lesson source stream from S3.');
+                }
+            } finally {
+                fclose($source);
+                fclose($destination);
+            }
+
+            return $target;
+        }
+
+        if (filled($this->lesson->video_path)) {
+            $localPath = Storage::disk('local')->path($this->lesson->video_path);
+            $publicPath = Storage::disk('public')->path($this->lesson->video_path);
+            if (is_file($localPath)) {
+                return $localPath;
+            }
+            if (is_file($publicPath)) {
+                return $publicPath;
             }
         }
 
-        if (! $ffprobeBin) {
-            if (file_exists('C:/laragon/bin/ffmpeg/bin/ffprobe.exe')) {
-                $ffprobeBin = 'C:/laragon/bin/ffmpeg/bin/ffprobe.exe';
-            } elseif (file_exists('C:/ffmpeg/bin/ffprobe.exe')) {
-                $ffprobeBin = 'C:/ffmpeg/bin/ffprobe.exe';
-            } else {
-                $ffprobeBin = 'ffprobe';
-            }
-        }
+        throw new RuntimeException('Source video not found for lesson ID '.$this->lesson->getKey().'.');
+    }
 
-        return [
-            'ffmpeg.binaries' => $ffmpegBin,
-            'ffprobe.binaries' => $ffprobeBin,
-            'timeout' => 3600,
-            'ffmpeg.threads' => (int) env('FFMPEG_THREADS', 12),
-        ];
+    private function markFailed(): void
+    {
+        Lesson::query()->whereKey($this->lesson->getKey())->update([
+            'processing_status' => 'failed',
+        ]);
     }
 }
