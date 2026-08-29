@@ -8,7 +8,7 @@
                 </div>
                 <a href="{{ route('instructor.courses.full-import.template') }}" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Tải mẫu Excel v3</a>
             </div>
-            <form class="mt-6 space-y-4" data-full-course-import-form data-preview-url="{{ route('instructor.courses.full-import.preview') }}">
+            <form class="mt-6 space-y-4" data-full-course-import-form data-preview-url="{{ route('instructor.courses.full-import.preview') }}" data-confirm-url="{{ route('instructor.courses.full-import.confirm') }}">
                 @csrf
                 <label for="full-course-import-file" class="block text-sm font-semibold text-slate-800 dark:text-slate-100">Chọn file Excel</label>
                 <input id="full-course-import-file" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
@@ -26,6 +26,10 @@
             <div class="mt-6 border-b border-slate-200 dark:border-slate-700" role="tablist" aria-label="Nội dung xem trước" data-full-course-tabs></div>
             <div class="mt-4 overflow-x-auto" data-full-course-panel></div>
             <div class="mt-6" data-full-course-issues></div>
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+                <button type="button" hidden data-full-course-confirm class="inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">Xác nhận tạo khóa học</button>
+                <p class="text-sm text-slate-600 dark:text-slate-300">Video sẽ được tạo dưới dạng shell; hãy tải nguồn video lên sau khi mở curriculum.</p>
+            </div>
         </section>
         <p class="sr-only" aria-live="polite" data-full-course-live></p>
     </div>
