@@ -62,4 +62,27 @@ class InstructorProfileAvatarTest extends TestCase
         $this->assertNotNull($instructor->avatar);
         Storage::disk('public')->assertExists($instructor->avatar);
     }
+
+    public function test_generated_avatar_services_use_an_internal_data_uri_fallback(): void
+    {
+        $user = User::factory()->make([
+            'name' => 'Nguyễn Văn Giảng',
+            'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=instructor',
+        ]);
+
+        $avatarUrl = $user->avatarUrl();
+
+        $this->assertStringStartsWith('data:image/svg+xml;base64,', $avatarUrl);
+        $this->assertStringContainsString('<svg', base64_decode(substr($avatarUrl, strlen('data:image/svg+xml;base64,')), true));
+        $this->assertStringNotContainsString('dicebear.com', $avatarUrl);
+    }
+
+    public function test_real_remote_social_avatar_is_preserved(): void
+    {
+        $user = User::factory()->make([
+            'avatar' => 'https://cdn.example.com/avatar.png',
+        ]);
+
+        $this->assertSame('https://cdn.example.com/avatar.png', $user->avatarUrl());
+    }
 }

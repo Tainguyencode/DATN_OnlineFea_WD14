@@ -42,13 +42,26 @@ class LeaderboardController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('user_id');
 
+        $completedCoursesSubquery = DB::table('enrollments')
+            ->select('user_id', DB::raw('COUNT(*) as completed_courses'))
+            ->where('status', Enrollment::STATUS_COMPLETED)
+            ->groupBy('user_id');
+
+        $totalPointsSubquery = DB::table('user_points')
+            ->select('user_id', DB::raw('SUM(points) as total_xp'))
+            ->groupBy('user_id');
+
         // 3. Query top 50 student users with points in period
         $top50Users = User::query()
             ->where('role', 'student')
             ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
-            ->select('users.*', 'points_table.period_xp')
+            ->leftJoinSub($completedCoursesSubquery, 'completed_table', 'users.id', '=', 'completed_table.user_id')
+            ->leftJoinSub($totalPointsSubquery, 'total_table', 'users.id', '=', 'total_table.user_id')
+            ->select('users.*', 'points_table.period_xp', DB::raw('COALESCE(completed_table.completed_courses, 0) as completed_courses_tiebreak'), DB::raw('COALESCE(total_table.total_xp, 0) as total_xp_tiebreak'))
             ->when($search, fn ($q) => $q->where('users.name', 'like', "%{$search}%"))
             ->orderByDesc('points_table.period_xp')
+            ->orderByDesc('completed_courses_tiebreak')
+            ->orderByDesc('total_xp_tiebreak')
             ->orderBy('users.id')
             ->take(50)
             ->get();
@@ -125,9 +138,10 @@ class LeaderboardController extends Controller
             $type = SystemSetting::get($typeKey, $defaultType);
             $value = (float) SystemSetting::get($valueKey, $defaultValue);
             if ($type === 'percent') {
-                return 'Voucher Giảm ' . (int) $value . '%';
+                return 'Voucher Giảm '.(int) $value.'%';
             }
-            return 'Voucher Giảm ' . number_format($value, 0, ',', '.') . 'đ';
+
+            return 'Voucher Giảm '.number_format($value, 0, ',', '.').'đ';
         };
 
         // Monthly Rewards definition

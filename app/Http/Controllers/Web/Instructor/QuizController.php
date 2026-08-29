@@ -206,8 +206,8 @@ class QuizController extends Controller
                 $this->quizContent->createQuestion($quiz, [
                     'question_text' => $q['question_text'],
                     'question_type' => $q['question_type'],
-                    'score'         => $q['score'],
-                    'explanation'   => $q['explanation'],
+                    'score' => $q['score'],
+                    'explanation' => $q['explanation'],
                 ], $q['option_data']);
 
                 $importedCount++;
@@ -244,6 +244,7 @@ class QuizController extends Controller
                         $rows[] = $cells;
                     }
                 }
+
                 return $rows;
             } catch (\Throwable $e) {
                 // Nếu đọc bằng Excel parser lỗi, fallback thử đọc dạng text bên dưới
@@ -351,7 +352,7 @@ class QuizController extends Controller
         if (count($rows) > 3) {
             $col0Values = array_slice(array_column($rows, 0), 1, 6); // bỏ header
             $uniqueCount = count(array_unique($col0Values));
-            $totalCount  = count($col0Values);
+            $totalCount = count($col0Values);
             if ($totalCount > 0 && ($uniqueCount / $totalCount) < 0.7) {
                 return true;
             }
@@ -372,8 +373,7 @@ class QuizController extends Controller
         // Bỏ qua header nếu hàng đầu không phải dữ liệu
         $startIndex = 0;
         $header = array_map(fn ($h) => mb_strtolower(trim((string) $h)), $rows[0] ?? []);
-        $hasHeader = collect($header)->contains(fn ($h) =>
-            str_contains($h, 'option') || str_contains($h, 'correct') || str_contains($h, 'code')
+        $hasHeader = collect($header)->contains(fn ($h) => str_contains($h, 'option') || str_contains($h, 'correct') || str_contains($h, 'code')
         );
         if ($hasHeader) {
             $startIndex = 1;
@@ -381,24 +381,32 @@ class QuizController extends Controller
 
         // Xác định vị trí các cột từ header (hoặc mặc định)
         $colQuestionCode = 0;
-        $colOptionCode   = 1;
-        $colOptionText   = 2;
-        $colIsCorrect    = 3;
+        $colOptionCode = 1;
+        $colOptionText = 2;
+        $colIsCorrect = 3;
 
         if ($hasHeader) {
             foreach ($header as $i => $h) {
-                if (str_contains($h, 'question') && str_contains($h, 'code')) { $colQuestionCode = $i; }
-                if ($h === 'option_code' || ($i !== $colQuestionCode && str_contains($h, 'option') && str_contains($h, 'code'))) { $colOptionCode = $i; }
-                if ($h === 'option_text' || ($i !== $colQuestionCode && str_contains($h, 'option') && str_contains($h, 'text'))) { $colOptionText = $i; }
-                if (str_contains($h, 'is_correct') || str_contains($h, 'correct')) { $colIsCorrect = $i; }
+                if (str_contains($h, 'question') && str_contains($h, 'code')) {
+                    $colQuestionCode = $i;
+                }
+                if ($h === 'option_code' || ($i !== $colQuestionCode && str_contains($h, 'option') && str_contains($h, 'code'))) {
+                    $colOptionCode = $i;
+                }
+                if ($h === 'option_text' || ($i !== $colQuestionCode && str_contains($h, 'option') && str_contains($h, 'text'))) {
+                    $colOptionText = $i;
+                }
+                if (str_contains($h, 'is_correct') || str_contains($h, 'correct')) {
+                    $colIsCorrect = $i;
+                }
             }
         }
 
         // Gom nhóm các hàng theo question_code
         $grouped = [];
-        $order   = [];
+        $order = [];
         for ($i = $startIndex; $i < count($rows); $i++) {
-            $row  = $rows[$i];
+            $row = $rows[$i];
             $code = trim((string) ($row[$colQuestionCode] ?? ''));
             if ($code === '') {
                 continue;
@@ -418,8 +426,8 @@ class QuizController extends Controller
             $optionData = [];
             $correctCount = 0;
             foreach ($optionRows as $sortOrder => $optRow) {
-                $optCode    = trim((string) ($optRow[$colOptionCode] ?? ''));
-                $optText    = trim((string) ($optRow[$colOptionText] ?? ''));
+                $optCode = trim((string) ($optRow[$colOptionCode] ?? ''));
+                $optText = trim((string) ($optRow[$colOptionText] ?? ''));
                 $rawCorrect = mb_strtolower(trim((string) ($optRow[$colIsCorrect] ?? '')));
 
                 if ($optText === '') {
@@ -433,8 +441,8 @@ class QuizController extends Controller
 
                 $optionEntry = [
                     'option_text' => $optText,
-                    'is_correct'  => $isCorrect,
-                    'sort_order'  => $sortOrder,
+                    'is_correct' => $isCorrect,
+                    'sort_order' => $sortOrder,
                 ];
 
                 // TRUE/FALSE identity
@@ -465,8 +473,8 @@ class QuizController extends Controller
                 $optionData = [
                     [
                         'option_text' => 'Đúng',
-                        'identity'    => 'TRUE',
-                        'is_correct'  => collect($optionRows)
+                        'identity' => 'TRUE',
+                        'is_correct' => collect($optionRows)
                             ->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'TRUE')
                             ? in_array(
                                 mb_strtolower(trim((string) (collect($optionRows)->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'TRUE')[$colIsCorrect] ?? ''))),
@@ -474,12 +482,12 @@ class QuizController extends Controller
                                 true
                             )
                             : true,
-                        'sort_order'  => 0,
+                        'sort_order' => 0,
                     ],
                     [
                         'option_text' => 'Sai',
-                        'identity'    => 'FALSE',
-                        'is_correct'  => collect($optionRows)
+                        'identity' => 'FALSE',
+                        'is_correct' => collect($optionRows)
                             ->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'FALSE')
                             ? in_array(
                                 mb_strtolower(trim((string) (collect($optionRows)->first(fn ($r) => mb_strtoupper(trim((string) ($r[$colOptionCode] ?? ''))) === 'FALSE')[$colIsCorrect] ?? ''))),
@@ -487,7 +495,7 @@ class QuizController extends Controller
                                 true
                             )
                             : false,
-                        'sort_order'  => 1,
+                        'sort_order' => 1,
                     ],
                 ];
             } elseif ($correctCount > 1) {
@@ -499,9 +507,9 @@ class QuizController extends Controller
             $questions[] = [
                 'question_text' => $code,   // question_code được dùng làm nội dung câu hỏi
                 'question_type' => $type,
-                'score'         => 1,
-                'explanation'   => null,
-                'option_data'   => $optionData,
+                'score' => 1,
+                'explanation' => null,
+                'option_data' => $optionData,
             ];
         }
 
@@ -527,8 +535,8 @@ class QuizController extends Controller
                 continue;
             }
 
-            $type        = $this->normalizeQuestionType(trim((string) ($row[1] ?? 'single_choice')));
-            $score       = max(1, (int) ($row[2] ?? 1));
+            $type = $this->normalizeQuestionType(trim((string) ($row[1] ?? 'single_choice')));
+            $score = max(1, (int) ($row[2] ?? 1));
             $explanation = trim((string) ($row[3] ?? '')) ?: null;
 
             $options = [];
@@ -539,12 +547,12 @@ class QuizController extends Controller
                 }
             }
 
-            $rawCorrect    = trim((string) ($row[8] ?? ''));
+            $rawCorrect = trim((string) ($row[8] ?? ''));
             $correctIndexes = $this->parseCorrectAnswers($rawCorrect, count($options), $type);
 
             if ($type === QuizQuestion::TYPE_TRUE_FALSE) {
                 $correctIndex = in_array(2, $correctIndexes, true) ? 1 : 0;
-                $optionData   = [
+                $optionData = [
                     ['option_text' => 'Đúng', 'identity' => 'TRUE',  'is_correct' => $correctIndex === 0, 'sort_order' => 0],
                     ['option_text' => 'Sai',  'identity' => 'FALSE', 'is_correct' => $correctIndex === 1, 'sort_order' => 1],
                 ];
@@ -553,9 +561,9 @@ class QuizController extends Controller
                     ->values()
                     ->map(fn (string $opt, int $i) => [
                         'option_text' => $opt,
-                        'is_correct'  => in_array($i + 1, $correctIndexes, true)
+                        'is_correct' => in_array($i + 1, $correctIndexes, true)
                             || ($correctIndexes === [] && $i === 0),
-                        'sort_order'  => $i,
+                        'sort_order' => $i,
                     ])
                     ->all();
             }
@@ -567,9 +575,9 @@ class QuizController extends Controller
             $questions[] = [
                 'question_text' => $questionText,
                 'question_type' => $type,
-                'score'         => $score,
-                'explanation'   => $explanation,
-                'option_data'   => $optionData,
+                'score' => $score,
+                'explanation' => $explanation,
+                'option_data' => $optionData,
             ];
         }
 
@@ -580,6 +588,9 @@ class QuizController extends Controller
     {
         $this->authorizeQuiz($quiz);
         $validated = $this->validatedQuestion($request);
+        if ($request->hasFile('question_image')) {
+            $validated['image_path'] = $request->file('question_image')->store('quiz-images', 'public');
+        }
 
         $this->quizContent->createQuestion($quiz, $validated);
 
@@ -590,6 +601,14 @@ class QuizController extends Controller
     {
         $this->authorizeQuestion($question);
         $validated = $this->validatedQuestion($request);
+        $authoringQuestion = $this->authoringQuestion($question);
+        if ($request->boolean('remove_question_image')) {
+            $validated['image_path'] = null;
+        } elseif ($request->hasFile('question_image')) {
+            $validated['image_path'] = $request->file('question_image')->store('quiz-images', 'public');
+        } else {
+            $validated['image_path'] = $authoringQuestion->image_path;
+        }
 
         $this->quizContent->updateQuestion($question, $validated);
 
@@ -670,6 +689,8 @@ class QuizController extends Controller
             'score' => ['required', 'integer', 'min:1', 'max:1000'],
             'explanation' => ['nullable', 'string', 'max:10000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'question_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'remove_question_image' => ['nullable', 'boolean'],
         ], [
             'question_text.required' => 'Vui lòng nhập nội dung câu hỏi.',
             'question_text.string' => 'Nội dung câu hỏi phải là chuỗi ký tự.',

@@ -11,6 +11,8 @@ use App\Models\QuizQuestion;
 use App\Models\User;
 use App\Services\QuizContentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class InstructorQuizAuthoringTest extends TestCase
@@ -138,6 +140,27 @@ class InstructorQuizAuthoringTest extends TestCase
         $this->assertSame('Chapter quiz', $quiz->title);
         $this->assertSame('Description', $quiz->description);
         $this->assertTrue($quiz->is_active);
+    }
+
+    public function test_instructor_can_attach_an_image_to_a_versioned_question(): void
+    {
+        Storage::fake('public');
+        [$instructor, , $lesson] = $this->authoringContext();
+        $quiz = app(QuizContentService::class)->getOrCreateForLesson($lesson);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.quizzes.questions.store', $quiz), [
+                'question_text' => 'Identify this diagram',
+                'question_type' => 'single_choice',
+                'score' => 1,
+                'question_image' => UploadedFile::fake()->image('diagram.png', 800, 600),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $question = $quiz->questions()->firstOrFail();
+        $version = $question->versions()->firstOrFail();
+        $this->assertNotNull($version->image_path);
+        Storage::disk('public')->assertExists($version->image_path);
     }
 
     /**

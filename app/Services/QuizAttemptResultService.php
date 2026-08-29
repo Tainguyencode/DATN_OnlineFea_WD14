@@ -75,7 +75,10 @@ class QuizAttemptResultService
 
             return [
                 'number' => $index + 1,
+                'question_id' => (int) $mapping->question_id,
+                'question_version_id' => (int) $questionVersion->id,
                 'question' => $questionVersion->question,
+                'image_url' => $questionVersion->image_path ? asset('storage/'.$questionVersion->image_path) : null,
                 'type' => $questionVersion->type,
                 'points' => (int) $questionVersion->points,
                 'explanation' => $questionVersion->explanation,

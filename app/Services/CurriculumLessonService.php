@@ -180,6 +180,11 @@ class CurriculumLessonService
         $videoFile = $data['video_file'] ?? null;
         $documentFile = $data['document_file'] ?? null;
         $s3Key = filled($data['s3_key'] ?? null) ? (string) $data['s3_key'] : null;
+        // The browser completes the direct S3 upload before submitting this form.
+        // At that point the multipart completion endpoint cannot find a lesson/update
+        // yet, so this save path must dispatch HLS when the object is already present.
+        $s3ObjectExists = $s3Key !== null
+            && app(AwsS3UploadService::class)->doesObjectExist($s3Key);
         $storedFiles = [];
         $type = $data['type'] ?? null;
         $duration = max(0, (int) ($data['duration'] ?? $data['duration_seconds'] ?? 0));
@@ -235,7 +240,7 @@ class CurriculumLessonService
                 'video_original_name' => (string) (($data['video_original_name'] ?? null) ?: basename($s3Key)),
                 'video_mime' => (string) (($data['video_mime'] ?? null) ?: 'video/mp4'),
                 'video_size' => (int) ($data['video_size'] ?? 0),
-                'upload_status' => 'uploaded',
+                'upload_status' => $s3ObjectExists ? 'uploaded' : 'pending',
                 'processing_status' => 'pending',
             ]);
         } elseif ($type === Lesson::TYPE_VIDEO && $videoFile instanceof UploadedFile) {
@@ -263,7 +268,7 @@ class CurriculumLessonService
         return [
             $data,
             $storedFiles,
-            $type === Lesson::TYPE_VIDEO && ($videoFile instanceof UploadedFile || $s3Key !== null),
+            $type === Lesson::TYPE_VIDEO && ($s3ObjectExists || $videoFile instanceof UploadedFile),
         ];
     }
 

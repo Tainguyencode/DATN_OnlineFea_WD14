@@ -1,7 +1,5 @@
 <x-instructor-layout :title="'Nội dung - '.$course->title" page-title="Quản lý nội dung khóa học" :breadcrumb="$course->title">
 
-<script src="{{ asset('js/s3-multipart-uploader.js') }}?v={{ time() }}"></script>
-
 @php
     $typeStyles = [
         'video' => 'bg-indigo-50 text-indigo-700 border-indigo-200',
@@ -51,45 +49,6 @@
             </div>
         </div>
 
-        @if(isset($pendingContentUpdates) && $pendingContentUpdates->isNotEmpty())
-            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <h4 class="text-sm font-bold text-amber-900">Các yêu cầu cập nhật đang lưu nháp / chờ duyệt ({{ $pendingContentUpdates->count() }}):</h4>
-                <ul class="mt-2 space-y-2 text-xs text-amber-900">
-                    @foreach($pendingContentUpdates as $pUpdate)
-                        <li class="flex items-center justify-between rounded-md bg-amber-100/60 p-2 border border-amber-200" x-data="{ showModal: false }">
-                            <div>
-                                <span class="font-bold uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-[11px]">{{ $pUpdate->type }}</span>
-                                <span class="font-semibold text-slate-700">({{ $pUpdate->action }})</span>:
-                                <strong class="text-slate-900 font-bold">@if(isset($pUpdate->payload['title'])) "{{ $pUpdate->payload['title'] }}" @else #{{ $pUpdate->entity_id }} @endif</strong>
-                                - <span class="font-bold text-amber-800">{{ $pUpdate->submitted_at ? 'Đã gửi Admin duyệt' : 'Đang lưu nháp' }}</span>
-                                @if($pUpdate->rejection_reason) <span class="text-rose-600 block text-[11px] font-semibold mt-0.5">Lý do từ chối trước đó: {{ $pUpdate->rejection_reason }}</span> @endif
-                            </div>
-                            <button type="button" @@click="showModal = true" class="rounded bg-amber-700 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-amber-800 cursor-pointer">
-                                Xem bản nháp
-                            </button>
-
-                            <!-- Modal Xem chi tiết bản nháp -->
-                            <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 text-left" x-cloak>
-                                <div class="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl space-y-3">
-                                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                                        <h3 class="text-sm font-bold text-slate-900">Chi tiết bản nháp {{ strtoupper($pUpdate->type) }} #{{ $pUpdate->id }}</h3>
-                                        <span class="text-xs uppercase font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{{ $pUpdate->action }}</span>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-xs font-semibold text-slate-500 uppercase">Nội dung chi tiết (Payload):</h4>
-                                        <div class="mt-2 max-h-56 overflow-y-auto rounded-lg bg-slate-900 p-3 text-xs font-mono text-emerald-400 whitespace-pre-wrap">{{ json_encode($pUpdate->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</div>
-                                    </div>
-                                    <div class="flex justify-end">
-                                        <button type="button" @@click="showModal = false" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Đóng</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <div class="mt-5 grid gap-3 sm:grid-cols-3">
             <div class="rounded-lg bg-slate-50 p-4">
                 <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Chương học</span>
@@ -115,7 +74,8 @@
         $videoReadinessBlockers = $course->videoReadinessBlockers();
         $hasVideoReadinessBlockers = $videoReadinessBlockers !== [];
         $hasIncompleteHls = $course->hasIncompleteHlsVideos();
-        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasVideoReadinessBlockers;
+        $submissionCheck = $course->submissionCheck();
+        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasVideoReadinessBlockers && $submissionCheck->passes();
         $videoBlockerTitle = $videoReadinessBlockers[0]['title'] ?? null;
     @endphp
 
@@ -127,6 +87,8 @@
                     <p id="common-hls-message" class="text-sm font-bold">
                         @if($hasVideoReadinessBlockers)
                             Còn video chưa sẵn sàng: {{ $videoBlockerTitle }}.
+                        @elseif(!$submissionCheck->passes())
+                            {{ $submissionCheck->summaryMessage() }}
                         @elseif($totalVideoLessons > 0)
                             Tất cả video đã được xử lý bảo mật thành công.
                         @endif
@@ -141,11 +103,11 @@
                         <input type="hidden" name="copyright_agreed" value="1">
                         <button type="submit"
                                 id="curriculum-submit-review-btn"
-                                {{ $hasVideoReadinessBlockers ? 'disabled' : '' }}
-                                @if($hasVideoReadinessBlockers)
-                                    title="Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: {{ $videoBlockerTitle }}."
+                                {{ !$canSubmitCourse ? 'disabled' : '' }}
+                                @if(!$canSubmitCourse)
+                                    title="{{ $hasVideoReadinessBlockers ? 'Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: '.$videoBlockerTitle : $submissionCheck->summaryMessage() }}"
                                 @endif
-                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasVideoReadinessBlockers ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
+                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ !$canSubmitCourse ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
                             {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
                         </button>
                     </form>

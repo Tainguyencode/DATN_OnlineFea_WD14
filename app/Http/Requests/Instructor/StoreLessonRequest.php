@@ -5,7 +5,6 @@ namespace App\Http\Requests\Instructor;
 use App\Models\Course;
 use App\Models\Lesson;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -23,12 +22,6 @@ class StoreLessonRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        Log::info('[UPLOAD TRACE] START REQUEST', [
-            'has_video_file' => $this->hasFile('video_file'),
-            'video_size_bytes' => $this->hasFile('video_file') ? $this->file('video_file')->getSize() : null,
-            'type' => $this->input('type'),
-        ]);
-
         if ($this->route('lesson')) {
             $lessonRoute = $this->route('lesson');
             $lessonId = is_object($lessonRoute) ? $lessonRoute->id : $lessonRoute;
@@ -46,48 +39,23 @@ class StoreLessonRequest extends FormRequest
         ]);
     }
 
-    protected function passedValidation(): void
-    {
-        Log::info('[UPLOAD TRACE] VALIDATION PASSED');
-    }
-
-    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void
-    {
-        $videoFile = $this->file('video_file');
-
-        Log::warning('[EXACT VALIDATION FAILED LOG]', [
-            'failed_rules' => $validator->failed(),
-            'errors' => $validator->errors()->toArray(),
-            'all' => $this->except(['video_file', 'document_file']),
-            'has_video' => $this->hasFile('video_file'),
-            'video_exists' => $this->file('video_file') !== null,
-            'video_valid' => $videoFile?->isValid(),
-            'video_error' => $videoFile?->getError(),
-            'video_error_message' => $videoFile?->getErrorMessage(),
-            'client_mime' => $videoFile?->getClientMimeType(),
-            'server_mime' => $videoFile?->getMimeType(),
-            'extension' => $videoFile?->extension(),
-            'client_extension' => $videoFile?->getClientOriginalExtension(),
-            'size' => $videoFile?->getSize(),
-        ]);
-
-        parent::failedValidation($validator);
-    }
-
     /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
+        $maxVideoBytes = max(1, (int) config('video.upload.max_bytes'));
+        $maxVideoKilobytes = (int) ceil($maxVideoBytes / 1024);
+
         return [
             'title' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in(Lesson::TYPES)],
-            's3_key' => ['nullable', 'string', 'max:500', 'prohibited_unless:type,video'],
+            's3_key' => ['nullable', 'string', 'max:1024', 'prohibited_unless:type,video'],
             'video_original_name' => ['nullable', 'string', 'max:255'],
             'video_mime' => ['nullable', 'string', 'max:100'],
-            'video_size' => ['nullable', 'integer', 'min:0'],
-            'video_file' => ['nullable', 'file', 'mimes:mp4,m4v,mov,avi,webm,mkv', 'max:204800', 'prohibited_unless:type,video'],
-            'video_url' => ['nullable', 'string', 'max:2048', 'prohibited_unless:type,video'],
+            'video_size' => ['nullable', 'integer', 'min:0', 'max:'.$maxVideoBytes],
+            'video_file' => ['nullable', 'file', 'mimes:mp4,m4v,mov,avi,webm,mkv', 'max:'.$maxVideoKilobytes, 'prohibited_unless:type,video'],
+            'video_url' => ['nullable', 'url:http,https', 'max:2048', 'prohibited_unless:type,video'],
             'content' => ['nullable', 'string', 'prohibited_if:type,quiz'],
             'document_file' => [
                 'nullable',
@@ -136,8 +104,6 @@ class StoreLessonRequest extends FormRequest
                 $type = $this->input('type');
 
                 if ($type === Lesson::TYPE_VIDEO && ! $this->hasVideoContent($lesson)) {
-                    $validator->errors()->add('video_url', 'Vui lòng tải file video bài giảng lên.');
-                    $validator->errors()->add('video_file', 'Vui lòng tải file video bài giảng lên.');
                     $validator->errors()->add('video_url', 'Vui lòng tải file video bài giảng lên hoặc nhập Video URL.');
                 }
 
@@ -164,6 +130,8 @@ class StoreLessonRequest extends FormRequest
      */
     public function messages(): array
     {
+        $maxVideoMegabytes = (int) ceil(max(1, (int) config('video.upload.max_bytes')) / 1048576);
+
         return [
             'title.required' => 'Vui lòng nhập tên bài học.',
             'title.string' => 'Tên bài học phải là chuỗi ký tự.',
@@ -174,10 +142,11 @@ class StoreLessonRequest extends FormRequest
 
             'video_file.file' => 'Video bài giảng phải là một tệp tin hợp lệ.',
             'video_file.mimes' => 'Video bài giảng chỉ cho phép định dạng MP4, MOV, AVI, WEBM hoặc MKV.',
-            'video_file.max' => 'Dung lượng video bài giảng tối đa là 200MB.',
+            'video_file.max' => "Dung lượng video bài giảng tối đa là {$maxVideoMegabytes}MB.",
             'video_file.prohibited_unless' => 'Chỉ upload video khi loại bài học là Video.',
+            'video_size.max' => "Dung lượng video bài giảng tối đa là {$maxVideoMegabytes}MB.",
 
-            'video_url.string' => 'Video URL phải là chuỗi ký tự.',
+            'video_url.url' => 'Video URL phải là địa chỉ HTTP hoặc HTTPS hợp lệ.',
             'video_url.max' => 'Video URL không được vượt quá :max ký tự.',
             'video_url.prohibited_unless' => 'Chỉ nhập Video URL khi loại bài học là Video.',
 

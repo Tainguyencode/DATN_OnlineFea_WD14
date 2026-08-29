@@ -350,7 +350,7 @@ class CouponController extends Controller
 
         return redirect()
             ->route('admin.coupons.reward_history')
-            ->with('success', "Đã kích hoạt tiến trình trao thưởng tuần {$period}. Kết quả: " . trim($output));
+            ->with('success', "Đã kích hoạt tiến trình trao thưởng tuần {$period}. Kết quả: ".trim($output));
     }
 
     /**

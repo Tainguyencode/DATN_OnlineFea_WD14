@@ -89,6 +89,11 @@
                     </label>
                 </div>
             </div>
+            <label class="mt-4 block max-w-xs">
+                <span class="mb-1.5 block text-sm font-bold text-slate-700">Số câu rút ngẫu nhiên</span>
+                <input type="number" name="question_count" value="{{ old('question_count', $quiz->question_count ?? '') }}" min="1" max="1000" placeholder="Để trống: dùng tất cả" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm">
+                <span class="mt-1 block text-xs text-slate-500">Mỗi lượt làm nhận một tập câu ổn định được rút từ ngân hàng câu hỏi.</span>
+            </label>
 
             <label class="mt-4 block">
                 <span class="mb-1.5 block text-sm font-bold text-slate-700">Mo ta quiz</span>
@@ -247,6 +252,9 @@
                                     @endif
                                 </div>
                                 <h4 class="mt-2 text-base font-bold text-slate-950"><span data-math-content>{{ $question->question }}</span></h4>
+                                @if($question->image_path)
+                                    <img src="{{ asset('storage/'.$question->image_path) }}" alt="Minh họa câu hỏi" class="mt-3 max-h-64 rounded-lg border border-slate-200 object-contain">
+                                @endif
                                 @if ($question->explanation)
                                     <p class="mt-2 text-sm leading-6 text-slate-500"><span data-math-content>{{ $question->explanation }}</span></p>
                                 @endif
@@ -258,7 +266,7 @@
                                         class="inline-flex min-h-10 cursor-pointer list-none items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
                                         Sửa câu hỏi
                                     </summary>
-                                    <form method="POST"
+                                    <form method="POST" enctype="multipart/form-data"
                                         action="{{ route('instructor.quiz-questions.update', $question) }}"
                                         class="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:w-[620px]">
                                         @csrf
@@ -273,6 +281,11 @@
                                             @if($errors->has('question_text') && old('editing_question_id') == $question->id)
                                                 <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('question_text') }}</p>
                                             @endif
+                                        </label>
+                                        <label class="block">
+                                            <span class="mb-1 block text-xs font-bold text-slate-600">Ảnh minh họa (JPG, PNG, WEBP; tối đa 5MB)</span>
+                                            <input type="file" name="question_image" accept="image/jpeg,image/png,image/webp" class="w-full text-sm">
+                                            @if($question->image_path)<span class="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" name="remove_question_image" value="1"> Xóa ảnh hiện tại</span>@endif
                                         </label>
                                         <div class="grid gap-3 sm:grid-cols-3">
                                             <label class="block">
@@ -439,7 +452,7 @@
                         </button>
                     </div>
 
-                    <form method="POST" action="{{ route('instructor.quizzes.questions.store', $quiz) }}"
+                    <form method="POST" enctype="multipart/form-data" action="{{ route('instructor.quizzes.questions.store', $quiz) }}"
                         class="mt-5 space-y-4">
                         @csrf
                         <input type="hidden" name="is_creating_question" value="1">
@@ -451,6 +464,12 @@
                             @if($errors->has('question_text') && old('is_creating_question'))
                                 <p class="mt-1 text-xs font-semibold text-rose-600">{{ $errors->first('question_text') }}</p>
                             @endif
+                            <span class="mt-1 block text-xs text-slate-500">Hỗ trợ công thức LaTeX, ví dụ: <code>$x^2 + y^2$</code> hoặc <code>\[\frac{a}{b}\]</code>.</span>
+                        </label>
+                        <label class="block">
+                            <span class="mb-1.5 block text-sm font-bold text-slate-700">Ảnh minh họa (không bắt buộc)</span>
+                            <input type="file" name="question_image" accept="image/jpeg,image/png,image/webp" class="w-full rounded-lg border border-slate-300 p-2 text-sm">
+                            @error('question_image')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
                         </label>
                         <div class="grid gap-4 sm:grid-cols-3">
                             <label class="block">

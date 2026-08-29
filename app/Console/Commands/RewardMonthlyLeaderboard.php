@@ -72,12 +72,18 @@ class RewardMonthlyLeaderboard extends Command
             ->select('user_id', DB::raw('SUM(points) as period_xp'))
             ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
             ->groupBy('user_id');
+        $completedCourses = DB::table('enrollments')->select('user_id', DB::raw('COUNT(*) as completed_courses'))->where('status', 'completed')->groupBy('user_id');
+        $totalPoints = DB::table('user_points')->select('user_id', DB::raw('SUM(points) as total_points'))->groupBy('user_id');
 
         $topStudents = User::query()
             ->where('role', 'student')
             ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
+            ->leftJoinSub($completedCourses, 'completed_table', 'users.id', '=', 'completed_table.user_id')
+            ->leftJoinSub($totalPoints, 'total_table', 'users.id', '=', 'total_table.user_id')
             ->select('users.*', 'points_table.period_xp')
             ->orderByDesc('points_table.period_xp')
+            ->orderByDesc(DB::raw('COALESCE(completed_table.completed_courses, 0)'))
+            ->orderByDesc(DB::raw('COALESCE(total_table.total_points, 0)'))
             ->orderBy('users.id')
             ->take(50)
             ->get();

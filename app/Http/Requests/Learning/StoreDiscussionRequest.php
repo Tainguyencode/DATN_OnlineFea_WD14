@@ -26,7 +26,7 @@ class StoreDiscussionRequest extends FormRequest
     {
         return [
             'title' => ['nullable', 'string', 'max:255'],
-            'content' => ['nullable', 'string', 'required_without:attachment'],
+            'content' => ['nullable', 'string', 'max:10000', 'required_without:attachment'],
             'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,mkv,pdf,doc,docx,xls,xlsx,zip,rar,txt', 'max:51200', 'required_without:content'], // Max 50MB
         ];
     }

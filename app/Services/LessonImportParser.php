@@ -20,6 +20,12 @@ class LessonImportParser
 {
     public const MAX_DATA_ROWS = 100;
 
+    private const MAX_ZIP_ENTRIES = 1000;
+
+    private const MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
+
+    private const MAX_SINGLE_ENTRY_BYTES = 20 * 1024 * 1024;
+
     /**
      * @return array{
      *     template_version: int,
@@ -225,6 +231,37 @@ class LessonImportParser
         }
 
         try {
+            if ($zip->numFiles > self::MAX_ZIP_ENTRIES) {
+                throw new LessonImportException(
+                    'xlsx_archive_too_large',
+                    'File Excel chứa quá nhiều thành phần và không thể xử lý an toàn.',
+                );
+            }
+
+            $uncompressedBytes = 0;
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entry = $zip->statIndex($index);
+                if (! is_array($entry)) {
+                    throw new LessonImportException('invalid_zip', 'File XLSX bị hỏng hoặc không đúng định dạng.');
+                }
+
+                $entryBytes = max(0, (int) ($entry['size'] ?? 0));
+                if ($entryBytes > self::MAX_SINGLE_ENTRY_BYTES) {
+                    throw new LessonImportException(
+                        'xlsx_archive_too_large',
+                        'File Excel có thành phần giải nén quá lớn và không thể xử lý an toàn.',
+                    );
+                }
+
+                $uncompressedBytes += $entryBytes;
+                if ($uncompressedBytes > self::MAX_UNCOMPRESSED_BYTES) {
+                    throw new LessonImportException(
+                        'xlsx_archive_too_large',
+                        'Dung lượng giải nén của file Excel vượt giới hạn an toàn.',
+                    );
+                }
+            }
+
             foreach (['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml'] as $requiredEntry) {
                 if ($zip->locateName($requiredEntry) === false) {
                     throw new LessonImportException('invalid_xlsx_structure', 'File tải lên không phải workbook XLSX hợp lệ.');

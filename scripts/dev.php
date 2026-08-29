@@ -11,12 +11,13 @@ declare(strict_types=1);
  */
 $hasPcntl = function_exists('pcntl_fork');
 
-$names = ['server', 'queue'];
+$names = ['server', 'queue', 'reverb'];
 $commands = [
     'php artisan serve',
     'php artisan queue:listen --tries=1 --timeout=0',
+    'php artisan reverb:start --debug',
 ];
-$colors = ['#93c5fd', '#c4b5fd'];
+$colors = ['#93c5fd', '#c4b5fd', '#86efac'];
 
 if ($hasPcntl) {
     $names[] = 'logs';

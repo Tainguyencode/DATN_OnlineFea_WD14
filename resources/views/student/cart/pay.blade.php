@@ -112,6 +112,12 @@
     
     <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 space-y-6">
 
+        @if(session('error'))
+            <div role="alert" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                {{ session('error') }}
+            </div>
+        @endif
+
         <!-- NAV QUAY LẠI -->
         <div class="flex items-center justify-between">
             <a href="{{ route('student.orders') }}" class="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition">

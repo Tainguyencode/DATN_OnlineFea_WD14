@@ -47,6 +47,7 @@ class RewardWeeklyLeaderboard extends Command
                 }
             } catch (\Throwable $e) {
                 $this->error("Invalid period format: {$periodOption}. Expected format: YYYY-Www (e.g. 2026-W34).");
+
                 return 1;
             }
         } else {
@@ -66,6 +67,7 @@ class RewardWeeklyLeaderboard extends Command
         $alreadyRewarded = MonthlyRewardLog::where('period_key', $periodKey)->exists();
         if ($alreadyRewarded) {
             $this->warn("[SKIP] Weekly rewards for period {$periodKey} have already been granted previously.");
+
             return 0;
         }
 
@@ -78,18 +80,25 @@ class RewardWeeklyLeaderboard extends Command
             ->select('user_id', DB::raw('SUM(points) as period_xp'))
             ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
             ->groupBy('user_id');
+        $completedCourses = DB::table('enrollments')->select('user_id', DB::raw('COUNT(*) as completed_courses'))->where('status', 'completed')->groupBy('user_id');
+        $totalPoints = DB::table('user_points')->select('user_id', DB::raw('SUM(points) as total_points'))->groupBy('user_id');
 
         $topStudents = User::query()
             ->where('role', 'student')
             ->joinSub($pointsSubquery, 'points_table', 'users.id', '=', 'points_table.user_id')
+            ->leftJoinSub($completedCourses, 'completed_table', 'users.id', '=', 'completed_table.user_id')
+            ->leftJoinSub($totalPoints, 'total_table', 'users.id', '=', 'total_table.user_id')
             ->select('users.*', 'points_table.period_xp')
             ->orderByDesc('points_table.period_xp')
+            ->orderByDesc(DB::raw('COALESCE(completed_table.completed_courses, 0)'))
+            ->orderByDesc(DB::raw('COALESCE(total_table.total_points, 0)'))
             ->orderBy('users.id')
             ->take(10)
             ->get();
 
         if ($topStudents->isEmpty()) {
             $this->warn("No students with points found for period {$periodKey}. Skipped reward generation.");
+
             return 0;
         }
 
@@ -148,16 +157,18 @@ class RewardWeeklyLeaderboard extends Command
                 $cleanUserName = Str::upper(Str::ascii(Str::slug($student->name, '')));
                 $cleanUserName = substr($cleanUserName, 0, 10);
                 if (empty($cleanUserName)) {
-                    $cleanUserName = 'USER' . $student->id;
+                    $cleanUserName = 'USER'.$student->id;
                 }
 
                 $baseCode = "TOP{$rank}-{$cleanPeriod}-{$cleanUserName}";
                 $code = $baseCode;
                 $counter = 1;
                 while (Coupon::where('code', $code)->exists()) {
-                    $code = "TOP{$rank}-{$cleanPeriod}-{$cleanUserName}" . strtoupper(Str::random(3));
+                    $code = "TOP{$rank}-{$cleanPeriod}-{$cleanUserName}".strtoupper(Str::random(3));
                     $counter++;
-                    if ($counter > 10) break;
+                    if ($counter > 10) {
+                        break;
+                    }
                 }
 
                 $expiryDays = max(1, $cfg['expiry_days']);
@@ -200,8 +211,8 @@ class RewardWeeklyLeaderboard extends Command
                 ]);
 
                 $discountText = $cfg['type'] === 'percent'
-                    ? ((int) $cfg['value'] . '%')
-                    : (number_format($cfg['value'], 0, ',', '.') . 'đ');
+                    ? ((int) $cfg['value'].'%')
+                    : (number_format($cfg['value'], 0, ',', '.').'đ');
 
                 $notificationService->send(
                     $student,
@@ -217,6 +228,7 @@ class RewardWeeklyLeaderboard extends Command
         }
 
         $this->info("Successfully processed weekly leaderboard rewards for {$periodKey}. Total granted: {$grantedCount}.");
+
         return 0;
     }
 }

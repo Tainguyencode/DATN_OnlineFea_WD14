@@ -48,7 +48,11 @@
                         </span>
                     @else
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-4 py-1.5 text-xs font-bold text-rose-700 border border-rose-200">
-                            {{ ucfirst($order->status) }}
+                            {{ match ($order->status) {
+                                'cancelled' => 'Đã hủy',
+                                'failed' => 'Thanh toán thất bại',
+                                default => ucfirst($order->status),
+                            } }}
                         </span>
                     @endif
                 </div>
@@ -188,12 +192,23 @@
                             <a href="{{ route('student.checkout.pay', $order->order_code) }}" class="inline-flex h-10 w-full items-center justify-center rounded-xl bg-amber-500 font-bold text-white transition hover:bg-amber-600 shadow-sm">
                                 Thanh toán ngay
                             </a>
+                            <form method="POST" action="{{ route('student.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này? Sau khi hủy, liên kết thanh toán cũ sẽ không còn được hệ thống chấp nhận.');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="inline-flex h-10 w-full items-center justify-center rounded-xl border border-rose-300 bg-white font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30">
+                                    Hủy đơn hàng
+                                </button>
+                            </form>
                         </div>
                     @endif
 
                     <!-- KHU VỰC HOÀN TIỀN (REFUND) -->
                     @php
-                        $refund = $order->refund;
+                        $refund = in_array($order->status, ['paid', 'refunded'], true)
+                            && (float) $order->total_amount > 0
+                            && (float) ($order->refund?->amount ?? 0) > 0
+                                ? $order->refund
+                                : null;
                     @endphp
 
                     @if($refund)

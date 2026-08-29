@@ -6,7 +6,8 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
-use App\Services\PointService;
+use App\Services\LearningProgressService;
+use App\Services\LessonNoteAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -44,6 +45,8 @@ class ProgressController
             ], 401);
         }
 
+        abort_unless($user->isStudent(), 403);
+
         // 2. Lấy thông tin lesson
         $lesson = Lesson::find($lessonId);
         if (! $lesson) {
@@ -53,67 +56,24 @@ class ProgressController
             ], 404);
         }
 
-        // 3. Kiểm tra user đã đăng ký khóa học chứa lesson này chưa
-        // Sử dụng whereHas để tránh query thừa
-        $enrollment = Enrollment::where('user_id', $user->id)
-            ->where('course_id', $lesson->course_id)
-            ->first();
+        $access = app(LessonNoteAccessService::class);
+        $courseId = $access->lessonCourseId($lesson);
+        abort_unless($courseId, 404);
+        $course = Course::findOrFail($courseId);
+        $access->assertCanUse($user, $course, $lesson);
 
-        if (! $enrollment) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn chưa đăng ký khóa học này. Vui lòng đăng ký trước khi học.',
-            ], 403);
-        }
+        // Video, quiz và bài tập phải hoàn thành qua luồng chuyên biệt để không thể bỏ qua
+        // thời lượng xem, kết quả quiz hoặc điểm chấm bài.
+        abort_unless($lesson->type === Lesson::TYPE_DOCUMENT, 422, 'Loại bài học này không thể đánh dấu hoàn thành thủ công.');
 
-        // 4. Cập nhật hoặc tạo mới lesson_progress
-        $progress = LessonProgress::updateOrCreate(
-            [
-                'user_id' => $user->id,
-                'lesson_id' => $lessonId,
-            ],
-            [
-                'is_completed' => true,
-                'completed_at' => now(),
-                'watched_seconds' => $request->input('watched_seconds', 0),
-            ]
+        $result = app(LearningProgressService::class)->recordLessonProgress(
+            $user->id,
+            $course,
+            $lesson,
+            0,
+            0,
+            true
         );
-
-        // Cộng điểm hoàn thành bài giảng và kiểm tra hoàn thành chương/streak
-        app(PointService::class)->awardLessonCompletionPoints($user->id, $lessonId);
-
-        // 5. Kiểm tra xem user đã hoàn thành tất cả lessons của course này chưa
-        $course = $lesson->course;
-        $totalLessons = $course->lessons()->count();
-        $completedLessons = $course->lessons()
-            ->whereHas('progress', function ($query) use ($user) {
-                $query->where('user_id', $user->id)
-                    ->where('is_completed', true);
-            })
-            ->count();
-
-        // Nếu hoàn thành 100% → cập nhật enrollment
-        if ($totalLessons > 0 && $completedLessons === $totalLessons) {
-            $enrollment->update([
-                'completed_at' => now(),
-                'progress_percent' => 100,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Chúc mừng! Bạn đã hoàn thành toàn bộ khóa học',
-                'data' => [
-                    'lesson_id' => $lessonId,
-                    'is_completed' => true,
-                    'course_completed' => true,
-                    'progress_percent' => 100,
-                ],
-            ], 200);
-        }
-
-        // Cập nhật tiến độ của enrollment
-        $progressPercent = $totalLessons > 0 ? ($completedLessons / $totalLessons) * 100 : 0;
-        $enrollment->update(['progress_percent' => $progressPercent]);
 
         return response()->json([
             'success' => true,
@@ -121,9 +81,8 @@ class ProgressController
             'data' => [
                 'lesson_id' => $lessonId,
                 'is_completed' => true,
-                'completed_at' => $progress->completed_at,
-                'course_completed' => false,
-                'course_progress' => round($progressPercent, 2),
+                'course_completed' => $result['course_completed'],
+                'course_progress' => $result['course_progress'],
             ],
         ], 200);
     }
@@ -365,8 +324,10 @@ class ProgressController
             ], 401);
         }
 
+        abort_unless($user->isStudent(), 403);
+
         $validated = $request->validate([
-            'watched_seconds' => 'required|integer|min:0',
+            'watched_seconds' => ['required', 'integer', 'min:0', 'max:86400'],
         ]);
 
         $lesson = Lesson::find($lessonId);
@@ -377,37 +338,32 @@ class ProgressController
             ], 404);
         }
 
-        // Kiểm tra quyền truy cập
-        $enrollment = Enrollment::where('user_id', $user->id)
-            ->where('course_id', $lesson->course_id)
-            ->first();
+        abort_unless($lesson->type === Lesson::TYPE_VIDEO, 422);
+        $access = app(LessonNoteAccessService::class);
+        $courseId = $access->lessonCourseId($lesson);
+        abort_unless($courseId, 404);
+        $course = Course::findOrFail($courseId);
+        $access->assertCanUse($user, $course, $lesson);
 
-        if (! $enrollment) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn chưa có quyền xem bài học này',
-            ], 403);
-        }
+        $duration = $access->lessonDurationSeconds($lesson);
+        abort_if($duration > 0 && $validated['watched_seconds'] > $duration, 422, 'Thời gian xem vượt quá thời lượng video.');
 
-        $progress = LessonProgress::updateOrCreate(
-            [
-                'user_id' => $user->id,
-                'lesson_id' => $lessonId,
-            ],
-            [
-                'watched_seconds' => $validated['watched_seconds'],
-            ]
-        );
+        $result = app(LearningProgressService::class)->recordVideoProgress($user->id, $course, $lesson, [
+            'last_position_seconds' => $validated['watched_seconds'],
+            'furthest_position_seconds' => $validated['watched_seconds'],
+            'played_seconds' => 0,
+            'duration_seconds' => $duration,
+        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Cập nhật tiến độ xem video thành công',
             'data' => [
                 'lesson_id' => $lessonId,
-                'watched_seconds' => $progress->watched_seconds,
-                'duration_seconds' => $lesson->duration_seconds,
-                'watch_percentage' => $lesson->duration_seconds > 0
-                    ? round(($progress->watched_seconds / $lesson->duration_seconds) * 100, 2)
+                'watched_seconds' => $result['watched_seconds'],
+                'duration_seconds' => $duration,
+                'watch_percentage' => $duration > 0
+                    ? round(($result['watched_seconds'] / $duration) * 100, 2)
                     : 0,
             ],
         ], 200);

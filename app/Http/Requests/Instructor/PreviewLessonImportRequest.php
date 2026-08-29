@@ -4,6 +4,7 @@ namespace App\Http\Requests\Instructor;
 
 use App\Models\Course;
 use App\Models\CourseSection;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
 
 class PreviewLessonImportRequest extends FormRequest
@@ -24,6 +25,16 @@ class PreviewLessonImportRequest extends FormRequest
             && $section instanceof CourseSection
             && $course->isOwnedBy($this->user())
             && (int) $section->course_id === (int) $course->id;
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    protected function failedAuthorization(): void
+    {
+        throw new AuthorizationException(
+            'Phiên đăng nhập hiện tại không sở hữu khóa học hoặc chương đã chọn. Vui lòng tải lại trang sau khi đăng nhập đúng tài khoản giảng viên.'
+        );
     }
 
     /**

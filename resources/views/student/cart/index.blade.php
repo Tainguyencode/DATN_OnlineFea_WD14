@@ -335,6 +335,7 @@
 
                 <form method="POST" action="{{ route('student.cart.checkout') }}" class="space-y-4">
                     @csrf
+                    <input type="hidden" name="idempotency_key" value="{{ (string) Str::uuid() }}">
                     <!-- Dynamic Selected Course Inputs -->
                     <template x-for="id in checkedIds" :key="id">
                         <input type="hidden" name="course_ids[]" :value="id">

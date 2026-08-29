@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'upload' => [
+        // Keep direct-to-S3 uploads aligned with StoreLessonRequest (200 MB).
+        'max_bytes' => (int) env('VIDEO_UPLOAD_MAX_BYTES', 200 * 1024 * 1024),
+        'allowed_extensions' => ['mp4', 'm4v', 'mov', 'avi', 'webm', 'mkv'],
+    ],
+
+    'ffmpeg' => [
+        // Environment access stays inside config so `php artisan config:cache` is safe.
+        'binary' => env('FFMPEG_BINARIES', env('FFMPEG_BIN')),
+        'probe_binary' => env('FFPROBE_BINARIES', env('FFPROBE_BIN')),
+        'threads' => (int) env('FFMPEG_THREADS', 12),
+        'timeout_seconds' => (int) env('FFMPEG_TIMEOUT_SECONDS', 3600),
+    ],
+
+    'hls' => [
+        // Encoding speed/quality trade-off. "veryfast" is suitable for web uploads.
+        'preset' => env('HLS_FFMPEG_PRESET', 'veryfast'),
+        'crf' => (int) env('HLS_FFMPEG_CRF', 23),
+        'segment_seconds' => (int) env('HLS_SEGMENT_SECONDS', 10),
+
+        // Keep a local fallback only when explicitly needed. S3 remains the source of truth.
+        'mirror_local' => (bool) env('HLS_MIRROR_LOCAL', true),
+    ],
+];

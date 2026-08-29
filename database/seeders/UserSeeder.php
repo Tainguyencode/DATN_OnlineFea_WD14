@@ -28,9 +28,11 @@ class UserSeeder extends Seeder
                 'username' => 'instructor',
                 'email' => 'instructor@example.com',
                 'role' => 'instructor',
-                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=giangvien1',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/sv
+                // g?seed=giangvien1',
                 'bio' => 'Giảng viên cấp cao với hơn 10 năm kinh nghiệm trong ngành lập trình Web Fullstack và AI.',
                 'phone' => '0987654321',
+                'password' => 'password123',
             ],
             [
                 'name' => 'Trần Đức Dũng',
@@ -40,6 +42,96 @@ class UserSeeder extends Seeder
                 'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=giangvien2',
                 'bio' => 'Chuyên gia thiết kế giao diện UI/UX và thiết kế hệ thống sản phẩm số.',
                 'phone' => '0977665544',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'TS. Hoàng Văn Tiến',
+                'username' => 'instructor3',
+                'email' => 'tien.datascience@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=giangvien3',
+                'bio' => 'Trưởng lab nghiên cứu Trí tuệ nhân tạo và Phân tích dữ liệu lớn với 12 năm kinh nghiệm.',
+                'phone' => '0981112233',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Trịnh Đình Long',
+                'username' => 'instructor4',
+                'email' => 'long.marketing@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=giangvien4',
+                'bio' => 'Giám đốc Brand & Performance Marketing tại tập đoàn công nghệ đa quốc gia.',
+                'phone' => '0982223344',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Thầy Tú Phạm',
+                'username' => 'instructor5',
+                'email' => 'tu.ielts@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=giangvien5',
+                'bio' => 'Chuyên gia luyện thi IELTS 8.5, cựu sinh viên Đại học Oxford với 8 năm giảng dạy.',
+                'phone' => '0983334455',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Phạm Nhật Minh',
+                'username' => 'instructor6',
+                'email' => 'minh.mobile@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=giangvien6',
+                'bio' => 'Senior Mobile Developer chuyên trách React Native & Flutter.',
+                'phone' => '0984445566',
+            ],
+            [
+                'name' => 'Phạm Nhật Minh',
+                'username' => 'minh_reactnative',
+                'email' => 'minh.reactnative@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=minh-reactnative',
+                'bio' => 'Giảng viên chuyên phát triển ứng dụng đa nền tảng với React Native và hệ sinh thái JavaScript.',
+                'phone' => '0984445571',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Nguyễn Thành Nam',
+                'username' => 'nam_uiux',
+                'email' => 'nam.uiux@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=nam-uiux',
+                'bio' => 'Giảng viên UI/UX tập trung vào nghiên cứu người dùng, thiết kế tương tác và hệ thống thiết kế.',
+                'phone' => '0984445572',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Đặng Thanh Tùng',
+                'username' => 'tung_data',
+                'email' => 'tung.data@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=tung-data',
+                'bio' => 'Giảng viên Data Science chuyên về Python, trực quan hóa dữ liệu và Machine Learning ứng dụng.',
+                'phone' => '0984445573',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Hà Tuấn Khang',
+                'username' => 'khang_seo',
+                'email' => 'khang.seo@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=khang-seo',
+                'bio' => 'Giảng viên SEO và Content Marketing, chuyên xây dựng chiến lược tăng trưởng dựa trên dữ liệu.',
+                'phone' => '0984445574',
+                'password' => 'password123',
+            ],
+            [
+                'name' => 'Ms. Hoa',
+                'username' => 'hoa_english',
+                'email' => 'hoa.english@example.com',
+                'role' => 'instructor',
+                'avatar' => 'https://api.dicebear.com/7.x/adventurer/svg?seed=hoa-english',
+                'bio' => 'Giảng viên tiếng Anh chuyên giao tiếp học thuật, IELTS Speaking và Writing.',
+                'phone' => '0984445575',
+                'password' => 'password123',
             ],
             [
                 'name' => 'Trần Thị Học',
@@ -116,17 +208,20 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($users as $data) {
-            User::query()->updateOrCreate(
+            $user = User::query()->updateOrCreate(
                 ['email' => $data['email']],
                 [
                     ...$data,
-                    'email_verified_at' => now(),
-                    'password' => Hash::make('password'),
+                    'password' => Hash::make($data['password'] ?? 'password'),
                     'two_factor_enabled' => false,
                     'two_factor_secret' => null,
                     'is_active' => true,
+                    'instructor_status' => ($data['role'] ?? '') === 'instructor' ? 'approved' : null,
                 ]
             );
+
+            $user->forceFill(['email_verified_at' => now()])->save();
+            app(RoleSyncService::class)->syncPrimaryRole($user, $data['role'] ?? null);
         }
     }
 }

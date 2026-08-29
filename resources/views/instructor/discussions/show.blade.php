@@ -1,5 +1,5 @@
 <x-instructor-layout title="Trao đổi với học viên" pageTitle="Chi tiết trao đổi" breadcrumb="Giảng viên / Trao đổi / Chi tiết">
-    <div class="space-y-4 max-w-4xl">
+    <div class="space-y-4 max-w-4xl" data-course-chat-root data-current-user-id="{{ auth()->id() }}" data-discussion-id="{{ $discussion->id }}" data-messages-url="{{ route('discussions.messages', $discussion) }}">
         <!-- NÚT QUAY LẠI -->
         <div class="flex items-center justify-between">
             <a href="{{ route('instructor.discussions.index') }}" class="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 transition-colors">
@@ -98,7 +98,7 @@
                                 </button>
 
                                 @if($canRecallDisc)
-                                    <form action="{{ route('discussions.recall', $discussion) }}" method="POST" class="inline" onsubmit="return confirm('Bạn có chắc muốn thu hồi tin nhắn này?')">
+                                    <form action="{{ route('discussions.recall', $discussion) }}" method="POST" class="inline" data-course-chat-recall data-chat-target="msg-disc-{{ $discussion->id }}">
                                         @csrf
                                         <button type="submit" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer" title="Thu hồi tin nhắn">
                                             <span>Thu hồi</span>
@@ -197,7 +197,7 @@
 
                                     <!-- NÚT THU HỒI -->
                                     @if($canRecallReply)
-                                        <form action="{{ route('discussions.replies.recall', $reply) }}" method="POST" class="inline" onsubmit="return confirm('Bạn có chắc muốn thu hồi tin nhắn này?')">
+                                        <form action="{{ route('discussions.replies.recall', $reply) }}" method="POST" class="inline" data-course-chat-recall data-chat-target="msg-reply-{{ $reply->id }}">
                                             @csrf
                                             <button type="submit" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer" title="Thu hồi tin nhắn">
                                                 <span>Thu hồi</span>
@@ -286,7 +286,7 @@
                     <button type="button" onclick="cancelInstructorReplyContext()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold leading-none p-1 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 shrink-0 cursor-pointer" title="Hủy trả lời tin nhắn này">&times;</button>
                 </div>
 
-                <form id="reply-form" action="{{ route('discussions.replies.store', $discussion) }}" method="POST" enctype="multipart/form-data" class="space-y-3" onsubmit="return validateInstructorReplyForm()">
+                <form id="reply-form" data-course-chat-send data-chat-messages="chat-messages" action="{{ route('discussions.replies.store', $discussion) }}" method="POST" enctype="multipart/form-data" class="space-y-3">
                     @csrf
                     <input type="hidden" name="reply_to_message_id" id="instructor-reply-to-message-id" value="">
                     <div>

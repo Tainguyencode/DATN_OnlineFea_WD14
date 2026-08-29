@@ -78,13 +78,6 @@ class VideoPlayerController extends Controller
             return response('Not found', 404, ['Access-Control-Allow-Origin' => '*']);
         }
 
-        if ($lesson->isProcessing() && ! $lesson->isHlsReady()) {
-            return response('Video is processing', 404, [
-                'Access-Control-Allow-Origin' => '*',
-                'X-Video-Status' => 'processing',
-            ]);
-        }
-
         $content = null;
         $isPlaylistRequest = str_ends_with($request->path(), 'playlist.m3u8');
         $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
@@ -178,6 +171,16 @@ class VideoPlayerController extends Controller
                     $content = Storage::disk('local')->get($localPlaylist);
                 }
             }
+        }
+
+        // Status can lag behind filesystem publication (especially for legacy
+        // videos). Serve a complete manifest when it exists; only report
+        // processing after both S3 and local lookup fail.
+        if ($content === null && $lesson->isProcessing() && ! $lesson->isHlsReady()) {
+            return response('Video is processing', 404, [
+                'Access-Control-Allow-Origin' => '*',
+                'X-Video-Status' => 'processing',
+            ]);
         }
 
         if ($content === null) {
