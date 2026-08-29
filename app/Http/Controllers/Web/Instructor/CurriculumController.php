@@ -36,6 +36,7 @@ class CurriculumController extends Controller
 
         return view('instructor.courses.curriculum', [
             'course' => $course,
+            'submissionCheck' => $course->submissionCheck(),
             'curriculumSections' => $curriculumSections,
             'pendingContentUpdates' => $pendingContentUpdates,
             'lessonTypes' => $this->lessonTypes(),
@@ -766,7 +767,7 @@ class CurriculumController extends Controller
                 : 'Còn '.count($processingTitles).' video đang xử lý bảo mật: '.implode(', ', $processingTitles).'.';
         } else {
             $commonState = 'completed';
-            $commonMessage = 'Video đã được xử lý bảo mật thành công. Bạn có thể bấm gửi duyệt.';
+            $commonMessage = 'Tất cả video đã được xử lý bảo mật thành công.';
         }
 
         return response()->json([

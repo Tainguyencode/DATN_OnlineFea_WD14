@@ -133,6 +133,24 @@ class FullCourseImportConfirmTest extends TestCase
         $this->assertSame(FullCourseImportBatch::STATUS_PREVIEWED, $batch->fresh()->status);
     }
 
+    public function test_full_course_import_uses_the_standard_submission_requirements(): void
+    {
+        $this->selectableCategory();
+        $instructor = $this->instructor();
+        $batch = $this->preview($instructor);
+
+        $this->actingAs($instructor)->postJson(route('instructor.courses.full-import.confirm'), [
+            'batch_token' => $batch->token,
+        ])->assertOk();
+
+        $course = Course::firstOrFail();
+        $errors = $course->submissionCheck()->errorMessages();
+        $keys = collect($course->submissionCheck()->items())->pluck('key')->all();
+
+        $this->assertContains('Thiếu thumbnail', $errors);
+        $this->assertNotContains('preview_lesson', $keys);
+    }
+
     public function test_confirm_revalidates_a_category_that_was_removed_after_preview(): void
     {
         $category = $this->selectableCategory();
