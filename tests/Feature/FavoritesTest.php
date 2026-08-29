@@ -206,13 +206,47 @@ class FavoritesTest extends TestCase
         $response->assertDontSee($courses[9]->title);
     }
 
-    public function test_guest_is_redirected_to_login_when_favoriting(): void
+    public function test_student_can_favorite_a_course_asynchronously_via_json(): void
     {
-        $course = $this->publishedCourse('Khóa học dành cho khách');
+        $course = $this->publishedCourse('Khóa học AJAX');
 
-        $response = $this->post(route('courses.favorite.store', $course));
+        $response = $this->actingAs($this->student)
+            ->postJson(route('courses.favorite.store', $course));
 
-        $response->assertRedirect(route('login'));
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'favorited' => true,
+                'count' => 1,
+            ])
+            ->assertJsonStructure(['success', 'favorited', 'message', 'count']);
+
+        $this->assertDatabaseHas('wishlists', [
+            'user_id' => $this->student->id,
+            'course_id' => $course->id,
+        ]);
+    }
+
+    public function test_student_can_unfavorite_a_course_asynchronously_via_json(): void
+    {
+        $course = $this->publishedCourse('Khóa học AJAX Unfavorite');
+        Wishlist::create(['user_id' => $this->student->id, 'course_id' => $course->id]);
+
+        $response = $this->actingAs($this->student)
+            ->deleteJson(route('courses.favorite.destroy', $course));
+
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'favorited' => false,
+                'count' => 0,
+            ])
+            ->assertJsonStructure(['success', 'favorited', 'message', 'count']);
+
+        $this->assertDatabaseMissing('wishlists', [
+            'user_id' => $this->student->id,
+            'course_id' => $course->id,
+        ]);
     }
 
     private function publishedCourse(string $title, array $overrides = []): Course

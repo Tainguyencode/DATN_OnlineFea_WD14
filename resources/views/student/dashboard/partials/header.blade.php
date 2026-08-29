@@ -55,13 +55,27 @@
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>
             </button>
 
-            <a data-student-wishlist data-favorite-count="{{ $favoriteCourseCount ?? 0 }}"
+            <a data-student-wishlist
+               data-favorite-count="{{ $favoriteCourseCount ?? 0 }}"
+               x-data="{ count: {{ (int) ($favoriteCourseCount ?? 0) }} }"
+               x-on:favorite-updated.window="
+                   if (typeof $event.detail.count !== 'undefined') {
+                       count = $event.detail.count;
+                   } else {
+                       count = $event.detail.favorited ? count + 1 : Math.max(0, count - 1);
+                   }
+               "
+               :data-favorite-count="count"
                href="{{ route('student.wishlist') }}"
                class="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-blue-50 hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-300 dark:hover:bg-slate-800"
                aria-label="Khóa học yêu thích" title="Khóa học yêu thích">
-                <svg class="h-5 w-5" fill="{{ ($favoriteCourseCount ?? 0) > 0 ? 'currentColor' : 'none' }}" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.3 6.3a4.5 4.5 0 0 1 6.4 0L12 7.6l1.3-1.3a4.5 4.5 0 1 1 6.4 6.4L12 20.4l-7.7-7.7a4.5 4.5 0 0 1 0-6.4Z"/></svg>
+                <svg class="h-5 w-5" :fill="count > 0 ? 'currentColor' : 'none'" fill="{{ ($favoriteCourseCount ?? 0) > 0 ? 'currentColor' : 'none' }}" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.3 6.3a4.5 4.5 0 0 1 6.4 0L12 7.6l1.3-1.3a4.5 4.5 0 1 1 6.4 6.4L12 20.4l-7.7-7.7a4.5 4.5 0 0 1 0-6.4Z"/></svg>
                 @if(($favoriteCourseCount ?? 0) > 0)
-                    <span data-favorite-badge class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">{{ $favoriteCourseCount > 99 ? '99+' : $favoriteCourseCount }}</span>
+                    <span x-show="count > 0" data-favorite-badge class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white" x-text="count > 99 ? '99+' : count">{{ $favoriteCourseCount > 99 ? '99+' : $favoriteCourseCount }}</span>
+                @else
+                    <template x-if="count > 0">
+                        <span data-favorite-badge class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white" x-text="count > 99 ? '99+' : count"></span>
+                    </template>
                 @endif
             </a>
 

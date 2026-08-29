@@ -16,7 +16,13 @@ class PublicNavigationTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('data-public-header', false);
-        $response->assertSee('Khám phá');
+        $response->assertSee('data-header-left', false);
+        $response->assertSee('data-header-right', false);
+        $response->assertSee('data-primary-navigation', false);
+        $response->assertSee('Khóa học');
+        $response->assertSee('Xếp hạng');
+        $response->assertSee('Lộ trình');
+        $response->assertSee('Giảng viên');
         $response->assertSee('Đăng nhập');
         $response->assertDontSee('id="public-nav-learning"', false);
         $response->assertDontSee('/student/orders', false);
@@ -69,8 +75,10 @@ class PublicNavigationTest extends TestCase
         $response->assertSee('aria-expanded', false);
         $response->assertSee('x-transition:enter', false);
         $response->assertSee('opacity-0 -translate-y-2', false);
-        $response->assertSee('Học tập');
-        $response->assertSee('Voucher của tôi');
+        $response->assertSee('data-student-wishlist', false);
+        $response->assertSee('data-student-cart', false);
+        $response->assertSee('Tổng quan');
+        $response->assertSee('Bảo mật tài khoản');
     }
 
     public function test_instructor_dashboard_keeps_role_specific_sidebar_shell(): void

@@ -7,15 +7,29 @@
     <section class="bg-white dark:bg-slate-950">
         <div class="relative overflow-hidden shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:focus-visible:ring-offset-slate-950" id="banner-slider" tabindex="0" aria-roledescription="carousel" aria-label="FEA Learning Highlights Carousel">
             <style>
+                #banner-slider {
+                    max-height: clamp(21rem, 37vw, 39rem);
+                }
+
                 .banner-img-custom {
                     width: 100%;
+                    height: clamp(21rem, 37vw, 39rem);
                     object-fit: cover;
-                    aspect-ratio: 1942 / 809;
+                    object-position: center;
                 }
 
                 @media (max-width: 768px) {
+                    #banner-slider,
                     .banner-img-custom {
-                        aspect-ratio: 16 / 9;
+                        height: clamp(15rem, 58vw, 25rem);
+                        max-height: none;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    #banner-slider,
+                    .banner-img-custom {
+                        height: 15rem;
                     }
                 }
             </style>
@@ -23,7 +37,7 @@
             <div class="banner-track flex transition-transform duration-700 ease-in-out" id="banner-track">
                 <div class="banner-slide relative w-full shrink-0">
                     <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1 - Học mọi lúc mọi nơi cùng nền tảng trực tuyến" class="block banner-img-custom">
-                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                    <div class="absolute inset-x-0 bottom-5 left-5 flex flex-col items-start justify-end sm:bottom-8 sm:left-10 lg:bottom-9 lg:left-12">
                         <h2 class="sr-only">Nền tảng học trực tuyến FEA Learning - Học mọi lúc mọi nơi</h2>
                         <p class="sr-only">Học tập chuyên nghiệp với đa dạng khóa học chất lượng.</p>
                         <a href="{{ route('courses.index') }}" class="inline-flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-5 py-2 sm:px-7 sm:py-2.5 transition duration-200 shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
@@ -33,7 +47,7 @@
                 </div>
                 <div class="banner-slide relative w-full shrink-0">
                     <img src="{{ asset('images/banner3.png') }}" alt="FEA Learning Banner 2 - Lộ trình học tập chuyên biệt tối ưu sự nghiệp" class="block banner-img-custom">
-                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                    <div class="absolute inset-x-0 bottom-5 left-5 flex flex-col items-start justify-end sm:bottom-8 sm:left-10 lg:bottom-9 lg:left-12">
                         <h2 class="sr-only">Lộ trình học tập chuyên biệt định hướng công việc</h2>
                         <a href="{{ route('learning-paths.index') }}" class="ui-button-primary px-5 py-2 sm:px-7 sm:py-2.5 rounded-xl font-bold shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2">
                             Xem lộ trình học
@@ -42,7 +56,7 @@
                 </div>
                 <div class="banner-slide relative w-full shrink-0">
                     <img src="{{ asset('images/banner2.png') }}" alt="FEA Learning Banner 3 - Đội ngũ giảng viên và chuyên gia đào tạo chất lượng cao" class="block banner-img-custom">
-                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                    <div class="absolute inset-x-0 bottom-5 left-5 flex flex-col items-start justify-end sm:bottom-8 sm:left-10 lg:bottom-9 lg:left-12">
                         <h2 class="sr-only">Đội ngũ giảng viên và chuyên gia đào tạo chất lượng cao</h2>
                         <a href="{{ route('instructors.index') }}" class="inline-flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-5 py-2 sm:px-7 sm:py-2.5 transition duration-200 shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
                             Đội ngũ giảng viên
@@ -52,7 +66,7 @@
                 {{-- Clone slide 1 để loop vô tận không giật --}}
                 <div class="banner-slide relative w-full shrink-0" aria-hidden="true">
                     <img src="{{ asset('images/banner1.png') }}" alt="FEA Learning Banner 1" class="block banner-img-custom">
-                    <div class="absolute inset-x-0 bottom-6 left-6 sm:bottom-10 sm:left-12 lg:bottom-12 lg:left-16 flex flex-col items-start justify-end">
+                    <div class="absolute inset-x-0 bottom-5 left-5 flex flex-col items-start justify-end sm:bottom-8 sm:left-10 lg:bottom-9 lg:left-12">
                         <a href="{{ route('courses.index') }}" class="inline-flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-5 py-2 sm:px-7 sm:py-2.5 transition duration-200 shadow-sm hover:shadow-md text-xs sm:text-sm md:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
                             Khám phá khóa học
                         </a>

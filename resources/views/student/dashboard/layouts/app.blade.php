@@ -32,7 +32,7 @@
       x-on:resize.window="if (window.innerWidth >= 1024 && studentSidebarOpen) { studentSidebarOpen = false; document.body.classList.remove('overflow-hidden'); }"
       x-on:keydown.escape.window="$dispatch('close-student-sidebar')"
       class="min-h-screen overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-    @include('student.dashboard.partials.header')
+    <x-public.header :student-dashboard="true" />
     <x-toast-container />
 
     <div class="flex w-full">
