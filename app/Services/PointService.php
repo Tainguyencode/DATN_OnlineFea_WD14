@@ -30,6 +30,22 @@ class PointService
             return;
         }
 
+        // Chỉ học viên (role = student) mới được tích lũy điểm thưởng XP
+        // Giảng viên và Quản trị viên không được tính điểm
+        $user = User::find($userId);
+        if (! $user || ! $user->isStudent()) {
+            return;
+        }
+
+        // Không cộng điểm nếu hoạt động thuộc về khóa học mặc định miễn phí (price <= 0)
+        // Khóa học có giá gốc > 0 (dù dùng voucher giảm về 0đ) vẫn được cộng điểm bình thường
+        if ($courseId) {
+            $course = Course::find($courseId);
+            if ($course && $course->isFree()) {
+                return;
+            }
+        }
+
         $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
 
         DB::transaction(function () use ($userId, $points, $source, $description, $courseId, $referenceId, $timestamp) {
@@ -56,7 +72,7 @@ class PointService
     public function checkAndAwardBadges(int $userId): void
     {
         $user = User::find($userId);
-        if (! $user) {
+        if (! $user || ! $user->isStudent()) {
             return;
         }
 
@@ -112,8 +128,8 @@ class PointService
      */
     public function awardLessonCompletionPoints(int $userId, int $lessonId, mixed $createdAt = null): void
     {
-        $lesson = Lesson::find($lessonId);
-        if (! $lesson) {
+        $lesson = Lesson::with('course')->find($lessonId);
+        if (! $lesson || ! $lesson->course || $lesson->course->isFree()) {
             return;
         }
 
@@ -159,6 +175,11 @@ class PointService
      */
     public function awardQuizPoints(int $userId, Quiz $quiz, float $percent, int $courseId, mixed $createdAt = null): void
     {
+        $course = Course::find($courseId);
+        if (! $course || $course->isFree()) {
+            return;
+        }
+
         $quizTag = "quiz_id:{$quiz->id}";
 
         // 1. Completion XP (+10 XP)
@@ -235,7 +256,7 @@ class PointService
     public function awardCourseCompletionPoints(int $userId, int $courseId, mixed $createdAt = null): void
     {
         $course = Course::find($courseId);
-        if (! $course) {
+        if (! $course || $course->isFree()) {
             return;
         }
 
@@ -273,7 +294,11 @@ class PointService
     public function awardReviewPoints(int $userId, int $courseId, ?int $reviewId = null, mixed $createdAt = null): void
     {
         $course = Course::find($courseId);
-        $courseTitle = $course ? $course->title : "Khóa học #{$courseId}";
+        if (! $course || $course->isFree()) {
+            return;
+        }
+
+        $courseTitle = $course->title;
 
         $alreadyAwarded = UserPoint::where('user_id', $userId)
             ->where('source', 'review_created')
@@ -300,6 +325,11 @@ class PointService
      */
     public function awardDiscussionPoints(int $userId, int $courseId, int $discussionId, mixed $createdAt = null): void
     {
+        $course = Course::find($courseId);
+        if (! $course || $course->isFree()) {
+            return;
+        }
+
         $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
 
         $alreadyAwarded = UserPoint::where('user_id', $userId)
