@@ -6,8 +6,7 @@ use App\Models\Lesson;
 use Aws\Command;
 use Aws\S3\S3Client;
 use Aws\S3\Transfer;
-use FFMpeg\FFMpeg;
-use FFMpeg\Format\Video\X264;
+use FFMpeg\FFProbe;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,6 +17,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 use Throwable;
 
 class ConvertVideoToHLS implements ShouldQueue
@@ -124,45 +124,7 @@ class ConvertVideoToHLS implements ShouldQueue
                 'ffprobe_binary' => $ffmpegConfig['ffprobe.binaries'],
             ]);
 
-            // 1. Thử phân đoạn HLS bằng Stream Copy (-c copy) để tốc độ tối đa (chỉ mất 2-5 giây)
-            $command = [
-                $ffmpegBin,
-                '-y',
-                '-i', $localInputPath,
-                '-c', 'copy',
-                '-hls_time', '10',
-                '-hls_list_size', '0',
-                '-hls_segment_filename', $hlsOutDir.'/segment_%03d.ts',
-                '-f', 'hls',
-                $playlistPath,
-            ];
-
-            $process = new \Symfony\Component\Process\Process($command);
-            $process->setTimeout(3600);
-            $process->run();
-
-            // 2. Nếu Stream copy gặp lỗi codec, fallback sang re-encode ultrafast
-            if (! $process->isSuccessful() || ! file_exists($playlistPath) || filesize($playlistPath) === 0) {
-                Log::warning('[ConvertVideoToHLS] Stream copy fallback to ultrafast re-encode: '.$process->getErrorOutput());
-
-                $fallbackCommand = [
-                    $ffmpegBin,
-                    '-y',
-                    '-i', $localInputPath,
-                    '-c:v', 'libx264',
-                    '-preset', 'ultrafast',
-                    '-c:a', 'aac',
-                    '-hls_time', '10',
-                    '-hls_list_size', '0',
-                    '-hls_segment_filename', $hlsOutDir.'/segment_%03d.ts',
-                    '-f', 'hls',
-                    $playlistPath,
-                ];
-
-                $fallbackProcess = new \Symfony\Component\Process\Process($fallbackCommand);
-                $fallbackProcess->setTimeout(3600);
-                $fallbackProcess->mustRun();
-            }
+            $this->convertToHls($ffmpegConfig, $localInputPath, $playlistPath);
 
             // Tạo master.m3u8
             $masterContent = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720\nplaylist.m3u8\n";
@@ -243,14 +205,14 @@ class ConvertVideoToHLS implements ShouldQueue
 
             // Trích xuất chính xác thời lượng video
             try {
-                $ffprobe = \FFMpeg\FFProbe::create($ffmpegConfig);
+                $ffprobe = FFProbe::create($ffmpegConfig);
                 $extractedDuration = (int) round((float) $ffprobe->format($localInputPath)->get('duration'));
                 if ($extractedDuration > 0) {
                     $updateData['duration_seconds'] = $extractedDuration;
                     $updateData['duration'] = $extractedDuration;
                 }
-            } catch (\Throwable $probeEx) {
-                Log::warning("[ConvertVideoToHLS] Could not probe video duration: " . $probeEx->getMessage());
+            } catch (Throwable $probeEx) {
+                Log::warning('[ConvertVideoToHLS] Could not probe video duration: '.$probeEx->getMessage());
             }
 
             if ($useS3) {
@@ -293,6 +255,67 @@ class ConvertVideoToHLS implements ShouldQueue
             }
 
             Cache::forget('video_processing_'.$lessonId);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $ffmpegConfig
+     */
+    private function convertToHls(array $ffmpegConfig, string $inputPath, string $playlistPath): void
+    {
+        $hlsOutDir = dirname($playlistPath);
+        $segmentFilename = $hlsOutDir.'/segment_%03d.ts';
+
+        $streamCopyProcess = new Process([
+            (string) $ffmpegConfig['ffmpeg.binaries'],
+            '-hide_banner',
+            '-nostdin',
+            '-y',
+            '-i', $inputPath,
+            '-c', 'copy',
+            '-hls_time', '10',
+            '-hls_list_size', '0',
+            '-hls_segment_filename', $segmentFilename,
+            '-f', 'hls',
+            $playlistPath,
+        ]);
+        $streamCopyProcess->setTimeout((float) $ffmpegConfig['timeout']);
+        $streamCopyProcess->run();
+
+        if ($streamCopyProcess->isSuccessful() && file_exists($playlistPath) && filesize($playlistPath) > 0) {
+            return;
+        }
+
+        Log::warning('[ConvertVideoToHLS] Stream copy fallback to ultrafast re-encode: '.trim($streamCopyProcess->getErrorOutput()));
+        File::cleanDirectory($hlsOutDir);
+
+        $process = new Process([
+            (string) $ffmpegConfig['ffmpeg.binaries'],
+            '-hide_banner',
+            '-nostdin',
+            '-y',
+            '-i', $inputPath,
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-c:a', 'aac',
+            '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
+            '-hls_time', '10',
+            '-hls_list_size', '0',
+            '-hls_segment_filename', $segmentFilename,
+            '-f', 'hls',
+            $playlistPath,
+        ]);
+        $process->setTimeout((float) $ffmpegConfig['timeout']);
+
+        $errorTail = '';
+        $process->run(function (string $type, string $buffer) use (&$errorTail): void {
+            if ($type === Process::ERR) {
+                $errorTail = substr($errorTail.$buffer, -4000);
+            }
+        });
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('FFmpeg conversion failed: '.trim($errorTail));
         }
     }
 

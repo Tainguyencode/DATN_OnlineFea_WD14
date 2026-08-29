@@ -695,7 +695,6 @@ function createLessonFormState(config) {
             const lessonTitle = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : file.name;
 
             const preKey = this.generateS3Key(file.name);
-            this.s3Key = preKey;
             this.videoOriginalName = file.name;
             this.videoSize = file.size;
             this.videoMime = file.type || 'video/mp4';
@@ -775,6 +774,9 @@ function createLessonFormState(config) {
                         this.isUploading = false;
                         this.uploadStatus = 'error';
                         this.uploadStatusMessage = toS3UploadUserError(err).message;
+                        // Không giữ key tạm khi S3 chưa xác nhận phiên upload.
+                        // Nếu giữ key này, form có thể tạo một lesson pending dù file không tồn tại.
+                        this.s3Key = '';
                     }
                 }
             });
@@ -785,6 +787,28 @@ function createLessonFormState(config) {
         async submitLessonForm(event) {
             const form = event.target;
             const isCreateForm = !this.lessonId;
+
+            if (this.selectedType === 'video' && this.uploadStatus === 'error') {
+                event.preventDefault();
+                if (window.showCurriculumToast) {
+                    window.showCurriculumToast(
+                        this.uploadStatusMessage || 'Video tải lên thất bại. Vui lòng chọn lại video.',
+                        true
+                    );
+                }
+
+                return;
+            }
+
+            // Chỉ gửi s3_key sau khi API multipart đã khởi tạo thành công và trả key thật.
+            if (this.selectedType === 'video' && this.isUploading && !this.s3Key) {
+                event.preventDefault();
+                if (window.showCurriculumToast) {
+                    window.showCurriculumToast('Đang khởi tạo tải video. Vui lòng chờ vài giây rồi lưu lại.', true);
+                }
+
+                return;
+            }
 
             // Submit qua AJAX cho cả Create và Edit để trang không reload làm đứt kết nối upload video
             if (window.fetch) {

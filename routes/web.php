@@ -13,8 +13,8 @@ use App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController;
 use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
-use App\Http\Controllers\Web\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Web\Admin\QuizQuestionInvalidationController;
+use App\Http\Controllers\Web\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Web\Admin\RoleController;
 use App\Http\Controllers\Web\Admin\StudentReviewController as AdminStudentReviewController;
 use App\Http\Controllers\Web\Admin\SupportTicketController as AdminSupportTicketController;
@@ -29,6 +29,7 @@ use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseCont
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
 use App\Http\Controllers\Web\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Web\Instructor\DiscussionController as InstructorDiscussionController;
+use App\Http\Controllers\Web\Instructor\FullCourseImportController;
 use App\Http\Controllers\Web\Instructor\InstructorProfileController;
 use App\Http\Controllers\Web\Instructor\LearningPathController as InstructorLearningPathController;
 use App\Http\Controllers\Web\Instructor\LessonImportController as InstructorLessonImportController;
@@ -337,6 +338,11 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::middleware('approved.instructor')->group(function () {
         Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
         Route::get('/courses', [InstructorCourseController::class, 'index'])->name('courses.index');
+        Route::get('/courses/import', [FullCourseImportController::class, 'create'])->name('courses.full-import.create');
+        Route::get('/courses/import/template', [FullCourseImportController::class, 'downloadTemplate'])->name('courses.full-import.template');
+        Route::post('/courses/import/preview', [FullCourseImportController::class, 'preview'])->name('courses.full-import.preview');
+        Route::post('/courses/import/confirm', [FullCourseImportController::class, 'confirm'])->name('courses.full-import.confirm');
+        Route::get('/courses/import/previews/{batch}', [FullCourseImportController::class, 'show'])->name('courses.full-import.show');
         Route::get('/courses/create', [InstructorCourseController::class, 'create'])->name('courses.create');
         Route::get('/courses/{course}/curriculum', [InstructorCurriculumController::class, 'index'])->name('courses.curriculum');
         Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');

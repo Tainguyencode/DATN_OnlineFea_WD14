@@ -245,7 +245,7 @@ class S3MultipartUploadTest extends TestCase
             ->assertJsonStructure(['statuses', 'can_submit', 'common_state', 'common_message'])
             ->assertJsonPath('can_submit', false)
             ->assertJsonPath('common_state', 'processing')
-            ->assertJsonPath('common_message', 'Video đang trong quá trình xử lý bảo mật, xử lý xong bạn có thể bấm gửi duyệt.');
+            ->assertJsonPath('common_message', 'Còn 1 video đang xử lý bảo mật: Bài đang xử lý.');
     }
 
     public function test_course_submit_is_rejected_when_video_hls_is_incomplete(): void

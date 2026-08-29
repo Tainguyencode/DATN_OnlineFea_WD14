@@ -51,20 +51,20 @@
                     <span class="mb-1.5 block text-sm font-semibold text-slate-700">Tìm kiếm khóa học</span>
                     <div class="relative">
                         <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
+                                d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
                         </svg>
                         <input type="search" name="search" value="{{ $search }}"
-                               placeholder="Nhập tên khóa học, mô tả..."
-                               class="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
+                            placeholder="Nhập tên khóa học, mô tả..."
+                            class="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20">
                     </div>
                 </label>
 
                 <label class="block">
                     <span class="mb-1.5 block text-sm font-semibold text-slate-700">Trạng thái</span>
                     <select name="status"
-                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer">
+                        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 cursor-pointer">
                         <option value="">Tất cả trạng thái</option>
                         @foreach ($statusOptions as $value => $label)
                             <option value="{{ $value }}" @selected($status === $value)>{{ $label }}
@@ -75,11 +75,11 @@
 
                 <div class="flex items-end gap-2">
                     <button type="submit"
-                            class="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 cursor-pointer">
+                        class="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 cursor-pointer">
                         Lọc
                     </button>
                     <a href="{{ route('instructor.courses.index') }}"
-                       class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 cursor-pointer">
+                        class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 cursor-pointer">
                         Xóa lọc
                     </a>
                 </div>
@@ -103,7 +103,7 @@
                     class="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                     <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
                 </div>
                 <h3 class="mt-5 text-lg font-bold text-slate-950">Chưa có khóa học nào</h3>
@@ -112,7 +112,7 @@
                     khi gửi duyệt.
                 </p>
                 <a href="{{ route('instructor.courses.create') }}"
-                   class="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 cursor-pointer">
+                    class="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 cursor-pointer">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
@@ -120,16 +120,16 @@
                 </a>
             </div>
         @else
-            <div class="hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm md:block">
-                <div class="overflow-x-auto">
+            <div class="hidden overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm md:block">
+                <div>
                     <table class="w-full text-left text-sm">
                         <colgroup>
-                            <col style="width: 38%">  {{-- Khóa học --}}
-                            <col style="width: 14%">  {{-- Trạng thái --}}
-                            <col style="width: 10%">  {{-- Giá --}}
-                            <col style="width: 9%">   {{-- Học viên --}}
-                            <col style="width: 11%">  {{-- Ngày tạo --}}
-                            <col style="width: 18%">  {{-- Thao tác --}}
+                            <col style="width: 38%"> {{-- Khóa học --}}
+                            <col style="width: 14%"> {{-- Trạng thái --}}
+                            <col style="width: 10%"> {{-- Giá --}}
+                            <col style="width: 9%"> {{-- Học viên --}}
+                            <col style="width: 11%"> {{-- Ngày tạo --}}
+                            <col style="width: 18%"> {{-- Thao tác --}}
                         </colgroup>
                         <thead
                             class="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -155,24 +155,29 @@
                                     {{-- Khóa học --}}
                                     <td class="px-5 py-4">
                                         <div class="flex items-center gap-3">
-                                            <div class="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                                            <div
+                                                class="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                                                 @if ($course->thumbnail)
                                                     <img src="{{ asset('storage/' . $course->thumbnail) }}"
-                                                         alt="{{ $course->title }}" class="h-full w-full object-cover">
+                                                        alt="{{ $course->title }}" class="h-full w-full object-cover">
                                                 @else
-                                                    <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-emerald-700 text-xs font-bold text-white">Fea</div>
+                                                    <div
+                                                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-emerald-700 text-xs font-bold text-white">
+                                                        Fea</div>
                                                 @endif
                                             </div>
                                             <div class="min-w-0">
-                                                <p class="line-clamp-2 font-bold leading-snug text-slate-950">{{ $course->title }}</p>
+                                                <p class="line-clamp-2 font-bold leading-snug text-slate-950">
+                                                    {{ $course->title }}</p>
                                                 <p class="mt-1 truncate text-xs text-slate-500">
                                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
                                                     {{ $levelLabels[$course->level] ?? 'Chưa chọn trình độ' }}
                                                 </p>
                                                 @if (in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
-                                                    <p class="mt-1 line-clamp-2 text-xs font-semibold text-rose-600">Lý do: {{ $course->rejectionReasonText() }}</p>
+                                                    <p class="mt-1 line-clamp-2 text-xs font-semibold text-rose-600">Lý
+                                                        do: {{ $course->rejectionReasonText() }}</p>
                                                 @endif
-                                                @if ($canSubmit && $check && ! $isReady)
+                                                @if ($canSubmit && $check && !$isReady)
                                                     <ul class="mt-1.5 space-y-0.5 text-xs text-amber-700">
                                                         @foreach ($check->errorMessages() as $message)
                                                             <li>• {{ $message }}</li>
@@ -185,21 +190,26 @@
 
                                     {{-- Trạng thái --}}
                                     <td class="px-4 py-4">
-                                        <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">
+                                        <span
+                                            class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">
                                             {{ $statusOptions[$course->status] ?? $course->status }}
                                         </span>
-                                        @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) && $course->copyright_agreed)
-                                            <div class="mt-1.5 flex items-center gap-0.5 text-[10px] font-bold text-emerald-700">
-                                                <span>✔ Đã cam kết bản quyền</span>
+                                        @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) &&
+                                                $course->copyright_agreed)
+                                            <div
+                                                class="mt-1.5 flex items-center gap-0.5 text-[10px] font-bold text-emerald-700">
+                                                <span>Đã cam kết bản quyền</span>
                                             </div>
                                         @endif
                                     </td>
 
                                     {{-- Giá --}}
                                     <td class="px-4 py-4">
-                                        <div class="font-bold text-slate-900">{{ $formatPrice($discountPrice ?? $course->price) }}</div>
+                                        <div class="font-bold text-slate-900">
+                                            {{ $formatPrice($discountPrice ?? $course->price) }}</div>
                                         @if ($discountPrice)
-                                            <div class="text-xs text-slate-400 line-through">{{ $formatPrice($course->price) }}</div>
+                                            <div class="text-xs text-slate-400 line-through">
+                                                {{ $formatPrice($course->price) }}</div>
                                         @endif
                                     </td>
 
@@ -215,40 +225,12 @@
 
                                     {{-- Thao tác --}}
                                     <td class="px-4 py-4">
-                                        <div class="flex flex-wrap items-center justify-end gap-1.5">
-                                            <a href="{{ route('instructor.courses.students', $course) }}"
-                                               class="rounded-md px-2 py-1 text-xs font-bold text-blue-700 hover:bg-blue-50">Học viên</a>
-                                            <a href="{{ route('instructor.courses.edit', $course) }}"
-                                               class="rounded-md px-2 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-50">Kiểm duyệt</a>
-                                            <a href="{{ route('instructor.courses.curriculum', $course) }}"
-                                               class="rounded-md px-2 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50">Nội dung</a>
-                                            @if ($course->status === 'published')
-                                                <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
-                                                   class="rounded-md px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100">Xem trước</a>
-                                            @endif
-                                            @if ($canSubmit && $isReady)
-                                                <a href="{{ route('instructor.courses.edit', $course) }}"
-                                                   class="rounded-md px-2 py-1 text-xs font-bold text-amber-700 hover:bg-amber-50">
-                                                    {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại' : 'Gửi duyệt' }}
-                                                </a>
-                                            @endif
-                                            @if ($course->status === 'published')
-                                                <form method="POST" action="{{ route('instructor.courses.archive', $course) }}"
-                                                      onsubmit="return confirm('Ẩn khóa học này khỏi trang học viên?')">
-                                                    @csrf
-                                                    <button type="submit" class="rounded-md px-2 py-1 text-xs font-bold text-zinc-700 hover:bg-zinc-100">Ẩn</button>
-                                                </form>
-                                            @endif
-                                            @if ($course->is_featured)
-                                                <span class="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">⭐ Nổi bật</span>
-                                            @endif
-                                            <form method="POST" action="{{ route('instructor.courses.destroy', $course) }}"
-                                                  onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="rounded-md px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50">Xóa</button>
-                                            </form>
-                                        </div>
+                                        @include('instructor.courses.partials.course-actions', [
+                                            'course' => $course,
+                                            'canSubmit' => $canSubmit,
+                                            'isReady' => $isReady,
+                                            'variant' => 'desktop',
+                                        ])
                                     </td>
                                 </tr>
                             @endforeach
@@ -266,11 +248,11 @@
                         $canSubmit = $course->canBeSubmittedForReview();
                         $isReady = $check?->passes() ?? false;
                     @endphp
-                    <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                        <div class="aspect-video bg-slate-100">
+                    <article class="overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm">
+                        <div class="aspect-video overflow-hidden rounded-t-lg bg-slate-100">
                             @if ($course->thumbnail)
                                 <img src="{{ asset('storage/' . $course->thumbnail) }}" alt="{{ $course->title }}"
-                                     class="h-full w-full object-cover">
+                                    class="h-full w-full object-cover">
                             @else
                                 <div
                                     class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-emerald-700 text-sm font-bold text-white">
@@ -289,9 +271,10 @@
                                 <p class="mt-1 text-xs text-slate-500">
                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
                                     {{ $course->created_at?->format('d/m/Y') }}</p>
-                                @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) && $course->copyright_agreed)
+                                @if (in_array($course->status, ['submitted', 'rejected', 'need_revision', 'approved', 'published'], true) &&
+                                        $course->copyright_agreed)
                                     <div class="mt-1 flex items-center gap-0.5 text-[10px] font-bold text-emerald-700">
-                                        <span>✔ Đã cam kết bản quyền</span>
+                                        <span>Đã cam kết bản quyền</span>
                                     </div>
                                 @endif
                                 @if (in_array($course->status, ['rejected', 'need_revision'], true) && $course->rejectionReasonText())
@@ -300,7 +283,7 @@
                                         Lý do: {{ $course->rejectionReasonText() }}</p>
                                 @endif
 
-                                @if ($canSubmit && $check && ! $isReady)
+                                @if ($canSubmit && $check && !$isReady)
                                     <ul class="mt-2 space-y-1 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
                                         @foreach ($check->errorMessages() as $message)
                                             <li>• {{ $message }}</li>
@@ -321,55 +304,13 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-2">
-                                <a href="{{ route('instructor.courses.students', $course) }}"
-                                     class="col-span-2 rounded-lg bg-blue-600 px-3 py-2 text-center text-xs font-bold text-white">Xem chi tiết</a>
-                                <a href="{{ route('instructor.courses.edit', $course) }}"
-                                    class="rounded-lg bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">Kết quả kiểm duyệt</a>
-                                <a href="{{ route('instructor.courses.curriculum', $course) }}"
-                                   class="rounded-lg bg-indigo-600 px-3 py-2 text-center text-xs font-bold text-white">Nội
-                                    dung</a>
-                                @if ($course->status === 'published')
-                                    <a href="{{ route('courses.show', $course->slug) }}" target="_blank"
-                                       class="rounded-lg border border-slate-300 px-3 py-2 text-center text-xs font-bold text-slate-700">Xem
-                                        trước</a>
-                                @else
-                                    <span
-                                        class="rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">Xem
-                                        trước</span>
-                                @endif
-                                @if ($canSubmit && $isReady)
-                                    <a href="{{ route('instructor.courses.edit', $course) }}"
-                                       class="rounded-lg bg-amber-500 px-3 py-2 text-center text-xs font-bold text-white">
-                                        {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi lại duyệt' : 'Gửi duyệt' }}
-                                    </a>
-                                @elseif ($canSubmit)
-                                    <span
-                                        class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-center text-xs font-bold text-slate-400">
-                                        Chưa đủ điều kiện
-                                    </span>
-                                @endif
-                                @if ($course->status === 'published')
-                                    <form method="POST" action="{{ route('instructor.courses.archive', $course) }}"
-                                          onsubmit="return confirm('Ẩn khóa học này khỏi trang học viên?')">
-                                        @csrf
-                                        <button type="submit"
-                                                class="w-full rounded-lg border border-zinc-200 px-3 py-2 text-center text-xs font-bold text-zinc-700">Ẩn
-                                            khóa học</button>
-                                    </form>
-                                @endif
-                                @if ($course->is_featured)
-                                    <div class="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-700">
-                                        ⭐ Đang nổi bật (Do Admin chọn)
-                                    </div>
-                                @endif
-                                <form method="POST" action="{{ route('instructor.courses.destroy', $course) }}"
-                                      onsubmit="return confirm('Bạn chắc chắn muốn xóa hoặc lưu trữ khóa học này?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit"
-                                            class="w-full rounded-lg border border-rose-200 px-3 py-2 text-center text-xs font-bold text-rose-700">Xóa</button>
-                                </form>
+                            <div class="flex justify-end">
+                                @include('instructor.courses.partials.course-actions', [
+                                    'course' => $course,
+                                    'canSubmit' => $canSubmit,
+                                    'isReady' => $isReady,
+                                    'variant' => 'mobile',
+                                ])
                             </div>
                         </div>
                     </article>

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\LessonImportException;
+use App\Support\FullCourseImportWorkbookSchema;
 use App\Support\LessonImportWorkbookSchema;
 use DateTimeInterface;
 use Illuminate\Http\UploadedFile;
@@ -70,6 +71,11 @@ class LessonImportParser
 
             if ($declaredVersion === (string) LessonImportWorkbookSchema::VERSION_V1) {
                 return $this->parseV1($spreadsheet, $metadata);
+            }
+
+            if ($declaredVersion === (string) FullCourseImportWorkbookSchema::VERSION
+                && ($metadata['schema'] ?? null) === FullCourseImportWorkbookSchema::SCHEMA) {
+                return $this->parseV3($spreadsheet, $metadata);
             }
 
             if (($metadata['schema'] ?? null) !== LessonImportWorkbookSchema::SCHEMA) {
@@ -151,6 +157,49 @@ class LessonImportParser
         return [
             'template_version' => LessonImportWorkbookSchema::VERSION_V2,
             'schema' => LessonImportWorkbookSchema::SCHEMA,
+            'sheets' => $sheets,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array{template_version: int, schema: string, sheets: array<string, array<int, array{row_number: int, values: array<string, mixed>}>>}
+     */
+    private function parseV3(Spreadsheet $spreadsheet, array $metadata): array
+    {
+        if (($metadata['schema'] ?? null) !== FullCourseImportWorkbookSchema::SCHEMA
+            || (string) ($metadata['template_version'] ?? '') !== (string) FullCourseImportWorkbookSchema::VERSION) {
+            throw new LessonImportException('wrong_schema', 'Template Excel không đúng schema full_course_import.');
+        }
+
+        $this->assertV3Sheets($spreadsheet);
+        $headersBySheet = [
+            FullCourseImportWorkbookSchema::COURSE_SHEET => FullCourseImportWorkbookSchema::COURSE_HEADERS,
+            FullCourseImportWorkbookSchema::SECTIONS_SHEET => FullCourseImportWorkbookSchema::SECTION_HEADERS,
+            FullCourseImportWorkbookSchema::LESSONS_SHEET => FullCourseImportWorkbookSchema::LESSON_HEADERS,
+            FullCourseImportWorkbookSchema::QUIZZES_SHEET => LessonImportWorkbookSchema::QUIZ_HEADERS,
+            FullCourseImportWorkbookSchema::QUIZ_QUESTIONS_SHEET => LessonImportWorkbookSchema::QUIZ_QUESTION_HEADERS,
+            FullCourseImportWorkbookSchema::QUIZ_OPTIONS_SHEET => LessonImportWorkbookSchema::QUIZ_OPTION_HEADERS,
+        ];
+        $sheets = [];
+        foreach ($headersBySheet as $sheetName => $headers) {
+            $sheet = $spreadsheet->getSheetByName($sheetName);
+            if (! $sheet) {
+                throw new LessonImportException('missing_sheet', "Template không có sheet {$sheetName} bắt buộc.");
+            }
+            $this->assertHeadersForSheet($sheet, $headers, $sheetName);
+            $this->assertNoFormulasForSheet($sheet, $headers, $sheetName);
+            $sheets[$sheetName] = $this->extractRowsForSheet(
+                $sheet,
+                $headers,
+                $sheetName,
+                FullCourseImportWorkbookSchema::dataRowLimit($sheetName),
+            );
+        }
+
+        return [
+            'template_version' => FullCourseImportWorkbookSchema::VERSION,
+            'schema' => FullCourseImportWorkbookSchema::SCHEMA,
             'sheets' => $sheets,
         ];
     }
@@ -292,6 +341,38 @@ class LessonImportParser
                 throw new LessonImportException('invalid_sheet_name', "Sheet {$sheetName} không đúng tên bắt buộc của template v2.");
             }
 
+            $sheet = $spreadsheet->getSheetByName($sheetName);
+            if ($sheet && $this->sheetHasData($sheet)) {
+                throw new LessonImportException('unknown_sheet', "Workbook chứa sheet {$sheetName} không được hỗ trợ.");
+            }
+        }
+    }
+
+    private function assertV3Sheets(Spreadsheet $spreadsheet): void
+    {
+        $sheetNames = $spreadsheet->getSheetNames();
+        $expected = FullCourseImportWorkbookSchema::SHEETS;
+        $normalized = [];
+        foreach ($sheetNames as $sheetName) {
+            $key = mb_strtolower(trim($sheetName));
+            if (isset($normalized[$key])) {
+                throw new LessonImportException('duplicate_sheet', 'Workbook chứa sheet bị trùng hoặc sai tên.');
+            }
+            $normalized[$key] = $sheetName;
+        }
+        foreach ($expected as $sheetName) {
+            if (! in_array($sheetName, $sheetNames, true)) {
+                throw new LessonImportException('missing_sheet', "Template không có sheet {$sheetName} bắt buộc.");
+            }
+        }
+        $normalizedExpected = array_map(static fn (string $name): string => mb_strtolower($name), $expected);
+        foreach ($sheetNames as $sheetName) {
+            if (in_array($sheetName, $expected, true)) {
+                continue;
+            }
+            if (in_array(mb_strtolower(trim($sheetName)), $normalizedExpected, true)) {
+                throw new LessonImportException('invalid_sheet_name', "Sheet {$sheetName} không đúng tên bắt buộc của template v3.");
+            }
             $sheet = $spreadsheet->getSheetByName($sheetName);
             if ($sheet && $this->sheetHasData($sheet)) {
                 throw new LessonImportException('unknown_sheet', "Workbook chứa sheet {$sheetName} không được hỗ trợ.");
@@ -464,8 +545,12 @@ class LessonImportParser
      * @param  array<int, string>  $headers
      * @return array<int, array{row_number: int, values: array<string, mixed>}>
      */
-    private function extractRowsForSheet(Worksheet $sheet, array $headers, string $sheetName): array
-    {
+    private function extractRowsForSheet(
+        Worksheet $sheet,
+        array $headers,
+        string $sheetName,
+        int $maxDataRows = self::MAX_DATA_ROWS,
+    ): array {
         $rows = [];
         $dataRowNumbers = [];
 
@@ -497,10 +582,10 @@ class LessonImportParser
                 'values' => $values,
             ];
 
-            if (count($rows) > self::MAX_DATA_ROWS) {
+            if (count($rows) > $maxDataRows) {
                 throw new LessonImportException(
                     'too_many_rows',
-                    "Sheet {$sheetName} chỉ hỗ trợ tối đa 100 dòng dữ liệu mỗi lần preview.",
+                    "Sheet {$sheetName} chỉ hỗ trợ tối đa {$maxDataRows} dòng dữ liệu mỗi lần preview.",
                 );
             }
         }

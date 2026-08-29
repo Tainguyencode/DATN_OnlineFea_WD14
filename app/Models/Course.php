@@ -458,7 +458,23 @@ class Course extends Model
      */
     public function hasIncompleteHlsVideos(): bool
     {
+        return collect($this->videoReadinessBlockers())
+            ->contains(fn (array $blocker): bool => $blocker['state'] !== 'missing_source');
+    }
+
+    /**
+     * Return the current video blockers shown to an instructor.
+     *
+     * The curriculum merge deliberately includes only active draft/pending updates,
+     * so historical rejected/approved uploads cannot keep a newer ready lesson in a
+     * processing state.
+     *
+     * @return array<int, array{title: string, state: 'missing_source'|'uploading'|'processing'|'failed'}>
+     */
+    public function videoReadinessBlockers(): array
+    {
         $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
+        $blockers = [];
         $checkedLessonIds = [];
 
         foreach ($sections as $section) {
@@ -466,27 +482,54 @@ class Course extends Model
                 if (! empty($lesson->is_pending_deletion)) {
                     continue;
                 }
-                if ($lesson->id) {
+
+                if ($lesson->type !== Lesson::TYPE_VIDEO) {
+                    continue;
+                }
+
+                if (! empty($lesson->id) && empty($lesson->is_draft_create)) {
                     $checkedLessonIds[] = $lesson->id;
                 }
-                if ($lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path || $lesson->hls_manifest_key)) {
-                    if (! $lesson->isHlsReady()) {
-                        return true;
-                    }
+
+                $blocker = $this->videoReadinessBlockerFor($lesson);
+                if ($blocker) {
+                    $blockers[] = $blocker;
                 }
             }
         }
 
-        $directLessons = $this->lessons()->whereNotIn('id', $checkedLessonIds)->get();
-        foreach ($directLessons as $lesson) {
-            if ($lesson->type === 'video' && ($lesson->original_video_key || $lesson->video_path || $lesson->hls_manifest_key)) {
-                if (! $lesson->isHlsReady()) {
-                    return true;
-                }
+        $orphanedLessons = $this->lessons()
+            ->where('type', Lesson::TYPE_VIDEO)
+            ->whereNotIn('id', $checkedLessonIds)
+            ->get();
+        foreach ($orphanedLessons as $lesson) {
+            $blocker = $this->videoReadinessBlockerFor($lesson);
+            if ($blocker) {
+                $blockers[] = $blocker;
             }
         }
 
-        return false;
+        return $blockers;
+    }
+
+    private function videoReadinessBlockerFor(Lesson $lesson): ?array
+    {
+        if (! $lesson->hasVideoSource()) {
+            return ['title' => $lesson->title, 'state' => 'missing_source'];
+        }
+
+        if ($lesson->isHlsReady()) {
+            return null;
+        }
+
+        if ($lesson->hasFailedProcessing()) {
+            return ['title' => $lesson->title, 'state' => 'failed'];
+        }
+
+        return [
+            'title' => $lesson->title,
+            'state' => $lesson->upload_status === 'pending' ? 'uploading' : 'processing',
+        ];
     }
 
     public function requiredVideoPercent(): int
