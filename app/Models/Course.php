@@ -538,7 +538,9 @@ class Course extends Model
         if (filled($lesson->video_url)
             && blank($lesson->original_video_key)
             && blank($lesson->video_path)
-            && blank($lesson->hls_manifest_key)) {
+            && blank($lesson->hls_manifest_key)
+            && blank($lesson->hls_playlist)
+            && blank($lesson->hls_path)) {
             return null;
         }
 

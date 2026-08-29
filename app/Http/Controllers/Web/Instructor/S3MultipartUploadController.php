@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class S3MultipartUploadController extends Controller
@@ -244,7 +245,8 @@ class S3MultipartUploadController extends Controller
                 }
 
                 if ($contentUpdate) {
-                    $contentUpdate->update(['payload' => array_merge($contentUpdate->payload ?? [], $videoData)]);
+                    $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, $videoData);
+                    Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
                     ConvertContentUpdateVideoToHLS::dispatch($contentUpdate)->afterCommit();
                 }
 
@@ -255,6 +257,10 @@ class S3MultipartUploadController extends Controller
                     'location' => $result['location'] ?? null,
                 ]);
             });
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => $e->validator->errors()->first() ?: $e->getMessage(),
+            ], 422);
         } catch (Throwable $e) {
             Log::error('S3 multipart upload completion failed.', [
                 'exception' => $e,
