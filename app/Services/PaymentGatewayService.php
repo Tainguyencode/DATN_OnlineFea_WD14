@@ -11,7 +11,6 @@ use App\Models\Payment;
 use App\Models\Refund;
 use App\Models\UserCoupon;
 use App\Models\Withdrawal;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -301,39 +300,6 @@ class PaymentGatewayService
         return $this->finalizePayment($order, $transactionId, $gatewayResponse, false);
     }
 
-    public function completeMomoPayment(Order $order, string $transactionId, array $gatewayResponse = []): bool
-    {
-        return $this->finalizePayment($order, $transactionId, $gatewayResponse, false, [
-            'gateway' => 'momo',
-            'bank_code' => $gatewayResponse['payType'] ?? null,
-            'transaction_no' => $gatewayResponse['transId'] ?? null,
-            'response_code' => isset($gatewayResponse['resultCode']) ? (string) $gatewayResponse['resultCode'] : null,
-            'transaction_date' => isset($gatewayResponse['responseTime']) ? CarbonImmutable::createFromTimestampMs((int) $gatewayResponse['responseTime']) : null,
-        ]);
-    }
-
-    public function failMomoPayment(Order $order, array $gatewayResponse): void
-    {
-        DB::transaction(function () use ($order, $gatewayResponse): void {
-            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
-            $payment = $lockedOrder->payment()->lockForUpdate()->first();
-
-            if (! $payment || $payment->status === 'success' || $lockedOrder->status === 'paid') {
-                return;
-            }
-
-            $payment->update([
-                'gateway' => 'momo',
-                'status' => 'failed',
-                'bank_code' => $gatewayResponse['payType'] ?? null,
-                'transaction_no' => $gatewayResponse['transId'] ?? null,
-                'response_code' => isset($gatewayResponse['resultCode']) ? (string) $gatewayResponse['resultCode'] : null,
-                'transaction_date' => isset($gatewayResponse['responseTime']) ? CarbonImmutable::createFromTimestampMs((int) $gatewayResponse['responseTime']) : null,
-                'gateway_response' => $gatewayResponse,
-            ]);
-        });
-    }
-
     public function completeFreeOrder(Order $order): bool
     {
         if ((float) $order->total_amount !== 0.0) {
@@ -379,9 +345,9 @@ class PaymentGatewayService
         );
     }
 
-    private function finalizePayment(Order $order, string $transactionId, array $gatewayResponse, bool $mock, array $paymentAttributes = []): bool
+    private function finalizePayment(Order $order, string $transactionId, array $gatewayResponse, bool $mock): bool
     {
-        return DB::transaction(function () use ($order, $transactionId, $gatewayResponse, $mock, $paymentAttributes): bool {
+        return DB::transaction(function () use ($order, $transactionId, $gatewayResponse, $mock): bool {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status === 'paid') {
                 return true;
@@ -413,12 +379,12 @@ class PaymentGatewayService
             }
 
             $lockedOrder->update(['status' => 'paid', 'transaction_id' => $transactionId]);
-            $payment->update(array_merge([
+            $payment->update([
                 'status' => 'success',
                 'transaction_id' => $transactionId,
                 'paid_at' => now(),
                 'gateway_response' => $gatewayResponse + ['mock' => $mock],
-            ], $paymentAttributes));
+            ]);
 
             $this->enrollStudent($lockedOrder);
             $this->clearCart($lockedOrder);

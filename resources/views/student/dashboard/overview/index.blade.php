@@ -13,7 +13,7 @@
                 </span>
             </div>
         </div>
-        <a href="{{ route('student.profile') }}" class="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white px-4 text-sm font-bold text-[#0056D2] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:border-blue-300 hover:shadow active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">Chỉnh sửa hồ sơ</a>
+        <a href="{{ route('student.profile') }}" class="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 text-sm font-bold text-[#0056D2] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300">Chỉnh sửa hồ sơ</a>
     </section>
 
     <section aria-labelledby="student-stats-title" class="mb-6">
@@ -55,7 +55,7 @@
                 <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2m0 14v2M5.6 5.6 7 7m10 10 1.4 1.4M3 12h2m14 0h2M5.6 18.4 7 17m10-10 1.4-1.4M9 16h6M10 19h4M9 12a3 3 0 1 1 6 0c0 1.2-.7 2-1.5 2.8-.4.4-.5.7-.5 1.2h-2c0-.5-.1-.8-.5-1.2C9.7 14 9 13.2 9 12Z"/></svg></div>
                 <h2 class="mt-4 text-lg font-extrabold">Gợi ý cho bạn</h2>
                 <p class="mt-1 text-sm leading-6 text-blue-100">Dành vài phút chọn khóa học đúng mục tiêu để duy trì nhịp học đều đặn.</p>
-                <a href="{{ route('courses.index') }}" class="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-white px-5 text-sm font-bold text-[#0056D2] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:shadow-md active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">Khám phá khóa học</a>
+                <a href="{{ route('courses.index') }}" class="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-[#0056D2] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">Khám phá khóa học</a>
             </section>
         </aside>
     </div>

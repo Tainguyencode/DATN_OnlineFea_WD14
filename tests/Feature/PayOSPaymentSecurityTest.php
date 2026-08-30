@@ -348,6 +348,7 @@ class PayOSPaymentSecurityTest extends TestCase
     public function test_removed_payment_gateway_routes_are_not_registered(): void
     {
         $this->get('/payments/momo/callback')->assertNotFound();
+        $this->post('/payments/momo/ipn')->assertNotFound();
         $this->get('/payments/vnpay/return')->assertNotFound();
         $this->post('/payments/vnpay/ipn')->assertNotFound();
     }

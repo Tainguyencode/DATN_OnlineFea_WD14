@@ -11,12 +11,7 @@
                     <div><label for="avatar" class="mb-1.5 block text-sm font-bold">Ảnh đại diện</label><input id="avatar" type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="min-h-11 w-full rounded-xl border border-slate-300 p-2 text-sm dark:border-slate-700">@error('avatar')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
                 </div>
                 <div><label for="bio" class="mb-1.5 block text-sm font-bold">Giới thiệu</label><textarea id="bio" name="bio" rows="5" maxlength="1000" class="w-full rounded-xl border border-slate-300 p-3 outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950">{{ old('bio', $user->bio) }}</textarea>@error('bio')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror</div>
-                <div class="flex flex-wrap gap-3">
-                    <button type="submit" :disabled="submitting" class="min-h-11 rounded-xl bg-[#0056D2] px-6 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0046B8] hover:shadow-md active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60">
-                        <span x-text="submitting ? 'Đang lưu...' : 'Lưu thay đổi'">Lưu thay đổi</span>
-                    </button>
-                    <a href="{{ route('student.profile.security') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow active:translate-y-0 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Đi tới bảo mật</a>
-                </div>
+                <div class="flex flex-wrap gap-3"><button type="submit" :disabled="submitting" class="min-h-11 rounded-xl bg-[#0056D2] px-5 text-sm font-bold text-white hover:bg-[#0046B8] disabled:cursor-not-allowed disabled:opacity-60"><span x-text="submitting ? 'Đang lưu...' : 'Lưu thay đổi'">Lưu thay đổi</span></button><a href="{{ route('student.profile.security') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-5 text-sm font-bold hover:bg-slate-50 dark:border-slate-700">Đi tới bảo mật</a></div>
             </form>
         </section>
     </div>

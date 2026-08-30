@@ -98,11 +98,4 @@ return [
         'ca_bundle' => env('PAYMENT_CA_BUNDLE'),
     ],
 
-    'momo' => [
-        'partner_code' => env('MOMO_PARTNER_CODE'),
-        'access_key' => env('MOMO_ACCESS_KEY'),
-        'secret_key' => env('MOMO_SECRET_KEY'),
-        'endpoint' => env('MOMO_ENDPOINT', env('MOMO_URL', 'https://test-payment.momo.vn')),
-    ],
-
 ];

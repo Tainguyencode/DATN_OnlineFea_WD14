@@ -12,6 +12,6 @@
     <h2 class="mt-3 text-base font-bold text-slate-900 dark:text-white">{{ $title }}</h2>
     @if($description)<p class="mx-auto mt-1 max-w-lg text-sm leading-6 text-slate-500 dark:text-slate-400">{{ $description }}</p>@endif
     @if($actionUrl && $actionLabel)
-        <a href="{{ $actionUrl }}" class="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-[#0056D2] px-5 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0046B8] hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2">{{ $actionLabel }}</a>
+        <a href="{{ $actionUrl }}" class="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2">{{ $actionLabel }}</a>
     @endif
 </div>

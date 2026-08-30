@@ -29,7 +29,7 @@
             @isset($actions)
                 {{ $actions }}
             @else
-                <a href="{{ $target }}" class="inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-[#0056D2] px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0046B8] hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2">{{ $progress !== null ? 'Tiếp tục học' : 'Xem chi tiết' }}</a>
+                <a href="{{ $target }}" class="inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] focus-visible:ring-offset-2">{{ $progress !== null ? 'Tiếp tục học' : 'Xem chi tiết' }}</a>
             @endisset
         </div>
     </div>
