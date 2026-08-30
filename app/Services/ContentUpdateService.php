@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Jobs\ConvertVideoToHLS;
+use App\Models\Assignment;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
 use App\Models\Course;
@@ -96,6 +97,11 @@ class ContentUpdateService
         return DB::transaction(function () use ($update, $changes): ContentUpdate {
             $locked = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $this->assertDraft($locked, 'Thay đổi đã được gửi duyệt và không thể chỉnh sửa.');
+            if ($locked->isRollback()) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Snapshot khôi phục được lấy nguyên vẹn từ phiên bản lịch sử và không thể chỉnh sửa.',
+                ]);
+            }
 
             $locked->update([
                 'payload' => array_merge($locked->payload ?? [], $changes),
@@ -146,7 +152,16 @@ class ContentUpdateService
                 ->where('status', ContentUpdate::STATUS_DRAFT)
                 ->lockForUpdate()
                 ->latest('id')
-                ->first();
+                ->get()
+                ->first(function (ContentUpdate $candidate) use ($rejected): bool {
+                    $rollbackSource = data_get($rejected->metadata, 'source_version_id');
+                    if ($rollbackSource) {
+                        return data_get($candidate->metadata, 'operation_origin') === 'rollback'
+                            && (int) data_get($candidate->metadata, 'source_version_id') === (int) $rollbackSource;
+                    }
+
+                    return data_get($candidate->metadata, 'operation_origin') !== 'rollback';
+                });
 
             if ($existing) {
                 return $existing;
@@ -158,6 +173,7 @@ class ContentUpdateService
                 'course_id' => $rejected->course_id,
                 'entity_id' => $rejected->entity_id,
                 'payload' => $rejected->payload ?? [],
+                'metadata' => $rejected->metadata ?? null,
                 'status' => ContentUpdate::STATUS_DRAFT,
                 'created_by' => $actor->id,
             ]);
@@ -196,6 +212,10 @@ class ContentUpdateService
 
                     case ContentUpdate::TYPE_LESSON:
                         $this->applyLessonUpdate($update, $payload, $admin);
+                        break;
+
+                    case ContentUpdate::TYPE_ASSIGNMENT:
+                        $this->applyAssignmentUpdate($update, $admin);
                         break;
 
                     default:
@@ -282,6 +302,18 @@ class ContentUpdateService
                 'level', 'language', 'category_id',
             ])));
         }
+    }
+
+    private function applyAssignmentUpdate(ContentUpdate $update, User $admin): void
+    {
+        abort_unless($update->action === ContentUpdate::ACTION_UPDATE, 422, 'Bài tập chỉ hỗ trợ cập nhật phiên bản.');
+        abort_unless(
+            Assignment::query()->where('course_id', $update->course_id)->whereKey($update->entity_id)->exists(),
+            422,
+            'Bài tập không thuộc khóa học của yêu cầu cập nhật.'
+        );
+
+        app(ContentVersionService::class)->activateCandidates($update, $admin);
     }
 
     private function approveQuizCandidate(ContentUpdate $update, array $payload, User $admin): void

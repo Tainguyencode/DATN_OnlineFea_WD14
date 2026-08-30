@@ -16,6 +16,8 @@ class ContentUpdate extends Model
 
     public const TYPE_QUIZ = 'quiz';
 
+    public const TYPE_ASSIGNMENT = 'assignment';
+
     public const ACTION_CREATE = 'create';
 
     public const ACTION_UPDATE = 'update';
@@ -38,6 +40,7 @@ class ContentUpdate extends Model
         'course_id',
         'action',
         'payload',
+        'metadata',
         'status',
         'rejection_reason',
         'created_by',
@@ -52,6 +55,7 @@ class ContentUpdate extends Model
             'entity_id' => 'integer',
             'course_id' => 'integer',
             'payload' => 'array',
+            'metadata' => 'array',
             'created_by' => 'integer',
             'reviewed_by' => 'integer',
             'submitted_at' => 'datetime',
@@ -127,6 +131,11 @@ class ContentUpdate extends Model
     public function isApproved(): bool
     {
         return $this->status === self::STATUS_APPROVED;
+    }
+
+    public function isRollback(): bool
+    {
+        return data_get($this->metadata, 'operation_origin') === 'rollback';
     }
 
     public function isRejected(): bool

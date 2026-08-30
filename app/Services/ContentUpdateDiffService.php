@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Assignment;
 use App\Models\AssignmentVersion;
 use App\Models\Category;
 use App\Models\ContentUpdate;
@@ -53,6 +54,7 @@ class ContentUpdateDiffService
             ContentUpdate::TYPE_COURSE => $this->courseDiff($data, $update, $payload, $course),
             ContentUpdate::TYPE_CHAPTER => $this->sectionDiff($data, $update, $payload, $course),
             ContentUpdate::TYPE_LESSON => $this->lessonDiff($data, $update, $payload, $course),
+            ContentUpdate::TYPE_ASSIGNMENT => $this->assignmentDiff($data, $update, $payload, $course),
             ContentUpdate::TYPE_QUIZ => $this->quizDiff($data, $update, $payload, $course),
             default => $this->unknownDiff($data),
         };
@@ -62,6 +64,9 @@ class ContentUpdateDiffService
     public function summary(ContentUpdate $update): string
     {
         $payload = is_array($update->payload) ? $update->payload : [];
+        if (($update->metadata['operation_origin'] ?? null) === 'rollback') {
+            return 'Khôi phục từ V'.($update->metadata['source_version_number'] ?? '?').': '.($payload['title'] ?? $this->entityLabel($update->type));
+        }
         $title = trim((string) ($payload['title'] ?? ''));
         if ($update->action === ContentUpdate::ACTION_DELETE) {
             return 'Yêu cầu xóa '.mb_strtolower($this->entityLabel($update->type)).($title !== '' ? ': '.$title : '');
@@ -212,6 +217,29 @@ class ContentUpdateDiffService
     }
 
     /** @param array<string, mixed> $data @param array<string, mixed> $payload @return array<string, mixed> */
+    private function assignmentDiff(array $data, ContentUpdate $update, array $payload, ?Course $course): array
+    {
+        $assignment = $course ? Assignment::query()->where('course_id', $course->id)->find($update->entity_id) : null;
+        if (! $assignment) {
+            return $this->missing($data);
+        }
+
+        $published = $assignment->published_version_id ? AssignmentVersion::query()->find($assignment->published_version_id) : null;
+        $candidate = $this->candidateVersion($update, AssignmentVersion::class, 'assignment_id', $assignment->id);
+        foreach ([
+            'title' => 'Tên bài tập', 'description' => 'Mô tả', 'instructions' => 'Hướng dẫn',
+            'due_date' => 'Hạn nộp', 'due_days' => 'Số ngày đến hạn', 'max_score' => 'Điểm tối đa',
+            'passing_score' => 'Điểm đạt', 'is_required' => 'Bắt buộc',
+            'allowed_file_types' => 'Loại tệp cho phép', 'maximum_file_size' => 'Dung lượng tối đa',
+        ] as $key => $label) {
+            $old = $published?->{$key} ?? $assignment->{$key};
+            $new = $candidate?->{$key} ?? $this->payloadValue($payload, $key, $old);
+            $this->addField($data, $key, $label, $old, $new, in_array($key, ['description', 'instructions'], true));
+        }
+
+        return $data;
+    }
+
     private function quizDiff(array $data, ContentUpdate $update, array $payload, ?Course $course): array
     {
         $quizId = (int) ($payload['quiz_id'] ?? $update->entity_id);
@@ -271,6 +299,7 @@ class ContentUpdateDiffService
             ContentUpdate::TYPE_COURSE => [CourseVersion::class, Course::class, 'course_id', $update->course_id],
             ContentUpdate::TYPE_CHAPTER => [CourseSectionVersion::class, CourseSection::class, 'course_section_id', $update->entity_id],
             ContentUpdate::TYPE_LESSON => [LessonVersion::class, Lesson::class, 'lesson_id', $update->entity_id],
+            ContentUpdate::TYPE_ASSIGNMENT => [AssignmentVersion::class, Assignment::class, 'assignment_id', $update->entity_id],
             default => null,
         };
         if (! $mapping) {
@@ -512,6 +541,7 @@ class ContentUpdateDiffService
             ContentUpdate::TYPE_COURSE => 'Khóa học: '.($course?->title ?? 'Không xác định'),
             ContentUpdate::TYPE_CHAPTER => 'Chương học: '.($payload['title'] ?? 'Không xác định'),
             ContentUpdate::TYPE_LESSON => 'Bài học: '.($payload['title'] ?? 'Không xác định'),
+            ContentUpdate::TYPE_ASSIGNMENT => 'Bài tập: '.($payload['title'] ?? 'Không xác định'),
             ContentUpdate::TYPE_QUIZ => 'Quiz: '.($payload['title'] ?? 'Không xác định'),
             default => 'Nội dung cập nhật',
         };
@@ -519,7 +549,7 @@ class ContentUpdateDiffService
 
     private function entityLabel(string $type): string
     {
-        return [ContentUpdate::TYPE_COURSE => 'Khóa học', ContentUpdate::TYPE_CHAPTER => 'Chương học', ContentUpdate::TYPE_LESSON => 'Bài học', ContentUpdate::TYPE_QUIZ => 'Quiz'][$type] ?? $type;
+        return [ContentUpdate::TYPE_COURSE => 'Khóa học', ContentUpdate::TYPE_CHAPTER => 'Chương học', ContentUpdate::TYPE_LESSON => 'Bài học', ContentUpdate::TYPE_ASSIGNMENT => 'Bài tập', ContentUpdate::TYPE_QUIZ => 'Quiz'][$type] ?? $type;
     }
 
     private function actionLabel(string $action): string

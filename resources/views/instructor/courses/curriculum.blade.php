@@ -73,13 +73,17 @@
                 </div>
             @endforeach
         </div>
-        @if($course->publishedVersion?->version_number)
-            <div class="mt-4 flex items-center gap-2 border-t border-blue-100 pt-4 text-xs font-bold text-emerald-700 dark:border-slate-700 dark:text-emerald-300">
+        <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-blue-100 pt-4 text-xs font-bold dark:border-slate-700">
+            @if($course->publishedVersion?->version_number)
                 <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 dark:border-emerald-500/30 dark:bg-emerald-500/10">
                     Đang xuất bản: V{{ $course->publishedVersion->version_number }}
                 </span>
-            </div>
-        @endif
+            @endif
+            <a href="{{ route('instructor.courses.versions.index', $course) }}"
+               class="ml-auto inline-flex min-h-9 items-center justify-center rounded-lg border border-indigo-200 bg-white px-3 text-xs font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-500/30 dark:bg-slate-800 dark:text-indigo-300 dark:hover:bg-indigo-500/10">
+                Lịch sử phiên bản
+            </a>
+        </div>
     </section>
 
     @if($pendingContentUpdates->isNotEmpty())

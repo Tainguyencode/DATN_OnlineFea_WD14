@@ -74,6 +74,7 @@
                     @endif
                 </div>
                 <h2 class="mt-2 text-2xl font-bold text-slate-950">{{ $course->title }}</h2>
+                <a href="{{ route('admin.courses.versions.index', $course) }}" class="mt-2 inline-block text-sm font-bold text-indigo-700 hover:underline">Lịch sử phiên bản</a>
                 <p class="mt-2 text-sm text-slate-500">Giảng viên: {{ $course->instructor?->name }} · {{ $course->instructor?->email }}</p>
                 <p class="mt-4 text-sm leading-6 text-slate-600">{{ $course->short_description ?: 'Chưa có mô tả ngắn.' }}</p>
 

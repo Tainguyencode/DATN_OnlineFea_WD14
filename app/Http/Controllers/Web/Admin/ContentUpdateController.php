@@ -46,6 +46,7 @@ class ContentUpdateController extends Controller
             ContentUpdate::TYPE_COURSE => 'Khóa học',
             ContentUpdate::TYPE_CHAPTER => 'Chương học',
             ContentUpdate::TYPE_LESSON => 'Bài học',
+            ContentUpdate::TYPE_ASSIGNMENT => 'Bài tập',
             ContentUpdate::TYPE_QUIZ => 'Quiz',
         ];
 
