@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use SocialiteProviders\Manager\SocialiteWasCalled;
@@ -36,6 +37,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->assertSafeTestingDatabase();
+
+        // Quick tunnels terminate TLS before forwarding to the local HTTP
+        // server. Force secure URLs only for those proxied HTTPS requests so
+        // local http://127.0.0.1 development keeps working normally.
+        if (request()->header('X-Forwarded-Proto') === 'https' || request()->headers->has('Cf-Ray')) {
+            URL::forceScheme('https');
+        }
 
         RateLimiter::for('checkout-payment', function (Request $request): Limit {
             $userKey = $request->user()

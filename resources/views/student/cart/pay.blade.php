@@ -136,7 +136,7 @@
                     <h1 class="text-lg font-extrabold text-slate-950 dark:text-white">Phương thức thanh toán</h1>
                     <p class="mt-1 text-xs text-slate-500">Chọn cổng thanh toán để hoàn tất đơn hàng</p>
 
-                    <form method="POST" action="{{ route('student.checkout.process_payment', $order->order_code) }}" class="mt-6 space-y-4" x-data="{ selectedGateway: 'bank_transfer', submitting: false }" x-on:submit="if (submitting) { $event.preventDefault(); return; } submitting = true">
+                    <form method="POST" action="{{ route('student.checkout.process_payment', $order->order_code) }}" class="mt-6 space-y-4" x-data="{ selectedGateway: '{{ $order->payment_method === 'momo' ? 'momo' : 'bank_transfer' }}', submitting: false }" x-on:submit="if (submitting) { $event.preventDefault(); return; } submitting = true">
                         @csrf
 
                         <!-- CỔNG THANH TOÁN -->
@@ -154,9 +154,23 @@
                             </div>
                         </label>
 
+                        <label class="relative flex cursor-pointer items-center justify-between rounded-2xl border p-4 transition"
+                               :class="selectedGateway === 'momo' ? 'border-[#a50064] bg-pink-50/50 ring-2 ring-pink-500/20 dark:border-pink-400 dark:bg-pink-950/20' : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950'">
+                            <div class="flex items-center gap-3">
+                                <input type="radio" name="payment_method" value="momo" x-model="selectedGateway" class="h-4 w-4 text-[#a50064] focus:ring-pink-500">
+                                <div class="flex h-10 w-14 items-center justify-center rounded-xl bg-[#a50064] text-[10px] font-black text-white shrink-0">
+                                    MoMo
+                                </div>
+                                <div>
+                                    <span class="text-xs font-bold text-slate-950 dark:text-white">MoMo</span>
+                                    <p class="mt-0.5 text-[11px] text-slate-500">Thanh toán thử nghiệm qua ví MoMo</p>
+                                </div>
+                            </div>
+                        </label>
+
                         <div class="pt-4">
                             <button type="submit" :disabled="submitting" :class="submitting ? 'cursor-wait bg-indigo-400' : 'cursor-pointer bg-indigo-600 hover:bg-indigo-700'" class="h-12 w-full rounded-xl text-xs font-extrabold text-white transition shadow-md flex items-center justify-center gap-2">
-                                <span x-show="!submitting">Tiến hành quét mã QR (<span x-text="formatMoney(totalAmount)"></span>)</span>
+                                <span x-show="!submitting"><span x-text="selectedGateway === 'momo' ? 'Thanh toán qua MoMo' : 'Tiến hành quét mã QR'"></span> (<span x-text="formatMoney(totalAmount)"></span>)</span>
                                 <span x-show="submitting">Đang tạo liên kết thanh toán...</span>
                                 <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
