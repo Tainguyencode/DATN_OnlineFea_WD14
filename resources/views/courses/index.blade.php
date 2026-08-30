@@ -4,10 +4,10 @@
 
 @section('content')
 @php
-    $formatPrice = fn ($value) => (float) $value <= 0 ? 'Miễn phí' : number_format((float) $value, 0, ',', '.').'đ';
     $pricingOptions = [
         '' => 'Tất cả mức giá',
         'free' => 'Miễn phí',
+        'paid' => 'Trả phí',
         'under_200k' => 'Dưới 200.000đ',
         '200k_500k' => '200.000đ - 500.000đ',
         'above_500k' => 'Trên 500.000đ',
@@ -19,10 +19,38 @@
         '3.0' => '3.0 sao trở lên',
     ];
     $categoryCount = $categories->sum(fn ($parent) => $parent->children->count());
+    $overviewSections = $showCourseOverview ? [
+        [
+            'key' => 'all',
+            'title' => 'Danh sách khóa học',
+            'description' => 'Các khóa học mới nhất đã được kiểm duyệt và sẵn sàng đăng ký.',
+            'items' => $allCoursesPreview,
+            'moreUrl' => route('courses.index', ['view' => 'all']),
+        ],
+        [
+            'key' => 'paid',
+            'title' => 'Khóa học trả phí',
+            'description' => 'Nội dung chuyên sâu với lộ trình, bài giảng và hỗ trợ đầy đủ.',
+            'items' => $paidCoursesPreview,
+            'moreUrl' => route('courses.index', ['pricing' => 'paid']),
+        ],
+        [
+            'key' => 'free',
+            'title' => 'Khóa học miễn phí',
+            'description' => 'Bắt đầu học ngay với những khóa học hoàn toàn miễn phí.',
+            'items' => $freeCoursesPreview,
+            'moreUrl' => route('courses.index', ['pricing' => 'free']),
+        ],
+    ] : [];
 @endphp
 
 <section class="bg-slate-950 text-white">
-    <div class="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-16">
+    <div class="mx-auto max-w-[1536px] px-4 pt-6 sm:px-6 lg:px-8">
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-blue-300 hover:text-white cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
+    </div>
+    <div class="mx-auto grid max-w-[1536px] gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-12">
         <div>
             <span class="inline-flex rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-200">
                 Fea Course Catalog
@@ -65,7 +93,7 @@
 </section>
 
 <section class="bg-slate-50 py-10 dark:bg-[#0a0a0a]">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-[1536px] px-4 sm:px-6 lg:px-8">
         <form method="GET" action="{{ route('courses.index') }}" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-5">
             <div class="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(150px,.7fr)_minmax(140px,.6fr)_minmax(140px,.6fr)_minmax(140px,.6fr)_auto]">
                 <label class="block">
@@ -123,99 +151,55 @@
             </div>
         </form>
 
-        <div class="mt-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-                <h2 class="text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white">Danh sách khóa học</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Hiển thị {{ $courses->firstItem() ?? 0 }}-{{ $courses->lastItem() ?? 0 }} trong {{ $courses->total() }} khóa học phù hợp.
-                </p>
-            </div>
-        </div>
-
-        @if($courses->isEmpty())
-            <div class="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-800 dark:bg-[#161615]">
-                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-                    <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5s3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253" />
-                    </svg>
-                </div>
-                <h3 class="mt-4 text-lg font-bold text-slate-950 dark:text-white">Chưa tìm thấy khóa học phù hợp</h3>
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Thử đổi từ khóa, danh mục hoặc mức giá để xem thêm lựa chọn.</p>
-                <a href="{{ route('courses.index') }}" class="mt-5 inline-flex rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-700">
-                    Xem tất cả khóa học
-                </a>
-            </div>
-        @else
-            <div class="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                @foreach($courses as $course)
-                    @php
-                        $discountPrice = $course->discount_price ?? $course->sale_price;
-                        $price = $discountPrice ?? $course->price;
-                        $originalPrice = $discountPrice ? $course->price : null;
-                        $lessonCount = $course->lessons_count ?? 0;
-                        $levelLabel = $levelOptions[$course->level] ?? 'Mọi trình độ';
-                        $isFavorited = (bool) ($course->is_favorited ?? false);
-                    @endphp
-                    <article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:border-slate-800 dark:bg-[#161615] dark:hover:border-indigo-500/50">
-                        <div class="relative aspect-video overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-800">
-                            <a href="{{ route('courses.show', $course->slug) }}" class="block h-full" aria-label="Xem chi tiết {{ $course->title }}">
-                                @if($course->thumbnail)
-                                    <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80'">
-                                @else
-                                    <div class="flex h-full w-full items-center justify-center text-3xl font-extrabold text-white/80">Fea</div>
-                                @endif
-                            </a>
-                            <span class="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-slate-900 backdrop-blur">
-                                {{ $levelLabel }}
-                            </span>
-                            <x-favorite-button :course="$course" :favorited="$isFavorited" class="absolute right-3 top-3 z-20" />
-                        </div>
-
-                        <div class="flex flex-1 flex-col p-5">
-                            @if($course->category)
-                                <a href="{{ route('courses.category', $course->category->slug) }}" class="text-xs font-bold uppercase tracking-wide text-indigo-600 transition hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200">
-                                    {{ $course->category->full_name }}
-                                </a>
-                            @endif
-                            <h3 class="mt-2 line-clamp-2 text-lg font-extrabold leading-snug text-slate-950 transition group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-300">
-                                <a href="{{ route('courses.show', $course->slug) }}">{{ $course->title }}</a>
-                            </h3>
-                            <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                                {{ $course->short_description ?: Str::limit($course->description, 120) }}
-                            </p>
-
-                            <div class="mt-4 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
-                                    {{ strtoupper(substr($course->instructor?->name ?? 'F', 0, 1)) }}
-                                </div>
-                                <span class="truncate">{{ $course->instructor?->name ?? 'Giảng viên Fea' }}</span>
+        @if($showCourseOverview)
+            <div class="mt-10 space-y-14">
+                @foreach($overviewSections as $section)
+                    <section data-course-section="{{ $section['key'] }}" aria-labelledby="course-section-{{ $section['key'] }}">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <span class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">FEA Learning</span>
+                                <h2 id="course-section-{{ $section['key'] }}" class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl dark:text-white">{{ $section['title'] }}</h2>
+                                <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">{{ $section['description'] }}</p>
                             </div>
-
-                            <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
-                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/60">
-                                    <span class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Bài học</span>
-                                    <strong class="mt-1 block text-slate-950 dark:text-white">{{ $lessonCount }}</strong>
-                                </div>
-                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/60">
-                                    <span class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Giá</span>
-                                    <strong class="mt-1 block text-slate-950 dark:text-white">{{ $formatPrice($price) }}</strong>
-                                    @if($originalPrice && (float) $originalPrice > (float) $price)
-                                        <span class="text-xs text-slate-400 line-through">{{ $formatPrice($originalPrice) }}</span>
-                                    @endif
-                                </div>
-                            </div>
-
-                            <a href="{{ route('courses.show', $course->slug) }}" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200">
-                                Xem chi tiết
+                            <a data-view-more href="{{ $section['moreUrl'] }}" class="inline-flex h-11 shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-indigo-200 bg-white px-4 text-sm font-bold text-indigo-700 transition hover:border-indigo-600 hover:bg-indigo-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:self-auto dark:border-indigo-500/40 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-indigo-500 dark:hover:text-white">
+                                Xem thêm
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 5 7 7-7 7"/></svg>
                             </a>
                         </div>
-                    </article>
+
+                        @if($section['items']->isEmpty())
+                            <div class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-[#161615] dark:text-slate-400">
+                                Chưa có khóa học phù hợp trong danh sách này.
+                            </div>
+                        @else
+                            @include('courses._catalog-grid', ['courseItems' => $section['items']])
+                        @endif
+                    </section>
                 @endforeach
             </div>
-
-            <div class="mt-8">
-                {{ $courses->links() }}
+        @else
+            <div class="mt-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 class="text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white">Danh sách khóa học</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Hiển thị {{ $courses->firstItem() ?? 0 }}-{{ $courses->lastItem() ?? 0 }} trong {{ $courses->total() }} khóa học phù hợp.
+                    </p>
+                </div>
+                <a href="{{ route('courses.index') }}" class="text-sm font-bold text-indigo-600 transition hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">← Quay lại các nhóm khóa học</a>
             </div>
+
+            @if($courses->isEmpty())
+                <div class="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-800 dark:bg-[#161615]">
+                    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                        <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5s3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253"/></svg>
+                    </div>
+                    <h3 class="mt-4 text-lg font-bold text-slate-950 dark:text-white">Chưa tìm thấy khóa học phù hợp</h3>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Thử đổi từ khóa, danh mục hoặc mức giá để xem thêm lựa chọn.</p>
+                </div>
+            @else
+                @include('courses._catalog-grid', ['courseItems' => $courses])
+                <div class="mt-8">{{ $courses->links() }}</div>
+            @endif
         @endif
     </div>
 </section>

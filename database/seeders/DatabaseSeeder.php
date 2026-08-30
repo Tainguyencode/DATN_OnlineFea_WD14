@@ -67,6 +67,12 @@ class DatabaseSeeder extends Seeder
             'reviews',
             'lesson_progress',
             'course_reviews',
+            'quiz_version_question_invalidations',
+            'quiz_attempt_regrades',
+            'quiz_version_questions',
+            'question_versions',
+            'quiz_versions',
+            'instructor_profiles',
         ];
 
         foreach ($tables as $table) {
@@ -271,11 +277,15 @@ class DatabaseSeeder extends Seeder
             ];
         }
 
+        $validCourseIds = DB::table('courses')->pluck('id')->all();
+
         foreach ($enrollments as $enrollment) {
-            DB::table('enrollments')->updateOrInsert(
-                ['user_id' => $enrollment['user_id'], 'course_id' => $enrollment['course_id']],
-                $enrollment
-            );
+            if (in_array($enrollment['course_id'], $validCourseIds, true)) {
+                DB::table('enrollments')->updateOrInsert(
+                    ['user_id' => $enrollment['user_id'], 'course_id' => $enrollment['course_id']],
+                    $enrollment
+                );
+            }
         }
 
         echo "✓ Đã đăng ký thành công các khóa học mẫu cho học sinh!\n\n";

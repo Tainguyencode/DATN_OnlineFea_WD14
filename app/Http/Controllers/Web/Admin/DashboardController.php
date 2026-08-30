@@ -15,15 +15,20 @@ class DashboardController extends Controller
 {
     public function index(): View
     {
+        $currentMonth = now()->startOfMonth();
+
         $stats = [
-            'users' => User::count(),
-            'students' => User::where('role', 'student')->count(),
-            'instructors' => User::where('role', 'instructor')->count(),
-            'courses' => Course::where('status', Course::STATUS_PUBLISHED)->where('is_published', true)->count(),
-            'pending' => Course::whereIn('status', [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value])->count(),
+            'revenue_total' => Order::where('status', 'paid')->sum('total_amount'),
+            'revenue_month' => Order::where('status', 'paid')->where('created_at', '>=', $currentMonth)->sum('total_amount'),
+            'orders_paid_count' => Order::where('status', 'paid')->count(),
+            'users_total' => User::count(),
+            'students_count' => User::where('role', 'student')->count(),
+            'instructors_count' => User::where('role', 'instructor')->count(),
+            'courses_published' => Course::where('status', Course::STATUS_PUBLISHED)->where('is_published', true)->count(),
+            'courses_pending' => Course::whereIn('status', [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value])->count(),
+            'enrollments_total' => Enrollment::count(),
+            'enrollments_month' => Enrollment::where('created_at', '>=', $currentMonth)->count(),
             'pending_instructors' => User::where('role', 'instructor')->where('instructor_status', 'pending')->count(),
-            'revenue' => Order::where('status', 'paid')->sum('total_amount'),
-            'enrollments' => Enrollment::count(),
         ];
 
         $recentLogs = ActivityLog::with('user:id,name')

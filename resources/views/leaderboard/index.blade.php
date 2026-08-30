@@ -5,6 +5,11 @@
 @section('content')
 <div class="bg-slate-50 dark:bg-slate-950 min-h-screen py-8">
     <div class="ui-container max-w-7xl">
+        <div class="mb-4">
+            <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 cursor-pointer transition py-1">
+                ← Quay lại
+            </button>
+        </div>
 
         {{-- Header Title & Countdown Banner --}}
         <div class="mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">

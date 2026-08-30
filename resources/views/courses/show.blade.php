@@ -24,7 +24,12 @@
 @endphp
 
 <section class="bg-slate-950 text-white">
-    <div class="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-14">
+    <div class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('courses.index') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-blue-300 hover:text-white cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
+    </div>
+    <div class="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-12">
         <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2 text-sm">
                 @if($course->category)
@@ -218,7 +223,6 @@
                                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $section->description }}</p>
                                     @endif
                                 </div>
-                                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ $section->lessons->count() }} bài</span>
                             </div>
 
 
@@ -361,17 +365,7 @@
                                         + Thêm vào giỏ hàng
                                     </button>
                                 </form>
-                            @endif
-                            <form method="POST" action="{{ $isFavorited ? route('courses.favorite.destroy', $course) : route('courses.favorite.store', $course) }}">
-                                @csrf
-                                @if($isFavorited)
-                                    @method('DELETE')
-                                @endif
-                                <button type="submit" class="ui-button-secondary flex w-full items-center justify-center gap-2">
-                                    <svg class="h-5 w-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 0 0 0 6.364L12 20.364l7.682-7.682a4.5 4.5 0 0 0-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 0 0-6.364 0Z"></path></svg>
-                                    {{ $isFavorited ? 'Bỏ yêu thích' : 'Yêu thích' }}
-                                </button>
-                            </form>
+                            <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" />
                         </div>
                     @else
                         <a href="{{ auth()->user()->dashboardUrl() }}" class="ui-button-primary mt-6 w-full">

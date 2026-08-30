@@ -581,6 +581,10 @@ class Course extends Model
     /** Lấy bài học đầu tiên của khóa học để làm lối vào học ngay */
     public function firstLesson(): ?Lesson
     {
+        if ($this->relationLoaded('lessons')) {
+            return $this->lessons->sortBy('sort_order')->first();
+        }
+
         $this->loadMissing([
             'courseSections' => fn ($q) => $q->orderBy('sort_order'),
             'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order'),

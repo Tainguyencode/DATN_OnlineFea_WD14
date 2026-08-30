@@ -34,6 +34,16 @@ class InstructorProfile extends Model
         'agree_terms' => 'boolean',
     ];
 
+    public function getHeadlineAttribute(): ?string
+    {
+        return $this->position ?: ($this->specialty ?: $this->teaching_field);
+    }
+
+    public function getSpecialtiesAttribute(): ?string
+    {
+        return $this->specialty;
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
