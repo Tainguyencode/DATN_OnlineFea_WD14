@@ -187,15 +187,15 @@ class ContentUpdateService
             } else {
                 switch ($update->type) {
                     case ContentUpdate::TYPE_COURSE:
-                        $this->applyCourseUpdate($update, $payload);
+                        $this->applyCourseUpdate($update, $payload, $admin);
                         break;
 
                     case ContentUpdate::TYPE_CHAPTER:
-                        $this->applyChapterUpdate($update, $payload);
+                        $this->applyChapterUpdate($update, $payload, $admin);
                         break;
 
                     case ContentUpdate::TYPE_LESSON:
-                        $this->applyLessonUpdate($update, $payload);
+                        $this->applyLessonUpdate($update, $payload, $admin);
                         break;
 
                     default:
@@ -242,6 +242,7 @@ class ContentUpdateService
                 'reviewed_by' => $admin->id,
                 'reviewed_at' => now(),
             ]);
+            app(ContentVersionService::class)->rejectCandidates($update);
 
             // Nếu khóa học không còn pending update nào nữa thì chuyển status về rejected_update
             $remainingPending = ContentUpdate::where('course_id', $update->course_id)
@@ -264,8 +265,14 @@ class ContentUpdateService
         }
     }
 
-    private function applyCourseUpdate(ContentUpdate $update, array $payload): void
+    private function applyCourseUpdate(ContentUpdate $update, array $payload, User $admin): void
     {
+        if (in_array($update->action, [ContentUpdate::ACTION_UPDATE, ContentUpdate::ACTION_REORDER], true)) {
+            app(ContentVersionService::class)->activateCandidates($update, $admin);
+
+            return;
+        }
+
         $course = Course::find($update->course_id);
         if ($course) {
             $course->update(array_intersect_key($payload, array_flip([
@@ -370,8 +377,14 @@ class ContentUpdateService
         ]);
     }
 
-    private function applyChapterUpdate(ContentUpdate $update, array $payload): void
+    private function applyChapterUpdate(ContentUpdate $update, array $payload, User $admin): void
     {
+        if (in_array($update->action, [ContentUpdate::ACTION_UPDATE, ContentUpdate::ACTION_REORDER], true)) {
+            app(ContentVersionService::class)->activateCandidates($update, $admin);
+
+            return;
+        }
+
         if ($update->action === ContentUpdate::ACTION_CREATE) {
             $section = CourseSection::create([
                 'course_id' => $update->course_id,
@@ -387,6 +400,7 @@ class ContentUpdateService
             ]);
 
             $update->update(['entity_id' => $section->id]);
+            app(ContentVersionService::class)->createInitialSectionVersion($section, $admin);
         } elseif ($update->action === ContentUpdate::ACTION_UPDATE && $update->entity_id) {
             $section = CourseSection::query()
                 ->where('course_id', $update->course_id)
@@ -436,7 +450,8 @@ class ContentUpdateService
 
             if ($section) {
                 app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($section);
-                $section->delete();
+                $section->lessons()->update(['archived_at' => now(), 'status' => Lesson::STATUS_DRAFT]);
+                $section->forceFill(['archived_at' => now()])->save();
             }
 
             if ($legacyChapterId) {
@@ -467,8 +482,14 @@ class ContentUpdateService
         }
     }
 
-    private function applyLessonUpdate(ContentUpdate $update, array $payload): void
+    private function applyLessonUpdate(ContentUpdate $update, array $payload, User $admin): void
     {
+        if (in_array($update->action, [ContentUpdate::ACTION_UPDATE, ContentUpdate::ACTION_REORDER], true)) {
+            app(ContentVersionService::class)->activateCandidates($update, $admin);
+
+            return;
+        }
+
         if ($update->action === ContentUpdate::ACTION_CREATE) {
             $secId = $payload['section_id'] ?? null;
 
@@ -539,6 +560,10 @@ class ContentUpdateService
                     ['lesson_id' => $lesson->id],
                     $payload['ai_moderation']
                 );
+            }
+            app(ContentVersionService::class)->createInitialLessonVersion($lesson, $admin);
+            if ($lesson->assignment) {
+                app(ContentVersionService::class)->createInitialAssignmentVersion($lesson->assignment, $admin);
             }
 
             // Gửi thông báo cho toàn bộ học viên đang ghi danh nếu khóa học đã xuất bản
@@ -611,7 +636,7 @@ class ContentUpdateService
                 ->find($update->entity_id);
             if ($lesson) {
                 app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($lesson);
-                $lesson->delete();
+                $lesson->forceFill(['archived_at' => now(), 'status' => Lesson::STATUS_DRAFT])->save();
             }
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
             $orders = $payload['lesson_orders'] ?? [];

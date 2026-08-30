@@ -10,6 +10,8 @@ trait HasImmutableVersionState
 
     public const STATUS_SUPERSEDED = 'superseded';
 
+    public const STATUS_REJECTED = 'rejected';
+
     public function isDraft(): bool
     {
         return $this->status === self::STATUS_DRAFT;
@@ -23,5 +25,10 @@ trait HasImmutableVersionState
     public function isSuperseded(): bool
     {
         return $this->status === self::STATUS_SUPERSEDED;
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->status === self::STATUS_REJECTED;
     }
 }

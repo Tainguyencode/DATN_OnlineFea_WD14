@@ -77,6 +77,19 @@
                 @else
                     <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">{{ $lessonStatuses[$lesson->status] ?? $lesson->status }}</span>
                 @endif
+                @php
+                    $lessonVersionContext = $lessonUpdate
+                        ? app(\App\Services\ContentUpdateDiffService::class)->versionContext($lessonUpdate)
+                        : ['current' => $lesson->publishedVersion?->version_number, 'proposed' => null];
+                @endphp
+                @if(($lessonVersionContext['current'] ?? null) !== null)
+                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">Đang xuất bản: V{{ $lessonVersionContext['current'] }}</span>
+                @endif
+                @if(($lessonVersionContext['proposed'] ?? null) !== null)
+                    <span class="rounded-full border {{ $lessonUpdate?->isRejected() ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200 bg-blue-50 text-blue-800' }} px-2.5 py-0.5 text-xs font-bold">
+                        {{ $lessonUpdate?->isRejected() ? 'V'.$lessonVersionContext['proposed'].' — Bị từ chối' : 'Đề xuất: V'.$lessonVersionContext['proposed'].' — '.($lessonUpdate?->isPending() ? 'Chờ duyệt' : 'Nháp') }}
+                    </span>
+                @endif
                 @if($lesson->is_preview)
                     <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>
                 @endif

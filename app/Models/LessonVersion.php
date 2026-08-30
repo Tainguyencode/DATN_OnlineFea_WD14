@@ -10,11 +10,11 @@ class LessonVersion extends Model
 {
     use HasImmutableVersionState;
 
-    protected $fillable = ['lesson_id', 'version_number', 'status', 'section_id', 'legacy_chapter_id', 'title', 'type', 'content', 'document_file', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'hls_playlist', 'hls_path', 'video_original_name', 'video_mime', 'video_size', 'duration_seconds', 'is_preview', 'is_required', 'sort_order', 'attachments', 'subtitles', 'created_by', 'published_by', 'published_at', 'superseded_at'];
+    protected $fillable = ['lesson_id', 'version_number', 'status', 'content_update_id', 'section_id', 'legacy_chapter_id', 'title', 'type', 'content', 'document_file', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'hls_playlist', 'hls_path', 'video_original_name', 'video_mime', 'video_size', 'duration_seconds', 'is_preview', 'is_required', 'sort_order', 'attachments', 'subtitles', 'created_by', 'published_by', 'published_at', 'superseded_at', 'rejected_at'];
 
     protected function casts(): array
     {
-        return ['version_number' => 'integer', 'video_size' => 'integer', 'duration_seconds' => 'integer', 'is_preview' => 'boolean', 'is_required' => 'boolean', 'sort_order' => 'integer', 'attachments' => 'array', 'subtitles' => 'array', 'published_at' => 'datetime', 'superseded_at' => 'datetime'];
+        return ['version_number' => 'integer', 'video_size' => 'integer', 'duration_seconds' => 'integer', 'is_preview' => 'boolean', 'is_required' => 'boolean', 'sort_order' => 'integer', 'attachments' => 'array', 'subtitles' => 'array', 'published_at' => 'datetime', 'superseded_at' => 'datetime', 'rejected_at' => 'datetime'];
     }
 
     public function lesson(): BelongsTo
@@ -35,5 +35,10 @@ class LessonVersion extends Model
     public function publisher(): BelongsTo
     {
         return $this->belongsTo(User::class, 'published_by');
+    }
+
+    public function contentUpdate(): BelongsTo
+    {
+        return $this->belongsTo(ContentUpdate::class);
     }
 }

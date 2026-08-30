@@ -17,6 +17,7 @@ use App\Models\QuizVersionQuestion;
 use App\Models\User;
 use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use App\Services\CourseReviewService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -176,5 +177,58 @@ class ContentUpdateDiffServiceTest extends TestCase
         $this->assertCount(1, $diff['quiz_questions']['added']);
         $this->assertCount(1, $diff['quiz_questions']['changed']);
         $this->assertSame(80, collect($diff['fields'])->firstWhere('key', 'pass_score')['new']);
+    }
+
+    public function test_version_aware_diff_uses_published_and_frozen_candidate_not_live_payload(): void
+    {
+        [$instructor, $course] = $this->context();
+        $versions = app(ContentVersionService::class);
+        $versions->createInitialCourseVersion($course, $instructor);
+        $update = $this->update($course, $instructor, ContentUpdate::TYPE_COURSE, ContentUpdate::ACTION_UPDATE, $course->id, ['title' => 'PHP nâng cao']);
+
+        $versions->materializeCandidate($update, $instructor);
+        $update->update(['payload' => ['title' => 'Payload bị thay đổi']]);
+        $course->update(['title' => 'Live row bị thay đổi']);
+
+        $diff = app(ContentUpdateDiffService::class)->build($update->fresh());
+        $title = collect($diff['fields'])->firstWhere('key', 'title');
+
+        $this->assertSame('PHP cơ bản', $title['old']);
+        $this->assertSame('PHP nâng cao', $title['new']);
+        $this->assertSame(['current' => 1, 'proposed' => 2], $diff['metadata']['versions']);
+    }
+
+    public function test_admin_and_instructor_views_render_human_version_context(): void
+    {
+        [$instructor, $course, , $lesson] = $this->context();
+        $instructor->update([
+            'instructor_status' => 'approved',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        $versions = app(ContentVersionService::class);
+        $versions->publishInitialCourseTree($course->fresh(), $instructor);
+        $update = $this->update($course, $instructor, ContentUpdate::TYPE_LESSON, ContentUpdate::ACTION_UPDATE, $lesson->id, ['title' => 'BÃ i V2']);
+        $versions->materializeCandidate($update, $instructor);
+
+        $this->actingAs($admin)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('admin.content-updates.show', $update))
+            ->assertOk()
+            ->assertSee('V1')
+            ->assertSee('V2');
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('instructor.courses.curriculum', $course))
+            ->assertOk()
+            ->assertSee('V1')
+            ->assertSee('V2');
     }
 }

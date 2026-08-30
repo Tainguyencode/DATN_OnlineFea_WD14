@@ -145,6 +145,7 @@ class SubmissionController extends Controller
         // Tạo bản ghi attempt mới (started_at = null -> Timer KHÔNG chạy khi giảng viên cấp lượt)
         $newAttempt = Submission::create([
             'assignment_id' => $submission->assignment_id,
+            'assignment_version_id' => $submission->assignment()->value('published_version_id'),
             'user_id' => $submission->user_id,
             'attempt_number' => $nextAttemptNumber,
             'allowed_attempts' => $newAllowed,

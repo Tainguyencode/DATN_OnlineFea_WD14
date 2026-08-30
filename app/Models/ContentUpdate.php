@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ContentUpdate extends Model
 {
@@ -71,6 +72,26 @@ class ContentUpdate extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function courseVersions(): HasMany
+    {
+        return $this->hasMany(CourseVersion::class);
+    }
+
+    public function sectionVersions(): HasMany
+    {
+        return $this->hasMany(CourseSectionVersion::class);
+    }
+
+    public function lessonVersions(): HasMany
+    {
+        return $this->hasMany(LessonVersion::class);
+    }
+
+    public function assignmentVersions(): HasMany
+    {
+        return $this->hasMany(AssignmentVersion::class);
     }
 
     public function scopeDraft($query)
