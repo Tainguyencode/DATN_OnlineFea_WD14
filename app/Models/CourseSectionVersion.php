@@ -10,11 +10,11 @@ class CourseSectionVersion extends Model
 {
     use HasImmutableVersionState;
 
-    protected $fillable = ['course_section_id', 'version_number', 'status', 'title', 'description', 'sort_order', 'created_by', 'published_by', 'published_at', 'superseded_at'];
+    protected $fillable = ['course_section_id', 'version_number', 'status', 'content_update_id', 'title', 'description', 'sort_order', 'created_by', 'published_by', 'published_at', 'superseded_at', 'rejected_at'];
 
     protected function casts(): array
     {
-        return ['version_number' => 'integer', 'sort_order' => 'integer', 'published_at' => 'datetime', 'superseded_at' => 'datetime'];
+        return ['version_number' => 'integer', 'sort_order' => 'integer', 'published_at' => 'datetime', 'superseded_at' => 'datetime', 'rejected_at' => 'datetime'];
     }
 
     public function section(): BelongsTo
@@ -30,5 +30,10 @@ class CourseSectionVersion extends Model
     public function publisher(): BelongsTo
     {
         return $this->belongsTo(User::class, 'published_by');
+    }
+
+    public function contentUpdate(): BelongsTo
+    {
+        return $this->belongsTo(ContentUpdate::class);
     }
 }

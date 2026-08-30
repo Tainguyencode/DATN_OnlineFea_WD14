@@ -69,6 +69,9 @@ class CourseReviewService
                     'status' => ContentUpdate::STATUS_PENDING,
                     'submitted_at' => now(),
                 ]);
+                if ($isAlreadyPublished) {
+                    app(ContentVersionService::class)->materializeCandidate($draftUpdate, $instructor);
+                }
             }
 
             $noticeMsg = $isAlreadyPublished
@@ -138,6 +141,7 @@ class CourseReviewService
 
             if (! $wasAlreadyPublished) {
                 app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+                app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
             }
 
             $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
@@ -214,6 +218,7 @@ class CourseReviewService
         $count = 0;
         foreach ($approvedCourses as $course) {
             app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+            app(ContentVersionService::class)->publishInitialCourseTree($course, $instructor);
             $course->update([
                 'status' => CourseStatus::Published->value,
                 'is_published' => true,
@@ -304,8 +309,9 @@ class CourseReviewService
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::Approved->value, CourseStatus::Suspended->value], true), 422);
 
-        DB::transaction(function () use ($course): void {
+        DB::transaction(function () use ($course, $admin): void {
             app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+            app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
             $course->update([
                 'status' => CourseStatus::Published->value,
                 'is_published' => true,

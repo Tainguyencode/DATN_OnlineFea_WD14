@@ -8,12 +8,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CourseSection extends Model
 {
+    protected static function booted(): void
+    {
+        static::addGlobalScope('not_archived', fn ($query) => $query->whereNull('archived_at'));
+    }
+
     protected $fillable = [
         'course_id',
         'title',
         'description',
         'sort_order',
     ];
+
+    protected function casts(): array
+    {
+        return ['archived_at' => 'datetime'];
+    }
 
     public function course(): BelongsTo
     {

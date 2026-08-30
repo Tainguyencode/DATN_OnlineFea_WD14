@@ -10,11 +10,11 @@ class AssignmentVersion extends Model
 {
     use HasImmutableVersionState;
 
-    protected $fillable = ['assignment_id', 'version_number', 'status', 'title', 'description', 'instructions', 'due_date', 'due_days', 'max_score', 'passing_score', 'is_required', 'allowed_file_types', 'maximum_file_size', 'created_by', 'published_by', 'published_at', 'superseded_at'];
+    protected $fillable = ['assignment_id', 'version_number', 'status', 'content_update_id', 'title', 'description', 'instructions', 'due_date', 'due_days', 'max_score', 'passing_score', 'is_required', 'allowed_file_types', 'maximum_file_size', 'created_by', 'published_by', 'published_at', 'superseded_at', 'rejected_at'];
 
     protected function casts(): array
     {
-        return ['version_number' => 'integer', 'due_date' => 'datetime', 'due_days' => 'integer', 'max_score' => 'integer', 'passing_score' => 'integer', 'is_required' => 'boolean', 'maximum_file_size' => 'integer', 'published_at' => 'datetime', 'superseded_at' => 'datetime'];
+        return ['version_number' => 'integer', 'due_date' => 'datetime', 'due_days' => 'integer', 'max_score' => 'integer', 'passing_score' => 'integer', 'is_required' => 'boolean', 'maximum_file_size' => 'integer', 'published_at' => 'datetime', 'superseded_at' => 'datetime', 'rejected_at' => 'datetime'];
     }
 
     public function assignment(): BelongsTo
@@ -30,5 +30,10 @@ class AssignmentVersion extends Model
     public function publisher(): BelongsTo
     {
         return $this->belongsTo(User::class, 'published_by');
+    }
+
+    public function contentUpdate(): BelongsTo
+    {
+        return $this->belongsTo(ContentUpdate::class);
     }
 }

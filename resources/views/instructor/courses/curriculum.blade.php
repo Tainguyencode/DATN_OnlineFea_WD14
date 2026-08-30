@@ -34,6 +34,9 @@
             <div>
                 <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600">Udemy-style curriculum builder</p>
                 <h2 class="mt-1 text-2xl font-bold tracking-tight text-slate-950">{{ $course->title }}</h2>
+                @if($course->publishedVersion?->version_number)
+                    <p class="mt-1 text-xs font-bold text-emerald-700">Đang xuất bản: V{{ $course->publishedVersion->version_number }}</p>
+                @endif
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
                     Xây dựng chương học, bài video, tài liệu, quiz và bài tập trước khi gửi khóa học cho admin duyệt.
                 </p>
@@ -62,6 +65,17 @@
                                 <span class="font-semibold text-slate-700">({{ $pUpdate->action }})</span>:
                                 <strong class="text-slate-900 font-bold">@if(isset($pUpdate->payload['title'])) "{{ $pUpdate->payload['title'] }}" @else #{{ $pUpdate->entity_id }} @endif</strong>
                                 - <span class="font-bold {{ $pUpdate->isRejected() ? 'text-rose-700' : ($pUpdate->isPending() ? 'text-blue-800' : 'text-amber-800') }}">{{ $pUpdate->isRejected() ? 'Bị từ chối' : ($pUpdate->isPending() ? 'Chờ duyệt' : 'Nháp') }}</span>
+                                @php
+                                    $versionContext = app(\App\Services\ContentUpdateDiffService::class)->versionContext($pUpdate);
+                                @endphp
+                                @if(($versionContext['current'] ?? null) !== null)
+                                    <span class="ml-1 font-semibold text-slate-600">Đang xuất bản: V{{ $versionContext['current'] }}</span>
+                                @endif
+                                @if(($versionContext['proposed'] ?? null) !== null)
+                                    <span class="ml-1 font-semibold {{ $pUpdate->isRejected() ? 'text-rose-700' : ($pUpdate->isPending() ? 'text-blue-800' : 'text-amber-800') }}">
+                                        {{ $pUpdate->isRejected() ? 'V'.$versionContext['proposed'].' — Bị từ chối' : ('Đề xuất: V'.$versionContext['proposed'].' — '.($pUpdate->isPending() ? 'Chờ duyệt' : 'Nháp')) }}
+                                    </span>
+                                @endif
                                 @if($pUpdate->rejection_reason) <span class="text-rose-600 block text-[11px] font-semibold mt-0.5">Lý do từ chối trước đó: {{ $pUpdate->rejection_reason }}</span> @endif
                             </div>
                             @if($pUpdate->isRejected())
@@ -202,6 +216,9 @@
                 $safeSectionDescription = $hasInvalidSectionDescription ? null : $section->description;
                 $sectionUpdate = $section->draft_update ?? null;
                 $sectionReadOnly = $sectionUpdate?->isPending() ?? false;
+                $sectionVersionContext = $sectionUpdate
+                    ? app(\App\Services\ContentUpdateDiffService::class)->versionContext($sectionUpdate)
+                    : ['current' => $section->publishedVersion?->version_number, 'proposed' => null];
             @endphp
             <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-100 bg-slate-50 px-5 py-4">
@@ -218,6 +235,14 @@
                                     @elseif($section->update_status === 'rejected')
                                         <span class="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">Chương bị từ chối</span>
                                     @endif
+                                @endif
+                                @if(($sectionVersionContext['current'] ?? null) !== null)
+                                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">Đang xuất bản: V{{ $sectionVersionContext['current'] }}</span>
+                                @endif
+                                @if(($sectionVersionContext['proposed'] ?? null) !== null)
+                                    <span class="rounded-full border {{ $sectionUpdate?->isRejected() ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200 bg-blue-50 text-blue-800' }} px-2.5 py-0.5 text-xs font-bold">
+                                        {{ $sectionUpdate?->isRejected() ? 'V'.$sectionVersionContext['proposed'].' — Bị từ chối' : 'Đề xuất: V'.$sectionVersionContext['proposed'].' — '.($sectionUpdate?->isPending() ? 'Chờ duyệt' : 'Nháp') }}
+                                    </span>
                                 @endif
                             </div>
                             <h3 class="mt-2 text-lg font-bold text-slate-950">{{ $section->title }}</h3>

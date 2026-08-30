@@ -11,6 +11,20 @@
             </span>
         </div>
 
+        @php
+            $versionContext = $diff['metadata']['versions'] ?? [];
+        @endphp
+        @if(($versionContext['current'] ?? null) !== null || ($versionContext['proposed'] ?? null) !== null)
+            <div class="flex flex-wrap gap-2 text-xs font-bold text-slate-600">
+                @if(($versionContext['current'] ?? null) !== null)
+                    <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Phiên bản hiện tại: V{{ $versionContext['current'] }}</span>
+                @endif
+                @if(($versionContext['proposed'] ?? null) !== null)
+                    <span class="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-indigo-800">Phiên bản đề xuất: V{{ $versionContext['proposed'] }}</span>
+                @endif
+            </div>
+        @endif
+
         @foreach($diff['warnings'] as $warning)
             <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">{{ $warning }}</div>
         @endforeach
