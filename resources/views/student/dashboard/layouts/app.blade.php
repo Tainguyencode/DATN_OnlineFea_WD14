@@ -47,7 +47,7 @@
         <main id="student-main-content" class="min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-7 xl:px-10 xl:py-9">
             <div class="mx-auto w-full max-w-[1440px]">
                 @if($pageTitle ?? false)
-                    <x-student.dashboard.page-header :title="$pageTitle" :description="$breadcrumb" />
+                    <x-student.dashboard.page-header :title="$pageTitle" :description="$breadcrumb" :back-url="$backUrl ?? null" :show-back="$showBack ?? true" />
                 @endif
 
                 {{ $slot }}

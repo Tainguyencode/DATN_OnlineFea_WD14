@@ -81,7 +81,7 @@ class StudentDashboardRefactorTest extends TestCase
             ->assertSee('data-cart-count="1"', false)
             ->assertSee('href="'.route('student.wishlist').'"', false)
             ->assertSee('href="'.route('cart').'"', false)
-            ->assertDontSee('aria-label="Thông báo"', false)
+            ->assertSee('aria-label="Thông báo"', false)
             ->assertViewHas('continueLearning', fn ($items) => $items->count() === 3)
             ->assertViewHas('stats', fn ($stats) => $stats === [
                 'enrolled' => 4,
@@ -94,9 +94,9 @@ class StudentDashboardRefactorTest extends TestCase
             ->assertDontSee('Khóa giới hạn 4');
 
         $html = $response->getContent();
-        $this->assertTrue(strpos($html, 'data-student-search') < strpos($html, 'data-student-account'));
-        $this->assertTrue(strpos($html, 'data-student-account') < strpos($html, 'data-student-wishlist'));
+        $this->assertTrue(strpos($html, 'data-student-search') < strpos($html, 'data-student-wishlist'));
         $this->assertTrue(strpos($html, 'data-student-wishlist') < strpos($html, 'data-student-cart'));
+        $this->assertTrue(strpos($html, 'data-student-cart') < strpos($html, 'data-student-account'));
     }
 
     public function test_all_separated_student_pages_render_their_compact_empty_state(): void
