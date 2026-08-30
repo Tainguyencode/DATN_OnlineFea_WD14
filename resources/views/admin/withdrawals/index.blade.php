@@ -174,7 +174,7 @@
                             <th class="px-5 py-3.5">Giảng viên</th>
                             <th class="px-5 py-3.5 text-right">Số tiền rút</th>
                             <th class="px-5 py-3.5">Tài khoản Ngân hàng Nhận</th>
-                            <th class="px-4 py-3.5 text-center">Trạng thái</th>
+                            <th class="px-4 py-3.5 text-center whitespace-nowrap">Trạng thái</th>
                             <th class="px-5 py-3.5 text-center">Thao tác Chuyển tiền</th>
                         </tr>
                     </thead>
@@ -220,22 +220,13 @@
                                     <p class="text-[11px] text-slate-500 uppercase font-semibold">{{ $item->bank_account_name }}</p>
                                 </td>
 
-                                <td class="px-4 py-4 text-center">
+                                <td class="px-4 py-4 text-center whitespace-nowrap">
                                     @if ($item->status === 'pending')
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                            Chờ chuyển tiền
-                                        </span>
+                                        <span class="status-badge status-pending">Chờ chuyển tiền</span>
                                     @elseif ($item->status === 'approved')
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                            Đã chuyển tiền
-                                        </span>
+                                        <span class="status-badge status-success">Đã chuyển tiền</span>
                                     @else
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-[11px] font-bold text-rose-800">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                                            Từ chối
-                                        </span>
+                                        <span class="status-badge status-danger">Từ chối</span>
                                     @endif
                                 </td>
 

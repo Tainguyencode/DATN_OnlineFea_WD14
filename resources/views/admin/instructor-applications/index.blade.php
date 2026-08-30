@@ -16,7 +16,7 @@
                         <th class="px-4 py-3 font-semibold">Ứng viên</th>
                         <th class="px-4 py-3 font-semibold">Chuyên môn</th>
                         <th class="px-4 py-3 font-semibold">Ngày gửi</th>
-                        <th class="px-4 py-3 font-semibold">Trạng thái</th>
+                        <th class="px-4 py-3 font-semibold text-center whitespace-nowrap">Trạng thái</th>
                         <th class="px-4 py-3 font-semibold text-right">Thao tác</th>
                     </tr>
                 </thead>
@@ -29,13 +29,14 @@
                             </td>
                             <td class="px-4 py-4">{{ $application->expertise }}</td>
                             <td class="px-4 py-4">{{ $application->created_at->format('d/m/Y H:i') }}</td>
-                            <td class="px-4 py-4">
-                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold
-                                    @if($application->status === 'pending') bg-amber-50 text-amber-700
-                                    @elseif($application->status === 'approved') bg-emerald-50 text-emerald-700
-                                    @else bg-rose-50 text-rose-700 @endif">
-                                    {{ ucfirst($application->status) }}
-                                </span>
+                            <td class="px-4 py-4 text-center whitespace-nowrap">
+                                @if($application->status === 'pending')
+                                    <span class="status-badge status-pending">Chờ duyệt</span>
+                                @elseif($application->status === 'approved')
+                                    <span class="status-badge status-approved">Đã duyệt</span>
+                                @else
+                                    <span class="status-badge status-danger">Từ chối</span>
+                                @endif
                             </td>
                             <td class="px-4 py-4 text-right">
                                 @if($application->isPending())

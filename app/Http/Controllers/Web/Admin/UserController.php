@@ -150,6 +150,11 @@ class UserController extends Controller
             $data['is_active'] = true;
         }
 
+        if (($data['role'] ?? '') === 'instructor') {
+            $data['instructor_status'] = 'pending';
+            $data['needs_admin_review'] = false;
+        }
+
         $user = User::create($data);
 
         ActivityLogService::log(

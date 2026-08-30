@@ -135,7 +135,7 @@
                         <th class="px-5 py-4 text-left"><input type="checkbox" x-on:change="selected = $event.target.checked ? [...document.querySelectorAll('.user-checkbox')].map(i => i.value) : []"></th>
                         <th class="px-5 py-4 text-left font-bold text-slate-600">Người dùng</th>
                         <th class="px-5 py-4 text-left font-bold text-slate-600">Vai trò</th>
-                        <th class="px-5 py-4 text-left font-bold text-slate-600">Trạng thái</th>
+                        <th class="px-5 py-4 text-center font-bold text-slate-600 whitespace-nowrap">Trạng thái</th>
                         <th class="px-5 py-4 text-left font-bold text-slate-600">Đăng nhập</th>
                         <th class="px-5 py-4 text-right font-bold text-slate-600">Thao tác</th>
                     </tr>
@@ -156,19 +156,28 @@
                                 </div>
                             </td>
                             <td class="px-5 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold {{ $roleColors[$user->role] ?? 'bg-slate-100 text-slate-600' }}">{{ $roleLabels[$user->role] ?? $user->role }}</span></td>
-                            <td class="px-5 py-4">
+                            <td class="px-5 py-4 text-center whitespace-nowrap">
                                 @if($user->trashed())
-                                    <span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-600">Đã xóa</span>
+                                    <span class="status-badge status-danger">Đã xóa</span>
                                 @else
-                                    <span class="rounded-full px-3 py-1 text-xs font-bold {{ $user->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700' }}">{{ $user->is_active ? 'Hoạt động' : 'Đã khóa' }}</span>
+                                    <span class="status-badge {{ $user->is_active ? 'status-active' : 'status-danger' }}">{{ $user->is_active ? 'Hoạt động' : 'Đã khóa' }}</span>
                                 @endif
                             </td>
                             <td class="px-5 py-4 text-slate-500">{{ $user->last_login_at?->diffForHumans() ?? 'Chưa có' }}</td>
                             <td class="px-5 py-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="{{ route('admin.users.show', $user->id) }}" class="inline-flex h-9 items-center justify-center rounded-xl bg-blue-50 px-3 text-xs font-bold text-[#0056D2] ring-1 ring-blue-100 transition hover:bg-blue-100">Xem</a>
+                                    <a href="{{ route('admin.users.show', $user->id) }}" title="Xem chi tiết" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#0056D2] ring-1 ring-blue-100 transition hover:bg-blue-100">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        </svg>
+                                    </a>
                                     <div x-data="{ open: false }" class="relative inline-block text-left">
-                                    <button type="button" x-on:click="open = !open" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">Actions</button>
+                                    <button type="button" x-on:click="open = !open" title="Thao tác" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition hover:bg-slate-200">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+                                        </svg>
+                                    </button>
                                     <div x-show="open" x-on:click.outside="open = false" class="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-md dark:border-slate-700 dark:bg-slate-900" x-cloak>
                                         <a href="{{ route('admin.users.show', $user->id) }}" class="block rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Xem chi tiết</a>
                                         @if(! $user->trashed())
