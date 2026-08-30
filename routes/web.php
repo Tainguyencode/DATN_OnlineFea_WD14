@@ -584,3 +584,5 @@ if (app()->environment('local')) {
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───
 Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');
+Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
+Route::get('/payments/momo/return', [PaymentController::class, 'momoReturn'])->name('payments.momo.return');

@@ -158,7 +158,7 @@ class DemoInteractionSeeder
                             'discount_amount' => 0.00,
                             'total_amount' => $price,
                             'status' => 'paid',
-                            'payment_method' => 'vnpay',
+                            'payment_method' => 'momo',
                             'created_at' => $enrollment->enrolled_at,
                             'updated_at' => $enrollment->enrolled_at,
                         ]
@@ -177,7 +177,7 @@ class DemoInteractionSeeder
                     Payment::updateOrCreate(
                         ['order_id' => $order->id],
                         [
-                            'gateway' => 'vnpay',
+                            'gateway' => 'momo',
                             'gateway_order_code' => 'PAY-' . Str::random(12),
                             'transaction_id' => 'TXN-' . Str::random(16),
                             'amount' => $price,
@@ -210,7 +210,7 @@ class DemoInteractionSeeder
 
         $log("✓ Đã tạo {$enrollmentCount} Lượt ghi danh (Enrollments) với tiến độ từ 0% đến 100%");
         $log("✓ Đã cấp {$certificateCount} Chứng chỉ tốt nghiệp chuẩn cho các lượt học 100%");
-        $log("✓ Đã tạo {$orderCount} Đơn hàng & Giao dịch thanh toán PayOS/VNPay hợp lệ");
+        $log("✓ Đã tạo {$orderCount} Đơn hàng & Giao dịch thanh toán PayOS/SePay hợp lệ");
         $log("✓ Đã tạo {$reviewCount} Đánh giá thực tế từ chính học viên đã tham gia học");
     }
 }

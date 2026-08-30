@@ -591,6 +591,55 @@ class CartCheckoutTest extends TestCase
         $responseCheckout->assertSessionHas('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
     }
 
+    public function test_used_coupon_is_hidden_from_the_students_next_payment_page(): void
+    {
+        $usedCoupon = Coupon::create([
+            'code' => 'USED-ONCE',
+            'type' => 'fixed',
+            'value' => 20000,
+            'min_order_amount' => 0,
+            'is_active' => true,
+        ]);
+        $availableCoupon = Coupon::create([
+            'code' => 'STILL-AVAILABLE',
+            'type' => 'fixed',
+            'value' => 10000,
+            'min_order_amount' => 0,
+            'is_active' => true,
+        ]);
+
+        Order::create([
+            'order_code' => 'ORD-USED-COUPON',
+            'user_id' => $this->student->id,
+            'coupon_id' => $usedCoupon->id,
+            'subtotal' => 100000,
+            'discount_amount' => 20000,
+            'total_amount' => 80000,
+            'status' => 'paid',
+            'payment_method' => 'bank_transfer',
+        ]);
+        $pendingOrder = Order::create([
+            'order_code' => 'ORD-NEXT-PAYMENT',
+            'user_id' => $this->student->id,
+            'subtotal' => 100000,
+            'discount_amount' => 0,
+            'total_amount' => 100000,
+            'status' => 'pending',
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response = $this->actingAs($this->student)
+            ->get(route('student.checkout.pay', $pendingOrder->order_code));
+
+        $response->assertOk()
+            ->assertViewHas('activeCoupons', function ($coupons) use ($usedCoupon, $availableCoupon): bool {
+                return ! $coupons->contains('id', $usedCoupon->id)
+                    && $coupons->contains('id', $availableCoupon->id);
+            })
+            ->assertDontSee('USED-ONCE')
+            ->assertSee('STILL-AVAILABLE');
+    }
+
     /**
      * Test học viên có thể mua ngay một khóa học (Buy Now) tạo đơn hàng pending và chuyển sang trang thanh toán.
      */
