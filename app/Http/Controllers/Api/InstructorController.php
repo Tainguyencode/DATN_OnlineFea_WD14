@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
+use App\Models\Category;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Services\ActivityLogService;
+use App\Services\CourseReviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class InstructorController extends Controller
 {
@@ -31,16 +35,7 @@ class InstructorController extends Controller
 
     public function storeCourse(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'category_id' => 'required|exists:categories,id',
-            'description' => 'required|string',
-            'objectives' => 'nullable|string',
-            'level' => 'required|in:beginner,intermediate,advanced',
-            'price' => 'required|numeric|min:0',
-            'sale_price' => 'nullable|numeric|min:0',
-            'tags' => 'nullable|array',
-        ]);
+        $validated = $this->validateCoursePayload($request);
 
         $course = Course::create([
             ...$validated,
@@ -58,16 +53,7 @@ class InstructorController extends Controller
     {
         $this->authorizeCourse($request, $course);
 
-        $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'category_id' => 'sometimes|exists:categories,id',
-            'description' => 'sometimes|string',
-            'objectives' => 'nullable|string',
-            'level' => 'sometimes|in:beginner,intermediate,advanced',
-            'price' => 'sometimes|numeric|min:0',
-            'sale_price' => 'nullable|numeric|min:0',
-            'tags' => 'nullable|array',
-        ]);
+        $validated = $this->validateCoursePayload($request, $course);
 
         $course->update($validated);
 
@@ -78,11 +64,15 @@ class InstructorController extends Controller
     {
         $this->authorizeCourse($request, $course);
 
-        if ($course->chapters()->count() === 0) {
-            return $this->error('Khóa học cần có ít nhất 1 chương', 422);
+        abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
+        $request->validate(['copyright_agreed' => ['required', 'accepted']]);
+
+        $submissionCheck = $course->submissionCheck();
+        if (! $submissionCheck->passes()) {
+            return $this->error($submissionCheck->summaryMessage(), 422);
         }
 
-        $course->update(['status' => 'pending']);
+        app(CourseReviewService::class)->submitForReview($course, $request->user());
 
         return $this->success($course, 'Đã gửi khóa học để duyệt');
     }
@@ -111,10 +101,10 @@ class InstructorController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'content' => 'nullable|string',
+            'content' => 'nullable|string|max:10000',
             'type' => 'required|in:video,document,quiz,assignment',
-            'video_url' => 'nullable|string',
-            'duration_seconds' => 'sometimes|integer|min:0',
+            'video_url' => 'nullable|url:http,https|max:2048|required_if:type,video|prohibited_unless:type,video',
+            'duration_seconds' => 'sometimes|integer|min:0|max:999999',
             'is_preview' => 'sometimes|boolean',
             'sort_order' => 'sometimes|integer|min:0',
         ]);
@@ -183,5 +173,41 @@ class InstructorController extends Controller
         if ($course->instructor_id !== $request->user()->id && ! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized');
         }
+    }
+
+    /** @return array<string, mixed> */
+    private function validateCoursePayload(Request $request, ?Course $course = null): array
+    {
+        $required = $course ? 'sometimes' : 'required';
+        $validator = Validator::make($request->all(), [
+            'title' => [$required, 'string', 'max:255'],
+            'category_id' => [$required, 'integer', Rule::exists('categories', 'id')],
+            'description' => [$required, 'string', 'max:10000'],
+            'objectives' => ['nullable', 'string', 'max:5000'],
+            'level' => [$required, Rule::in(['beginner', 'intermediate', 'advanced'])],
+            'price' => [$required, 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000'],
+            'sale_price' => ['nullable', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000'],
+            'tags' => ['nullable', 'array', 'max:20'],
+            'tags.*' => ['string', 'max:50', 'distinct'],
+        ]);
+
+        $validator->after(function ($validator) use ($course, $request): void {
+            if ($request->filled('category_id')) {
+                $category = Category::with('parent:id,status')->find($request->integer('category_id'));
+                if ($category && (! $category->status || ($category->parent_id && ! $category->parent?->status))) {
+                    $validator->errors()->add('category_id', 'Danh mục được chọn hoặc danh mục cha đang bị tắt.');
+                }
+                if ($category && ! $category->parent_id && $category->children()->active()->exists()) {
+                    $validator->errors()->add('category_id', 'Vui lòng chọn danh mục con.');
+                }
+            }
+
+            $price = (float) ($request->input('price', $course?->price ?? 0));
+            if ($request->filled('sale_price') && (float) $request->input('sale_price') > $price) {
+                $validator->errors()->add('sale_price', 'Giá khuyến mãi phải nhỏ hơn hoặc bằng giá gốc.');
+            }
+        });
+
+        return $validator->validate();
     }
 }

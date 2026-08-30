@@ -30,8 +30,7 @@ class InstructorController extends Controller
                     ->orWhereIn('courses.status', [Course::STATUS_PUBLISHED, Course::STATUS_PENDING_UPDATE]);
             });
 
-        // ── Query chính (KHÔNG dùng addSelect correlated subquery để tránh
-        //    phá COUNT query của paginate) ─────────────────────────────────────
+        // ── Query chính ────────────────────────────────────────────────────────
         $query = User::query()
             ->where('role', 'instructor')
             ->where('instructor_status', 'approved')
@@ -39,8 +38,14 @@ class InstructorController extends Controller
             ->where(fn ($q) => $q->whereNull('account_status')->orWhereNotIn('account_status', ['locked', 'suspended']))
             ->withCount([
                 'courses as courses_count' => fn ($q) => $q->published(),
+                'instructorCertificates as approved_certificates_count' => fn ($q) => $q->where('status', 'approved')->whereIn('document_type', ['certificate', 'degree', 'portfolio']),
             ])
             ->with([
+                'instructorProfile:id,user_id,position,specialty,teaching_field,bio,organization',
+                'instructorCertificates' => fn ($q) => $q->where('status', 'approved')
+                    ->whereIn('document_type', ['certificate', 'degree', 'portfolio'])
+                    ->orderByDesc('created_at')
+                    ->select(['id', 'user_id', 'title', 'original_name', 'document_type', 'status', 'created_at']),
                 'courses' => fn ($q) => $q->published()
                     ->with('category:id,name,slug,parent_id')
                     ->select(['id', 'instructor_id', 'category_id', 'rating_avg', 'rating_count']),
@@ -50,7 +55,14 @@ class InstructorController extends Controller
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhereHas('instructorProfile', function ($pq) use ($search) {
+                        $pq->where('position', 'like', "%{$search}%")
+                            ->orWhere('specialty', 'like', "%{$search}%")
+                            ->orWhere('teaching_field', 'like', "%{$search}%")
+                            ->orWhere('bio', 'like', "%{$search}%")
+                            ->orWhere('organization', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -64,7 +76,7 @@ class InstructorController extends Controller
         // ── Sắp xếp ──────────────────────────────────────────────────────────
         match ($sort) {
             'courses' => $query->orderByDesc('courses_count'),
-            'students' => $query->orderByDesc($studentsOrderSub),  // subquery chỉ trong ORDER BY
+            'students' => $query->orderByDesc($studentsOrderSub),
             'rating' => $query->orderByDesc(
                 Course::selectRaw('AVG(rating_avg)')
                     ->whereColumn('instructor_id', 'users.id')
@@ -98,9 +110,9 @@ class InstructorController extends Controller
             $instructor->total_rating_count = (int) $instructor->courses->sum('rating_count');
         }
 
-        // ── Toàn bộ danh mục cha + con trong DB (không lọc active) ──────────
+        // ── Toàn bộ danh mục cha + con trong DB ─────────────────────────────
         $specialties = Category::query()
-            ->whereNull('parent_id')          // chỉ lấy danh mục cha
+            ->whereNull('parent_id')
             ->with(['children' => fn ($q) => $q->orderBy('name')])
             ->orderBy('name')
             ->get(['id', 'name', 'slug']);
@@ -121,6 +133,15 @@ class InstructorController extends Controller
             && ! $user->isLocked(),
             404
         );
+
+        $user->loadMissing(['instructorProfile.teachingCategories']);
+
+        // ── Load chứng chỉ công khai đã được admin duyệt (STU-BE-10) ─────────
+        $approvedCertificates = $user->instructorCertificates()
+            ->where('status', 'approved')
+            ->whereIn('document_type', ['certificate', 'degree', 'portfolio'])
+            ->orderByDesc('created_at')
+            ->get(['id', 'user_id', 'title', 'original_name', 'document_type', 'status', 'created_at']);
 
         // ── Load courses của instructor ───────────────────────────────────────
         $coursesQuery = Course::published()
@@ -152,7 +173,7 @@ class InstructorController extends Controller
         $totalReviews = (int) ($avgRatingData->total_reviews ?? 0);
 
         return view('student.instructors.show', compact(
-            'user', 'courses',
+            'user', 'courses', 'approvedCertificates',
             'totalCourses', 'totalStudents', 'avgRating', 'totalReviews'
         ));
     }

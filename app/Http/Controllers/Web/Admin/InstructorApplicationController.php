@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\InstructorCertificate;
 use App\Models\User;
 use App\Notifications\InstructorApprovedNotification;
@@ -27,10 +28,38 @@ class InstructorApplicationController extends Controller
         $query = User::where('role', 'instructor')
             ->with(['instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
 
+        // 1. Lọc theo trạng thái ứng tuyển (từ Filter Tabs hoặc Dropdown)
         if ($status === 'new_updates') {
             $query->where('needs_admin_review', true);
         } elseif (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $query->where('instructor_status', $status);
+        }
+
+        // 2. Bộ lọc: Tìm kiếm theo tên, email, sđt (users và instructor_profiles)
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhereHas('instructorProfile', function ($qp) use ($search) {
+                      $qp->where('phone', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // 3. Bộ lọc: Lọc theo chuyên ngành giảng dạy
+        if ($request->filled('category_id')) {
+            $categoryId = $request->query('category_id');
+            $query->whereHas('instructorProfile.teachingCategories', function ($q) use ($categoryId) {
+                $q->where('categories.id', $categoryId);
+            });
+        }
+
+        // 4. Bộ lọc: Lọc theo ngày đăng ký (users.created_at)
+        if ($request->filled('date')) {
+            $date = $request->query('date');
+            $query->whereDate('created_at', $date);
         }
 
         $applications = $query
@@ -40,6 +69,7 @@ class InstructorApplicationController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        // Thống kê tổng quan hệ thống (Phương án A - không thay đổi khi sử dụng bộ lọc)
         $counts = [
             'all' => User::where('role', 'instructor')->count(),
             'new_updates' => User::where('role', 'instructor')->where('needs_admin_review', true)->count(),
@@ -48,10 +78,50 @@ class InstructorApplicationController extends Controller
             'rejected' => User::where('role', 'instructor')->where('instructor_status', 'rejected')->count(),
         ];
 
+        $growthUsers = User::query()
+            ->where('role', 'instructor')
+            ->get(['created_at', 'approved_at']);
+        $firstGrowthYear = (int) ($growthUsers->min(fn (User $user) => $user->created_at?->year) ?: now()->year);
+        $growthYears = collect(range($firstGrowthYear, now()->year))->sortDesc()->values();
+        $growthYear = $growthYears->contains($request->integer('growth_year'))
+            ? $request->integer('growth_year')
+            : now()->year;
+        $growthData = collect(range(1, 12))->map(function (int $month) use ($growthUsers, $growthYear): array {
+            $start = now()->setYear($growthYear)->startOfYear()->addMonths($month - 1);
+            $end = $start->copy()->endOfMonth();
+
+            return [
+                'label' => 'T'.$start->month,
+                'full_label' => $start->format('m/Y'),
+                'registered' => $growthUsers->filter(fn (User $user) => $user->created_at?->between($start, $end))->count(),
+                'approved' => $growthUsers->filter(fn (User $user) => $user->approved_at?->between($start, $end))->count(),
+                'cumulative' => $growthUsers->filter(fn (User $user) => $user->created_at?->lte($end))->count(),
+            ];
+        })->values();
+        $yearRegistered = (int) $growthData->sum('registered');
+        $previousYearRegistered = $growthUsers->filter(
+            fn (User $user) => $user->created_at?->year === $growthYear - 1
+        )->count();
+        $growthRate = $previousYearRegistered > 0
+            ? round((($yearRegistered - $previousYearRegistered) / $previousYearRegistered) * 100, 1)
+            : ($yearRegistered > 0 ? 100 : 0);
+
+        // Lấy danh sách các chuyên ngành đang hoạt động để làm dữ liệu cho dropdown lọc
+        $categories = Category::where('status', true)->orderBy('name')->get();
+
         return view('admin.instructors.applications.index', [
             'applications' => $applications,
             'status' => $status,
             'counts' => $counts,
+            'growthData' => $growthData,
+            'growthRate' => $growthRate,
+            'growthYear' => $growthYear,
+            'growthYears' => $growthYears,
+            'yearRegistered' => $yearRegistered,
+            'categories' => $categories,
+            'search' => $request->query('search'),
+            'categoryId' => $request->query('category_id'),
+            'date' => $request->query('date'),
         ]);
     }
 

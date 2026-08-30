@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentGatewayService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -15,6 +16,8 @@ class PayOSPaymentSecurityTest extends TestCase
 {
     use DatabaseTransactions;
 
+    private const FRIENDLY_CHECKOUT_ERROR = 'Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại sau.';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -22,6 +25,181 @@ class PayOSPaymentSecurityTest extends TestCase
         Config::set('services.payos.checksum_key', 'test-checksum-key');
         Config::set('services.payos.client_id', 'test-client');
         Config::set('services.payos.api_key', 'test-api-key');
+        Config::set('services.payos.mode', 'live');
+    }
+
+    public function test_valid_payos_response_redirects_to_checkout_url_and_sends_contract_payload(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        $checkoutUrl = 'https://pay.payos.vn/web/test-payment-link';
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response([
+                'code' => '00',
+                'desc' => 'success',
+                'data' => ['checkoutUrl' => $checkoutUrl],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($user)->post(
+            route('student.checkout.process_payment', $order->order_code),
+            ['payment_method' => 'payos']
+        );
+
+        $response->assertRedirect($checkoutUrl);
+        Http::assertSent(function (HttpRequest $request) use ($order): bool {
+            $data = $request->data();
+            $signedData = [
+                'amount' => $data['amount'],
+                'cancelUrl' => $data['cancelUrl'],
+                'description' => $data['description'],
+                'orderCode' => $data['orderCode'],
+                'returnUrl' => $data['returnUrl'],
+            ];
+
+            return $data['orderCode'] === $order->id
+                && is_int($data['orderCode'])
+                && $data['amount'] === 100000
+                && is_int($data['amount'])
+                && strlen($data['description']) <= 9
+                && $data['signature'] === $this->signature($signedData);
+        });
+
+        $this->assertSame((string) $order->id, $payment->fresh()->gateway_order_code);
+    }
+
+    public function test_http_failure_is_redirected_with_a_friendly_message(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response(['code' => '01', 'desc' => 'invalid request'], 400),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+    }
+
+    public function test_http_200_with_payos_business_error_is_not_parsed_as_a_checkout_success(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response([
+                'code' => '20',
+                'desc' => 'description is invalid',
+                'data' => null,
+            ], 200),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+    }
+
+    public function test_missing_data_is_handled_without_a_raw_exception(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response(['code' => '00', 'desc' => 'success'], 200),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+    }
+
+    public function test_missing_checkout_url_is_handled(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response([
+                'code' => '00',
+                'desc' => 'success',
+                'data' => ['status' => 'PENDING'],
+            ], 200),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+    }
+
+    public function test_non_https_checkout_url_is_rejected(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response([
+                'code' => '00',
+                'desc' => 'success',
+                'data' => ['checkoutUrl' => 'http://pay.payos.vn/web/test-payment-link'],
+            ], 200),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+    }
+
+    public function test_malformed_json_is_handled_safely(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response('{malformed-json', 200),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+    }
+
+    public function test_browser_amount_cannot_override_the_persisted_order_amount(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response([
+                'code' => '00',
+                'desc' => 'success',
+                'data' => ['checkoutUrl' => 'https://pay.payos.vn/web/test-payment-link'],
+            ], 200),
+        ]);
+
+        $response = $this->payOrder($order, $user, ['amount' => 1]);
+
+        $response->assertRedirect('https://pay.payos.vn/web/test-payment-link');
+        Http::assertSent(fn (HttpRequest $request): bool => $request->data()['amount'] === 100000);
+    }
+
+    public function test_secrets_are_not_exposed_in_the_student_response(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response(['code' => '01', 'desc' => 'request rejected'], 400),
+        ]);
+
+        $response = $this->payOrder($order, $user);
+        $content = $response->getContent();
+
+        $this->assertStringNotContainsString('test-client', $content);
+        $this->assertStringNotContainsString('test-api-key', $content);
+        $this->assertStringNotContainsString('test-checksum-key', $content);
+    }
+
+    public function test_missing_payos_configuration_is_a_controlled_failure(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        Config::set('services.payos.api_key', null);
+        Http::fake();
+
+        $response = $this->payOrder($order, $user);
+
+        $response->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $response->assertSessionHas('error', self::FRIENDLY_CHECKOUT_ERROR);
+        Http::assertNothingSent();
     }
 
     public function test_unsigned_payos_webhook_is_rejected(): void
@@ -70,6 +248,23 @@ class PayOSPaymentSecurityTest extends TestCase
         $this->assertSame('pending', $order->fresh()->status);
     }
 
+    public function test_status_sync_rejects_an_http_200_payos_business_error(): void
+    {
+        [$order] = $this->pendingOrder();
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response([
+                'code' => '20',
+                'desc' => 'request rejected',
+                'data' => ['status' => 'PAID', 'amountPaid' => 100000],
+            ], 200),
+        ]);
+
+        $result = app(PaymentGatewayService::class)->checkAndUpdatePayOSStatus($order);
+
+        $this->assertFalse($result);
+        $this->assertSame('pending', $order->fresh()->status);
+    }
+
     public function test_live_mode_rejects_direct_mock_payment_tools(): void
     {
         Config::set('services.payos.mode', 'live');
@@ -85,6 +280,69 @@ class PayOSPaymentSecurityTest extends TestCase
 
         $this->assertSame('pending', $order->fresh()->status);
         $this->assertSame('pending', $order->payment->fresh()->status);
+    }
+
+    public function test_existing_payos_request_reuses_its_checkout_url(): void
+    {
+        Config::set('services.payos.mode', 'live');
+        [$order, , $user] = $this->pendingOrder();
+        $checkoutUrl = 'https://pay.payos.vn/web/existing-link';
+
+        Http::fake(function ($request) use ($checkoutUrl) {
+            if ($request->method() === 'POST') {
+                return Http::response(['code' => '231', 'desc' => 'Mã đơn hàng đã tồn tại', 'data' => null], 200);
+            }
+
+            return Http::response(['code' => '00', 'data' => ['checkoutUrl' => $checkoutUrl]], 200);
+        });
+
+        $this->actingAs($user)
+            ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
+            ->assertRedirect($checkoutUrl);
+    }
+
+    public function test_expired_existing_payos_request_is_recreated_with_a_new_order_code(): void
+    {
+        Config::set('services.payos.mode', 'live');
+        [$order, $payment, $user] = $this->pendingOrder();
+        $oldGatewayOrderCode = $payment->gateway_order_code;
+        $checkoutUrl = 'https://pay.payos.vn/web/recreated-link';
+        $postCount = 0;
+
+        Http::fake(function ($request) use (&$postCount, $checkoutUrl) {
+            if ($request->method() === 'GET') {
+                return Http::response(['code' => '00', 'data' => ['status' => 'CANCELLED']], 200);
+            }
+
+            $postCount++;
+
+            return $postCount === 1
+                ? Http::response(['code' => '231', 'desc' => 'Đơn thanh toán đã tồn tại', 'data' => null], 200)
+                : Http::response(['code' => '00', 'data' => ['checkoutUrl' => $checkoutUrl]], 200);
+        });
+
+        $this->actingAs($user)
+            ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
+            ->assertRedirect($checkoutUrl);
+
+        $this->assertNotSame($oldGatewayOrderCode, $payment->fresh()->gateway_order_code);
+        $this->assertLessThanOrEqual(9007199254740991, (int) $payment->fresh()->gateway_order_code);
+        $this->assertSame(2, $postCount);
+    }
+
+    public function test_payos_error_returns_to_payment_page_instead_of_500(): void
+    {
+        Config::set('services.payos.mode', 'live');
+        [$order, , $user] = $this->pendingOrder();
+
+        Http::fake([
+            'api-merchant.payos.vn/*' => Http::response(['code' => '20', 'desc' => 'Thông tin tài khoản không hợp lệ'], 200),
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
+            ->assertRedirect(route('student.checkout.pay', $order->order_code))
+            ->assertSessionHas('error', 'PayOS từ chối yêu cầu: Thông tin tài khoản không hợp lệ');
     }
 
     public function test_removed_payment_gateway_routes_are_not_registered(): void
@@ -116,6 +374,14 @@ class PayOSPaymentSecurityTest extends TestCase
         ]);
 
         return [$order, $payment, $user];
+    }
+
+    private function payOrder(Order $order, User $user, array $extra = [])
+    {
+        return $this->actingAs($user)->post(
+            route('student.checkout.process_payment', $order->order_code),
+            ['payment_method' => 'payos'] + $extra
+        );
     }
 
     private function signature(array $data): string

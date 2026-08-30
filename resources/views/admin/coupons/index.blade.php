@@ -63,7 +63,7 @@
                         <th class="px-4 py-3 text-right font-semibold text-slate-600">Đơn tối thiểu</th>
                         <th class="px-4 py-3 text-center font-semibold text-slate-600">Đã dùng / Tối đa</th>
                         <th class="px-4 py-3 text-center font-semibold text-slate-600">Thời gian hiệu lực</th>
-                        <th class="px-4 py-3 text-center font-semibold text-slate-600">Trạng thái</th>
+                        <th class="px-4 py-3 text-center font-semibold text-slate-600 whitespace-nowrap">Trạng thái</th>
                         <th class="rounded-r-lg px-4 py-3 text-right font-semibold text-slate-600">Thao tác</th>
                     </tr>
                 </thead>
@@ -125,35 +125,45 @@
                                     Không giới hạn thời gian
                                 @endif
                             </td>
-                            <td class="px-4 py-3 text-center align-middle">
+                            <td class="px-4 py-3 text-center align-middle whitespace-nowrap">
                                 @php
                                     $isValid = $coupon->isValid();
                                 @endphp
                                 @if(! $coupon->is_active)
-                                    <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">Tắt</span>
+                                    <span class="status-badge status-inactive">Đã tắt</span>
                                 @elseif($coupon->starts_at && $coupon->starts_at->isFuture())
-                                    <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">Chờ kích hoạt</span>
+                                    <span class="status-badge status-pending">Chờ kích hoạt</span>
                                 @elseif($coupon->expires_at && $coupon->expires_at->isPast())
-                                    <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 ring-1 ring-rose-200">Hết hạn</span>
+                                    <span class="status-badge status-danger">Hết hạn</span>
                                 @elseif($coupon->max_uses && $coupon->used_count >= $coupon->max_uses)
-                                    <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 ring-1 ring-rose-200">Hết lượt dùng</span>
+                                    <span class="status-badge status-danger">Hết lượt dùng</span>
                                 @else
-                                    <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">Hoạt động</span>
+                                    <span class="status-badge status-active">Hoạt động</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-3 align-middle">
-                                <div class="flex flex-wrap items-center justify-end gap-2">
-                                    <a href="{{ route('admin.coupons.edit', $coupon) }}" class="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50">Sửa</a>
+                            <td class="px-4 py-3 align-middle whitespace-nowrap">
+                                <div class="flex flex-row flex-nowrap items-center justify-end gap-2">
+                                    <a href="{{ route('admin.coupons.edit', $coupon) }}" title="Sửa" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-colors duration-200 hover:bg-slate-50">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                                        </svg>
+                                    </a>
                                     <form method="POST" action="{{ route('admin.coupons.toggle-status', $coupon) }}" class="inline-flex">
                                         @csrf
-                                        <button type="submit" class="inline-flex h-8 items-center rounded-lg border border-amber-100 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition-colors duration-200 hover:bg-amber-100">
-                                            {{ $coupon->is_active ? 'Tắt' : 'Bật' }}
+                                        <button type="submit" title="{{ $coupon->is_active ? 'Tắt mã' : 'Bật mã' }}" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-100 bg-amber-50 text-amber-700 transition-colors duration-200 hover:bg-amber-100">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.828A5 5 0 1116.24 7.76M12 12V3"/>
+                                            </svg>
                                         </button>
                                     </form>
                                     <form method="POST" action="{{ route('admin.coupons.destroy', $coupon) }}" class="inline-flex" onsubmit="return confirm('Xóa mã giảm giá này?')">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="inline-flex h-8 items-center rounded-lg border border-rose-100 bg-rose-50 px-3 text-xs font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-100">Xóa</button>
+                                        <button type="submit" title="Xóa" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-100 bg-rose-50 text-rose-700 transition-colors duration-200 hover:bg-rose-100">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                        </button>
                                     </form>
                                 </div>
                             </td>

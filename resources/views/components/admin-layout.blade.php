@@ -6,7 +6,10 @@
 
 @php
     $pendingInstructorsCount = \App\Models\User::where('role', 'instructor')->where('instructor_status', 'pending')->count();
-    $pendingCoursesCount = \App\Models\Course::where('status', 'under_review')->count();
+    $pendingCoursesCount = \App\Models\Course::whereIn('status', [
+        \App\Enums\CourseStatus::PendingReview->value,
+        \App\Enums\CourseStatus::PendingUpdate->value,
+    ])->count();
     $pendingQuizInvalidationsCount = \App\Models\QuizVersionQuestionInvalidation::pending()->count();
 
     $menu = [
@@ -187,7 +190,7 @@
 <x-layouts.dashboard
     role="admin"
     roleLabel="Quản trị viên"
-    accent="rose"
+    accent="blue"
     :menu="$menu"
     :title="$title"
     :pageTitle="$pageTitle"

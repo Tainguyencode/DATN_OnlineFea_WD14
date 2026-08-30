@@ -107,6 +107,7 @@ class WalletController extends Controller
         }
 
         $validated = $request->validate([
+            'idempotency_key' => ['nullable', 'uuid'],
             'amount' => ['required', 'numeric', 'min:10000', 'max:'.$availableBalance],
         ], [
             'amount.required' => 'Vui lòng nhập số tiền cần rút.',
@@ -117,7 +118,17 @@ class WalletController extends Controller
 
         $amount = (float) $validated['amount'];
 
-        $result = DB::transaction(function () use ($user, $amount) {
+        $existingWithdrawal = ! empty($validated['idempotency_key'])
+            ? Withdrawal::query()
+                ->where('user_id', $user->id)
+                ->where('idempotency_key', $validated['idempotency_key'])
+                ->first()
+            : null;
+        if ($existingWithdrawal) {
+            return back()->with('success', 'Yêu cầu rút tiền này đã được ghi nhận trước đó.');
+        }
+
+        $result = DB::transaction(function () use ($user, $amount, $validated) {
             // Lock bản ghi user để tránh đụng độ race-condition khi bấm rút tiền liên tiếp
             $lockedUser = User::query()->lockForUpdate()->find($user->id);
             if (! $lockedUser || $lockedUser->available_balance < $amount) {
@@ -126,6 +137,7 @@ class WalletController extends Controller
 
             $withdrawal = Withdrawal::create([
                 'user_id' => $lockedUser->id,
+                'idempotency_key' => $validated['idempotency_key'] ?? null,
                 'amount' => $amount,
                 'bank_code' => $lockedUser->bank_code,
                 'bank_name' => $lockedUser->bank_name,

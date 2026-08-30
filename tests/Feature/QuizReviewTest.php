@@ -415,7 +415,7 @@ class QuizReviewTest extends TestCase
         $response->assertSee('Đây là một bug lịch sử trong JS trả về object.');
     }
 
-    public function test_student_submit_ajax_returns_review_url(): void
+    public function test_student_submit_ajax_requires_started_attempt(): void
     {
         $student = User::factory()->create(['role' => 'student']);
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
@@ -477,17 +477,7 @@ class QuizReviewTest extends TestCase
             ],
         ]);
 
-        $response->assertStatus(200);
-        $response->assertJsonPath('success', true);
-        $response->assertJsonStructure([
-            'attempt' => [
-                'id',
-                'score',
-                'total_score',
-                'percent',
-                'passed',
-                'review_url',
-            ],
-        ]);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['attempt_id']);
     }
 }

@@ -8,7 +8,13 @@
         <div class="pointer-events-none absolute -top-40 right-0 h-96 w-96 rounded-full bg-indigo-600/10 blur-3xl"></div>
         <div class="pointer-events-none absolute bottom-0 left-0 h-64 w-64 rounded-full bg-blue-600/10 blur-3xl"></div>
 
-        <div class="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8 lg:py-16 items-center">
+        <div class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-blue-300 hover:text-white cursor-pointer transition py-1">
+                ← Quay lại
+            </button>
+        </div>
+
+        <div class="mx-auto grid max-w-7xl gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8 lg:py-12 items-center">
             <div>
                 <span class="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-indigo-200">
                     <svg class="h-3.5 w-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -28,6 +34,35 @@
                     <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">🎯 {{ $stats['total_paths'] }} Lộ trình bài bản</span>
                     <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">📚 {{ $stats['total_courses'] }} Khóa học tích hợp</span>
                     <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2">👨‍🎓 {{ $stats['total_students'] }}+ Học viên theo học</span>
+                </div>
+
+                {{-- Onboarding Survey Banner with Skip Button (STU-FE-09) --}}
+                <div class="mt-8 rounded-2xl border border-indigo-400/30 bg-gradient-to-r from-indigo-900/60 to-slate-900/80 p-5 backdrop-blur">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div class="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-indigo-300">
+                                <span>🤖</span>
+                                <span>Khảo sát định hướng học tập cá nhân hóa (Tùy chọn)</span>
+                            </div>
+                            <p class="mt-1 text-xs text-slate-300 sm:text-sm">
+                                Trả lời 3 câu hỏi ngắn để nhận ngay lộ trình học tập tối ưu từ AI và danh sách khóa học thực tế tại OnlineFEA.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                                type="button"
+                                onclick="window.dispatchEvent(new CustomEvent('open-lp-ai-chat'))"
+                                class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 px-4 text-xs font-bold text-white shadow-lg shadow-indigo-500/25 transition">
+                                <span>Làm khảo sát ngay</span>
+                                <span>→</span>
+                            </button>
+                            <a
+                                href="#learning-paths-catalog"
+                                class="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3.5 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white">
+                                Bỏ qua
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -58,7 +93,7 @@
     </section>
 
     {{-- Main Content Section --}}
-    <section class="bg-slate-50 py-10 dark:bg-[#0a0a0a]">
+    <section id="learning-paths-catalog" class="bg-slate-50 py-10 dark:bg-[#0a0a0a]">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {{-- Filter & Search Form (Matching courses/index.blade.php form design) --}}
             <form method="GET" action="{{ route('learning-paths.index') }}" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#161615] sm:p-5 mb-8">
@@ -221,4 +256,7 @@
             @endif
         </div>
     </section>
+
+    {{-- Floating AI Assistant Modal Component (STU-FE-09) --}}
+    <x-learning-path.floating-ai />
 @endsection

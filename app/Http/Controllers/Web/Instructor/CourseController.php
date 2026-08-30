@@ -165,16 +165,18 @@ class CourseController extends Controller
         }
 
         try {
+            $lessons = $course->lessons()->get();
             app(HistoricalQuizDeletionGuard::class)->assertCourseCanBeHardDeleted($course);
+
+            DB::transaction(function () use ($course, $lessons): void {
+                $lessons->each(fn (Lesson $lesson) => $lesson->delete());
+                $course->delete();
+            });
         } catch (HistoricalQuizDeletionException $exception) {
             return back()->withErrors(['course' => $exception->getMessage()]);
         }
 
-        $course->lessons()->get()->each(function (Lesson $lesson) {
-            $lesson->delete();
-        });
         $this->deleteThumbnail($course);
-        $course->delete();
 
         return redirect()->route('instructor.courses.index')
             ->with('success', 'Đã xóa khóa học.');

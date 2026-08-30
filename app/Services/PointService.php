@@ -30,10 +30,29 @@ class PointService
             return;
         }
 
+        // Chỉ học viên (role = student) mới được tích lũy điểm thưởng XP
+        // Giảng viên và Quản trị viên không được tính điểm
+        $user = User::find($userId);
+        if (! $user || ! $user->isStudent()) {
+            return;
+        }
+
+        // Không cộng điểm nếu hoạt động thuộc về khóa học mặc định miễn phí (price <= 0)
+        // Khóa học có giá gốc > 0 (dù dùng voucher giảm về 0đ) vẫn được cộng điểm bình thường
+        if ($courseId) {
+            $course = Course::find($courseId);
+            if ($course && $course->isFree()) {
+                return;
+            }
+        }
+
         $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
 
         DB::transaction(function () use ($userId, $points, $source, $description, $courseId, $referenceId, $timestamp) {
-            $userPoint = new UserPoint([
+            $attributes = $referenceId !== null
+                ? ['user_id' => $userId, 'source' => $source, 'reference_id' => $referenceId]
+                : ['id' => null];
+            $values = [
                 'user_id' => $userId,
                 'points' => $points,
                 'type' => 'earn',
@@ -41,10 +60,17 @@ class PointService
                 'description' => $description,
                 'course_id' => $courseId,
                 'reference_id' => $referenceId,
-            ]);
-            $userPoint->created_at = $timestamp;
-            $userPoint->updated_at = $timestamp;
-            $userPoint->save();
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ];
+
+            $userPoint = $referenceId !== null
+                ? UserPoint::firstOrCreate($attributes, $values)
+                : UserPoint::create($values);
+
+            if (! $userPoint->wasRecentlyCreated) {
+                return;
+            }
 
             $this->checkAndAwardBadges($userId);
         });
@@ -56,7 +82,7 @@ class PointService
     public function checkAndAwardBadges(int $userId): void
     {
         $user = User::find($userId);
-        if (! $user) {
+        if (! $user || ! $user->isStudent()) {
             return;
         }
 
@@ -112,8 +138,8 @@ class PointService
      */
     public function awardLessonCompletionPoints(int $userId, int $lessonId, mixed $createdAt = null): void
     {
-        $lesson = Lesson::find($lessonId);
-        if (! $lesson) {
+        $lesson = Lesson::with('course')->find($lessonId);
+        if (! $lesson || ! $lesson->course || $lesson->course->isFree()) {
             return;
         }
 
@@ -159,6 +185,11 @@ class PointService
      */
     public function awardQuizPoints(int $userId, Quiz $quiz, float $percent, int $courseId, mixed $createdAt = null): void
     {
+        $course = Course::find($courseId);
+        if (! $course || $course->isFree()) {
+            return;
+        }
+
         $quizTag = "quiz_id:{$quiz->id}";
 
         // 1. Completion XP (+10 XP)
@@ -235,7 +266,7 @@ class PointService
     public function awardCourseCompletionPoints(int $userId, int $courseId, mixed $createdAt = null): void
     {
         $course = Course::find($courseId);
-        if (! $course) {
+        if (! $course || $course->isFree()) {
             return;
         }
 
@@ -273,7 +304,11 @@ class PointService
     public function awardReviewPoints(int $userId, int $courseId, ?int $reviewId = null, mixed $createdAt = null): void
     {
         $course = Course::find($courseId);
-        $courseTitle = $course ? $course->title : "Khóa học #{$courseId}";
+        if (! $course || $course->isFree()) {
+            return;
+        }
+
+        $courseTitle = $course->title;
 
         $alreadyAwarded = UserPoint::where('user_id', $userId)
             ->where('source', 'review_created')
@@ -300,6 +335,11 @@ class PointService
      */
     public function awardDiscussionPoints(int $userId, int $courseId, int $discussionId, mixed $createdAt = null): void
     {
+        $course = Course::find($courseId);
+        if (! $course || $course->isFree()) {
+            return;
+        }
+
         $timestamp = $createdAt ? Carbon::parse($createdAt) : now();
 
         $alreadyAwarded = UserPoint::where('user_id', $userId)
@@ -462,26 +502,37 @@ class PointService
      */
     public function getUserRank(int $userId, string $period = 'week'): int
     {
-        $userPoints = match ($period) {
-            'week' => $this->getUserWeeklyPoints($userId),
-            'month' => $this->getUserMonthlyPoints($userId),
-            default => $this->getUserTotalPoints($userId),
-        };
-
         $dateConstraint = match ($period) {
             'week' => now()->startOfWeek(),
             'month' => now()->startOfMonth(),
             default => null,
         };
 
-        $higherUsersCount = DB::table('user_points')
+        $periodPoints = DB::table('user_points')
             ->select('user_id', DB::raw('SUM(points) as period_points'))
-            ->when($dateConstraint, fn ($q) => $q->where('created_at', '>=', $dateConstraint))
-            ->groupBy('user_id')
-            ->having('period_points', '>', $userPoints)
-            ->get()
-            ->count();
+            ->when($dateConstraint, fn ($query) => $query->where('created_at', '>=', $dateConstraint))
+            ->groupBy('user_id');
+        $completedCourses = DB::table('enrollments')
+            ->select('user_id', DB::raw('COUNT(*) as completed_courses'))
+            ->where('status', 'completed')
+            ->groupBy('user_id');
+        $totalPoints = DB::table('user_points')
+            ->select('user_id', DB::raw('SUM(points) as total_points'))
+            ->groupBy('user_id');
 
-        return $higherUsersCount + 1;
+        $orderedIds = DB::table('users')
+            ->where('role', 'student')
+            ->joinSub($periodPoints, 'period_scores', 'users.id', '=', 'period_scores.user_id')
+            ->leftJoinSub($completedCourses, 'completed_scores', 'users.id', '=', 'completed_scores.user_id')
+            ->leftJoinSub($totalPoints, 'total_scores', 'users.id', '=', 'total_scores.user_id')
+            ->orderByDesc('period_scores.period_points')
+            ->orderByDesc(DB::raw('COALESCE(completed_scores.completed_courses, 0)'))
+            ->orderByDesc(DB::raw('COALESCE(total_scores.total_points, 0)'))
+            ->orderBy('users.id')
+            ->pluck('users.id');
+
+        $index = $orderedIds->search($userId);
+
+        return $index === false ? $orderedIds->count() + 1 : $index + 1;
     }
 }

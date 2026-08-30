@@ -583,6 +583,7 @@ function initQuizPlayer() {
             <div class="rounded border border-white/10 bg-white/5 p-5 relative z-20">
                 <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">${question.form_type || question.type}</p>
                 <h3 class="mt-2 text-lg font-bold"><span data-math-content>${escapeHtml(question.question)}</span></h3>
+                ${question.image_url ? `<img src="${escapeHtml(question.image_url)}" alt="Minh họa câu hỏi" class="mt-4 max-h-80 w-full rounded-lg object-contain bg-black/20">` : ''}
                 <p class="mt-1 text-xs text-white/60">${question.points} điểm</p>
                 ${question.is_excluded ? '<div role="status" class="mt-4 rounded border border-amber-300/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100">Câu hỏi này đã bị hủy và sẽ không được tính điểm.</div>' : ''}
                 <div class="mt-4 space-y-2">
@@ -600,6 +601,7 @@ function initQuizPlayer() {
                 </div>
             </div>
         `;
+        window.MathJax?.typesetPromise?.([questionContainer]);
 
         renderMath(questionContainer);
 
@@ -1879,6 +1881,7 @@ function initAiStudyAssistant() {
     let inFlight = false;
     let historyLoaded = false;
     let conversationId = null;
+    let currentAbortController = null;
 
     const parseJsonSafe = async (response) => {
         const raw = await response.text();
@@ -1958,20 +1961,36 @@ function initAiStudyAssistant() {
         quickActions.classList.toggle('hidden', messages.querySelector('[data-ai-message]') !== null);
     };
 
-    const appendMessage = (role, text, loading = false) => {
+    const appendMessage = (role, text, loading = false, retryPrompt = null) => {
         const row = document.createElement('div');
         row.dataset.aiMessage = role;
         row.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
 
         const bubble = document.createElement('div');
         bubble.className = role === 'user'
-            ? 'max-w-[86%] rounded-2xl rounded-br-md bg-[#0056D2] px-3 py-2 text-sm leading-6 text-white'
-            : 'max-w-[86%] rounded-2xl rounded-bl-md bg-slate-100 px-3 py-2 text-sm leading-6 text-slate-800';
+            ? 'max-w-[86%] rounded-2xl rounded-br-md bg-[#0056D2] px-3.5 py-2 text-sm leading-6 text-white'
+            : 'max-w-[86%] rounded-2xl rounded-bl-md bg-slate-100 px-3.5 py-2 text-sm leading-6 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
 
         if (loading) {
-            bubble.innerHTML = '<span class="inline-flex items-center gap-1"><span>AI đang suy nghĩ</span><span class="animate-pulse">...</span></span>';
+            bubble.innerHTML = '<span class="inline-flex items-center gap-2"><span>AI đang suy nghĩ</span><span class="animate-pulse">...</span><button type="button" data-ai-cancel class="ml-2 font-bold text-xs text-rose-600 hover:text-rose-700 underline">Hủy</button></span>';
+            const cancelBtn = bubble.querySelector('[data-ai-cancel]');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    if (currentAbortController) {
+                        currentAbortController.abort();
+                    }
+                });
+            }
         } else if (role === 'assistant') {
             bubble.innerHTML = renderSafeMarkdown(text);
+            if (retryPrompt) {
+                const retryBtn = document.createElement('button');
+                retryBtn.type = 'button';
+                retryBtn.className = 'mt-2 block rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200';
+                retryBtn.textContent = '🔄 Thử lại';
+                retryBtn.addEventListener('click', () => sendMessage(retryPrompt));
+                bubble.appendChild(retryBtn);
+            }
         } else {
             bubble.textContent = text;
         }
@@ -2048,6 +2067,8 @@ function initAiStudyAssistant() {
         if (status) status.textContent = 'AI đang suy nghĩ...';
         const loadingRow = appendMessage('assistant', '', true);
 
+        currentAbortController = new AbortController();
+
         try {
             const body = { message };
             if (conversationId) {
@@ -2056,6 +2077,7 @@ function initAiStudyAssistant() {
 
             const response = await fetch(chatUrl, {
                 method: 'POST',
+                signal: currentAbortController.signal,
                 headers: {
                     Accept: 'application/json',
                     'Content-Type': 'application/json',
@@ -2069,7 +2091,7 @@ function initAiStudyAssistant() {
 
             if (!response.ok || !data.success) {
                 const messageText = aiErrorMessage(response, data);
-                appendMessage('assistant', messageText);
+                appendMessage('assistant', messageText, false, message);
                 if (status) status.textContent = messageText;
                 return;
             }
@@ -2079,9 +2101,15 @@ function initAiStudyAssistant() {
             if (status) status.textContent = 'Sẵn sàng hỗ trợ bạn học bài.';
         } catch (error) {
             removeMessage(loadingRow);
-            appendMessage('assistant', 'Trợ lý AI hiện chưa khả dụng.');
-            if (status) status.textContent = 'Trợ lý AI hiện chưa khả dụng.';
+            if (error.name === 'AbortError') {
+                appendMessage('assistant', 'Đã hủy câu hỏi.');
+                if (status) status.textContent = 'Đã hủy yêu cầu.';
+            } else {
+                appendMessage('assistant', 'Trợ lý AI hiện chưa khả dụng. Bạn có thể nhấn Thử lại.', false, message);
+                if (status) status.textContent = 'Trợ lý AI hiện chưa khả dụng.';
+            }
         } finally {
+            currentAbortController = null;
             setBusy(false);
             input.focus();
             scrollToBottom();

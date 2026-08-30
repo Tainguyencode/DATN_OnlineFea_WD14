@@ -94,6 +94,42 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_instructor_can_edit_a_draft_lesson_content_update(): void
+    {
+        [$instructor, $course, $section] = $this->createPublishedCourseWithSection();
+        $update = ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => [
+                'section_id' => $section->id,
+                'title' => 'Tên cũ',
+                'type' => Lesson::TYPE_VIDEO,
+                'video_url' => 'https://example.com/old.mp4',
+                'duration' => 60,
+                'status' => Lesson::STATUS_DRAFT,
+            ],
+        ]);
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->put(route('instructor.courses.content-updates.update', [$course, $update]), [
+                'title' => 'Tên mới',
+                'type' => Lesson::TYPE_VIDEO,
+                'video_url' => 'https://example.com/old.mp4',
+                'duration' => 90,
+                'sort_order' => 1,
+                'status' => Lesson::STATUS_DRAFT,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Tên mới', $update->fresh()->payload['title']);
+        $this->assertSame(90, $update->fresh()->payload['duration_seconds']);
+    }
+
     public function test_pending_update_course_keeps_using_content_update_workflow(): void
     {
         [$instructor, $course, $section] = $this->createPublishedCourseWithSection();
@@ -234,6 +270,33 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
         ]);
 
         $this->assertEquals(ContentUpdate::STATUS_APPROVED, $update->fresh()->status);
+    }
+
+    public function test_approved_chapter_update_is_not_merged_again_after_materialization(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$instructor, $course] = $this->createPublishedCourseWithSection();
+
+        $update = ContentUpdate::create([
+            'type' => ContentUpdate::TYPE_CHAPTER,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'course_id' => $course->id,
+            'entity_id' => null,
+            'payload' => [
+                'title' => 'Final project',
+                'sort_order' => 2,
+            ],
+            'status' => ContentUpdate::STATUS_PENDING,
+            'created_by' => $instructor->id,
+        ]);
+
+        app(ContentUpdateService::class)->applyApprovedUpdate($update, $admin);
+
+        $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course->fresh());
+
+        $this->assertCount(2, $sections);
+        $this->assertSame(1, $sections->where('title', 'Final project')->count());
+        $this->assertSame($update->fresh()->entity_id, $sections->firstWhere('title', 'Final project')->id);
     }
 
     public function test_admin_approval_of_assignment_lesson_creates_assignment_atomically(): void

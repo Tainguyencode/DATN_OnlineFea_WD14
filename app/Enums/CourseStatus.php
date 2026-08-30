@@ -39,6 +39,21 @@ enum CourseStatus: string
         return $this === self::Published;
     }
 
+    public function chartColor(): string
+    {
+        return match ($this) {
+            self::Draft => '#94a3b8',
+            self::PendingReview => '#f59e0b',
+            self::Approved => '#0ea5e9',
+            self::Rejected => '#ef4444',
+            self::Published => '#22c55e',
+            self::Suspended => '#f97316',
+            self::Archived => '#64748b',
+            self::PendingUpdate => '#8b5cf6',
+            self::RejectedUpdate => '#e11d48',
+        };
+    }
+
     public static function values(): array
     {
         return array_column(self::cases(), 'value');

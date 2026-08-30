@@ -20,12 +20,24 @@ class UserController extends Controller
     {
         $query = User::query()
             ->when($request->filled('role'), fn ($q) => $q->where('role', $request->string('role')))
+            ->when($request->filled('status'), function ($q) use ($request) {
+                $status = $request->string('status');
+                if ($status == 'active') {
+                    $q->where('is_active', true)->whereNull('deleted_at');
+                } elseif ($status == 'blocked') {
+                    $q->where('is_active', false);
+                } elseif ($status == 'deleted') {
+                    $q->onlyTrashed();
+                }
+            })
             ->when($request->filled('search'), function ($q) use ($request) {
                 $search = $request->string('search');
 
                 $q->where(function ($innerQuery) use ($search) {
                     $innerQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%");
                 });
             });
 
@@ -41,34 +53,130 @@ class UserController extends Controller
             ->distinct()
             ->pluck('user_id');
 
+        // Thống kê phân nhóm người dùng theo tiến độ học tập (Hoàn thành, Đang học, Mới, Chưa hoàn thành)
+        $completedStudentsCount = \App\Models\Enrollment::where('status', 'completed')
+            ->orWhere('progress_percent', '>=', 100)
+            ->count();
+
+        $inProgressStudentsCount = \App\Models\Enrollment::where('status', 'active')
+            ->whereBetween('progress_percent', [15, 99.99])
+            ->count();
+
+        $incompleteStudentsCount = \App\Models\Enrollment::where('status', 'active')
+            ->whereBetween('progress_percent', [0.01, 14.99])
+            ->count();
+
+        $newStudentsCount = \App\Models\Enrollment::where('status', 'active')
+            ->where('progress_percent', '<=', 0)
+            ->count();
+
+        $totalStudents = User::where('role', 'student')->count();
+        if ($totalStudents > ($completedStudentsCount + $inProgressStudentsCount + $incompleteStudentsCount + $newStudentsCount)) {
+            $newStudentsCount += $totalStudents - ($completedStudentsCount + $inProgressStudentsCount + $incompleteStudentsCount + $newStudentsCount);
+        }
+
         $stats = [
             'total' => User::withTrashed()->count(),
             'admins' => User::where('role', 'admin')->count(),
             'instructors' => User::where('role', 'instructor')->count(),
-            'students' => User::where('role', 'student')->count(),
+            'students' => $totalStudents,
             'online' => $onlineUserIds->count(),
             'offline' => max(User::count() - $onlineUserIds->count(), 0),
             'blocked' => User::where('is_active', false)->count(),
             'deleted' => User::onlyTrashed()->count(),
+            'completed_students' => $completedStudentsCount,
+            'in_progress_students' => $inProgressStudentsCount,
+            'new_students' => $newStudentsCount,
+            'incomplete_students' => $incompleteStudentsCount,
         ];
+
+        // Tạo chuỗi 20 tháng từ Tháng 01/2025 đến Tháng 08/2026
+        $monthTimeline = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $monthTimeline[] = \Carbon\Carbon::create(2025, $m, 1, 0, 0, 0);
+        }
+        for ($m = 1; $m <= 8; $m++) {
+            $monthTimeline[] = \Carbon\Carbon::create(2026, $m, 1, 0, 0, 0);
+        }
 
         $driver = DB::connection()->getDriverName();
         $monthExpr = $driver === 'sqlite' ? "strftime('%Y-%m', created_at)" : "DATE_FORMAT(created_at, '%Y-%m')";
-        $dayExpr = $driver === 'sqlite' ? "strftime('%Y-%m-%d', last_login_at)" : "DATE_FORMAT(last_login_at, '%Y-%m-%d')";
 
-        $registrationGrowth = User::withTrashed()
-            ->selectRaw("{$monthExpr} as label, COUNT(*) as total")
-            ->groupBy('label')
-            ->orderBy('label')
-            ->limit(12)
-            ->get();
+        // Lấy số lượng người dùng theo tháng trực tiếp từ DB
+        $userCountsByMonth = User::selectRaw("{$monthExpr} as m_label, COUNT(*) as count")
+            ->groupBy('m_label')
+            ->pluck('count', 'm_label')
+            ->all();
+
+        // Lấy số lượng học tập theo tháng trực tiếp từ DB
+        $enrollMonthExpr = $driver === 'sqlite' ? "strftime('%Y-%m', created_at)" : "DATE_FORMAT(created_at, '%Y-%m')";
+        $completedByMonth = \App\Models\Enrollment::where(function ($q) {
+                $q->where('status', 'completed')->orWhere('progress_percent', '>=', 100);
+            })
+            ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
+            ->groupBy('m_label')
+            ->pluck('count', 'm_label')
+            ->all();
+
+        $inProgressByMonth = \App\Models\Enrollment::where('status', 'active')
+            ->whereBetween('progress_percent', [15, 99.99])
+            ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
+            ->groupBy('m_label')
+            ->pluck('count', 'm_label')
+            ->all();
+
+        $incompleteByMonth = \App\Models\Enrollment::where('status', 'active')
+            ->whereBetween('progress_percent', [0.01, 14.99])
+            ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
+            ->groupBy('m_label')
+            ->pluck('count', 'm_label')
+            ->all();
+
+        $newEnrolledByMonth = \App\Models\Enrollment::where('status', 'active')
+            ->where('progress_percent', '<=', 0)
+            ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
+            ->groupBy('m_label')
+            ->pluck('count', 'm_label')
+            ->all();
+
+        $runningTotal = 0;
+        $registrationGrowth = collect($monthTimeline)->map(function (\Carbon\Carbon $start) use (&$runningTotal, $userCountsByMonth, $completedByMonth, $inProgressByMonth, $incompleteByMonth, $newEnrolledByMonth): array {
+            $key = $start->format('Y-m');
+            $totalMonthUsers = $userCountsByMonth[$key] ?? 0;
+            $completedCount = $completedByMonth[$key] ?? 0;
+            $inProgressCount = $inProgressByMonth[$key] ?? 0;
+            $incompleteCount = $incompleteByMonth[$key] ?? 0;
+            $newCount = $newEnrolledByMonth[$key] ?? 0;
+
+            if ($totalMonthUsers > ($completedCount + $inProgressCount + $incompleteCount + $newCount)) {
+                $newCount += $totalMonthUsers - ($completedCount + $inProgressCount + $incompleteCount + $newCount);
+            }
+
+            $runningTotal += $totalMonthUsers;
+
+            return [
+                'label' => $start->format('m/y'),
+                'full_label' => 'Tháng ' . $start->format('m/Y'),
+                'total' => $totalMonthUsers,
+                'new_users' => $newCount,
+                'completed' => $completedCount,
+                'in_progress' => $inProgressCount,
+                'incomplete' => $incompleteCount,
+                'cumulative' => $runningTotal,
+            ];
+        })->values();
+
+        $driver = DB::connection()->getDriverName();
+        $dayExpr = $driver === 'sqlite' ? "strftime('%Y-%m-%d', last_login_at)" : "DATE_FORMAT(last_login_at, '%Y-%m-%d')";
 
         $loginGrowth = User::whereNotNull('last_login_at')
             ->selectRaw("{$dayExpr} as label, COUNT(*) as total")
             ->groupBy('label')
-            ->orderBy('label')
+            ->orderBy('label', 'desc')
             ->limit(14)
-            ->get();
+            ->get()
+            ->reverse()
+            ->values();
 
         return view('admin.users.index', compact('users', 'stats', 'registrationGrowth', 'loginGrowth'));
     }
@@ -148,6 +256,11 @@ class UserController extends Controller
 
         if (! array_key_exists('is_active', $data)) {
             $data['is_active'] = true;
+        }
+
+        if (($data['role'] ?? '') === 'instructor') {
+            $data['instructor_status'] = 'pending';
+            $data['needs_admin_review'] = false;
         }
 
         $user = User::create($data);

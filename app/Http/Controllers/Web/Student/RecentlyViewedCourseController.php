@@ -31,7 +31,7 @@ class RecentlyViewedCourseController extends Controller
             collect($histories->items())->pluck('course_id')
         );
 
-        return view('student.recently-viewed-courses.index', compact('histories', 'enrollmentMap'));
+        return view('student.dashboard.recently-viewed.index', compact('histories', 'enrollmentMap'));
     }
 
     public function destroy(Request $request, int $recentlyViewedCourse): RedirectResponse

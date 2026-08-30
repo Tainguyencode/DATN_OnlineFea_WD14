@@ -3,7 +3,12 @@
 @section('content')
 @include('partials.financial-clean-icons')
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-[70vh]">
-    
+    <div class="mb-4">
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
+    </div>
+
     <!-- Tiêu đề giỏ hàng -->
     <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -335,6 +340,7 @@
 
                 <form method="POST" action="{{ route('student.cart.checkout') }}" class="space-y-4">
                     @csrf
+                    <input type="hidden" name="idempotency_key" value="{{ (string) Str::uuid() }}">
                     <!-- Dynamic Selected Course Inputs -->
                     <template x-for="id in checkedIds" :key="id">
                         <input type="hidden" name="course_ids[]" :value="id">

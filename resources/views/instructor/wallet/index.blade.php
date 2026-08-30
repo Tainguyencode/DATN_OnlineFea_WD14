@@ -536,6 +536,7 @@
 
                     <form action="{{ route('instructor.wallet.withdraw') }}" method="POST" class="mt-4 space-y-4">
                         @csrf
+                        <input type="hidden" name="idempotency_key" value="{{ (string) Str::uuid() }}">
 
                         {{-- Receiver Bank Summary Box --}}
                         <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">

@@ -904,7 +904,11 @@ function initializeLessonImport(root) {
             const payload = await readJsonSafely(response);
 
             if (!response.ok || !payload || payload.success !== true) {
-                const message = firstValidationMessage(payload)
+                const authorizationMessage = response.status === 401 || response.status === 403
+                    ? 'Phiên đăng nhập đã thay đổi hoặc không sở hữu khóa học này. Vui lòng tải lại trang và đăng nhập đúng tài khoản giảng viên.'
+                    : null;
+                const message = authorizationMessage
+                    || firstValidationMessage(payload)
                     || (typeof payload?.message === 'string' ? payload.message : null)
                     || 'Không thể kiểm tra file Excel. Vui lòng thử lại.';
                 showFileError(message);
@@ -966,7 +970,11 @@ function initializeLessonImport(root) {
             const payload = await readJsonSafely(response);
 
             if (!response.ok || !payload || payload.success !== true) {
-                const message = firstValidationMessage(payload)
+                const authorizationMessage = response.status === 401 || response.status === 403
+                    ? 'Phiên đăng nhập đã thay đổi hoặc không sở hữu khóa học này. Vui lòng tải lại trang và đăng nhập đúng tài khoản giảng viên.'
+                    : null;
+                const message = authorizationMessage
+                    || firstValidationMessage(payload)
                     || (typeof payload?.message === 'string' ? payload.message : null)
                     || 'Không thể import bài học. Không có dữ liệu nào được thay đổi.';
                 const nonRetryableCodes = new Set([

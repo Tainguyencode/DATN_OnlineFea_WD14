@@ -98,16 +98,21 @@ class RefundController extends Controller
                 return null;
             }
 
-            return Refund::create([
-                'order_id' => $lockedOrder->id,
-                'user_id' => auth()->id(),
-                'amount' => $lockedOrder->total_amount,
-                'reason' => trim($validated['reason']),
-                'bank_code' => strtoupper($validated['bank_code']),
-                'bank_account_number' => $validated['bank_account_number'],
-                'bank_account_name' => mb_strtoupper(Str::ascii(preg_replace('/\s+/u', ' ', trim($validated['bank_account_name'])))),
-                'status' => 'pending',
-            ]);
+            return Refund::updateOrCreate(
+                ['order_id' => $lockedOrder->id],
+                [
+                    'user_id' => auth()->id(),
+                    'amount' => $lockedOrder->total_amount,
+                    'reason' => trim($validated['reason']),
+                    'bank_code' => strtoupper($validated['bank_code']),
+                    'bank_account_number' => $validated['bank_account_number'],
+                    'bank_account_name' => mb_strtoupper(Str::ascii(preg_replace('/\s+/u', ' ', trim($validated['bank_account_name'])))),
+                    'status' => 'pending',
+                    'refund_method' => 'manual',
+                    'transaction_reference' => null,
+                    'admin_note' => null,
+                    'processed_at' => null,
+                ]);
         });
 
         if (! $refund) {
