@@ -123,8 +123,23 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                                     <p class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" title="{{ $member->name }}">
                                         {{ $member->name }}
                                     </p>
-                                    <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold uppercase {{ $member->pivot->role === 'moderator' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' }}">
-                                        {{ $member->pivot->role === 'moderator' ? 'Trưởng nhóm' : 'Học viên' }}
+                                    @php
+                                        if ($member->pivot->role === 'moderator' || $member->id === $studyGroup->creator_id) {
+                                            $roleBadgeText = 'Trưởng nhóm';
+                                            $roleBadgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400';
+                                        } elseif ($member->isInstructor() || $member->role === 'instructor') {
+                                            $roleBadgeText = 'Giảng viên';
+                                            $roleBadgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400';
+                                        } elseif ($member->isAdmin() || $member->role === 'admin') {
+                                            $roleBadgeText = 'Quản trị viên';
+                                            $roleBadgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400';
+                                        } else {
+                                            $roleBadgeText = 'Học viên';
+                                            $roleBadgeClass = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+                                        }
+                                    @endphp
+                                    <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold uppercase {{ $roleBadgeClass }}">
+                                        {{ $roleBadgeText }}
                                     </span>
                                 </div>
                                 
