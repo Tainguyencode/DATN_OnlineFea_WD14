@@ -1084,14 +1084,14 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
                     messageEl.textContent = commonMessage;
 
                     if (commonState === 'completed') {
-                        bannerWrapper.className = 'rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900 shadow-xs transition-all duration-300';
+                        bannerWrapper.className = 'rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 shadow-sm transition-all duration-300 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200';
                         if (iconEl) iconEl.textContent = '✅';
                     } else if (commonState === 'failed') {
-                        bannerWrapper.className = 'rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-rose-900 shadow-xs transition-all duration-300';
+                        bannerWrapper.className = 'rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-900 shadow-sm transition-all duration-300 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200';
                         if (iconEl) iconEl.textContent = '⚠️';
                     } else {
                         // processing
-                        bannerWrapper.className = 'rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs transition-all duration-300';
+                        bannerWrapper.className = 'rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm transition-all duration-300 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200';
                         if (iconEl) iconEl.textContent = '⏳';
                     }
                 }
@@ -1145,13 +1145,13 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             submitButtons.forEach(btn => {
                 if (canSubmit) {
                     btn.removeAttribute('disabled');
-                    btn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-                    btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
+                    btn.classList.remove('bg-slate-200', 'bg-slate-300', 'text-slate-400', 'text-slate-500', 'cursor-not-allowed', 'bg-emerald-600', 'hover:bg-emerald-700', 'dark:bg-slate-800', 'dark:text-slate-600');
+                    btn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white', 'cursor-pointer', 'shadow-lg', 'shadow-blue-500/20');
                     btn.removeAttribute('title');
                 } else {
                     btn.setAttribute('disabled', 'disabled');
-                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
-                    btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+                    btn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer', 'shadow-lg', 'shadow-blue-500/20');
+                    btn.classList.add('bg-slate-200', 'text-slate-400', 'cursor-not-allowed', 'dark:bg-slate-800', 'dark:text-slate-600');
                     btn.setAttribute('title', submissionMessage);
                 }
             });

@@ -20,7 +20,7 @@
         <div class="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.2fr)_repeat(5,minmax(150px,1fr))_auto]">
             <label class="sr-only" for="course-search">Tìm khóa học</label>
             <input id="course-search" type="text" name="search" value="{{ $filters['search'] }}"
-                   placeholder="Tìm kiếm theo tên khóa học hoặc mã slug..."
+                   placeholder="Tìm theo tên hoặc slug..."
                    class="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition-colors duration-200 placeholder:text-slate-400 focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100">
 
             <label class="sr-only" for="course-instructor">Giảng viên</label>

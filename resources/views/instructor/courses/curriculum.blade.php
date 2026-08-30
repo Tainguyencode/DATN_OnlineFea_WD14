@@ -70,7 +70,7 @@
     <div id="global-video-upload-queue-panel" class="hidden"></div>
 
     <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <aside class="order-2 space-y-3 xl:sticky xl:top-24">
+        <aside class="order-2 space-y-3 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:pr-1">
             <section class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                 <div class="flex items-end justify-between gap-3">
                     <div>
@@ -105,7 +105,7 @@
             <div id="common-hls-banner-wrapper"
                  class="rounded-2xl border p-4 shadow-sm transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasVideoReadinessBlockers ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200') }}">
                 <div class="flex items-start gap-3">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-current/20 text-sm font-black">i</span>
+                    <span id="common-hls-icon" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-current/20 text-sm font-black">i</span>
                     <div>
                         <p class="text-xs font-black uppercase tracking-wide">Trạng thái video</p>
                         <p id="common-hls-message" class="mt-1 text-xs font-semibold leading-5">
@@ -170,16 +170,19 @@
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10M18 15v6m-3-3h6"/></svg>
                         Nhập từ Excel
                     </button>
-                    <a href="#add-course-section" class="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700">+ Thêm chương</a>
+                    <button type="button" onclick="const panel=document.getElementById('add-course-section'); panel.classList.toggle('hidden'); if(!panel.classList.contains('hidden')) panel.scrollIntoView({behavior:'smooth',block:'center'});" class="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700">+ Thêm chương</button>
                 </div>
             </section>
 
     <form id="add-course-section" method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
-          class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          class="{{ $errors->hasBag('storeSection') ? '' : 'hidden' }} rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         @csrf
-        <div class="mb-4">
-            <h3 class="text-sm font-black text-slate-950 dark:text-white">Thêm chương mới</h3>
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Tạo cấu trúc chương trước khi thêm video, tài liệu, quiz hoặc bài tập.</p>
+        <div class="mb-4 flex items-start justify-between gap-4">
+            <div>
+                <h3 class="text-sm font-black text-slate-950 dark:text-white">Thêm chương mới</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Tạo cấu trúc chương trước khi thêm video, tài liệu, quiz hoặc bài tập.</p>
+            </div>
+            <button type="button" onclick="document.getElementById('add-course-section').classList.add('hidden')" aria-label="Đóng form thêm chương" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:hover:bg-slate-800">×</button>
         </div>
         <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] lg:items-end">
             <label class="block">
