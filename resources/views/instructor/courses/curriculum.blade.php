@@ -43,6 +43,10 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
+                <a href="{{ route('instructor.courses.versions.index', $course) }}"
+                   class="inline-flex min-h-10 items-center justify-center rounded-lg border border-indigo-200 px-4 py-2 text-sm font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50">
+                    Lịch sử phiên bản
+                </a>
                 <a href="{{ route('instructor.courses.edit', $course) }}"
                    class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer">
                     Thông tin khóa học

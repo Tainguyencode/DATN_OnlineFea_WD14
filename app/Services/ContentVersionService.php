@@ -124,6 +124,7 @@ class ContentVersionService
                 ContentUpdate::TYPE_COURSE => $this->materializeCourseCandidate($update, $payload, $actor),
                 ContentUpdate::TYPE_CHAPTER => $this->materializeSectionCandidate($update, $payload, $actor),
                 ContentUpdate::TYPE_LESSON => $this->materializeLessonCandidate($update, $payload, $actor),
+                ContentUpdate::TYPE_ASSIGNMENT => $this->materializeAssignmentCandidate($update, $payload, $actor),
                 default => null,
             };
         });
@@ -160,6 +161,7 @@ class ContentVersionService
             ContentUpdate::TYPE_COURSE => $this->publishCourseVersion($this->candidate(CourseVersion::class, $update), $admin),
             ContentUpdate::TYPE_CHAPTER => $this->publishSectionVersion($this->candidate(CourseSectionVersion::class, $update), $admin),
             ContentUpdate::TYPE_LESSON => $this->activateLessonCandidates($update, $admin),
+            ContentUpdate::TYPE_ASSIGNMENT => $this->publishAssignmentVersion($this->candidate(AssignmentVersion::class, $update), $admin),
             default => null,
         };
     }
@@ -210,7 +212,7 @@ class ContentVersionService
     public function publishCourseVersion(CourseVersion $candidate, User $admin): CourseVersion
     {
         return $this->publishVersion($candidate, Course::class, 'course_id', 'published_version_id', 'draft_version_id', $admin,
-            fn (CourseVersion $version): array => $this->only($version, ['title', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags']));
+            fn (CourseVersion $version): array => $this->only($version, ['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags']));
     }
 
     public function publishSectionVersion(CourseSectionVersion $candidate, User $admin): CourseSectionVersion
@@ -283,7 +285,7 @@ class ContentVersionService
     private function withoutIdentity(Model $version, array $except): array
     {
         $data = $version->getAttributes();
-        unset($data['id'], $data['version_number'], $data['status'], $data['content_update_id'], $data['created_by'], $data['published_by'], $data['published_at'], $data['superseded_at'], $data['rejected_at'], $data['created_at'], $data['updated_at']);
+        unset($data['id'], $data['version_number'], $data['status'], $data['content_update_id'], $data['source_version_id'], $data['created_by'], $data['published_by'], $data['published_at'], $data['superseded_at'], $data['rejected_at'], $data['created_at'], $data['updated_at']);
         foreach ($except as $key) {
             unset($data[$key]);
         }
@@ -321,8 +323,9 @@ class ContentVersionService
         $course = Course::query()->lockForUpdate()->findOrFail($update->course_id);
         $this->createInitialCourseVersion($course, $actor);
         $course->refresh();
-        $candidate = $this->candidateFor($course, CourseVersion::class, 'course_id', $update, $actor, fn (CourseVersion $version) => $this->withoutIdentity($version, ['course_id']));
-        $candidate->fill(array_intersect_key($payload, array_flip(['title', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags'])))->save();
+        $source = $this->rollbackSource($update, CourseVersion::class, 'course_id', $course->id);
+        $candidate = $this->candidateFor($course, CourseVersion::class, 'course_id', $update, $actor, fn (CourseVersion $version) => $this->withoutIdentity($version, ['course_id']), $source);
+        $candidate->fill(array_intersect_key($payload, array_flip(['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags'])))->save();
     }
 
     /** @param array<string, mixed> $payload */
@@ -331,7 +334,8 @@ class ContentVersionService
         $section = CourseSection::query()->where('course_id', $update->course_id)->lockForUpdate()->findOrFail($update->entity_id);
         $this->createInitialSectionVersion($section, $actor);
         $section->refresh();
-        $candidate = $this->candidateFor($section, CourseSectionVersion::class, 'course_section_id', $update, $actor, fn (CourseSectionVersion $version) => $this->withoutIdentity($version, ['course_section_id']));
+        $source = $this->rollbackSource($update, CourseSectionVersion::class, 'course_section_id', $section->id);
+        $candidate = $this->candidateFor($section, CourseSectionVersion::class, 'course_section_id', $update, $actor, fn (CourseSectionVersion $version) => $this->withoutIdentity($version, ['course_section_id']), $source);
         $candidate->fill(array_intersect_key($payload, array_flip(['title', 'description', 'sort_order'])))->save();
     }
 
@@ -341,7 +345,8 @@ class ContentVersionService
         $lesson = Lesson::query()->where('course_id', $update->course_id)->lockForUpdate()->findOrFail($update->entity_id);
         $this->createInitialLessonVersion($lesson, $actor);
         $lesson->refresh();
-        $candidate = $this->candidateFor($lesson, LessonVersion::class, 'lesson_id', $update, $actor, fn (LessonVersion $version) => $this->withoutIdentity($version, ['lesson_id']));
+        $source = $this->rollbackSource($update, LessonVersion::class, 'lesson_id', $lesson->id);
+        $candidate = $this->candidateFor($lesson, LessonVersion::class, 'lesson_id', $update, $actor, fn (LessonVersion $version) => $this->withoutIdentity($version, ['lesson_id']), $source);
         $changes = array_intersect_key($payload, array_flip(['section_id', 'title', 'type', 'content', 'document_file', 'video_url', 'video_path', 'original_video_key', 'hls_manifest_key', 'hls_playlist', 'hls_path', 'video_original_name', 'video_mime', 'video_size', 'duration_seconds', 'is_preview', 'is_required', 'sort_order', 'attachments', 'subtitles']));
         if (array_key_exists('duration', $payload)) {
             $changes['duration_seconds'] = (int) $payload['duration'];
@@ -352,7 +357,9 @@ class ContentVersionService
         $candidate->fill($changes)->save();
 
         $assignment = $lesson->assignment;
-        if ($assignment && ($lesson->type === Lesson::TYPE_ASSIGNMENT || ($payload['type'] ?? null) === Lesson::TYPE_ASSIGNMENT)) {
+        if (($update->metadata['operation_origin'] ?? null) !== 'rollback'
+            && $assignment
+            && ($lesson->type === Lesson::TYPE_ASSIGNMENT || ($payload['type'] ?? null) === Lesson::TYPE_ASSIGNMENT)) {
             $this->createInitialAssignmentVersion($assignment, $actor);
             $assignment->refresh();
             $assignmentCandidate = $this->candidateFor($assignment, AssignmentVersion::class, 'assignment_id', $update, $actor, fn (AssignmentVersion $version) => $this->withoutIdentity($version, ['assignment_id']));
@@ -368,6 +375,20 @@ class ContentVersionService
         }
     }
 
+    /** @param array<string, mixed> $payload */
+    private function materializeAssignmentCandidate(ContentUpdate $update, array $payload, User $actor): void
+    {
+        $assignment = Assignment::query()->where('course_id', $update->course_id)->lockForUpdate()->findOrFail($update->entity_id);
+        $this->createInitialAssignmentVersion($assignment, $actor);
+        $assignment->refresh();
+        $source = $this->rollbackSource($update, AssignmentVersion::class, 'assignment_id', $assignment->id);
+        $candidate = $this->candidateFor($assignment, AssignmentVersion::class, 'assignment_id', $update, $actor, fn (AssignmentVersion $version) => $this->withoutIdentity($version, ['assignment_id']), $source);
+        $candidate->fill(array_intersect_key($payload, array_flip([
+            'title', 'description', 'instructions', 'due_date', 'due_days', 'max_score',
+            'passing_score', 'is_required', 'allowed_file_types', 'maximum_file_size',
+        ])))->save();
+    }
+
     /** @template T of Model @param class-string<T> $versionClass @return T */
     private function candidate(string $versionClass, ContentUpdate $update): Model
     {
@@ -380,6 +401,7 @@ class ContentVersionService
             ContentUpdate::TYPE_COURSE => CourseVersion::query()->where('content_update_id', $update->id)->exists(),
             ContentUpdate::TYPE_CHAPTER => CourseSectionVersion::query()->where('content_update_id', $update->id)->exists(),
             ContentUpdate::TYPE_LESSON => LessonVersion::query()->where('content_update_id', $update->id)->exists(),
+            ContentUpdate::TYPE_ASSIGNMENT => AssignmentVersion::query()->where('content_update_id', $update->id)->exists(),
             default => false,
         };
     }
@@ -435,7 +457,7 @@ class ContentVersionService
     }
 
     /** @template T of Model @param class-string<T> $versionClass @return T */
-    private function candidateFor(Model $identity, string $versionClass, string $foreignKey, ContentUpdate $update, User $actor, callable $snapshot): Model
+    private function candidateFor(Model $identity, string $versionClass, string $foreignKey, ContentUpdate $update, User $actor, callable $snapshot, ?Model $source = null): Model
     {
         $existing = $versionClass::query()
             ->where('content_update_id', $update->id)
@@ -454,16 +476,39 @@ class ContentVersionService
             return $draft;
         }
         $published = $versionClass::query()->lockForUpdate()->findOrFail($identity->published_version_id);
+        $basis = $source ?? $published;
         $candidate = $identity->versions()->create([
-            ...$snapshot($published),
+            ...$snapshot($basis),
             'version_number' => $this->nextNumber($identity->versions()),
             'status' => $versionClass::STATUS_DRAFT,
             'content_update_id' => $update->id,
+            'source_version_id' => $source?->id,
             'created_by' => $actor->id,
         ]);
         $identity->forceFill(['draft_version_id' => $candidate->id])->save();
 
         return $candidate;
+    }
+
+    private function rollbackSource(ContentUpdate $update, string $versionClass, string $foreignKey, int $identityId): ?Model
+    {
+        $metadata = $update->metadata ?? [];
+        if (($metadata['operation_origin'] ?? null) !== 'rollback') {
+            return null;
+        }
+
+        $sourceId = (int) ($metadata['source_version_id'] ?? 0);
+        $source = $versionClass::query()
+            ->where($foreignKey, $identityId)
+            ->lockForUpdate()
+            ->find($sourceId);
+        if (! $source || ! $source->isSuperseded()) {
+            throw ValidationException::withMessages([
+                'version' => 'Phiên bản nguồn khôi phục không còn hợp lệ cho nội dung này.',
+            ]);
+        }
+
+        return $source;
     }
 
     private function activateLessonCandidates(ContentUpdate $update, User $admin): void

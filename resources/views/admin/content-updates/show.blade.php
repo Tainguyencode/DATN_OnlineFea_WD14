@@ -4,7 +4,10 @@
             <div>
                 <a href="{{ route('admin.content-updates.index') }}" class="text-sm font-semibold text-indigo-700 hover:underline">← Quay lại danh sách cập nhật</a>
                 <h1 class="mt-2 text-2xl font-bold text-slate-900">{{ $diff['label'] }}</h1>
-                <p class="mt-1 text-sm text-slate-500">{{ $diff['entity_label'] }} · {{ $diff['action_label'] }} · {{ $contentUpdate->course?->title }}</p>
+                <p class="mt-1 text-sm text-slate-500">{{ $diff['entity_label'] }} · {{ data_get($contentUpdate->metadata, 'operation_origin') === 'rollback' ? 'Khôi phục phiên bản' : $diff['action_label'] }} · {{ $contentUpdate->course?->title }}</p>
+                @if($contentUpdate->course)
+                    <a href="{{ route('admin.courses.versions.index', $contentUpdate->course) }}" class="mt-2 inline-block text-sm font-bold text-indigo-700 hover:underline">Lịch sử phiên bản khóa học</a>
+                @endif
             </div>
             <span class="rounded-full px-3 py-1 text-sm font-bold {{ $contentUpdate->isPending() ? 'bg-amber-100 text-amber-800' : ($contentUpdate->isApproved() ? 'bg-emerald-100 text-emerald-800' : ($contentUpdate->isRejected() ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')) }}">
                 {{ ['draft' => 'Nháp', 'pending' => 'Chờ duyệt', 'approved' => 'Đã duyệt', 'rejected' => 'Bị từ chối'][$contentUpdate->status] ?? $contentUpdate->status }}
@@ -23,6 +26,15 @@
                     <span class="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-indigo-800">Phiên bản đề xuất: V{{ $versionContext['proposed'] }}</span>
                 @endif
             </div>
+        @endif
+
+        @if(data_get($contentUpdate->metadata, 'operation_origin') === 'rollback')
+            <section class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+                <h2 class="font-bold">Loại thay đổi: Khôi phục phiên bản</h2>
+                <p class="mt-2">Nguồn khôi phục: V{{ data_get($contentUpdate->metadata, 'source_version_number') ?? '—' }}</p>
+                <p class="mt-1">Phiên bản đề xuất mới chỉ được kích hoạt sau khi Admin duyệt; phiên bản nguồn lịch sử không bị tái kích hoạt.</p>
+                <p class="mt-2"><strong>Lý do khôi phục:</strong> {{ data_get($contentUpdate->metadata, 'rollback_reason') ?? 'Không xác định' }}</p>
+            </section>
         @endif
 
         @foreach($diff['warnings'] as $warning)
