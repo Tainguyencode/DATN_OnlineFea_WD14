@@ -11,7 +11,13 @@
             <a href="{{ route('admin.quiz-invalidations.index') }}" class="text-sm font-bold text-rose-700 hover:underline">Quay lại danh sách</a>
             <h1 class="mt-2 text-2xl font-bold text-slate-900">Yêu cầu #{{ $invalidation->id }}</h1>
         </div>
-        <span class="rounded-full px-3 py-1 text-xs font-bold ring-1 {{ $invalidation->status === 'pending' ? 'bg-amber-50 text-amber-800 ring-amber-200' : ($invalidation->status === 'active' ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-slate-100 text-slate-700 ring-slate-200') }}">{{ $invalidation->status }}</span>
+        @if($invalidation->status === 'pending')
+            <span class="status-badge status-pending">Đang chờ</span>
+        @elseif($invalidation->status === 'active')
+            <span class="status-badge status-active">Đã phê duyệt</span>
+        @else
+            <span class="status-badge status-danger">Đã từ chối</span>
+        @endif
     </div>
 
     @if (session('success'))

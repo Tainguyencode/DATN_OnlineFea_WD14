@@ -155,17 +155,45 @@ class QuizController extends Controller
         ]);
     }
 
-    public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse
+    public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): View|RedirectResponse|JsonResponse
     {
         $this->authorizePublishedLesson($course, $lesson);
         abort_unless($request->user()?->isStudent(), 403);
         if (! $this->isEnrolled($course)) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Enrollment is required to submit this quiz.'], 403);
+            }
             return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson])->with('error', 'Enrollment is required to submit this quiz.');
         }
 
         [$attempt, $quiz, $graded, $completedNow] = $this->gradeBoundAttempt($request, $course, $lesson);
         if ($completedNow) {
             $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService);
+        }
+
+        if ($request->expectsJson()) {
+            $gradedPayload = $graded;
+            if (isset($gradedPayload['questions'])) {
+                $gradedPayload['questions'] = array_values($gradedPayload['questions']);
+            }
+
+            return response()->json([
+                'success' => true,
+                'attempt' => [
+                    'id' => $attempt->id,
+                    'score' => $attempt->score,
+                    'total_score' => $attempt->total_score,
+                    'percent' => (float) $attempt->percent,
+                    'passed' => (bool) $attempt->passed,
+                    'pass_score' => $attempt->quizVersion?->pass_score ?? $quiz->pass_score,
+                    'quiz_version_id' => $attempt->quiz_version_id,
+                ],
+                'graded' => $gradedPayload,
+                'quiz' => [
+                    'id' => $quiz->id,
+                    'version' => $quiz->version,
+                ],
+            ]);
         }
 
         return redirect()->route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]);
@@ -231,6 +259,18 @@ class QuizController extends Controller
         ]);
     }
 
+    public function recordFocusViolation(Request $request, Course $course, Lesson $lesson, QuizAttempt $attempt): JsonResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        abort_unless((int) $attempt->user_id === (int) $request->user()?->id, 403);
+        abort_unless($attempt->status === 'in_progress', 409);
+        abort_unless($attempt->quiz?->lesson_id === $lesson->id, 404);
+
+        $attempt->increment('focus_violation_count');
+
+        return response()->json(['count' => $attempt->fresh()->focus_violation_count]);
+    }
+
     public function reviewAttempt(
         Request $request,
         Course $course,
@@ -241,7 +281,7 @@ class QuizController extends Controller
         $this->authorizePublishedLesson($course, $lesson);
         abort_unless($lesson->type === 'quiz', 404);
 
-        $quiz = $this->activeQuiz($lesson);
+        $quiz = $lesson->quiz()->firstOrFail();
         abort_unless((int) $attempt->quiz_id === (int) $quiz->id, 404);
 
         $user = $request->user();
@@ -254,6 +294,7 @@ class QuizController extends Controller
         abort_unless($canAccess, 403, 'Bạn không có quyền xem lại bài làm này.');
 
         $review = $quizService->buildAttemptReview($attempt);
+        $quiz = $review['quiz'];
 
         return view('courses.quiz-result', [
             'course' => $course,

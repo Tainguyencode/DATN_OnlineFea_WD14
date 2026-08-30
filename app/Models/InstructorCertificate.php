@@ -46,6 +46,21 @@ class InstructorCertificate extends Model
         return $types[$this->document_type] ?? 'Chứng chỉ';
     }
 
+    public function getNameAttribute(): ?string
+    {
+        return $this->title ?: $this->original_name;
+    }
+
+    public function getIssuedAtAttribute(): ?\Illuminate\Support\Carbon
+    {
+        return $this->reviewed_at ?: $this->uploaded_at ?: $this->created_at;
+    }
+
+    public function getInstitutionAttribute(): ?string
+    {
+        return null;
+    }
+
     protected function casts(): array
     {
         return [

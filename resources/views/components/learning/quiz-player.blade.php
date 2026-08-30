@@ -17,12 +17,12 @@
             <span>Đang mất kết nối mạng. Đáp án của bạn vẫn được lưu tạm thời, hệ thống sẽ tự động đồng bộ khi có kết nối trở lại.</span>
         </div>
 
+        <div class="mx-auto mb-3 hidden max-w-2xl rounded border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100" data-quiz-security-warning></div>
+
         {{-- Dynamic Watermark Layer --}}
         <div data-quiz-watermark class="pointer-events-none absolute inset-0 z-10 overflow-hidden opacity-[0.07] select-none" hidden>
             <div data-quiz-watermark-pattern class="w-full h-full text-white font-mono text-xs leading-relaxed transform -rotate-12 flex flex-wrap gap-12 p-8"></div>
         </div>
-
-        {{-- Màn hình Giới thiệu & Modal Quy định kiểm tra --}}
         <div data-quiz-intro class="mx-auto flex min-h-[280px] max-w-2xl flex-col justify-center py-4 text-white">
             <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">Quiz</p>
             <h2 class="mt-2 text-2xl font-bold">{{ $quizContext['title'] }}</h2>
@@ -166,5 +166,58 @@
         {{-- Màn hình Kết quả Bình thường (Submitted / Result) --}}
         <div data-quiz-result class="mx-auto max-w-2xl text-white relative z-20" hidden></div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!document.querySelector('script[data-mathjax-loader]')) {
+                window.MathJax = {tex: {inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['\\[', '\\]'], ['$$', '$$']]}};
+                const mathScript = document.createElement('script');
+                mathScript.defer = true;
+                mathScript.dataset.mathjaxLoader = '1';
+                mathScript.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+                document.head.appendChild(mathScript);
+            }
+            const panel = document.querySelector('[data-quiz-player]');
+            if (!panel) return;
+            const context = JSON.parse(panel.dataset.quiz || '{}');
+            const warning = panel.querySelector('[data-quiz-security-warning]');
+            const watermark = panel.querySelector('[data-quiz-watermark]');
+            let active = Boolean(context.attempt_id);
+            let lastReportedAt = 0;
+
+            if (active) {
+                watermark?.classList.remove('hidden');
+                watermark?.classList.add('flex');
+            }
+
+            panel.querySelector('[data-quiz-start]')?.addEventListener('click', async () => {
+                active = true;
+                watermark?.classList.remove('hidden');
+                watermark?.classList.add('flex');
+                try { await panel.requestFullscreen?.(); } catch (_) {}
+            });
+
+            const report = async (message) => {
+                if (!active || Date.now() - lastReportedAt < 1500) return;
+                lastReportedAt = Date.now();
+                if (warning) {
+                    warning.textContent = message;
+                    warning.classList.remove('hidden');
+                }
+                if (context.focus_violation_url) {
+                    await fetch(context.focus_violation_url, {
+                        method: 'POST',
+                        headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'Accept': 'application/json'}
+                    }).catch(() => {});
+                }
+            };
+
+            document.addEventListener('visibilitychange', () => document.hidden && report('Đã ghi nhận việc rời khỏi màn hình làm quiz.'));
+            window.addEventListener('blur', () => report('Đã ghi nhận việc chuyển sang cửa sổ khác.'));
+            document.addEventListener('fullscreenchange', () => active && !document.fullscreenElement && report('Bạn đã thoát chế độ toàn màn hình.'));
+            panel.addEventListener('contextmenu', event => active && event.preventDefault());
+            panel.addEventListener('copy', event => active && event.preventDefault());
+        });
+    </script>
 @endif
 

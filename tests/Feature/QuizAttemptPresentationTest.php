@@ -72,7 +72,7 @@ class QuizAttemptPresentationTest extends TestCase
 
         $player = app(LearningPlayerService::class)->buildPlayerContext($course->fresh(), $lesson->fresh(), $student, false);
         $contextQuestions = collect($player['quizContext']['questions']);
-        $this->assertSame($projectedQuestionIds, $contextQuestions->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertSame($projected->questions->pluck('id')->map(fn ($id): int => (int) $id)->all(), $contextQuestions->pluck('id')->map(fn ($id): int => (int) $id)->all());
         $this->assertSame(
             $projectedOptionIds,
             $contextQuestions->map(fn (array $question): array => collect($question['options'])->pluck('id')->map(fn ($id): int => (int) $id)->all())->all(),

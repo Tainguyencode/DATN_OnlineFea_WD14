@@ -62,6 +62,40 @@ class PointServiceTest extends TestCase
         $this->assertSame(10, $this->calculatePoints($noDurationLesson));
     }
 
+    /**
+     * Test free course detection:
+     * - Khóa học gốc 0đ: Không tính điểm (isFree = true)
+     * - Khóa học có phí > 0đ (kể cả dùng voucher giảm về 0đ): Vẫn tính điểm (isFree = false)
+     */
+    public function test_course_is_free(): void
+    {
+        $freeCourseZero = new \App\Models\Course(['price' => 0]);
+        $freeCourseNull = new \App\Models\Course(['price' => null]);
+        $paidCourse = new \App\Models\Course(['price' => 200000, 'discount_price' => null]);
+        $paidCourseWithVoucherOrDiscount = new \App\Models\Course(['price' => 200000, 'discount_price' => 0]);
+
+        $this->assertTrue($freeCourseZero->isFree());
+        $this->assertTrue($freeCourseNull->isFree());
+        $this->assertFalse($paidCourse->isFree());
+        $this->assertFalse($paidCourseWithVoucherOrDiscount->isFree());
+    }
+
+    /**
+     * Test role student check:
+     * - Student: isStudent = true
+     * - Instructor / Admin: isStudent = false
+     */
+    public function test_user_is_student(): void
+    {
+        $student = new \App\Models\User(['role' => 'student']);
+        $instructor = new \App\Models\User(['role' => 'instructor']);
+        $admin = new \App\Models\User(['role' => 'admin']);
+
+        $this->assertTrue($student->isStudent());
+        $this->assertFalse($instructor->isStudent());
+        $this->assertFalse($admin->isStudent());
+    }
+
     private function calculatePoints(Lesson $lesson): int
     {
         $durationSeconds = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);

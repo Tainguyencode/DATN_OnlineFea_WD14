@@ -23,6 +23,7 @@ class QuizVersion extends Model
         'pass_score',
         'time_limit_minutes',
         'max_attempts',
+        'question_count',
         'status',
         'created_by',
         'published_at',
@@ -35,6 +36,7 @@ class QuizVersion extends Model
             'pass_score' => 'integer',
             'time_limit_minutes' => 'integer',
             'max_attempts' => 'integer',
+            'question_count' => 'integer',
             'published_at' => 'datetime',
         ];
     }

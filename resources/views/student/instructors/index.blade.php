@@ -87,11 +87,17 @@
 </style>
 
 {{-- HERO --}}
-<section style="background: #F0F7FF; padding: 60px 0; position: relative; overflow: hidden; border-bottom: 1px solid #E5E7EB;">
+<section style="background: #F0F7FF; padding: 40px 0 60px; position: relative; overflow: hidden; border-bottom: 1px solid #E5E7EB;">
     {{-- Decorative Background on the right (Wave/Blob) --}}
     <div style="position: absolute; right: -5%; top: -20%; bottom: -20%; width: 55%; background: #E0ECFF; border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; z-index: 0; transform: rotate(-5deg);"></div>
     <div style="position: absolute; right: -10%; bottom: -40%; width: 40%; height: 60%; background: #D1E0FF; border-radius: 50%; z-index: 0; opacity: 0.5;"></div>
     
+    <div style="max-width: 1400px; margin: 0 auto; padding: 0 32px 16px; position: relative; z-index: 1;">
+        <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('home') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] cursor-pointer transition py-1">
+            ← Quay lại
+        </button>
+    </div>
+
     <div style="max-width: 1400px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 40px;">
         
         {{-- Left: Text & Stats --}}
@@ -245,6 +251,9 @@
                 @php
                     $isTop = $instructor->courses_count >= 5;
                     $rating = $instructor->average_rating;
+                    $certsCount = $instructor->approved_certificates_count ?? 0;
+                    $headline = $instructor->instructorProfile?->headline ?? $instructor->courses->first()?->category?->name ?? 'Giảng viên chuyên nghiệp';
+                    $bioText = $instructor->instructorProfile?->bio ?? $instructor->bio ?? 'Giảng viên chuyên nghiệp tại OnlineFEA.';
                 @endphp
                 <div class="instructor-card">
                     <div class="instructor-avatar-wrap">
@@ -252,29 +261,33 @@
                     </div>
                     
                     <div style="text-align: center; margin-bottom: 8px;">
-                        <h2 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px; line-height: 1.3;">{{ $instructor->name }}</h2>
-                        <p style="font-size: 13px; color: #6B7280; margin: 0;">
-                            {{ $instructor->courses->first()?->category->name ?? 'Giảng viên' }}
+                        <h2 style="font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 4px; line-height: 1.3;" class="line-clamp-1" title="{{ $instructor->name }}">{{ $instructor->name }}</h2>
+                        <p style="font-size: 13px; color: #2563EB; font-weight: 600; margin: 0;" class="line-clamp-1" title="{{ $headline }}">
+                            {{ $headline }}
                         </p>
                     </div>
                     
-                    {{-- Rating --}}
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 16px;">
+                    {{-- Rating & Verified Badges --}}
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
                         @if($rating > 0)
-                            <div style="display: flex; gap: 2px; color: #F59E0B;">
-                                @for($i=1; $i<=5; $i++)
-                                    <svg style="width:14px;height:14px;fill:{{ $i <= round($rating) ? 'currentColor' : '#E5E7EB' }}" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                                @endfor
+                            <div style="display: flex; align-items: center; gap: 2px; color: #F59E0B;">
+                                <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                <span style="font-size: 13px; font-weight: 700; color: #374151;">{{ number_format($rating, 1) }}</span>
+                                <span style="font-size: 12px; color: #9CA3AF;">({{ $instructor->total_rating_count }})</span>
                             </div>
-                            <span style="font-size: 13px; font-weight: 700; color: #374151; margin-left: 2px;">{{ number_format($rating, 1) }}</span>
-                            <span style="font-size: 12px; color: #9CA3AF;">({{ $instructor->total_rating_count }})</span>
                         @else
-                            <span style="font-size: 13px; color: #9CA3AF;">Chưa có đánh giá</span>
+                            <span style="font-size: 12px; color: #9CA3AF;">Mới tham gia</span>
+                        @endif
+
+                        @if($certsCount > 0)
+                            <span style="display: inline-flex; align-items: center; gap: 3px; background: #ECFDF5; border: 1px solid #A7F3D0; color: #047857; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;" title="{{ $certsCount }} chứng chỉ & bằng cấp đã xác minh">
+                                🏅 {{ $certsCount }} chứng chỉ
+                            </span>
                         @endif
                     </div>
                     
                     {{-- 3 Stats --}}
-                    <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; font-size: 12px; color: #4B5563; font-weight: 500;">
+                    <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; font-size: 12px; color: #4B5563; font-weight: 500;">
                         <span style="display: flex; align-items: center; gap: 4px;">
                             👨‍🎓 {{ format_k_number($instructor->students_count) }} học viên
                         </span>
@@ -284,15 +297,15 @@
                         </span>
                         @if($isTop)
                             <span style="color: #D1D5DB;">|</span>
-                            <span style="display: flex; align-items: center; gap: 4px; color: #B45309;">
-                                ⭐ Top Instructor
+                            <span style="display: flex; align-items: center; gap: 4px; color: #B45309; font-weight: 700;">
+                                ⭐ Top GV
                             </span>
                         @endif
                     </div>
                     
                     {{-- Bio --}}
-                    <p style="font-size: 13px; color: #6B7280; line-height: 1.5; margin: 0 0 20px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: center;">
-                        {{ $instructor->bio ?: 'Giảng viên chuyên nghiệp tại OnlineFEA.' }}
+                    <p style="font-size: 13px; color: #6B7280; line-height: 1.5; margin: 0 0 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: center; height: 38px;">
+                        {{ $bioText }}
                     </p>
                     
                     {{-- Button --}}

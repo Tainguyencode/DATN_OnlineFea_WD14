@@ -10,7 +10,10 @@ use App\Models\Submission;
 use App\Services\LearningProgressService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 /**
  * Controller Xử lý Nộp bài tập dành cho Học viên (Student)
@@ -22,6 +25,35 @@ use Illuminate\Support\Facades\Storage;
  */
 class AssignmentController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $assignments = Assignment::query()
+            ->whereHas('course.enrollments', fn ($query) => $query
+                ->where('user_id', $request->user()->id)
+                ->whereIn('status', ['active', 'completed']))
+            ->with([
+                'course:id,title,slug',
+                'lesson:id,course_id,title',
+                'submissions' => fn ($query) => $query->where('user_id', $request->user()->id),
+            ])
+            ->when($request->filled('status'), function ($query) use ($request): void {
+                $status = $request->string('status')->toString();
+                if ($status === 'not_submitted') {
+                    $query->whereDoesntHave('submissions', fn ($submissions) => $submissions->where('user_id', $request->user()->id));
+                } else {
+                    $query->whereHas('submissions', fn ($submissions) => $submissions
+                        ->where('user_id', $request->user()->id)
+                        ->where('status', $status));
+                }
+            })
+            ->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('due_date')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('student.assignments.index', compact('assignments'));
+    }
+
     /**
      * Tải tài liệu bài tập về máy và kích hoạt thời gian làm bài (6 giờ) cho lần làm hiện tại.
      *
@@ -164,17 +196,22 @@ class AssignmentController extends Controller
      */
     public function submit(Request $request, Course $course, Lesson $lesson, LearningProgressService $progressService): RedirectResponse
     {
+        abort_unless((int) $lesson->course_id === (int) $course->id
+            || $lesson->section()->where('course_id', $course->id)->exists()
+            || $lesson->chapter()->where('course_id', $course->id)->exists(), 404);
+        abort_unless($lesson->type === Lesson::TYPE_ASSIGNMENT, 404);
+
         // 1. Kiểm tra xem học viên đã ghi danh vào khóa học này chưa
         $isEnrolled = $course->enrollments()
             ->where('user_id', $request->user()->id)
-            ->whereIn('status', ['active', 'completed'])
+            ->withLearningAccess()
             ->exists();
 
         abort_unless($isEnrolled, 403, 'Bạn cần đăng ký khóa học để thực hiện hành động này.');
 
-        // 2. Đảm bảo bài học hiện tại có bài tập thực hành
+        // Assignment phải do giảng viên cấu hình; request học viên không được tự sinh dữ liệu khóa học.
         $assignment = $lesson->assignment;
-        abort_unless($assignment, 404, 'Không tìm thấy bài tập thực hành.');
+        abort_unless($assignment && (int) $assignment->course_id === (int) $course->id, 404, 'Không tìm thấy bài tập thực hành.');
 
         // 3. Lấy attempt mới nhất hiện tại của học viên
         $submission = Submission::query()
@@ -205,14 +242,23 @@ class AssignmentController extends Controller
         }
 
         // 4. Validate dữ liệu đầu vào: bắt buộc phải có 1 trong 2 (Nội dung văn bản HOẶC File đính kèm)
-        $request->validate([
-            'content' => 'required_without:file|nullable|string|max:5000',
-            'file' => 'required_without:content|nullable|file|mimes:pdf,zip,rar,doc,docx,png,jpg,jpeg|max:10240', // Tối đa 10MB
+        $allowedTypes = collect(explode(',', (string) ($assignment->allowed_file_types ?: 'pdf,zip,rar,doc,docx,png,jpg,jpeg')))
+            ->map(fn (string $type) => strtolower(trim($type)))
+            ->filter(fn (string $type) => in_array($type, ['pdf', 'zip', 'rar', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'txt', 'xls', 'xlsx', 'ppt', 'pptx'], true))
+            ->unique()
+            ->values();
+        abort_if($allowedTypes->isEmpty(), 422, 'Bài tập chưa cấu hình định dạng tệp hợp lệ.');
+        $maximumFileSize = max(1, min(102400, (int) ($assignment->maximum_file_size ?: 10240)));
+
+        $validated = $request->validate([
+            'content' => ['required_without:file', 'nullable', 'string', 'max:5000'],
+            'code_language' => ['nullable', 'string', Rule::in(['plaintext', 'php', 'javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'html', 'css', 'sql', 'json', 'bash'])],
+            'file' => ['required_without:content', 'nullable', 'file', 'mimes:'.$allowedTypes->implode(','), 'max:'.$maximumFileSize],
         ], [
             'content.required_without' => 'Vui lòng nhập nội dung câu trả lời hoặc tải lên file bài làm.',
             'file.required_without' => 'Vui lòng tải lên file bài làm hoặc nhập nội dung câu trả lời.',
-            'file.mimes' => 'File đính kèm chỉ chấp nhận các định dạng: PDF, ZIP, RAR, DOC, DOCX, PNG, JPG, JPEG.',
-            'file.max' => 'Dung lượng file tải lên không được vượt quá 10MB.',
+            'file.mimes' => 'File đính kèm chỉ chấp nhận các định dạng: '.$allowedTypes->map(fn ($type) => strtoupper($type))->implode(', ').'.',
+            'file.max' => 'Dung lượng file tải lên không được vượt quá '.round($maximumFileSize / 1024, 1).'MB.',
         ]);
 
         // 5. Quản lý lưu trữ file bài làm (Lưu riêng từng attempt, không ghi đè file các lần trước)
@@ -227,6 +273,7 @@ class AssignmentController extends Controller
         $submission->update([
             'file_path' => $filePath,
             'content' => $request->input('content'),
+            'code_language' => $validated['code_language'] ?? 'plaintext',
             'status' => 'submitted',
             'submitted_at' => now(),
             'result' => null,

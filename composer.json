@@ -7,15 +7,16 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
-        "barryvdh/laravel-dompdf": "*",
+        "barryvdh/laravel-dompdf": "^3.1",
         "laravel/framework": "^13.0",
-        "laravel/socialite": "*",
+        "laravel/reverb": "^1.11",
+        "laravel/socialite": "^5.28",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.35",
         "maatwebsite/excel": "^4.0",
         "php-ffmpeg/php-ffmpeg": "^1.4",
         "phpoffice/phpspreadsheet": "^5.9",
-        "socialiteproviders/microsoft": "*",
+        "socialiteproviders/microsoft": "^4.9",
         "stripe/stripe-php": "^21.0"
     },
     "require-dev": {
@@ -53,7 +54,7 @@
         ],
         "dev:unix": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan reverb:start --debug\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,reverb,logs,vite --kill-others"
         ],
         "test": [
             "@php artisan config:clear --ansi",

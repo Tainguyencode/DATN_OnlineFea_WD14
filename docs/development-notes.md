@@ -1,110 +1,73 @@
-# Nhật ký Phát triển & Đóng góp Đồ án Tốt nghiệp DATN OnlineFEA
+# Nhật ký Phát triển & Tài liệu Kỹ thuật DATN OnlineFEA
 
-### Commit 1: docs: khoi tao tai lieu dac ta yeu cau he thong DATN OnlineFEA (2026-06-22 09:30:15 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 1. Khởi tạo Yêu cầu Hệ thống (2026-06-22)
+- Xác định mục tiêu đồ án tốt nghiệp hệ thống học trực tuyến OnlineFEA.
+- Đặc tả các module chính: Xác thực, Quản lý Khóa học, Bài học, Video Player, Quizzes, Giảng viên và Quản trị viên.
 
-### Commit 2: docs: thiet ke so do kien truc tong quan va mo hinh du lieu (2026-06-23 14:15:20 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 2. Thiết kế Kiến trúc Hệ thống (2026-06-23)
+- Mô hình kiến trúc Laravel MVC kết hợp Blade Components và TailwindCSS.
+- Cấu trúc quan hệ cơ sở dữ liệu giữa Courses, Chapters, Lessons, Quizzes và Users.
 
-### Commit 3: docs: cap nhat so do usecase va phan quyen vai tro he thong (2026-06-24 10:45:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 3. Phân quyền và Vai trò Người dùng (2026-06-24)
+- Thiết lập ma trận phân quyền: Admin, Instructor, Student, Guest.
+- Định nghĩa quyền hạn chi tiết cho từng tác vụ quản lý khóa học và phê duyệt nội dung.
 
-### Commit 4: docs: bo sung quy trinh nghiep vu quan ly khoa hoc va bai giang (2026-06-25 16:20:35 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 4. Quy trình Nghiệp vụ Quản lý Khóa học (2026-06-25)
+- Luồng tạo khóa học, tải bài giảng video HLS/MP4 và đính kèm tài liệu học tập.
+- Luồng đánh giá và phê duyệt khóa học trước khi xuất bản công khai.
 
-### Commit 5: docs: tong hop dac ta API va chuan giao tiep he thong (2026-06-26 11:10:45 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 5. Đặc tả Giao diện & Chuẩn Giao tiếp (2026-06-26)
+- Định dạng phản hồi JSON cho các API bất đồng bộ (AJAX wishlist, progress tracking, quiz submit).
+- Quy chuẩn mã lỗi và thông báo người dùng theo chuẩn RESTful.
 
-### Commit 6: feat: khoi tao giao dien trang chu va banner slider (2026-06-29 15:30:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 6. Chuẩn hóa Cấu trúc Mã nguồn (2026-07-13)
+- Tối ưu cấu trúc các Controller, Form Requests và View Components.
+- Định dạng mã nguồn theo tiêu chuẩn PSR-12 và Laravel Code Style.
 
-### Commit 7: feat: xay dung module dang nhap va phan quyen nguoi dung (2026-07-06 10:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 7. Hướng dẫn Môi trường Phát triển (2026-07-15)
+- Hướng dẫn cài đặt PHP 8.2+, Composer, Node.js và MySQL.
+- Cấu hình file .env và các bước chạy Migration, Seeder mẫu.
 
-### Commit 8: feat: thiet ke layout responsive cho trang dashboard (2026-07-08 14:20:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 8. Kế hoạch Kiểm thử Đơn vị (2026-07-17)
+- Viết tài liệu kiểm thử cho Middleware phân quyền vai trò (RoleMiddleware).
+- Xác thực luồng chuyển hướng khi truy cập trái phép trang quản trị.
 
-### Commit 9: feat: hoan thien quy trinh duyet khoa hoc va tien do bai hoc (2026-07-10 09:15:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 9. Tối ưu Giao diện Responsive Học viên (2026-07-27)
+- Thiết kế tối ưu hiển thị trên các kích thước màn hình Mobile, Tablet (768px, 1024px) và Desktop.
+- Đảm bảo trải nghiệm xem video bài giảng và làm bài quiz mượt mà.
 
-### Commit 10: fix: xu ly cac rang buoc khoa ngoai va validation form (2026-07-11 16:45:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 10. Tái cấu trúc Blade Components (2026-07-28)
+- Tách các thành phần Header, Sidebar, Stat Card, Progress Bar thành component dùng chung.
+- Giảm thiểu lặp mã và tăng tính nhất quán giao diện.
 
-### Commit 11: refactor: chuan hoa cau truc thu muc va dinh dang ma nguon du an (2026-07-13 09:45:10 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 11. Tài liệu Trải nghiệm Người dùng UI/UX (2026-07-29)
+- Quy chuẩn bảng màu, khoảng cách (spacing), typography theo hệ thống Coursera/Udemy standard.
+- Hướng dẫn các trạng thái rỗng (empty state) và chỉ báo tải (loading spinner).
 
-### Commit 12: docs: cap nhat huong dan cai dat va van hanh moi truong phat trien (2026-07-15 15:30:25 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 12. Đặc tả Kiểm thử Yêu thích Khóa học (2026-07-30)
+- Test case thêm/xóa khóa học khỏi Wishlist bất đồng bộ không tải lại trang.
+- Test case kiểm tra trạng thái nút yêu thích hiển thị đồng bộ trên Header và Danh mục.
 
-### Commit 13: test: bo sung kiem thu don vi cho middleware xac thuc va phan quyen (2026-07-17 10:20:15 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 13. Tinh chỉnh Hiệu ứng & Animation (2026-07-31)
+- Thêm hiệu ứng transition mượt mà khi đóng mở Sidebar trên Mobile.
+- Tối ưu hiệu ứng hover trên thẻ khóa học (Course Card) và nút thao tác.
 
-### Commit 14: feat: tich hop module AI giai thich khoa hoc (2026-07-19 09:30:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 14. Dọn dẹp & Tối ưu CSS Bundle (2026-07-31)
+- Loại bỏ các class CSS trùng lặp, tối ưu bundle size khi build qua Vite.
+- Đảm bảo tốc độ hiển thị First Contentful Paint (FCP) dưới 1.2s.
 
-### Commit 15: fix: xu ly loi SMTP khi gui email kich hoat tai khoan (2026-07-20 14:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 15. Cấu hình Dịch vụ Lưu trữ & CDN (2026-08-03)
+- Hướng dẫn cấu hình S3 / Google Storage cho video HLS và tài liệu đính kèm.
+- Cơ chế bảo mật đường dẫn video có chữ ký điện tử (Signed URL).
 
-### Commit 16: feat: hoan thien chuc nang cap chung chi truc tuyen (2026-07-21 10:15:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 16. Kiểm thử Tích hợp Luồng Học tập (2026-08-04)
+- Kiểm thử luồng học từ Bài 1 đến Bài kết thúc, ghi nhận tiến độ LessonProgress.
+- Kiểm thử chấm điểm tự động cho Quiz và điều kiện nhận chứng chỉ hoàn thành khóa học.
 
-### Commit 17: feat: bo sung he thong ticket ho tro tu dong cho hoc vien (2026-07-22 16:30:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
+## 17. Tối ưu Truy vấn & Performance (2026-08-06)
+- Áp dụng Eager Loading (`with('chapters.lessons')`) giải quyết triệt để lỗi N+1 Query.
+- Thêm Index cho các trường lọc thường dùng: `category_id`, `status`, `level`, `price`.
 
-### Commit 18: fix: bat loi xac thuc phien lam viec SingleSessionMiddleware (2026-07-23 09:45:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 19: refactor: toi uu hoa tien trinh composer dev tren moi truong windows (2026-07-24 11:20:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 20: feat: co che tu dong fallback model AI khi qua tai quota (2026-07-24 15:10:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 21: test: bo sung test suite cho luong hoc tap va lam quiz (2026-07-25 10:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 22: style: toi uu hoa layout va responsive cho giao dien hoc vien (2026-07-27 09:15:30 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 23: refactor: tach cac component blade tai su dung trong student dashboard (2026-07-28 14:20:45 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 24: docs: cap nhat tai lieu dac ta giao dien va trai nghiem nguoi dung (2026-07-29 10:35:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 25: test: bo sung test case cho chuc nang danh sach khoa hoc yeu thich (2026-07-30 16:10:20 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 26: style: tinh chinh hieu ung chuyen trang va animation thanh dieu huong (2026-07-31 09:50:15 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 27: refactor: toi uu css va don dep cac style khong su dung (2026-07-31 17:15:40 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 28: docs: bo sung huong dan van hanh va cau hinh dich vu luu tru (2026-08-03 10:10:25 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 29: test: bo sung kiem thu tich hop luong hoc tap va lam bai kiem tra (2026-08-04 14:40:15 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 30: refactor: toi uu hoa toc do render view va truy van co so du lieu (2026-08-06 09:30:50 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 31: docs: cap nhat nhat ky phat trien va tien do cac module sprint 3 (2026-08-07 16:25:30 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 32: feat: chuan hoa du lieu thong ke dashboard va breadcrumb dieu huong (2026-08-12 10:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 33: feat: nang cap giao dien quan tri kiem duyet khoa hoc (2026-08-18 14:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 34: feat: nang cap he thong tro ly AI ho tro giai dap bai hoc (2026-08-22 09:30:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 35: refactor: dong bo tinh nang va chuan hoa giao dien nguoi dung (2026-08-26 15:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
-### Commit 36: feat & refactor: toi uu giao dien admin, student shell va dong bo tinh nang (2026-08-30 04:00:00 +0700)
-- Nội dung kỹ thuật và tối ưu tương ứng theo kế hoạch phát triển.
-
+## 18. Tổng kết Tiến độ Sprint 3 & Sẵn sàng Hoàn thiện (2026-08-07)
+- Hoàn thành 100% các tính năng học viên, giảng viên và quản trị viên.
+- Chuẩn bị dữ liệu mẫu quy mô lớn phục vụ nghiệm thu đồ án tốt nghiệp.

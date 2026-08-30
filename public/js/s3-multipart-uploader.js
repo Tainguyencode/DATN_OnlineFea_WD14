@@ -29,6 +29,7 @@ class S3MultipartUploader {
         this.batchSignUrl = options.batchSignUrl;
         this.completeUrl = options.completeUrl;
         this.abortUrl = options.abortUrl;
+        this.maxVideoBytes = Number(options.maxVideoBytes) || (200 * 1024 * 1024);
         this.csrfToken = options.csrfToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         // Số luồng upload song song (4 luồng giúp tận dụng tối đa băng thông quốc tế)
@@ -68,6 +69,9 @@ class S3MultipartUploader {
     async upload(file) {
         if (!file) {
             throw createS3UploadUserError('Vui lòng chọn tệp video để tải lên.');
+        }
+        if (file.size > this.maxVideoBytes) {
+            throw createS3UploadUserError(`Dung lượng video tối đa là ${this.formatBytes(this.maxVideoBytes, 0)}.`);
         }
 
         this.isCancelled = false;
@@ -499,6 +503,7 @@ class CourseUploadQueueManager {
             signPartUrl: next.config.signPartUrl,
             completeUrl: next.config.completeUrl,
             abortUrl: next.config.abortUrl,
+            maxVideoBytes: next.config.maxVideoBytes,
             concurrency: 4,
             onInit: (initData) => {
                 next.key = initData.key;
@@ -676,6 +681,7 @@ function createLessonFormState(config) {
         signPartUrl: config.signPartUrl,
         completeUrl: config.completeUrl,
         abortUrl: config.abortUrl,
+        maxVideoBytes: Number(config.maxVideoBytes) || (200 * 1024 * 1024),
         currentQueueId: null,
 
         generateS3Key(filename) {
@@ -689,6 +695,15 @@ function createLessonFormState(config) {
         startS3Upload(event) {
             const file = event.target.files && event.target.files[0];
             if (!file) return;
+            if (file.size > this.maxVideoBytes) {
+                this.uploadStatus = 'error';
+                this.uploadStatusMessage = `Dung lượng video tối đa là ${Math.round(this.maxVideoBytes / 1048576)}MB.`;
+                event.target.value = '';
+                if (window.showCurriculumToast) {
+                    window.showCurriculumToast(this.uploadStatusMessage, true);
+                }
+                return;
+            }
 
             const formElement = event.target.closest('form');
             const titleInput = formElement ? formElement.querySelector("input[name='title']") : null;
@@ -735,6 +750,7 @@ function createLessonFormState(config) {
                 signPartUrl: this.signPartUrl,
                 completeUrl: this.completeUrl,
                 abortUrl: this.abortUrl,
+                maxVideoBytes: this.maxVideoBytes,
                 onInit: (initData) => {
                     if (this.currentQueueId === queueItem.id) {
                         this.s3Key = initData.key;
@@ -1053,6 +1069,7 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             const commonState = data.common_state || 'completed'; // 'completed' | 'processing' | 'failed'
             const commonMessage = data.common_message || '';
             const canSubmit = !!data.can_submit;
+            const submissionMessage = data.submission_message || 'Khóa học chưa đủ điều kiện để gửi duyệt.';
 
             // 1. CẬP NHẬT BANNER HLS CHUNG TỔNG THỂ
             const bannerWrapper = document.getElementById('common-hls-banner-wrapper');
@@ -1135,7 +1152,7 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
                     btn.setAttribute('disabled', 'disabled');
                     btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
                     btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-                    btn.setAttribute('title', 'Khóa học chưa thể gửi duyệt vì video vẫn đang được xử lý bảo mật.');
+                    btn.setAttribute('title', submissionMessage);
                 }
             });
 

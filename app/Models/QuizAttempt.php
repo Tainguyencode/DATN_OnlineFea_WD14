@@ -24,6 +24,9 @@ class QuizAttempt extends Model
         'user_id',
         'quiz_id',
         'quiz_version_id',
+        'random_seed',
+        'focus_violation_count',
+        'question_ids',
         'status',
         'termination_reason',
         'remaining_seconds',
@@ -51,6 +54,8 @@ class QuizAttempt extends Model
             'remaining_seconds' => 'integer',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'focus_violation_count' => 'integer',
+            'question_ids' => 'array',
         ];
     }
 

@@ -178,7 +178,7 @@ class LessonImportController extends Controller
         } catch (Throwable $exception) {
             Log::error('Lesson import confirm controller failed unexpectedly.', [
                 'course_id' => $course->id,
-                'section_id' => $section->id,
+                'section_id' => $sectionModel->id,
                 'user_id' => $request->user()->id,
                 'exception' => $exception,
             ]);

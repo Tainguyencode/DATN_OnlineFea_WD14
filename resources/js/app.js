@@ -181,7 +181,25 @@ function initializeToast(toast) {
     startTimer();
 }
 
-function showAppToast({ type = 'info', message = '', duration = DEFAULT_TOAST_DURATION } = {}) {
+function showAppToast(optionsOrMessage = {}, maybeType = 'info', maybeDuration = DEFAULT_TOAST_DURATION) {
+    let message = '';
+    let type = 'info';
+    let duration = DEFAULT_TOAST_DURATION;
+
+    if (typeof optionsOrMessage === 'string' || optionsOrMessage instanceof String) {
+        message = String(optionsOrMessage);
+        if (typeof maybeType === 'string') {
+            type = maybeType;
+        }
+        if (typeof maybeDuration === 'number' || (typeof maybeDuration === 'string' && !Number.isNaN(Number(maybeDuration)))) {
+            duration = normalizeToastDuration(maybeDuration);
+        }
+    } else if (optionsOrMessage && typeof optionsOrMessage === 'object') {
+        message = optionsOrMessage.message ?? '';
+        type = optionsOrMessage.type ?? 'info';
+        duration = normalizeToastDuration(optionsOrMessage.duration ?? DEFAULT_TOAST_DURATION);
+    }
+
     const container = getToastContainer();
 
     if (!container) return null;
@@ -208,7 +226,47 @@ function showAppToast({ type = 'info', message = '', duration = DEFAULT_TOAST_DU
 
 window.AppToast = {
     show: showAppToast,
+    success: (msg, dur) => showAppToast(msg, 'success', dur),
+    error: (msg, dur) => showAppToast(msg, 'error', dur),
+    info: (msg, dur) => showAppToast(msg, 'info', dur),
+    warning: (msg, dur) => showAppToast(msg, 'warning', dur),
 };
+
+function publicHeader() {
+    return {
+        openMenu: null,
+        mobileOpen: false,
+
+        isDesktop() {
+            return window.matchMedia('(min-width: 1024px)').matches;
+        },
+
+        isOpen(menu) {
+            return this.openMenu === menu;
+        },
+
+        activate(menu) {
+            if (this.isDesktop()) {
+                this.openMenu = menu;
+            }
+        },
+
+        toggleMenu(menu) {
+            this.openMenu = this.openMenu === menu ? null : menu;
+        },
+
+        closeMenus() {
+            this.openMenu = null;
+        },
+
+        closeMobile() {
+            this.openMenu = null;
+            this.mobileOpen = false;
+        },
+    };
+}
+
+window.publicHeader = publicHeader;
 
 Alpine.start();
 

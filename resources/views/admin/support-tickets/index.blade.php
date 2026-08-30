@@ -42,7 +42,7 @@
                     <th class="px-4 py-3">Mã</th>
                     <th class="px-4 py-3">Tiêu đề</th>
                     <th class="px-4 py-3">Người gửi</th>
-                    <th class="px-4 py-3">Trạng thái</th>
+                    <th class="px-4 py-3 text-center whitespace-nowrap">Trạng thái</th>
                     <th class="px-4 py-3">Ưu tiên</th>
                     <th class="px-4 py-3">Phụ trách</th>
                     <th class="px-4 py-3"></th>
@@ -60,7 +60,18 @@
                             <div>{{ $ticket->user?->name }}</div>
                             <div class="text-xs text-slate-500">{{ $ticket->user?->email }}</div>
                         </td>
-                        <td class="px-4 py-3">{{ $ticket->status->label() }}</td>
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            @php
+                                $mappedStatus = match($ticket->status->value) {
+                                    'open' => 'status-info',
+                                    'in_progress' => 'status-pending',
+                                    'resolved' => 'status-success',
+                                    'closed' => 'status-inactive',
+                                    default => 'status-info'
+                                };
+                            @endphp
+                            <span class="status-badge {{ $mappedStatus }}">{{ $ticket->status->label() }}</span>
+                        </td>
                         <td class="px-4 py-3">{{ $ticket->priority->label() }}</td>
                         <td class="px-4 py-3">{{ $ticket->assignee?->name ?? '—' }}</td>
                         <td class="px-4 py-3 text-right">

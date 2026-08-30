@@ -11,11 +11,11 @@
         <h2 class="mt-4 text-xl font-bold text-slate-900 dark:text-white">Thao tác quá nhiều lần</h2>
         <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Bạn đã gửi yêu cầu quá nhanh. Vui lòng chờ 1 phút sau đó thử lại.</p>
         <div class="mt-6 flex justify-center gap-3">
-            <a href="{{ route('password.request') }}" class="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700">
-                Thử lại Quên mật khẩu
+            <a href="{{ url()->previous() }}" class="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700">
+                Quay lại
             </a>
-            <a href="{{ route('login') }}" class="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300">
-                Về Đăng nhập
+            <a href="{{ route('home') }}" class="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300">
+                Trang chủ
             </a>
         </div>
     </div>

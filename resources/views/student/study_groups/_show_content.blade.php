@@ -35,10 +35,9 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
         
         {{-- Breadcrumb / Back button --}}
         <div class="flex items-center justify-between">
-            <a href="{{ route('study-groups.index') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-                Quay lại danh sách nhóm
-            </a>
+            <button type="button" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ route('study-groups.index') }}'; }" class="inline-flex items-center gap-2 text-sm sm:text-base font-bold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-400 cursor-pointer transition py-1">
+                ← Quay lại
+            </button>
             
             <div class="flex items-center gap-2">
                 <span class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0056D2] ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-300">
@@ -124,8 +123,23 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                                     <p class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" title="{{ $member->name }}">
                                         {{ $member->name }}
                                     </p>
-                                    <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold uppercase {{ $member->pivot->role === 'moderator' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' }}">
-                                        {{ $member->pivot->role === 'moderator' ? 'Trưởng nhóm' : 'Học viên' }}
+                                    @php
+                                        if ($member->pivot->role === 'moderator' || $member->id === $studyGroup->creator_id) {
+                                            $roleBadgeText = 'Trưởng nhóm';
+                                            $roleBadgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400';
+                                        } elseif ($member->isInstructor() || $member->role === 'instructor') {
+                                            $roleBadgeText = 'Giảng viên';
+                                            $roleBadgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400';
+                                        } elseif ($member->isAdmin() || $member->role === 'admin') {
+                                            $roleBadgeText = 'Quản trị viên';
+                                            $roleBadgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400';
+                                        } else {
+                                            $roleBadgeText = 'Học viên';
+                                            $roleBadgeClass = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+                                        }
+                                    @endphp
+                                    <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold uppercase {{ $roleBadgeClass }}">
+                                        {{ $roleBadgeText }}
                                     </span>
                                 </div>
                                 
@@ -224,8 +238,8 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                                             {{-- Header: Actions + Thời gian · Bạn --}}
                                             <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 px-1">
                                                 @if(!$msg->is_recalled)
-                                                    <button type="button" 
-                                                            onclick="recallMessage({{ $msg->id }})"
+                                                    <button type="button"
+                                                            onclick="event.preventDefault(); event.stopPropagation(); recallMessage({{ $msg->id }}); return false;"
                                                             class="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-1 py-0.5 rounded transition cursor-pointer"
                                                             title="Thu hồi tin nhắn">
                                                         <span>Thu hồi</span>
@@ -448,7 +462,7 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                             </div>
                         </div>
 
-                        <form id="send-form" class="flex gap-3 items-center" onsubmit="handleSendMessage(event)">
+                        <form id="send-form" action="{{ route('study-groups.messages.store', $studyGroup) }}" method="POST" onsubmit="event.preventDefault(); handleSendMessage(event); return false;" class="flex gap-3 items-center">
                             @csrf
                             <input type="hidden" name="reply_to_message_id" id="reply-to-message-id" value="">
                             <div class="relative flex-1 flex items-center">
@@ -472,6 +486,7 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
 
                                 <input type="text" 
                                        id="message-input" 
+                                       name="message"
                                        placeholder="Nhập nội dung tin nhắn..." 
                                        autocomplete="off"
                                        class="flex-1 rounded-xl border border-slate-300 bg-white pl-12 pr-4 py-3 text-sm text-slate-950 focus:border-[#0056D2] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white transition">
@@ -592,7 +607,9 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
 <script>
     const groupId = {{ $studyGroup->id }};
     const currentUserId = {{ Auth::id() }};
+    const sendForm = document.getElementById('send-form');
     const chatBox = document.getElementById('chat-box');
+    const chatStatus = document.getElementById('chat-status');
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
     const replyInput = document.getElementById('reply-to-message-id');
@@ -610,6 +627,9 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
     const uploadProgressPercent = document.getElementById('upload-progress-percent');
     const uploadProgressBar = document.getElementById('upload-progress-bar');
     let lastMessageId = {{ $studyGroup->messages->last()->id ?? 0 }};
+    let isSendingMessage = false;
+    let realtimeConnected = false;
+    let pollTimer = null;
 
     function showStudyGroupToast(message, type = 'error') {
         const safeMessage = typeof message === 'string' && message.trim() !== ''
@@ -845,6 +865,7 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             return;
         }
 
+        const shouldStickToBottom = isMe || (chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 120);
         const placeholder = document.getElementById('no-messages-placeholder');
         if (placeholder) placeholder.remove();
 
@@ -854,8 +875,8 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
 
         if (msg.is_recalled) {
             renderRecalledMessage(messageDiv, msg);
-            chatBox.appendChild(messageDiv);
-            scrollToBottom();
+            insertMessageInOrder(messageDiv, msg.id);
+            if (shouldStickToBottom) scrollToBottom();
             return;
         }
 
@@ -868,8 +889,8 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             messageDiv.className = 'group flex items-start justify-end gap-2.5 my-1.5 p-1 rounded-xl transition-all duration-300';
             headerHtml = `
                 <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 px-1">
-                    <button type="button" 
-                            onclick="recallMessage(${msg.id})"
+                    <button type="button"
+                            onclick="event.preventDefault(); event.stopPropagation(); recallMessage(${msg.id}); return false;"
                             class="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-1 py-0.5 rounded transition cursor-pointer"
                             title="Thu hồi tin nhắn">
                         <span>Thu hồi</span>
@@ -944,15 +965,31 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             messageDiv.innerHTML = avatarHtml + bubbleHtml;
         }
 
-        chatBox.appendChild(messageDiv);
-        scrollToBottom();
+        insertMessageInOrder(messageDiv, msg.id);
+        lastMessageId = Math.max(lastMessageId, Number(msg.id) || 0);
+        if (shouldStickToBottom) scrollToBottom();
+    }
+
+    function insertMessageInOrder(messageElement, messageId) {
+        const nextMessage = Array.from(chatBox.children).find((element) => {
+            const id = Number.parseInt(element.id?.replace('msg-', ''), 10);
+            return Number.isFinite(id) && id > Number(messageId);
+        });
+
+        if (nextMessage) {
+            chatBox.insertBefore(messageElement, nextMessage);
+        } else {
+            chatBox.appendChild(messageElement);
+        }
     }
 
     function handleSendMessage(event) {
         event.preventDefault();
+        if (isSendingMessage) return;
         const message = messageInput.value.trim();
         const hasAttachment = attachmentInput.files.length > 0;
         if (!message && !hasAttachment) return;
+        isSendingMessage = true;
         messageInput.disabled = true; sendButton.disabled = true;
         const formData = new FormData();
         if (message) formData.append('message', message);
@@ -962,25 +999,32 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
         
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `/study-groups/${groupId}/messages`, true);
-        xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('input[name="_token"]').value);
+        xhr.setRequestHeader('X-CSRF-TOKEN', sendForm.querySelector('input[name="_token"]').value);
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         xhr.setRequestHeader('Accept', 'application/json');
+        const socketId = window.Echo?.socketId?.();
+        if (socketId) xhr.setRequestHeader('X-Socket-ID', socketId);
         if (hasAttachment) {
             xhr.upload.addEventListener('progress', function(e) {
                 if (e.lengthComputable) { const percent = Math.round((e.loaded / e.total) * 100); uploadProgressBar.style.width = percent + '%'; uploadProgressPercent.textContent = percent + '%'; }
             });
         }
         xhr.onload = function() {
+            isSendingMessage = false;
             messageInput.disabled = false; sendButton.disabled = false; uploadProgressContainer.classList.add('hidden');
             if (xhr.status >= 200 && xhr.status < 300) {
-                const result = JSON.parse(xhr.responseText);
-                if (result.success) {
-                    messageInput.value = '';
-                    cancelReplyContext();
-                    clearSelectedAttachment();
-                    appendMessage(result.data, true);
-                    lastMessageId = result.data.id;
-                    messageInput.focus();
+                try {
+                    const result = JSON.parse(xhr.responseText);
+                    if (result.success) {
+                        messageInput.value = '';
+                        cancelReplyContext();
+                        clearSelectedAttachment();
+                        appendMessage(result.data, true);
+                        messageInput.focus();
+                    }
+                } catch (error) {
+                    showStudyGroupToast('Máy chủ trả về dữ liệu không hợp lệ. Tin nhắn sẽ được đồng bộ lại.');
+                    schedulePoll(0);
                 }
             } else {
                 try {
@@ -992,6 +1036,7 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
             }
         };
         xhr.onerror = function() {
+            isSendingMessage = false;
             messageInput.disabled = false; sendButton.disabled = false; uploadProgressContainer.classList.add('hidden');
             showStudyGroupToast('Không thể kết nối tới máy chủ. Vui lòng thử lại.');
         };
@@ -1005,9 +1050,9 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                 const result = await response.json();
                 if (result.success && result.data && result.data.messages) {
                     result.data.messages.forEach(msg => {
-                        if (msg.id > lastMessageId) {
+                        const existing = document.getElementById(`msg-${msg.id}`);
+                        if (!existing) {
                             appendMessage(msg, parseInt(msg.user_id) === currentUserId);
-                            lastMessageId = msg.id;
                         } else if (msg.is_recalled) {
                             const el = document.getElementById(`msg-${msg.id}`);
                             if (el && !el.innerHTML.includes('Tin nhắn đã được thu hồi')) {
@@ -1018,8 +1063,47 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                 }
             }
         } catch (error) { console.error(error); }
+        schedulePoll(realtimeConnected ? 30000 : 3500);
     }
-    setInterval(pollMessages, 3500);
+
+    function schedulePoll(delay = 3500) {
+        window.clearTimeout(pollTimer);
+        pollTimer = window.setTimeout(pollMessages, delay);
+    }
+
+    function setRealtimeStatus(connected) {
+        realtimeConnected = connected;
+        chatStatus.innerHTML = connected
+            ? '<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span> Trực tuyến'
+            : '<span class="h-2 w-2 rounded-full bg-amber-500"></span> Đang kết nối lại';
+        schedulePoll(connected ? 30000 : 0);
+    }
+
+    if (window.Echo) {
+        window.Echo.private(`study-group.${groupId}`)
+            .listen('.study-group.message.created', (event) => {
+                appendMessage(event.message, Number(event.message.user_id) === currentUserId);
+            })
+            .listen('.study-group.message.recalled', (event) => {
+                const element = document.getElementById(`msg-${event.message.id}`);
+                if (element) renderRecalledMessage(element, event.message);
+            })
+            .error((error) => {
+                console.error('Study group channel error:', error);
+                setRealtimeStatus(false);
+            });
+
+        const connection = window.Echo.connector?.pusher?.connection;
+        connection?.bind('connected', () => setRealtimeStatus(true));
+        connection?.bind('disconnected', () => setRealtimeStatus(false));
+        connection?.bind('error', (error) => {
+            console.error('Reverb connection error:', error);
+            setRealtimeStatus(false);
+        });
+        setRealtimeStatus(connection?.state === 'connected');
+    } else {
+        setRealtimeStatus(false);
+    }
 
     // INVITATION MODAL JS
     function openInviteModal() {
