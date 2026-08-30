@@ -365,6 +365,7 @@
                                         + Thêm vào giỏ hàng
                                     </button>
                                 </form>
+                            @endif
                             <x-favorite-button :course="$course" :favorited="$isFavorited" :label="true" :block="true" />
                         </div>
                     @else
