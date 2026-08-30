@@ -48,6 +48,7 @@ use App\Http\Controllers\Web\LearningPathController;
 use App\Http\Controllers\Web\LegalDocumentController;
 use App\Http\Controllers\Web\LessonCommentController;
 use App\Http\Controllers\Web\NotificationController;
+use App\Http\Controllers\Web\PageController;
 use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\ProfileController;
 use App\Http\Controllers\Web\ReviewController;
@@ -84,6 +85,14 @@ Route::get('/home', [HomeController::class, 'index'])->name('home');
 Route::get('/dieu-khoan-dang-ky', [LegalDocumentController::class, 'registrationTerms'])
     ->name('legal.registration-terms');
 Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+
+// ─── STATIC INFORMATION PAGES ───
+Route::prefix('pages')->name('pages.')->group(function () {
+    Route::get('/academy', [PageController::class, 'academy'])->name('academy');
+    Route::get('/innovation-lab', [PageController::class, 'innovationLab'])->name('innovation-lab');
+    Route::get('/career-accelerator', [PageController::class, 'careerAccelerator'])->name('career-accelerator');
+    Route::get('/corporate-training', [PageController::class, 'corporateTraining'])->name('corporate-training');
+});
 
 // ─── GIẢNG VIÊN (PUBLIC) ───
 Route::get('/instructors', [InstructorController::class, 'index'])->name('instructors.index');
