@@ -190,7 +190,7 @@
 <x-layouts.dashboard
     role="admin"
     roleLabel="Quản trị viên"
-    accent="rose"
+    accent="blue"
     :menu="$menu"
     :title="$title"
     :pageTitle="$pageTitle"

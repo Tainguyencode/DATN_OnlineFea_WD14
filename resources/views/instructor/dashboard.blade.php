@@ -1,60 +1,96 @@
-<x-instructor-layout title="Tổng quan" page-title="Dashboard Giảng viên" breadcrumb="Quản lý khóa học và học viên">
+<x-instructor-layout title="Phân tích giảng dạy" page-title="Dashboard Giảng viên" breadcrumb="Theo dõi hiệu suất khóa học và học viên">
 
-<div class="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-    <x-stat-card label="Tổng khóa học" :value="$stats['courses']" color="emerald"
-        icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>' />
-    <x-stat-card label="Đã xuất bản" :value="$stats['published']" color="blue"
-        icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' />
-    <x-stat-card label="Học viên" :value="$stats['students']" color="purple"
-        icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' />
-    <x-stat-card label="Doanh thu" :value="number_format($stats['revenue'], 0, ',', '.') . 'đ'" color="amber"
-        icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' />
+@php
+    $statusOptions = collect(\App\Enums\CourseStatus::cases());
+    $chartLabels = $monthlyAnalytics->pluck('label');
+    $chartRevenue = $monthlyAnalytics->pluck('revenue');
+    $chartEnrollments = $monthlyAnalytics->pluck('enrollments');
+    $statusLabels = $courseStatuses->pluck('label');
+    $statusValues = $courseStatuses->pluck('value');
+    $topCourseLabels = $topCourses->pluck('title')->map(fn ($title) => \Illuminate\Support\Str::limit($title, 22));
+    $topCourseValues = $topCourses->pluck('period_enrollments_count');
+@endphp
+
+<div class="bi-dashboard space-y-4">
+    <form method="GET" action="{{ route('instructor.dashboard') }}" class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+            <div class="min-w-[240px] xl:mr-auto">
+                <p class="text-lg font-black text-slate-950 dark:text-white">Phân tích hoạt động giảng dạy</p>
+                <p class="mt-1 text-xs text-slate-400">Theo dõi dữ liệu thực tế của từng khóa học</p>
+            </div>
+            <div class="grid flex-1 gap-3 sm:grid-cols-3">
+                <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Khoảng thời gian</span><select name="period" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="6" @selected($filters['period'] === 6)>6 tháng gần nhất</option><option value="12" @selected($filters['period'] === 12)>12 tháng gần nhất</option></select></label>
+                <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Khóa học</span><select name="course_id" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="">Tất cả khóa học</option>@foreach($courseOptions as $course)<option value="{{ $course->id }}" @selected($filters['courseId'] === $course->id)>{{ $course->title }}</option>@endforeach</select></label>
+                <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Trạng thái</span><select name="status" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="">Tất cả trạng thái</option>@foreach($statusOptions as $courseStatus)<option value="{{ $courseStatus->value }}" @selected($filters['status'] === $courseStatus->value)>{{ $courseStatus->label() }}</option>@endforeach</select></label>
+            </div>
+            <div class="flex gap-2"><button class="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700">Áp dụng</button><a href="{{ route('instructor.dashboard') }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Xóa lọc</a></div>
+        </div>
+    </form>
+
+    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        @php
+            $kpis = [
+                ['Thu nhập', number_format($stats['revenue'], 0, ',', '.').'đ', '₫', 'Trong kỳ đã chọn'],
+                ['Khóa học', number_format($stats['courses']), '▤', 'Theo bộ lọc'],
+                ['Đã xuất bản', number_format($stats['published']), '✓', 'Đang hoạt động'],
+                ['Học viên', number_format($stats['students']), '◉', number_format($stats['enrollments']).' lượt ghi danh'],
+                ['Tổng đánh giá', number_format($stats['reviews']), '✦', number_format($stats['helpful_reviews']).' lượt hữu ích'],
+                ['Điểm trung bình', number_format($stats['average_rating'], 1), '★', 'Trên thang 5 sao'],
+            ];
+        @endphp
+        @foreach($kpis as $index => $kpi)
+            <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-[0_4px_12px_rgba(37,99,235,0.07)] dark:border-blue-900/50 dark:bg-slate-900">
+                <div class="flex items-center gap-3"><span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $index === 5 ? 'bg-amber-50 text-amber-500 dark:bg-amber-500/10' : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300' }} text-sm font-black">{{ $kpi[2] }}</span><div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{{ $kpi[0] }}</p><p class="mt-1 truncate text-xl font-black text-slate-950 dark:text-white">{{ $kpi[1] }}</p><p class="mt-0.5 truncate text-[10px] text-slate-400">{{ $kpi[3] }}</p></div></div>
+            </article>
+        @endforeach
+    </section>
+
+    <section class="grid gap-4 xl:grid-cols-12">
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-5"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Thu nhập và ghi danh theo tháng</h3><p class="mt-1 text-xs text-slate-400">Xu hướng trong {{ $filters['period'] }} tháng gần nhất</p></div><div class="h-[285px]"><canvas id="instructorTrendChart" role="img" aria-label="Biểu đồ thu nhập và ghi danh"></canvas></div></article>
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-3"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Cơ cấu khóa học</h3><p class="mt-1 text-xs text-slate-400">Phân bổ theo trạng thái xuất bản</p></div><div class="h-[285px]"><canvas id="instructorStatusChart" role="img" aria-label="Biểu đồ trạng thái khóa học"></canvas></div></article>
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-4"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Top khóa học</h3><p class="mt-1 text-xs text-slate-400">Xếp hạng theo lượt ghi danh trong kỳ</p></div><div class="h-[285px]"><canvas id="instructorTopCoursesChart" role="img" aria-label="Biểu đồ top khóa học"></canvas></div></article>
+    </section>
+
+    <section class="grid gap-4 xl:grid-cols-12">
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-4"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Phân bố điểm đánh giá</h3><p class="mt-1 text-xs text-slate-400">Phản hồi của học viên từ 1 đến 5 sao</p></div><div class="h-[310px]"><canvas id="instructorRatingChart" role="img" aria-label="Biểu đồ phân bố đánh giá"></canvas></div></article>
+        <article class="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-8">
+            <header class="flex items-center justify-between border-b border-blue-100 px-4 py-3 dark:border-slate-800"><div><h3 class="text-sm font-black text-slate-900 dark:text-white">Phân tích chi tiết khóa học</h3><p class="mt-1 text-xs text-slate-400">Hiệu suất nội dung theo bộ lọc hiện tại</p></div><a href="{{ route('instructor.courses.create') }}" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">+ Tạo khóa học</a></header>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[720px] text-left text-xs">
+                    <thead class="bg-blue-600 text-white"><tr><th class="px-4 py-3 font-bold">Khóa học</th><th class="px-3 py-3 font-bold">Danh mục</th><th class="px-3 py-3 text-center font-bold">Ghi danh</th><th class="px-3 py-3 text-center font-bold">Đánh giá</th><th class="px-3 py-3 text-center font-bold">Điểm</th><th class="px-3 py-3 font-bold">Trạng thái</th><th class="px-4 py-3 text-right font-bold">Thao tác</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        @forelse($topCourses as $course)
+                            <tr class="hover:bg-blue-50/50 dark:hover:bg-slate-800/60">
+                                <td class="max-w-[250px] px-4 py-3 font-bold text-slate-800 dark:text-slate-100"><span class="block truncate">{{ $course->title }}</span></td>
+                                <td class="px-3 py-3 text-slate-500 dark:text-slate-400">{{ $course->category?->name ?? '—' }}</td>
+                                <td class="px-3 py-3 text-center font-bold text-slate-700 dark:text-slate-200">{{ number_format($course->period_enrollments_count) }}</td>
+                                <td class="px-3 py-3 text-center text-slate-500">{{ number_format($course->reviews_count) }}</td>
+                                <td class="px-3 py-3 text-center"><span class="font-black text-amber-500">★</span> <strong class="text-slate-700 dark:text-slate-200">{{ number_format((float) ($course->reviews_avg_rating ?? 0), 1) }}</strong></td>
+                                <td class="px-3 py-3"><span class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{{ $course->statusEnum()->label() }}</span></td>
+                                <td class="px-4 py-3 text-right"><a href="{{ route('instructor.courses.edit', $course) }}" class="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-300">Chi tiết</a></td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="px-4 py-12 text-center text-slate-400">Không có dữ liệu phù hợp với bộ lọc.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
 </div>
 
-<div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
-    <div class="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div class="flex items-center justify-between border-b border-slate-200 p-5 dark:border-slate-800">
-            <h2 class="font-bold text-slate-900 dark:text-white">Khóa học gần đây</h2>
-            <a href="{{ route('instructor.courses.index') }}" class="text-sm font-semibold text-[#0056D2] hover:text-[#0046B8] dark:text-blue-300">Xem tất cả</a>
-        </div>
-        <div class="divide-y divide-slate-200 dark:divide-slate-800">
-            @forelse($recentCourses as $course)
-                <div class="flex items-center justify-between p-4 transition duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                    <div>
-                        <h3 class="font-semibold text-slate-900 dark:text-white">{{ $course->title }}</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ $course->enrollments_count }} học viên · {{ $course->category?->name }}</p>
-                    </div>
-                    @php
-                        $statusColors = ['draft' => 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', 'pending' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', 'published' => 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', 'rejected' => 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'];
-                    @endphp
-                    <span class="rounded px-2 py-1 text-xs font-bold {{ $statusColors[$course->status] ?? '' }}">{{ ucfirst($course->status) }}</span>
-                </div>
-            @empty
-                <div class="ui-empty m-5">Chưa có khóa học. <a href="{{ route('instructor.courses.create') }}" class="font-semibold text-[#0056D2] dark:text-blue-300">Tạo ngay</a></div>
-            @endforelse
-        </div>
-    </div>
-
-    <div class="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div class="border-b border-slate-200 p-5 dark:border-slate-800">
-            <h2 class="font-bold text-slate-900 dark:text-white">Học viên mới đăng ký</h2>
-        </div>
-        <div class="divide-y divide-slate-200 dark:divide-slate-800">
-            @forelse($recentStudents as $enrollment)
-                <div class="flex items-center gap-3 p-4 transition duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-sm font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        {{ strtoupper(substr($enrollment->user->name, 0, 1)) }}
-                    </div>
-                    <div>
-                        <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ $enrollment->user->name }}</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400">{{ $enrollment->course->title }}</div>
-                    </div>
-                </div>
-            @empty
-                <div class="ui-empty m-5">Chưa có học viên đăng ký.</div>
-            @endforelse
-        </div>
-    </div>
-</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.Chart) return;
+    const dark = document.documentElement.classList.contains('dark');
+    const text = dark ? '#cbd5e1' : '#64748b';
+    const grid = dark ? 'rgba(148,163,184,.12)' : 'rgba(148,163,184,.18)';
+    const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: text, boxWidth: 10, usePointStyle: true, font: { size: 10 } } } } };
+    new Chart(document.getElementById('instructorTrendChart'), { type: 'line', data: { labels: @json($chartLabels), datasets: [{ label: 'Thu nhập', data: @json($chartRevenue), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .35, pointRadius: 3, yAxisID: 'y' }, { label: 'Ghi danh', data: @json($chartEnrollments), borderColor: '#06b6d4', backgroundColor: '#06b6d4', tension: .35, pointRadius: 3, yAxisID: 'y1' }] }, options: { ...common, interaction: { mode: 'index', intersect: false }, scales: { x: { ticks: { color: text }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: text, callback: value => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(value) + 'đ' }, grid: { color: grid } }, y1: { beginAtZero: true, position: 'right', ticks: { color: text, precision: 0 }, grid: { display: false } } } } });
+    new Chart(document.getElementById('instructorStatusChart'), { type: 'doughnut', data: { labels: @json($statusLabels), datasets: [{ data: @json($statusValues), backgroundColor: ['#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#06b6d4','#14b8a6','#64748b'], borderWidth: 3, borderColor: dark ? '#0f172a' : '#fff' }] }, options: { ...common, cutout: '62%', plugins: { ...common.plugins, legend: { position: 'bottom', labels: { color: text, boxWidth: 9, usePointStyle: true, font: { size: 9 } } } } } });
+    new Chart(document.getElementById('instructorTopCoursesChart'), { type: 'bar', data: { labels: @json($topCourseLabels->take(5)), datasets: [{ label: 'Ghi danh', data: @json($topCourseValues->take(5)), backgroundColor: '#3b82f6', borderRadius: 5 }] }, options: { ...common, indexAxis: 'y', plugins: { ...common.plugins, legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } }, y: { ticks: { color: text, font: { size: 10 } }, grid: { display: false } } } } });
+    new Chart(document.getElementById('instructorRatingChart'), { type: 'bar', data: { labels: @json($ratingDistribution->pluck('label')), datasets: [{ label: 'Đánh giá', data: @json($ratingDistribution->pluck('value')), backgroundColor: ['#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#1d4ed8'], borderRadius: 6 }] }, options: { ...common, plugins: { ...common.plugins, legend: { display: false } }, scales: { x: { ticks: { color: text }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } } } } });
+});
+</script>
 
 </x-instructor-layout>
