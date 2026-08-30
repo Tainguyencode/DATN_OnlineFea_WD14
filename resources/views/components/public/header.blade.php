@@ -79,9 +79,7 @@
             </button>
 
             @auth
-                @unless($user->isStudent())
-                    <x-notifications.bell :recent-notifications="$recentNotifications ?? collect()" :unread-count="$unreadNotificationCount ?? 0" />
-                @endunless
+                <x-notifications.bell :recent-notifications="$recentNotifications ?? collect()" :unread-count="$unreadNotificationCount ?? 0" />
 
                 <div data-student-account class="relative" x-on:click.outside="if (isOpen('account')) closeMenus()">
                     <button type="button" x-on:click="toggleMenu('account')"

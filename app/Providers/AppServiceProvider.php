@@ -107,18 +107,6 @@ class AppServiceProvider extends ServiceProvider
                     ->value('courses_count') ?? 0;
             }
 
-            if ($isStudentPublicHeader || $isStudentDashboardHeader) {
-                $view->with([
-                    'unreadNotificationCount' => 0,
-                    'recentNotifications' => collect(),
-                    'unreadStudyGroupCount' => 0,
-                    'favoriteCourseCount' => $favoriteCourseCount,
-                    'studentCartCount' => $studentCartCount,
-                ]);
-
-                return;
-            }
-
             if (! Schema::hasTable('push_notifications')) {
                 $view->with([
                     'unreadNotificationCount' => 0,
