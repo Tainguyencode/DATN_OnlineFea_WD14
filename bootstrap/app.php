@@ -20,8 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Required when the local app is exposed through Cloudflare/ngrok so
+        // URL generation honours X-Forwarded-Host and X-Forwarded-Proto.
+        $middleware->trustProxies(at: env('TRUSTED_PROXIES'));
+
         $middleware->validateCsrfTokens(except: [
             'payments/payos/ipn',
+            'payments/momo/ipn',
             'instructor/courses/*/s3/multipart/*',
         ]);
 

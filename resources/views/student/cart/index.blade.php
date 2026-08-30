@@ -420,6 +420,23 @@
                                     <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'bank_transfer'"></div>
                                 </div>
                             </div>
+
+                            <!-- MoMo Option -->
+                            <div @click="paymentMethod = 'momo'"
+                                 :class="paymentMethod === 'momo' ? 'border-[#a50064] bg-pink-50/50 dark:border-pink-400 dark:bg-pink-950/20' : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'"
+                                 class="flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition select-none">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-8 w-12 rounded-lg bg-[#a50064] text-white flex items-center justify-center shrink-0 text-[10px] font-black tracking-tight">MoMo</div>
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-800 dark:text-white block">MoMo</span>
+                                        <span class="text-[10px] text-[#a50064] dark:text-pink-300 font-medium">Thanh toán thử nghiệm qua ví MoMo</span>
+                                    </div>
+                                </div>
+                                <div class="h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0"
+                                     :class="paymentMethod === 'momo' ? 'border-[#a50064] bg-[#a50064]' : 'border-slate-300'">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white" x-show="paymentMethod === 'momo'"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
