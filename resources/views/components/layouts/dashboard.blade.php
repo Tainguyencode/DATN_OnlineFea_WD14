@@ -39,6 +39,117 @@
     <title>{{ $title }} - EduPlatform</title>
     @include('partials.theme-init', ['useSystemPreference' => $role !== 'admin'])
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/learning-player.js'])
+    <style>
+        /* Custom scrollbar cho Sidebar */
+        .sidebar-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb {
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+        .sidebar-scrollbar {
+            scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+            scrollbar-width: thin;
+        }
+
+        /* CSS dùng chung cho Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: fit-content;
+            min-width: unset;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+            flex-wrap: nowrap;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+
+        .status-badge::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex: 0 0 auto;
+        }
+
+        /* Trạng thái hoạt động / Đang bật (Xanh lá) */
+        .status-active,
+        .status-approved,
+        .status-success {
+            background-color: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+        .status-active::before,
+        .status-approved::before,
+        .status-success::before {
+            background-color: #10b981;
+        }
+
+        /* Trạng thái chờ / Đang xử lý (Vàng/Cam) */
+        .status-pending,
+        .status-warning {
+            background-color: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+        .status-pending::before,
+        .status-warning::before {
+            background-color: #f59e0b;
+        }
+
+        /* Trạng thái không hoạt động / Đã tắt (Xám) */
+        .status-inactive,
+        .status-disabled {
+            background-color: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        .status-inactive::before,
+        .status-disabled::before {
+            background-color: #64748b;
+        }
+
+        /* Trạng thái nguy hiểm / Hủy / Từ chối (Đỏ) */
+        .status-danger,
+        .status-rejected,
+        .status-canceled,
+        .status-expired {
+            background-color: #fff1f2;
+            color: #be123c;
+            border: 1px solid #fecdd3;
+        }
+        .status-danger::before,
+        .status-rejected::before,
+        .status-canceled::before,
+        .status-expired::before {
+            background-color: #f43f5e;
+        }
+
+        /* Trạng thái thông tin (Xanh dương) */
+        .status-info {
+            background-color: #f0f9ff;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+        .status-info::before {
+            background-color: #0ea5e9;
+        }
+    </style>
 </head>
 <body @class([
     'instructor-shell' => $role === 'instructor',
@@ -57,7 +168,7 @@
                 </a>
             </div>
 
-            <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+            <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto sidebar-scrollbar">
                 @foreach($menu as $item)
                     @php
                         $children = $item['children'] ?? [];

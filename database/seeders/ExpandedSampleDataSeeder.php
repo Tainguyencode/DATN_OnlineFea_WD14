@@ -40,6 +40,7 @@ class ExpandedSampleDataSeeder extends Seeder
                 ['email' => $instructor['email']],
                 [
                     'name' => $instructor['name'],
+                    'role' => $instructor['role'],
                     'password' => bcrypt('password123'),
                 ]
             );
@@ -62,6 +63,7 @@ class ExpandedSampleDataSeeder extends Seeder
                 ['email' => $email],
                 [
                     'name' => "$firstName $lastName",
+                    'role' => 'student',
                     'password' => bcrypt('password123'),
                 ]
             );

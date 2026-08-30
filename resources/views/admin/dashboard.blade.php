@@ -224,7 +224,14 @@
                     <div class="flex gap-3 py-3 text-xs">
                         <div class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500"></div>
                         <div class="min-w-0 flex-1">
-                            <p class="font-semibold text-slate-800 dark:text-slate-200 line-clamp-1">{{ $log->action }}</p>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="font-semibold text-slate-800 dark:text-slate-200 line-clamp-1">
+                                    {{ str_replace(['login', 'logout'], ['Đăng nhập', 'Đăng xuất'], $log->action) }}
+                                </p>
+                                @if($loop->first)
+                                    <span class="rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">MỚI</span>
+                                @endif
+                            </div>
                             <p class="mt-0.5 text-slate-400">{{ $log->user?->name ?? 'Hệ thống' }} · {{ $log->created_at->diffForHumans() }}</p>
                         </div>
                     </div>
@@ -236,7 +243,6 @@
             </div>
         </div>
     </div>
-
 </div>
 
 </x-admin-layout>

@@ -168,7 +168,7 @@
                             <th class="px-5 py-3.5">Học viên</th>
                             <th class="px-5 py-3.5 text-right">Số tiền hoàn</th>
                             <th class="px-5 py-3.5">Tài khoản nhận refund</th>
-                            <th class="px-4 py-3.5 text-center">Trạng thái</th>
+                            <th class="px-4 py-3.5 text-center whitespace-nowrap">Trạng thái</th>
                             <th class="px-5 py-3.5 text-center">Hành động</th>
                         </tr>
                     </thead>
@@ -205,27 +205,15 @@
                                     <p class="text-[11px] text-slate-500 line-clamp-1 italic mt-0.5">Lý do: "{{ $item->reason }}"</p>
                                 </td>
 
-                                <td class="px-4 py-4 text-center">
+                                <td class="px-4 py-4 text-center whitespace-nowrap">
                                     @if ($item->status === 'pending')
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                            Chờ đối soát
-                                        </span>
+                                        <span class="status-badge status-pending">Chờ đối soát</span>
                                     @elseif ($item->status === 'processing')
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-800">
-                                            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
-                                            Đang xử lý
-                                        </span>
+                                        <span class="status-badge status-info">Đang xử lý</span>
                                     @elseif ($item->status === 'approved')
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1 text-[11px] font-bold text-purple-800">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
-                                            Đã hoàn tiền
-                                        </span>
+                                        <span class="status-badge status-success">Đã hoàn tiền</span>
                                     @else
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-[11px] font-bold text-rose-800">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                                            Từ chối
-                                        </span>
+                                        <span class="status-badge status-danger">Từ chối</span>
                                     @endif
                                 </td>
 

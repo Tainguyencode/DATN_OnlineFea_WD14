@@ -28,6 +28,7 @@ class DashboardController extends Controller
             'courses_pending' => Course::whereIn('status', [Course::STATUS_SUBMITTED, CourseStatus::PendingReview->value])->count(),
             'enrollments_total' => Enrollment::count(),
             'enrollments_month' => Enrollment::where('created_at', '>=', $currentMonth)->count(),
+            'pending_instructors' => User::where('role', 'instructor')->where('instructor_status', 'pending')->count(),
         ];
 
         $recentLogs = ActivityLog::with('user:id,name')
@@ -41,6 +42,22 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
-        return view('admin.dashboard', compact('stats', 'recentLogs', 'pendingCourses'));
+        // Tổng hợp dữ liệu đăng ký mới trong 7 ngày gần nhất cho biểu đồ
+        $recentUsers = User::where('created_at', '>=', now()->subDays(6)->startOfDay())->get(['created_at']);
+        $chartDates = [];
+        $chartCounts = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $dateStr = now()->subDays($i)->format('Y-m-d');
+            $displayDate = now()->subDays($i)->format('d/m');
+            
+            $count = $recentUsers->filter(function ($user) use ($dateStr) {
+                return $user->created_at->format('Y-m-d') === $dateStr;
+            })->count();
+
+            $chartDates[] = $displayDate;
+            $chartCounts[] = $count;
+        }
+
+        return view('admin.dashboard', compact('stats', 'recentLogs', 'pendingCourses', 'chartDates', 'chartCounts'));
     }
 }
