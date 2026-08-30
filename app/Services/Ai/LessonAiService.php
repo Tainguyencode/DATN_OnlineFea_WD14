@@ -503,6 +503,7 @@ PROMPT;
     {
         $clean = strip_tags($text);
         $clean = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $clean = str_replace('**', '', $clean);
 
         return trim(preg_replace("/[ \t]+/u", ' ', $clean) ?? $clean);
     }

@@ -514,4 +514,80 @@ class InstructorRegistrationWorkflowTest extends TestCase
         $this->assertFalse($instructor->fresh()->needs_admin_review);
         $this->assertNotNull($instructor->fresh()->admin_last_reviewed_at);
     }
+
+    /**
+     * CASE 19: Test unified filters: status, date_from, date_to, category_id
+     */
+    public function test_case_19_unified_instructor_applications_filter(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+        $catWeb = Category::create(['name' => 'Web Development', 'slug' => 'web-dev', 'status' => true]);
+        $catMobile = Category::create(['name' => 'Mobile Development', 'slug' => 'mobile-dev', 'status' => true]);
+
+        $instPending = User::factory()->create([
+            'name' => 'Pending Instructor',
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'created_at' => '2026-01-10 10:00:00',
+            'email_verified_at' => now(),
+        ]);
+        $instPending->instructorProfile()->create([
+            'category_id' => $catWeb->id,
+            'specialty' => 'Laravel Expert',
+        ]);
+
+        $instApproved = User::factory()->create([
+            'name' => 'Approved Instructor',
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'created_at' => '2026-02-15 10:00:00',
+            'email_verified_at' => now(),
+        ]);
+        $instApproved->instructorProfile()->create([
+            'category_id' => $catMobile->id,
+            'specialty' => 'Flutter Developer',
+        ]);
+
+        // Filter status=pending
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['status' => 'pending']));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+
+        // Filter status=approved
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['status' => 'approved']));
+        $res->assertOk();
+        $res->assertSee('Approved Instructor');
+        $res->assertDontSee('Pending Instructor');
+
+        // Filter date_from = 2026-02-01
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['date_from' => '2026-02-01']));
+        $res->assertOk();
+        $res->assertSee('Approved Instructor');
+        $res->assertDontSee('Pending Instructor');
+
+        // Filter date_to = 2026-01-31
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['date_to' => '2026-01-31']));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+
+        // Filter category_id = catWeb
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['category_id' => $catWeb->id]));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+
+        // Filter combined
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', [
+            'status' => 'pending',
+            'date_from' => '2026-01-01',
+            'date_to' => '2026-01-31',
+            'category_id' => $catWeb->id,
+        ]));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+    }
 }

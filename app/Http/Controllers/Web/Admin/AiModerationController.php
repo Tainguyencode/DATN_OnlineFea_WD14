@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\ContentUpdate;
+use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\VideoModeration;
 use App\Services\GeminiService;
@@ -367,20 +369,116 @@ class AiModerationController extends Controller
     }
 
     /**
+     * Helper lấy context đầy đủ của bài học & khóa học để kiểm tra độ phù hợp danh mục.
+     */
+    private function resolveLessonContext(string|int $lessonId): array
+    {
+        $isUpdate = str_starts_with((string) $lessonId, 'update_les_');
+        $updateId = $isUpdate ? str_replace('update_les_', '', $lessonId) : null;
+        $update = $updateId ? ContentUpdate::find($updateId) : null;
+        $lesson = (! $isUpdate && ! $update)
+            ? Lesson::with(['course.category.parent', 'chapter.course.category.parent', 'section.course.category.parent'])->find($lessonId)
+            : null;
+
+        $course = null;
+        $lessonTitle = '';
+        $lessonContent = '';
+
+        if ($lesson) {
+            $lessonTitle = $lesson->title;
+            $lessonContent = (string) ($lesson->content ?: ($lesson->description ?? ''));
+            $course = $lesson->course ?: ($lesson->chapter?->course ?: $lesson->section?->course);
+            if (! $course && $lesson->course_id) {
+                $course = Course::with('category.parent')->find($lesson->course_id);
+            }
+        } elseif ($update) {
+            $payload = $update->payload ?? [];
+            $lessonTitle = $payload['title'] ?? 'Bài học';
+            $lessonContent = (string) ($payload['content'] ?? ($payload['description'] ?? ''));
+            if ($update->course_id) {
+                $course = Course::with('category.parent')->find($update->course_id);
+            }
+        }
+
+        $category = $course?->category;
+
+        return [
+            'category_name' => $category?->name ?? 'Không xác định',
+            'parent_category_name' => $category?->parent?->name ?? '',
+            'course_title' => $course?->title ?? '',
+            'course_description' => (string) ($course?->short_description ?: ($course?->description ?? '')),
+            'lesson_title' => $lessonTitle,
+            'lesson_content' => $lessonContent,
+        ];
+    }
+
+    /**
+     * Bước 2b: Phân tích sự phù hợp giữa nội dung video và danh mục / ngành của khóa học.
+     */
+    public function checkCategoryMatch(Request $request, string|int $lessonId, GeminiService $gemini)
+    {
+        $framePaths = $request->input('frames', []);
+
+        if (empty($framePaths)) {
+            $lessonDir = storage_path('app/temp_frames/lesson_'.$lessonId);
+            if (File::isDirectory($lessonDir)) {
+                $framePaths = File::glob($lessonDir.'/*.jpg');
+            }
+        }
+
+        if (empty($framePaths)) {
+            return response()->json([
+                'status' => 'Cần Admin kiểm tra',
+                'confidence' => 0.5,
+                'reason' => 'Không tìm thấy khung hình video để kiểm tra danh mục.',
+                'detected_topics' => [],
+            ]);
+        }
+
+        $context = $this->resolveLessonContext($lessonId);
+
+        if ($request->filled('category_name')) {
+            $context['category_name'] = $request->input('category_name');
+        }
+        if ($request->filled('course_title')) {
+            $context['course_title'] = $request->input('course_title');
+        }
+
+        $result = $gemini->analyzeCategoryMatch($framePaths, $context);
+        $result['category_name'] = $context['category_name'];
+
+        return response()->json($result);
+    }
+
+    /**
      * Bước 3: Tổng hợp kết quả từ frontend, lưu DB và xóa ảnh rác.
      */
     public function saveResults(Request $request, string|int $lessonId)
     {
         $validated = $request->validate([
             'results' => 'present|array',
+            'category_match' => 'nullable|array',
         ]);
 
         $results = $validated['results'];
+        $categoryMatch = $validated['category_match'] ?? null;
 
         if (count($results) === 0) {
             return response()->json([
                 'error' => 'Không có kết quả phân tích nào để lưu. Vui lòng thử quét lại.',
             ], 422);
+        }
+
+        // Nếu frontend chưa gửi category_match nhưng còn frame trong thư mục tạm, tự động chạy kiểm tra
+        if (! is_array($categoryMatch) || empty($categoryMatch['status'])) {
+            $lessonDir = storage_path('app/temp_frames/lesson_'.$lessonId);
+            if (File::isDirectory($lessonDir)) {
+                $frameFiles = File::glob($lessonDir.'/*.jpg');
+                if (! empty($frameFiles)) {
+                    $context = $this->resolveLessonContext($lessonId);
+                    $categoryMatch = app(GeminiService::class)->analyzeCategoryMatch($frameFiles, $context);
+                }
+            }
         }
 
         $violence = false;
@@ -395,7 +493,11 @@ class AiModerationController extends Controller
         $maxRiskValue = 0;
         $riskLevels = ['none' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
 
-        foreach ($results as $result) {
+        foreach ($results as $key => $result) {
+            if ($key === 'category_match' || ! is_array($result)) {
+                continue;
+            }
+
             if (! empty($result['violence'])) {
                 $violence = true;
             }
@@ -451,6 +553,11 @@ class AiModerationController extends Controller
             if (! empty($signs)) {
                 $summary = 'AI phát hiện dấu hiệu cần kiểm tra: '.implode(', ', $signs).'. Gợi ý: Có thể chỉ là video minh họa, admin nên xem lại trước khi quyết định.';
             }
+        }
+
+        // Thêm category_match vào details
+        if (is_array($categoryMatch) && ! empty($categoryMatch['status'])) {
+            $results['category_match'] = $categoryMatch;
         }
 
         $isUpdate = str_starts_with((string) $lessonId, 'update_les_');

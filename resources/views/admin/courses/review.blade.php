@@ -465,6 +465,71 @@
                                                                 </div>
                                                             @endif
 
+                                                            {{-- Bổ sung: AI kiểm tra phù hợp danh mục --}}
+                                                            @php
+                                                                $catMatch = method_exists($mod, 'categoryMatch') ? $mod->categoryMatch() : ($mod->details['category_match'] ?? null);
+                                                                $catBadge = method_exists($mod, 'categoryMatchBadge') ? $mod->categoryMatchBadge() : null;
+                                                                $courseCategoryName = $course->category?->name ?? 'Không xác định';
+                                                                if ($course->category?->parent) {
+                                                                    $courseCategoryName = $course->category->parent->name . ' → ' . $courseCategoryName;
+                                                                }
+                                                            @endphp
+
+                                                            @if($catMatch)
+                                                                @php
+                                                                    $catStatus = $catMatch['status'] ?? 'Cần Admin kiểm tra';
+                                                                    $catBadgeClass = match($catStatus) {
+                                                                        'Phù hợp' => 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                                                                        'Không phù hợp' => 'bg-rose-100 text-rose-800 border-rose-300',
+                                                                        default => 'bg-amber-100 text-amber-800 border-amber-300',
+                                                                    };
+                                                                    $catEmoji = match($catStatus) {
+                                                                        'Phù hợp' => '🟢',
+                                                                        'Không phù hợp' => '🔴',
+                                                                        default => '🟡',
+                                                                    };
+                                                                @endphp
+                                                                <div class="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 p-3.5 shadow-2xs">
+                                                                    <div class="flex items-center justify-between gap-2 mb-2">
+                                                                        <div class="flex items-center gap-1.5">
+                                                                            <span class="text-base">🎓</span>
+                                                                            <h6 class="font-bold text-indigo-950 text-xs sm:text-sm">AI kiểm tra phù hợp danh mục</h6>
+                                                                        </div>
+                                                                        <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold {{ $catBadgeClass }}">
+                                                                            <span>{{ $catEmoji }}</span>
+                                                                            {{ $catStatus }}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div class="space-y-1.5 text-xs">
+                                                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                                            <span class="text-slate-500 font-medium">Danh mục yêu cầu:</span>
+                                                                            <span class="font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{{ $courseCategoryName }}</span>
+                                                                            @if(isset($catMatch['confidence']))
+                                                                                <span class="text-slate-400">·</span>
+                                                                                <span class="text-slate-500 font-medium">Độ tin cậy:</span>
+                                                                                <span class="font-bold text-indigo-700">{{ round(((float)$catMatch['confidence']) <= 1.0 ? ((float)$catMatch['confidence'] * 100) : (float)$catMatch['confidence']) }}%</span>
+                                                                            @endif
+                                                                        </div>
+
+                                                                        @if(!empty($catMatch['detected_topics']) && is_array($catMatch['detected_topics']))
+                                                                            <div class="flex flex-wrap items-center gap-1 pt-1">
+                                                                                <span class="text-slate-500 font-medium mr-1">Chủ đề phát hiện:</span>
+                                                                                @foreach($catMatch['detected_topics'] as $topic)
+                                                                                    <span class="inline-block rounded bg-white border border-indigo-200 px-2 py-0.5 text-indigo-800 font-semibold text-[11px]">{{ $topic }}</span>
+                                                                                @endforeach
+                                                                            </div>
+                                                                        @endif
+
+                                                                        @if(!empty($catMatch['reason']))
+                                                                            <div class="mt-2 text-slate-700 bg-white p-2.5 rounded-lg border border-indigo-100/80 leading-relaxed text-xs">
+                                                                                <span class="font-semibold text-slate-800">AI nhận xét về chuyên ngành:</span> {{ $catMatch['reason'] }}
+                                                                            </div>
+                                                                        @endif
+                                                                    </div>
+                                                                </div>
+                                                            @endif
+
                                                             {{-- Note admin --}}
                                                             <p class="mt-3 text-xs text-slate-500 italic">ℹ️ AI chỉ hỗ trợ phát hiện dấu hiệu. Quyết định Approve / Cần chỉnh sửa / Từ chối luôn do Admin.</p>
                                                         </div>
@@ -1205,12 +1270,32 @@ document.addEventListener('DOMContentLoaded', function () {
             );
         }
 
+        // Bước 2b: Kiểm tra độ phù hợp danh mục khóa học
+        onProgress({ phase: 'category_match', frameIndex: total, frameTotal: total });
+        var categoryMatchData = null;
+        try {
+            var catRes = await fetch('/admin/ai-moderation/' + lessonId + '/category-match', {
+                method: 'POST',
+                headers: aiFetchHeaders(),
+                body: JSON.stringify({ frames: frames }),
+            });
+            var catJson = await parseJsonResponse(catRes);
+            if (catRes.ok && catJson && catJson.status) {
+                categoryMatchData = catJson;
+            }
+        } catch (e) {
+            console.warn('[AI Moderation] Category match check error:', e);
+        }
+
         onProgress({ phase: 'save', frameIndex: total, frameTotal: total });
 
         var saveRes = await fetch('/admin/ai-moderation/' + lessonId + '/save', {
             method: 'POST',
             headers: aiFetchHeaders(),
-            body: JSON.stringify({ results: aiResults }),
+            body: JSON.stringify({
+                results: aiResults,
+                category_match: categoryMatchData,
+            }),
         });
 
         var saveData = await parseJsonResponse(saveRes);
@@ -1244,8 +1329,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         statusText.innerText = 'Đang cắt frame (mỗi 300s)...';
                         progressBar.style.width = '10%';
                     } else if (state.phase === 'analyze') {
-                        statusText.innerText = 'Đang phân tích ' + state.frameIndex + '/' + state.frameTotal + ' frame...';
-                        progressBar.style.width = (10 + (90 * state.frameIndex / state.frameTotal)) + '%';
+                        statusText.innerText = 'Đang phân tích dấu hiệu ' + state.frameIndex + '/' + state.frameTotal + ' frame...';
+                        progressBar.style.width = (10 + (70 * state.frameIndex / state.frameTotal)) + '%';
+                    } else if (state.phase === 'category_match') {
+                        statusText.innerText = 'Đang kiểm tra độ phù hợp danh mục...';
+                        progressBar.style.width = '88%';
                     } else if (state.phase === 'save') {
                         statusText.innerText = 'Đang lưu kết quả...';
                         progressBar.style.width = '98%';

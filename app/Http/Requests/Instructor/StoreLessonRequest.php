@@ -4,6 +4,7 @@ namespace App\Http\Requests\Instructor;
 
 use App\Models\Course;
 use App\Models\Lesson;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -17,7 +18,11 @@ class StoreLessonRequest extends FormRequest
             ?? $this->route('lesson')?->course
             ?? $this->route('chapter')?->course;
 
-        return $course?->isOwnedBy($this->user()) ?? false;
+        if (! $course || ! $this->user()) {
+            return false;
+        }
+
+        return app(InstructorCourseCategoryAccess::class)->canManageCourse($this->user(), $course);
     }
 
     protected function prepareForValidation(): void

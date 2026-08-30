@@ -845,7 +845,8 @@ function escapeHtml(value) {
 }
 
 function renderSafeMarkdown(value) {
-    const text = escapeHtml(value || '').replace(/\r\n/g, '\n');
+    const raw = typeof value === 'string' ? value.replace(/\*\*/g, '') : (value || '');
+    const text = escapeHtml(raw).replace(/\r\n/g, '\n');
     const codeBlocks = [];
     const withPlaceholders = text.replace(/```([\s\S]*?)```/g, (_, code) => {
         const index = codeBlocks.length;
@@ -1574,12 +1575,17 @@ function initLessonAi() {
         summaryError.classList.remove('hidden');
     };
 
+    const cleanAiText = (str) => {
+        if (typeof str !== 'string') return str || '';
+        return str.replace(/\*\*/g, '');
+    };
+
     const renderSummary = (data) => {
         if (summaryBox) {
-            summaryBox.textContent = data.summary || data.message || 'Chưa có bản tóm tắt.';
+            summaryBox.textContent = cleanAiText(data.summary || data.message || 'Chưa có bản tóm tắt.');
         }
-        renderList(keyPointsEl, data.key_points || []);
-        renderList(takeawaysEl, data.takeaways || []);
+        renderList(keyPointsEl, (data.key_points || []).map(cleanAiText));
+        renderList(takeawaysEl, (data.takeaways || []).map(cleanAiText));
         if (summaryStatus) {
             summaryStatus.textContent = data.summary
                 ? (data.cached ? 'Đang dùng bản tóm tắt đã lưu.' : 'Đã tạo tóm tắt mới.')
@@ -1593,7 +1599,8 @@ function initLessonAi() {
         item.className = role === 'user'
             ? 'rounded bg-[#eef5ff] px-3 py-2 text-sm text-[#1c1d1f]'
             : 'rounded bg-[#f7f9fa] px-3 py-2 text-sm text-[#1c1d1f]';
-        item.innerHTML = `<strong class="block text-xs uppercase tracking-wide text-[#6a6f73]">${role === 'user' ? 'Bạn' : 'AI'}</strong><span class="mt-1 block whitespace-pre-line">${escapeHtml(text)}</span>`;
+        const displayText = role === 'user' ? text : cleanAiText(text);
+        item.innerHTML = `<strong class="block text-xs uppercase tracking-wide text-[#6a6f73]">${role === 'user' ? 'Bạn' : 'AI'}</strong><span class="mt-1 block whitespace-pre-line">${escapeHtml(displayText)}</span>`;
         chatLog.appendChild(item);
         chatLog.scrollTop = chatLog.scrollHeight;
     };

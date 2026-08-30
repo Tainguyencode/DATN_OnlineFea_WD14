@@ -121,6 +121,22 @@ class EmailVerificationTest extends TestCase
         $this->assertTrue($user->fresh()->hasVerifiedEmail());
     }
 
+    public function test_new_instructor_is_redirected_to_profile_after_email_verification(): void
+    {
+        $instructor = User::factory()->unverified()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+        ]);
+        $this->createActiveCode($instructor, '482911');
+
+        $this->actingAs($instructor)
+            ->withSession(['new_instructor_profile_redirect_user_id' => $instructor->id])
+            ->post(route('verification.code.verify'), ['code' => '482911'])
+            ->assertRedirect(route('instructor.profile'));
+
+        $this->assertTrue($instructor->fresh()->hasVerifiedEmail());
+    }
+
     public function test_email_verified_at_is_updated_after_successful_verification(): void
     {
         $user = User::factory()->unverified()->create(['role' => 'student']);

@@ -81,6 +81,9 @@
                             <p class="text-xs text-amber-800 dark:text-amber-300">
                                 Bạn còn <span class="font-black text-amber-600 dark:text-amber-400">{{ $daysRemaining }} ngày</span> để hoàn thiện hồ sơ chứng chỉ trước khi bị khóa tạm thời.
                             </p>
+                            <p class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                                Bạn hãy hoàn thành cập nhật chứng chỉ bắt buộc ngay để Admin trả lời bạn sớm nhất trong vòng 72h tới. Trong khi chờ Admin duyệt bạn vẫn có thể xử dụng các chức năng quản trị bình thường.
+                            </p>
                         </div>
                     </div>
                     @if($certificatesCount > 0)

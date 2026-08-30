@@ -119,8 +119,13 @@ class AuthController extends Controller
         $request->session()->regenerate();
         $authService->registerActiveSession($user, $request);
 
+        // Chỉ hướng dẫn giảng viên vừa đăng ký tới bước hoàn thiện hồ sơ một lần.
+        if ($user->isInstructor()) {
+            $request->session()->put('new_instructor_profile_redirect_user_id', $user->id);
+        }
+
         if (! config('auth.email_verification_enabled', true)) {
-            return $this->redirectAfterAuthentication($user, $request)
+            return $this->redirectAfterNewInstructorRegistration($user, $request)
                 ->with('success', 'Đăng ký thành công.');
         }
 
@@ -303,7 +308,7 @@ class AuthController extends Controller
         $request->session()->regenerate();
         app(AuthService::class)->registerActiveSession($user, $request);
 
-        return redirect()->intended($user->dashboardUrl())
+        return $this->redirectAfterNewInstructorRegistration($user, $request)
             ->with('success', $result['message']);
     }
 
@@ -317,7 +322,7 @@ class AuthController extends Controller
             event(new Verified($request->user()));
         }
 
-        return $this->redirectAfterAuthentication($request->user(), $request)
+        return $this->redirectAfterNewInstructorRegistration($request->user(), $request)
             ->with('success', 'Email đã được xác thực thành công.');
     }
 
@@ -362,7 +367,7 @@ class AuthController extends Controller
             }
         }
 
-        return redirect()->intended($user->dashboardUrl())
+        return $this->redirectAfterNewInstructorRegistration($user, $request)
             ->with('success', 'Email đã được xác thực thành công.');
     }
 
@@ -421,6 +426,21 @@ class AuthController extends Controller
         }
 
         return redirect()->intended($user->dashboardUrl());
+    }
+
+    /**
+     * A new instructor is taken to the profile once after registration/verification,
+     * without changing redirects for later logins or existing accounts.
+     */
+    private function redirectAfterNewInstructorRegistration(User $user, Request $request): RedirectResponse
+    {
+        $registeredInstructorId = $request->session()->pull('new_instructor_profile_redirect_user_id');
+
+        if ($user->isInstructor() && (int) $registeredInstructorId === $user->id) {
+            return redirect()->route('instructor.profile');
+        }
+
+        return $this->redirectAfterAuthentication($user, $request);
     }
 
     private function isSafeRedirect(string $redirect): bool

@@ -135,7 +135,7 @@ class AuthService
                 $teachingField = Category::find($categoryId)?->name;
             }
 
-            InstructorProfile::create([
+            $profile = InstructorProfile::create([
                 'user_id' => $user->id,
                 'category_id' => $categoryId,
                 'teaching_field' => $teachingField,
@@ -150,6 +150,15 @@ class AuthService
                 'agree_information' => true,
                 'agree_terms' => true,
             ]);
+
+            if ($categoryId) {
+                $profile->syncTeachingFields([[
+                    'category_id' => $categoryId,
+                    'specialty' => $validated['specialty'] ?? null,
+                    'experience' => $validated['experience'] ?? null,
+                    'is_primary' => true,
+                ]]);
+            }
 
             InstructorApplication::create([
                 'user_id' => $user->id,

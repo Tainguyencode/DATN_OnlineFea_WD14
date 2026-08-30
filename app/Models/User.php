@@ -579,7 +579,9 @@ class User extends Authenticatable implements MustVerifyEmail
             return new Collection;
         }
 
-        $categories = $profile->teachingCategories()->get();
+        $categories = $profile->relationLoaded('teachingCategories')
+            ? $profile->teachingCategories
+            : $profile->teachingCategories()->get();
         if ($categories->isNotEmpty()) {
             return $categories;
         }
@@ -601,12 +603,16 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         // Ưu tiên lấy category có is_primary = true từ pivot
-        $primary = $profile->teachingCategories()->wherePivot('is_primary', true)->first();
+        $teachingCategories = $profile->relationLoaded('teachingCategories')
+            ? $profile->teachingCategories
+            : $profile->teachingCategories()->get();
+
+        $primary = $teachingCategories->first(fn (Category $category) => (bool) $category->pivot?->is_primary);
         if ($primary) {
             return $primary;
         }
 
-        $first = $profile->teachingCategories()->first();
+        $first = $teachingCategories->first();
         if ($first) {
             return $first;
         }

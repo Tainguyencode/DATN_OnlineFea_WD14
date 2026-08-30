@@ -3,8 +3,8 @@
     $selectedCategory = old('category_id', $course->category_id ?? '');
     $currentCategory = $course?->category ?? null;
     $selectedCategoryIsVisible = $categories
-        ->flatMap(fn ($parent) => $parent->children)
         ->contains(fn ($cat) => (string) $cat->id === (string) $selectedCategory);
+    $hasOneTeachingCategory = $categories->count() === 1;
     $selectedLevel = old('level', $course->level ?? 'beginner');
     $selectedLanguage = old('language', $course->language ?? 'vi');
     $discountPrice = old('discount_price', $course->discount_price ?? $course->sale_price ?? null);
@@ -93,26 +93,16 @@
                         <label for="category_id" class="mb-1 block text-sm font-semibold text-slate-700">Danh mục <span class="text-rose-500">*</span></label>
                         <select id="category_id" name="category_id"
                                 class="h-10 w-full cursor-pointer rounded-lg border bg-white px-3 text-sm text-slate-900 outline-none transition-colors duration-200 focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/20 @error('category_id') border-rose-500 focus:border-rose-500 focus-visible:ring-rose-500/20 @else border-slate-300 @enderror">
-                            <option value="">Chọn danh mục khóa học</option>
+                            @unless($hasOneTeachingCategory)<option value="">Chọn danh mục khóa học</option>@endunless
                             @if($selectedCategory && $currentCategory && ! $selectedCategoryIsVisible)
                                 <option value="{{ $currentCategory->id }}" selected disabled>
                                     {{ $currentCategory->full_name }} (không còn khả dụng)
                                 </option>
                             @endif
-                            @foreach($categories as $parent)
-                                @if($parent->children->isNotEmpty())
-                                    <optgroup label="{{ $parent->name }}">
-                                        @foreach($parent->children as $cat)
-                                            <option value="{{ $cat->id }}" @selected((string) $selectedCategory === (string) $cat->id)>
-                                                {{ $cat->name }}
-                                            </option>
-                                        @endforeach
-                                    </optgroup>
-                                @else
-                                    <option value="{{ $parent->id }}" @selected((string) $selectedCategory === (string) $parent->id)>
-                                        {{ $parent->name }}
-                                    </option>
-                                @endif
+                            @foreach($categories as $cat)
+                                <option value="{{ $cat->id }}" @selected((string) ($selectedCategory ?: ($hasOneTeachingCategory ? $cat->id : '')) === (string) $cat->id)>
+                                    {{ $cat->full_name }}
+                                </option>
                             @endforeach
                         </select>
                         @error('category_id') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror

@@ -925,26 +925,40 @@ function createLessonFormState(config) {
                                 parentDetails.removeAttribute('open');
                             }
                         } else {
-                            // Khi sửa bài học thành công, đóng modal sửa bài học
-                            const modal = form.closest('[id^="edit-lesson-modal-"]') || form.closest('.fixed');
-                            if (modal) {
-                                modal.classList.add('hidden');
+                            // Khi sửa bài học thành công, cập nhật ngay lập tức DOM bài học
+                            if (lessonId && resData.html) {
+                                const existingItem = document.getElementById(`lesson-item-${lessonId}`);
+                                if (existingItem) {
+                                    const tempDiv = document.createElement('div');
+                                    tempDiv.innerHTML = resData.html.trim();
+                                    const newEl = tempDiv.firstElementChild;
+                                    if (newEl) {
+                                        existingItem.replaceWith(newEl);
+                                        if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                                            window.Alpine.initTree(newEl);
+                                        }
+                                    }
+                                }
+                            } else {
+                                const modal = form.closest('[id^="edit-lesson-modal-"]') || form.closest('.fixed');
+                                if (modal) {
+                                    modal.classList.add('hidden');
+                                }
+                                if (lessonId && lessonTitle) {
+                                    const titleEl = document.querySelector(`#lesson-item-${lessonId} h4`)
+                                        || document.querySelector(`[data-lesson-title-key="lesson_${lessonId}"]`);
+                                    if (titleEl) {
+                                        titleEl.textContent = lessonTitle;
+                                    }
+                                }
                             }
+
                             const parentDetails = form.closest('details');
                             if (parentDetails) {
                                 parentDetails.removeAttribute('open');
                             }
 
                             this.currentQueueId = null;
-
-                            // Cập nhật tiêu đề bài học ngoài DOM
-                            if (lessonId && lessonTitle) {
-                                const titleEl = document.querySelector(`#lesson-item-${lessonId} h4`)
-                                    || document.querySelector(`[data-lesson-title-key="lesson_${lessonId}"]`);
-                                if (titleEl) {
-                                    titleEl.textContent = lessonTitle;
-                                }
-                            }
 
                             // Nếu video vẫn đang tải dở, hiển thị trạng thái chờ tải ở bài học ngoài danh sách
                             if (this.isUploading && lessonId) {

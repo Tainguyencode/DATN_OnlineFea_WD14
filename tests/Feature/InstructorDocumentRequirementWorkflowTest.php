@@ -410,4 +410,55 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
         $this->assertTrue($result['summary']['can_approve']);
         $this->assertEquals(2, $result['summary']['required_approved_count']);
     }
+
+    public function test_applications_index_shows_progress_for_required_documents_only(): void
+    {
+        InstructorDocumentRequirement::create([
+            'category_id' => $this->categoryWeb->id,
+            'document_type' => 'transcript',
+            'document_title' => 'Bảng điểm',
+            'is_required' => true,
+            'is_active' => true,
+            'sort_order' => 3,
+        ]);
+
+        $optionalRequirement = InstructorDocumentRequirement::create([
+            'category_id' => $this->categoryWeb->id,
+            'document_type' => 'portfolio',
+            'document_title' => 'Portfolio',
+            'is_required' => false,
+            'is_active' => true,
+            'sort_order' => 4,
+        ]);
+
+        InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqDegree->id,
+            'file_path' => 'test/degree.pdf',
+            'original_name' => 'degree.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => 1024,
+            'document_type' => 'degree',
+            'status' => 'approved',
+            'uploaded_at' => now(),
+        ]);
+
+        InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $optionalRequirement->id,
+            'file_path' => 'test/portfolio.pdf',
+            'original_name' => 'portfolio.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => 1024,
+            'document_type' => 'portfolio',
+            'status' => 'approved',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.instructors.applications.index'))
+            ->assertOk()
+            ->assertSee('33%')
+            ->assertSee('1/3');
+    }
 }

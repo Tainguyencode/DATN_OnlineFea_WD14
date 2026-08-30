@@ -33,6 +33,7 @@ function initialise(root) {
     if (!form) return;
     const file = form.querySelector('input[type="file"]');
     const filename = root.querySelector('[data-full-course-file-name]');
+    const fileError = root.querySelector('[data-full-course-file-error]');
     const preview = root.querySelector('[data-full-course-preview]');
     const live = root.querySelector('[data-full-course-live]');
     const tabs = root.querySelector('[data-full-course-tabs]');
@@ -41,10 +42,60 @@ function initialise(root) {
     const confirm = root.querySelector('[data-full-course-confirm]');
     let response = null;
 
+    const showFileError = (message) => {
+        if (fileError) {
+            fileError.textContent = message;
+            fileError.classList.remove('hidden');
+        }
+        if (file) {
+            file.classList.add('!border-rose-500', '!ring-1', '!ring-rose-500', 'dark:!border-rose-500');
+            file.focus();
+        }
+    };
+
+    const clearFileError = () => {
+        if (fileError) {
+            fileError.textContent = '';
+            fileError.classList.add('hidden');
+        }
+        if (file) {
+            file.classList.remove('!border-rose-500', '!ring-1', '!ring-rose-500', 'dark:!border-rose-500');
+        }
+    };
+
+    const validateFile = (selected) => {
+        if (!selected) {
+            return 'Vui lòng chọn file Excel để xem trước.';
+        }
+        const fileName = selected.name || '';
+        const ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+        if (ext !== '.xlsx') {
+            return 'Chỉ hỗ trợ file có phần mở rộng .xlsx.';
+        }
+        if (selected.size > 5 * 1024 * 1024) {
+            return 'Dung lượng file Excel tối đa là 5MB.';
+        }
+        return null;
+    };
+
     file?.addEventListener('change', () => {
+        clearFileError();
         const selected = file.files?.[0];
-        filename.classList.toggle('hidden', !selected);
-        filename.textContent = selected ? `${selected.name} (${Math.ceil(selected.size / 1024)} KB)` : '';
+        if (selected) {
+            const error = validateFile(selected);
+            if (error) {
+                showFileError(error);
+            }
+            if (filename) {
+                filename.classList.remove('hidden');
+                filename.textContent = `${selected.name} (${Math.ceil(selected.size / 1024)} KB)`;
+            }
+        } else {
+            if (filename) {
+                filename.classList.add('hidden');
+                filename.textContent = '';
+            }
+        }
     });
 
     const views = {
@@ -68,17 +119,31 @@ function initialise(root) {
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
+        clearFileError();
+
+        const selected = file?.files?.[0];
+        const clientError = validateFile(selected);
+        if (clientError) {
+            showFileError(clientError);
+            if (live) live.textContent = clientError;
+            return;
+        }
+
         const submit = form.querySelector('button[type="submit"]');
         submit.disabled = true; submit.textContent = 'Đang kiểm tra…';
         try {
             const result = await fetch(form.dataset.previewUrl, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value }, body: new FormData(form) });
             const data = await result.json();
-            if (!result.ok || !data.success) throw new Error(data.message || 'Không thể xem trước file.');
+            if (!result.ok || !data.success) {
+                const errorMessage = data?.errors?.file?.[0] || data?.message || 'Không thể xem trước file.';
+                showFileError(errorMessage);
+                throw new Error(errorMessage);
+            }
             response = data; preview.classList.remove('hidden');
             root.querySelector('[data-full-course-title]').textContent = data.course.title || 'Khóa học chưa có tiêu đề';
             root.querySelector('[data-full-course-meta]').textContent = `${data.course.category_slug || '—'} · ${data.course.level || '—'} · ${data.course.language || '—'}`;
             root.querySelector('[data-full-course-confirm-state]').textContent = data.batch.can_confirm ? 'Dữ liệu hợp lệ, sẵn sàng tạo khóa học nháp.' : 'Cần xử lý lỗi trước khi có thể xác nhận.';
-            confirm.hidden = !data.batch.can_confirm;
+            confirm.hidden = false;
             confirm.disabled = !data.batch.can_confirm;
             const summary = root.querySelector('[data-full-course-summary]'); summary.replaceChildren();
             Object.entries(data.summary).forEach(([key, value]) => { const card = element('div', 'rounded-lg bg-slate-50 p-3 dark:bg-slate-800'); card.append(element('dt', 'text-xs font-medium text-slate-500 dark:text-slate-400', key), element('dd', 'mt-1 text-lg font-bold text-slate-900 dark:text-white', value)); summary.append(card); });

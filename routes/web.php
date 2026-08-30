@@ -146,6 +146,7 @@ Route::post('/courses/{course}/lessons/{lesson}/quiz/start', [StudentQuizControl
 Route::post('/courses/{course}/lessons/{lesson}/quiz/save-progress', [StudentQuizController::class, 'saveProgress'])->middleware('auth')->name('courses.lessons.quiz.save-progress');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/terminate', [StudentQuizController::class, 'terminate'])->middleware('auth')->name('courses.lessons.quiz.terminate');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
+Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('courses.lessons.quiz.attempts.show');
 Route::get('/courses/{course}/lessons/{lesson}/assignment/download', [StudentAssignmentController::class, 'download'])->middleware('auth')->name('courses.lessons.assignment.download');
 Route::post('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}/focus-violation', [StudentQuizController::class, 'recordFocusViolation'])->middleware(['auth', 'throttle:20,1'])->name('courses.lessons.quiz.focus-violation');
 Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('courses.lessons.quiz.attempts.show');
@@ -525,6 +526,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/courses/{course}/publish', [ManageController::class, 'publish'])->name('courses.publish');
     Route::post('/ai-moderation/{lesson}/extract', [AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
     Route::post('/ai-moderation/analyze-frame', [AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
+    Route::post('/ai-moderation/{lesson}/category-match', [AiModerationController::class, 'checkCategoryMatch'])->name('ai-moderation.category-match');
     Route::post('/ai-moderation/{lesson}/save', [AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');

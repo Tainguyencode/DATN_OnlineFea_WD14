@@ -23,16 +23,39 @@ class InstructorApplicationController extends Controller
 {
     public function index(Request $request): View
     {
-        $status = $request->query('status', 'all');
+        $status = $request->query('status', '');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+        $categoryId = $request->query('category_id');
 
-        $query = User::where('role', 'instructor')
-            ->with(['instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
+        $query = User::where('users.role', 'instructor')
+            ->with(['instructorProfile.category', 'instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
 
         // 1. Lọc theo trạng thái ứng tuyển (từ Filter Tabs hoặc Dropdown)
         if ($status === 'new_updates') {
-            $query->where('needs_admin_review', true);
+            $query->where('users.needs_admin_review', true);
         } elseif (in_array($status, ['pending', 'approved', 'rejected'], true)) {
-            $query->where('instructor_status', $status);
+            $query->where('users.instructor_status', $status);
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('users.created_at', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('users.created_at', '<=', $dateTo);
+        }
+
+        if ($categoryId) {
+            $cat = Category::with('children')->find($categoryId);
+            $categoryIds = $cat ? array_merge([$cat->id], $cat->children->pluck('id')->all()) : [(int) $categoryId];
+
+            $query->whereHas('instructorProfile', function ($q) use ($categoryIds) {
+                $q->whereIn('category_id', $categoryIds)
+                    ->orWhereHas('teachingCategories', function ($tq) use ($categoryIds) {
+                        $tq->whereIn('categories.id', $categoryIds);
+                    });
+            });
         }
 
         // 2. Bộ lọc: Tìm kiếm theo tên, email, sđt (users và instructor_profiles)
@@ -63,11 +86,24 @@ class InstructorApplicationController extends Controller
         }
 
         $applications = $query
-            ->orderByDesc('needs_admin_review')
-            ->orderByRaw("CASE WHEN instructor_status = 'pending' THEN 1 ELSE 2 END")
-            ->orderByDesc('updated_at')
+            ->orderByDesc('users.needs_admin_review')
+            ->orderByRaw("CASE WHEN users.instructor_status = 'pending' THEN 1 ELSE 2 END")
+            ->orderByDesc('users.updated_at')
             ->paginate(15)
             ->withQueryString();
+
+        $requirementService = app(InstructorRequirementService::class);
+        $applications->getCollection()->each(function (User $application) use ($requirementService): void {
+            $summary = $requirementService->getRequirementsForInstructor($application)['summary'];
+            $requiredCount = $summary['required_count'];
+            $completedCount = $summary['required_submitted_count'];
+
+            $application->setAttribute('certificate_progress', [
+                'required_count' => $requiredCount,
+                'completed_count' => $completedCount,
+                'percentage' => $requiredCount > 0 ? (int) round(($completedCount / $requiredCount) * 100) : null,
+            ]);
+        });
 
         // Thống kê tổng quan hệ thống (Phương án A - không thay đổi khi sử dụng bộ lọc)
         $counts = [
@@ -106,8 +142,12 @@ class InstructorApplicationController extends Controller
             ? round((($yearRegistered - $previousYearRegistered) / $previousYearRegistered) * 100, 1)
             : ($yearRegistered > 0 ? 100 : 0);
 
-        // Lấy danh sách các chuyên ngành đang hoạt động để làm dữ liệu cho dropdown lọc
-        $categories = Category::where('status', true)->orderBy('name')->get();
+        // Lấy danh sách các chuyên ngành (cả dạng cây / active)
+        $categories = Category::query()
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($q) => $q->orderBy('name')])
+            ->orderBy('name')
+            ->get();
 
         return view('admin.instructors.applications.index', [
             'applications' => $applications,
@@ -120,8 +160,10 @@ class InstructorApplicationController extends Controller
             'yearRegistered' => $yearRegistered,
             'categories' => $categories,
             'search' => $request->query('search'),
-            'categoryId' => $request->query('category_id'),
+            'categoryId' => $categoryId,
             'date' => $request->query('date'),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
         ]);
     }
 

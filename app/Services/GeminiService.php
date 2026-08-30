@@ -293,6 +293,182 @@ PROMPT;
     }
 
     /**
+     * Phân tích sự phù hợp giữa nội dung video và danh mục / chuyên ngành của khóa học.
+     *
+     * @param  array<string>  $framePaths  Danh sách đường dẫn các frame đã cắt
+     * @param  array{category_name?: string, parent_category_name?: string, course_title?: string, course_description?: string, lesson_title?: string, lesson_content?: string}  $context  Thông tin ngữ cảnh bài học & khóa học
+     * @return array{status: string, confidence: float, reason: string, detected_topics: list<string>, _model_used?: string}
+     */
+    public function analyzeCategoryMatch(array $framePaths, array $context): array
+    {
+        $apiKey = $this->apiKey();
+        if ($apiKey === null) {
+            return [
+                'status' => 'Cần Admin kiểm tra',
+                'confidence' => 0.5,
+                'reason' => 'Chưa cấu hình GEMINI_API_KEY trong .env để AI phân tích danh mục.',
+                'detected_topics' => [],
+            ];
+        }
+
+        $validFrames = array_values(array_filter($framePaths, fn ($p) => is_string($p) && file_exists($p)));
+        if (empty($validFrames)) {
+            return [
+                'status' => 'Cần Admin kiểm tra',
+                'confidence' => 0.5,
+                'reason' => 'Không tìm thấy khung hình video để kiểm tra danh mục.',
+                'detected_topics' => [],
+            ];
+        }
+
+        $selectedFrames = [];
+        $totalFrames = count($validFrames);
+        if ($totalFrames <= 3) {
+            $selectedFrames = $validFrames;
+        } else {
+            $selectedFrames = [
+                $validFrames[0],
+                $validFrames[(int) floor($totalFrames / 2)],
+                $validFrames[$totalFrames - 1],
+            ];
+        }
+
+        $categoryName = $context['category_name'] ?? 'Không xác định';
+        $parentCategoryName = $context['parent_category_name'] ?? '';
+        $courseTitle = $context['course_title'] ?? '';
+        $courseDescription = $context['course_description'] ?? '';
+        $lessonTitle = $context['lesson_title'] ?? '';
+        $lessonContent = $context['lesson_content'] ?? '';
+
+        $prompt = <<<PROMPT
+Bạn là hệ thống AI phân tích và kiểm tra sự phù hợp giữa nội dung video bài giảng với danh mục/ngành học của khóa học trên nền tảng giáo dục trực tuyến.
+
+NGỮ CẢNH KHÓA HỌC & BÀI HỌC:
+- Danh mục khóa học yêu cầu: {$categoryName}
+- Ngành học cha (nếu có): {$parentCategoryName}
+- Tên khóa học: {$courseTitle}
+- Mô tả khóa học: {$courseDescription}
+- Tên bài học: {$lessonTitle}
+- Nội dung/mô tả bài học: {$lessonContent}
+
+NHIỆM VỤ CỦA BẠN:
+1. Quan sát kỹ các hình ảnh (frame) được cắt từ video bài giảng đính kèm và kết hợp với tiêu đề/nội dung bài học.
+2. Nhận diện các chủ đề, công nghệ, kiến thức, lĩnh vực cụ thể xuất hiện trong video (detected_topics).
+3. Đánh giá xem nội dung thực tế trong video có PHÙ HỢP với "Danh mục khóa học yêu cầu: {$categoryName}" hay không.
+
+QUY TẮC PHÂN LOẠI TRẠNG THÁI (status):
+- "Phù hợp": Khi nội dung video rõ ràng thuộc về hoặc bổ trợ trực tiếp cho danh mục "{$categoryName}".
+- "Không phù hợp": Khi nội dung video hoàn toàn thuộc về lĩnh vực khác không liên quan (ví dụ: danh mục là Lập trình Web nhưng video dạy nấu ăn, ẩm thực, thời trang, thể thao, game không liên quan...).
+- "Cần Admin kiểm tra": Khi nội dung có tính giao thoa, nội dung chung chung (ví dụ slide giới thiệu chung, màn hình desktop chưa rõ nội dung), hoặc không đủ bằng chứng hình ảnh để khẳng định chắc chắn.
+
+QUY TẮC ĐỘ TIN CẬY (confidence):
+- confidence là số thực từ 0.0 đến 1.0 (ví dụ: 0.95 tương đương 95%).
+- Nếu không chắc chắn, hãy đặt confidence từ 0.5 đến 0.65 và chọn status "Cần Admin kiểm tra".
+
+QUY TẮC NHẬN XÉT (reason):
+- Viết 1-2 câu tiếng Việt nhận xét khách quan, nêu rõ tại sao phù hợp hoặc không phù hợp, nhắc đến tên danh mục "{$categoryName}".
+
+QUAN TRỌNG:
+- Trả về DUY NHẤT một chuỗi JSON hợp lệ. Không giải thích thêm. Không dùng markdown ```json.
+- Định dạng JSON bắt buộc:
+{
+  "status": "Phù hợp",
+  "confidence": 0.95,
+  "reason": "Nội dung video trình bày các kiến thức phù hợp với danh mục {$categoryName}.",
+  "detected_topics": ["Chủ đề 1", "Chủ đề 2"]
+}
+PROMPT;
+
+        $parts = [
+            ['text' => $prompt],
+        ];
+
+        foreach ($selectedFrames as $framePath) {
+            $imageData = base64_encode(file_get_contents($framePath));
+            $mimeType = mime_content_type($framePath) ?: 'image/jpeg';
+            $parts[] = [
+                'inline_data' => [
+                    'mime_type' => $mimeType,
+                    'data' => $imageData,
+                ],
+            ];
+        }
+
+        $body = [
+            'contents' => [
+                ['parts' => $parts],
+            ],
+            'generationConfig' => [
+                'temperature' => 0.1,
+                'maxOutputTokens' => 1024,
+                'responseMimeType' => 'application/json',
+            ],
+        ];
+
+        foreach (self::CANDIDATE_MODELS as $model) {
+            try {
+                $url = self::API_URL.$model.':generateContent?key='.$apiKey;
+
+                $response = Http::withoutVerifying()
+                    ->timeout(30)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post($url, $body);
+
+                if ($response->successful()) {
+                    $rawText = (string) ($response->json('candidates.0.content.parts.0.text') ?? '');
+                    $result = $this->parseJsonFromText($rawText);
+
+                    if (is_array($result) && isset($result['status'])) {
+                        $statusRaw = trim((string) $result['status']);
+                        $status = match (mb_strtolower($statusRaw, 'UTF-8')) {
+                            'phù hợp', 'phu hop', 'match', 'matched', 'suitable' => 'Phù hợp',
+                            'không phù hợp', 'khong phu hop', 'mismatch', 'mismatched', 'unsuitable' => 'Không phù hợp',
+                            default => 'Cần Admin kiểm tra',
+                        };
+
+                        $confidence = isset($result['confidence']) ? (float) $result['confidence'] : 0.8;
+                        if ($confidence > 1.0 && $confidence <= 100.0) {
+                            $confidence = round($confidence / 100.0, 2);
+                        }
+
+                        $detectedTopics = is_array($result['detected_topics'] ?? null)
+                            ? array_values(array_filter(array_map('strval', $result['detected_topics'])))
+                            : [];
+
+                        $reason = trim((string) ($result['reason'] ?? ''));
+                        if ($reason === '') {
+                            $reason = $status === 'Phù hợp'
+                                ? "Nội dung video phù hợp với danh mục {$categoryName}."
+                                : ($status === 'Không phù hợp'
+                                    ? "Nội dung video không phù hợp với danh mục {$categoryName}."
+                                    : "Chưa đủ bằng chứng để xác định chắc chắn độ phù hợp với danh mục {$categoryName}.");
+                        }
+
+                        return [
+                            'status' => $status,
+                            'confidence' => $confidence,
+                            'reason' => $reason,
+                            'detected_topics' => $detectedTopics,
+                            '_model_used' => $model,
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Google Gemini category match connection error [{$model}]", ['error' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            'status' => 'Cần Admin kiểm tra',
+            'confidence' => 0.5,
+            'reason' => "AI chưa thể đưa ra kết luận chắc chắn cho danh mục {$categoryName}. Admin vui lòng kiểm tra thêm.",
+            'detected_topics' => [],
+        ];
+    }
+
+    /**
      * Tách và parse JSON từ chuỗi phản hồi của Gemini một cách linh hoạt.
      */
     private function parseJsonFromText(string $rawText): ?array

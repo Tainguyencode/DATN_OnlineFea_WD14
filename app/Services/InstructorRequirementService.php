@@ -12,6 +12,9 @@ use Illuminate\Validation\ValidationException;
 
 class InstructorRequirementService
 {
+    /** @var array<int, Collection<int, InstructorDocumentRequirement>> */
+    private array $activeRequirementsByCategory = [];
+
     /**
      * Lấy toàn bộ danh sách yêu cầu tài liệu theo các ngành của giảng viên và trạng thái đáp ứng.
      */
@@ -60,18 +63,10 @@ class InstructorRequirementService
 
         foreach ($categories as $cat) {
             // Lấy requirements của category (hoặc thừa kế từ parent nếu category con chưa cấu hình riêng)
-            $catRequirements = InstructorDocumentRequirement::query()
-                ->where('category_id', $cat->id)
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->get();
+            $catRequirements = $this->activeRequirementsForCategory($cat->id);
 
             if ($catRequirements->isEmpty() && $cat->parent_id) {
-                $catRequirements = InstructorDocumentRequirement::query()
-                    ->where('category_id', $cat->parent_id)
-                    ->where('is_active', true)
-                    ->orderBy('sort_order')
-                    ->get();
+                $catRequirements = $this->activeRequirementsForCategory($cat->parent_id);
             }
 
             $catProcessed = [];
@@ -210,6 +205,21 @@ class InstructorRequirementService
             ],
             'unassigned_certificates' => $unassignedCertificates,
         ];
+    }
+
+    /**
+     * Cache requirement theo ngành trong cùng request để trang danh sách không lặp query
+     * khi nhiều giảng viên đăng ký cùng một ngành.
+     *
+     * @return Collection<int, InstructorDocumentRequirement>
+     */
+    private function activeRequirementsForCategory(int $categoryId): Collection
+    {
+        return $this->activeRequirementsByCategory[$categoryId] ??= InstructorDocumentRequirement::query()
+            ->where('category_id', $categoryId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
     }
 
     /**

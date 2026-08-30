@@ -15,6 +15,7 @@ use App\Models\Lesson;
 use App\Services\ContentUpdateService;
 use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,8 @@ use Illuminate\View\View;
 
 class CurriculumController extends Controller
 {
+    public function __construct(private readonly InstructorCourseCategoryAccess $courseCategoryAccess) {}
+
     public function index(Course $course): View
     {
         $this->authorizeCourse($course);
@@ -374,12 +377,35 @@ class CurriculumController extends Controller
                 ->with('success', 'Đã cập nhật bài quiz. Bạn có thể quản lý câu hỏi tại đây.');
         }
 
-        Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update Success)');
-
         if ($request->wantsJson() || $request->ajax()) {
+            $lessonHtml = view('instructor.courses.partials.lesson-item', [
+                'course' => $course,
+                'section' => $lesson->section,
+                'lesson' => $lesson,
+                'lessonTypes' => $this->lessonTypes(),
+                'lessonStatuses' => $this->lessonStatuses(),
+            ])->render();
+
             return response()->json([
                 'success' => true,
                 'lesson_id' => $lesson->id,
+                'lesson' => [
+                    'id' => $lesson->id,
+                    'section_id' => $lesson->section_id,
+                    'title' => $lesson->title,
+                    'type' => $lesson->type,
+                    'sort_order' => $lesson->sort_order,
+                    'duration' => (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0),
+                    'duration_formatted' => $this->formatDuration((int) ($lesson->duration ?? $lesson->duration_seconds ?? 0)),
+                    'is_preview' => (bool) $lesson->is_preview,
+                    'status' => $lesson->status,
+                    'original_video_key' => $lesson->original_video_key,
+                    'upload_status' => $lesson->upload_status,
+                    'processing_status' => $lesson->processing_status,
+                    'content' => $lesson->content,
+                    'destroy_url' => route('instructor.courses.lessons.destroy', [$course, $lesson->id]),
+                ],
+                'html' => $lessonHtml,
                 'title' => $lesson->title,
                 'message' => 'Đã cập nhật bài học.',
             ]);
@@ -463,7 +489,11 @@ class CurriculumController extends Controller
 
     private function authorizeCourse(Course $course): void
     {
-        abort_unless($course->isOwnedBy(auth()->user()), 403);
+        abort_unless(
+            $this->courseCategoryAccess->canManageCourse(auth()->user(), $course),
+            403,
+            'Bạn không có quyền chỉnh sửa nội dung khóa học này.'
+        );
     }
 
     private function authorizeSection(Course $course, CourseSection $section): void

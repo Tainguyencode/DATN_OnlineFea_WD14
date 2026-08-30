@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\InstructorProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -17,6 +18,8 @@ class InstructorCourseCreateTest extends TestCase
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
         $parentCategory = Category::create(['name' => 'IT', 'slug' => 'it', 'status' => true]);
         $category = Category::create(['name' => 'Web', 'slug' => 'web', 'parent_id' => $parentCategory->id, 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
 
         $response = $this->actingAs($instructor)->post(route('instructor.courses.store'), [
             'title' => 'Khóa học mới test',

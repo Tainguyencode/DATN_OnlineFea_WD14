@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\AwsS3UploadService;
@@ -447,6 +448,10 @@ class S3MultipartUploadTest extends TestCase
         $category = Category::create([
             'name' => 'Danh mục '.uniqid(),
             'slug' => 'category-'.uniqid(),
+        ]);
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->syncWithoutDetaching([
+            $category->id => ['is_primary' => ! $profile->teachingCategories()->exists()],
         ]);
 
         $course = Course::create([

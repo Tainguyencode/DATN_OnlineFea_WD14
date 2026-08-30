@@ -10,7 +10,6 @@ use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
-use App\Models\Category;
 use App\Models\Certificate;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
@@ -27,6 +26,7 @@ use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
 use App\Services\HistoricalQuizDeletionGuard;
+use App\Services\InstructorCourseCategoryAccess;
 use App\Services\NotificationService;
 use App\Services\QuizService;
 use Illuminate\Http\JsonResponse;
@@ -41,6 +41,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CourseController extends Controller
 {
+    public function __construct(private readonly InstructorCourseCategoryAccess $courseCategoryAccess) {}
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search'));
@@ -69,7 +71,7 @@ class CourseController extends Controller
 
     public function create(): View
     {
-        $categories = $this->categoryGroups();
+        $categories = $this->courseCategoryAccess->selectableCategories(auth()->user());
 
         return view('instructor.courses.create', compact('categories'));
     }
@@ -107,7 +109,7 @@ class CourseController extends Controller
             'courseReviews',
             'courseReviews.reviewer:id,name,email',
         ]);
-        $categories = $this->categoryGroups();
+        $categories = $this->courseCategoryAccess->selectableCategories(auth()->user());
         $statusOptions = $this->statusOptions();
         $submissionCheck = $course->submissionCheck();
         $courseReviews = $course->courseReviews;
@@ -774,7 +776,11 @@ class CourseController extends Controller
 
     protected function ensureOwned(Course $course): void
     {
-        abort_unless($course->isOwnedBy(auth()->user()), 403);
+        abort_unless(
+            $this->courseCategoryAccess->canManageCourse(auth()->user(), $course),
+            403,
+            'Bạn không có quyền chỉnh sửa nội dung khóa học này.'
+        );
     }
 
     private function enrollmentQuery(Course $course, Request $request)
@@ -954,19 +960,4 @@ class CourseController extends Controller
         return Course::STATUS_LABELS;
     }
 
-    private function categoryGroups()
-    {
-        return Category::query()
-            ->active()
-            ->parent()
-            ->with([
-                'children' => fn ($query) => $query
-                    ->active()
-                    ->orderBy('sort_order')
-                    ->orderBy('name'),
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get(['id', 'name', 'sort_order']);
-    }
 }

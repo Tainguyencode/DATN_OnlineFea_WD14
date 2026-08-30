@@ -10,9 +10,10 @@ use App\Models\Course;
 use App\Models\Lesson;
 use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
-use Illuminate\Support\Facades\DB;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -21,7 +22,8 @@ use Throwable;
 class S3MultipartUploadController extends Controller
 {
     public function __construct(
-        private AwsS3UploadService $s3Service
+        private AwsS3UploadService $s3Service,
+        private InstructorCourseCategoryAccess $courseCategoryAccess,
     ) {}
 
     /**
@@ -55,14 +57,6 @@ class S3MultipartUploadController extends Controller
 
         $filename = $validated['filename'];
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        $allowedExtensions = (array) config('video.upload.allowed_extensions', []);
-
-        if (! in_array($extension, $allowedExtensions, true)) {
-            return response()->json([
-                'message' => 'Định dạng video không được hỗ trợ. Vui lòng chọn tệp MP4, MOV, AVI, WEBM, hoặc MKV.',
-            ], 422);
-        }
-
         $contentType = $validated['content_type'] ?: 'video/'.($extension === 'mov' ? 'quicktime' : $extension);
         $lessonId = $validated['lesson_id'] ?? null;
 
@@ -78,67 +72,25 @@ class S3MultipartUploadController extends Controller
             return response()->json([
                 'uploadId' => $uploadId,
                 'key' => $key,
-                'bucket' => $this->s3Service->getBucket(),
+                'status' => 'initialized',
             ]);
         } catch (Throwable $e) {
-            Log::error('S3 multipart upload initialization failed.', [
-                'exception' => $e,
+            Log::error('S3 Multipart Upload create failed: '.$e->getMessage(), [
                 'course_id' => $course->id,
-                'lesson_id' => $lessonId,
+                'key' => $key,
             ]);
 
             return response()->json([
-                'message' => 'Không thể bắt đầu tải video lên lúc này. Vui lòng thử lại.',
+                'message' => 'Không thể khởi tạo phiên tải lên S3. Vui lòng thử lại sau.',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
 
     /**
-     * Ký presigned URL cho một hoặc nhiều Part
+     * Lấy Presigned URL cho từng Part
      */
-    public function batchSign(Request $request, Course $course): JsonResponse
-    {
-        $this->authorizeCourse($course);
-
-        $validated = $request->validate([
-            'key' => ['required', 'string', 'max:1024'],
-            'uploadId' => ['required', 'string', 'max:1024'],
-            'partNumbers' => ['required', 'array', 'min:1', 'max:100'],
-            'partNumbers.*' => ['required', 'integer', 'min:1', 'max:10000', 'distinct'],
-        ]);
-
-        $key = $validated['key'];
-        $this->validateKeyPrefix($course, $key);
-
-        $uploadId = $validated['uploadId'];
-        $partNumbers = $validated['partNumbers'];
-
-        try {
-            $presignedUrls = [];
-            foreach ($partNumbers as $partNumber) {
-                $presignedUrls[$partNumber] = $this->s3Service->createPresignedPartUrl($key, $uploadId, (int) $partNumber);
-            }
-
-            return response()->json([
-                'presignedUrls' => $presignedUrls,
-            ]);
-        } catch (Throwable $e) {
-            Log::error('S3 multipart batch signing failed.', [
-                'exception' => $e,
-                'course_id' => $course->id,
-                'part_count' => count($partNumbers),
-            ]);
-
-            return response()->json([
-                'message' => 'Không thể chuẩn bị tải video lên lúc này. Vui lòng thử lại.',
-            ], 500);
-        }
-    }
-
-    /**
-     * Ký presigned URL cho một Part đơn lẻ (phù hợp với @uppy/aws-s3-multipart)
-     */
-    public function signPart(Request $request, Course $course): JsonResponse
+    public function getPartUrl(Request $request, Course $course): JsonResponse
     {
         $this->authorizeCourse($course);
 
@@ -152,20 +104,69 @@ class S3MultipartUploadController extends Controller
         $this->validateKeyPrefix($course, $key);
 
         try {
-            $url = $this->s3Service->createPresignedPartUrl($key, $validated['uploadId'], (int) $validated['partNumber']);
+            $presignedUrl = $this->s3Service->createPresignedPartUrl(
+                $key,
+                $validated['uploadId'],
+                $validated['partNumber']
+            );
 
             return response()->json([
-                'url' => $url,
+                'url' => $presignedUrl,
+                'partNumber' => $validated['partNumber'],
             ]);
         } catch (Throwable $e) {
-            Log::error('S3 multipart part signing failed.', [
-                'exception' => $e,
+            Log::error('S3 Multipart Upload sign part failed: '.$e->getMessage(), [
                 'course_id' => $course->id,
-                'part_number' => (int) $validated['partNumber'],
+                'key' => $key,
+                'partNumber' => $validated['partNumber'],
             ]);
 
             return response()->json([
-                'message' => 'Không thể chuẩn bị tải video lên lúc này. Vui lòng thử lại.',
+                'message' => 'Không thể tạo URL tải lên cho part '.$validated['partNumber'],
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Batch lấy Presigned URLs cho nhiều Parts cùng một lúc
+     */
+    public function batchSignParts(Request $request, Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+
+        $validated = $request->validate([
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
+            'partNumbers' => ['required', 'array', 'min:1', 'max:1000'],
+            'partNumbers.*' => ['integer', 'min:1', 'max:10000'],
+        ]);
+
+        $key = $validated['key'];
+        $this->validateKeyPrefix($course, $key);
+
+        $urls = [];
+        try {
+            foreach ($validated['partNumbers'] as $partNumber) {
+                $urls[$partNumber] = $this->s3Service->createPresignedPartUrl(
+                    $key,
+                    $validated['uploadId'],
+                    $partNumber
+                );
+            }
+
+            return response()->json([
+                'urls' => $urls,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('S3 Multipart Upload batch sign parts failed: '.$e->getMessage(), [
+                'course_id' => $course->id,
+                'key' => $key,
+            ]);
+
+            return response()->json([
+                'message' => 'Không thể tạo URLs tải lên cho danh sách parts.',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -291,7 +292,11 @@ class S3MultipartUploadController extends Controller
 
     private function authorizeCourse(Course $course): void
     {
-        abort_unless($course->isOwnedBy(auth()->user()), 403, 'Bạn không có quyền quản trị khóa học này.');
+        abort_unless(
+            $this->courseCategoryAccess->canManageCourse(auth()->user(), $course),
+            403,
+            'Bạn không có quyền chỉnh sửa nội dung khóa học này.'
+        );
     }
 
     private function validateKeyPrefix(Course $course, string $key): void

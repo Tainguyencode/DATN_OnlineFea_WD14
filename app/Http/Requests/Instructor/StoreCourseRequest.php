@@ -4,6 +4,7 @@ namespace App\Http\Requests\Instructor;
 
 use App\Models\Category;
 use App\Models\Course;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -58,6 +59,10 @@ class StoreCourseRequest extends FormRequest
 
                 if (! $category) {
                     return;
+                }
+
+                if (! app(InstructorCourseCategoryAccess::class)->canTeachCategory($this->user(), $categoryId)) {
+                    $validator->errors()->add('category_id', 'Bạn không có quyền tạo khóa học thuộc ngành này.');
                 }
 
                 if (! $category->status) {
