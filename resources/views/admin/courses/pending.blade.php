@@ -36,7 +36,7 @@
 
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Đã gửi duyệt</span>
+                            <span class="status-badge status-pending">Đã gửi duyệt</span>
                             <span class="text-xs font-semibold text-slate-500">{{ $course->category?->name ?? 'Chưa chọn danh mục' }}</span>
                         </div>
                         <h3 class="mt-2 text-xl font-bold text-slate-950">{{ $course->title }}</h3>
