@@ -10,6 +10,7 @@
             ['label' => 'Chứng chỉ', 'route' => 'student.certificates', 'active' => ['student.certificates*'], 'icon' => 'award'],
         ],
         'Cá nhân' => [
+            ['label' => 'Thông báo', 'route' => 'notifications.index', 'active' => ['notifications.*'], 'icon' => 'bell'],
             ['label' => 'Yêu thích', 'route' => 'student.wishlist', 'active' => ['student.wishlist*', 'favorites.*'], 'icon' => 'heart'],
             ['label' => 'Hồ sơ cá nhân', 'route' => 'student.profile', 'active' => ['student.profile'], 'icon' => 'user'],
             ['label' => 'Bảo mật', 'route' => 'student.profile.security', 'active' => ['student.profile.security'], 'icon' => 'shield'],
@@ -62,6 +63,7 @@
                                     @case('book') <path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/> @break
                                     @case('clock') <circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/> @break
                                     @case('award') <circle cx="12" cy="9" r="6"/><path stroke-linecap="round" stroke-linejoin="round" d="m8.5 14-1 7 4.5-2 4.5 2-1-7"/> @break
+                                    @case('bell') <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/> @break
                                     @case('heart') <path stroke-linecap="round" stroke-linejoin="round" d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/> @break
                                     @case('user') <circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 21a8 8 0 0 1 16 0"/> @break
                                     @case('shield') <path stroke-linecap="round" stroke-linejoin="round" d="M12 3 4.5 6v5c0 4.8 3.1 8.1 7.5 10 4.4-1.9 7.5-5.2 7.5-10V6L12 3Z"/><path stroke-linecap="round" d="m9 12 2 2 4-4"/> @break
