@@ -141,7 +141,6 @@
                         @endif
                     </a>
                 @endif
-
                 <x-notifications.bell :recent-notifications="$recentNotifications ?? collect()" :unread-count="$unreadNotificationCount ?? 0" />
 
                 <div data-student-account class="relative" x-on:click.outside="if (isOpen('account')) closeMenus()">
