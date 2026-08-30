@@ -154,7 +154,7 @@
 <x-layouts.dashboard
     role="instructor"
     roleLabel="Giảng viên"
-    accent="emerald"
+    accent="blue"
     :menu="$menu"
     :title="$title"
     :pageTitle="$pageTitle"

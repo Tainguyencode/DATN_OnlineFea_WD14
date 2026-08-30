@@ -52,8 +52,12 @@ class DatabaseSeeder extends Seeder
             'courses',
             'faqs',
             'coupons',
+            'user_coupons',
             'badges',
             'categories',
+            'instructor_profile_teaching_fields',
+            'instructor_applications',
+            'instructor_profiles',
             'users',
             'homepage_settings',
             'push_notifications',
@@ -69,10 +73,6 @@ class DatabaseSeeder extends Seeder
             'course_reviews',
             'quiz_version_question_invalidations',
             'quiz_attempt_regrades',
-            'quiz_version_questions',
-            'question_versions',
-            'quiz_versions',
-            'instructor_profiles',
         ];
 
         foreach ($tables as $table) {
@@ -87,27 +87,25 @@ class DatabaseSeeder extends Seeder
 
         // 2. Thực thi các Seeder theo trình tự logic khóa ngoại (Dependencies)
         $this->call([
-            // Bảng độc lập (Không có khóa ngoại)
-            UserSeeder::class,
+            // Bảng danh mục nền tảng (Phải chạy đầu tiên)
             CategorySeeder::class,
+
+            // Bảng người dùng, giảng viên & học viên (Phụ thuộc categories)
+            UserSeeder::class,
+
+            // Cấu hình hệ thống & Tiện ích
             BadgeSeeder::class,
             CouponSeeder::class,
             FaqSeeder::class,
             HomepageSettingSeeder::class,
+            InstructorDocumentRequirementSeeder::class,
 
-            // Bảng phụ thuộc cấp 1 (Chỉ chứa khóa ngoại liên kết đến các bảng trên)
+            // Khóa học & Giáo trình chi tiết
             CourseSeeder::class,
             CourseReviewSeeder::class,
 
-            // Bảng phụ thuộc cấp 2 (Phụ thuộc vào khóa học và bài học)
-            LearningPathSeeder::class, // Phụ thuộc vào courses qua bảng pivot
-            // InteractionSeeder::class,
-
-            // Bảng ghi chép lịch sử và hoạt động hệ thống
-            // SystemSeeder::class, // Đã comment vì thiếu mock data users/courses
-
-            // Thêm dữ liệu mẫu bổ sung cho progress tracking
-            // ExpandedSampleDataSeeder::class,
+            // Lộ trình học tập
+            LearningPathSeeder::class,
         ]);
 
         // 3. Tự động đồng bộ course_sections và cập nhật lessons (course_id, section_id) từ chapters
@@ -127,14 +125,23 @@ class DatabaseSeeder extends Seeder
         $chapters = DB::table('chapters')->orderBy('id')->get();
 
         foreach ($chapters as $chapter) {
-            $sectionId = DB::table('course_sections')->insertGetId([
-                'course_id' => $chapter->course_id,
-                'title' => $chapter->title,
-                'description' => null,
-                'sort_order' => $chapter->sort_order,
-                'created_at' => $chapter->created_at ?? now(),
-                'updated_at' => $chapter->updated_at ?? now(),
-            ]);
+            $section = DB::table('course_sections')
+                ->where('course_id', $chapter->course_id)
+                ->where('sort_order', $chapter->sort_order)
+                ->first();
+
+            if (! $section) {
+                $sectionId = DB::table('course_sections')->insertGetId([
+                    'course_id' => $chapter->course_id,
+                    'title' => $chapter->title,
+                    'description' => null,
+                    'sort_order' => $chapter->sort_order,
+                    'created_at' => $chapter->created_at ?? now(),
+                    'updated_at' => $chapter->updated_at ?? now(),
+                ]);
+            } else {
+                $sectionId = $section->id;
+            }
 
             DB::table('lessons')
                 ->where('chapter_id', $chapter->id)
@@ -161,12 +168,23 @@ class DatabaseSeeder extends Seeder
         $student4 = DB::table('users')->where('email', 'student4@example.com')->value('id');
         $qtrung = DB::table('users')->where('email', 'tungazquoc@gmail.com')->value('id');
 
+        $courses = DB::table('courses')->where('status', 'published')->pluck('id')->all();
+        if (empty($courses)) {
+            return;
+        }
+
+        $c1 = $courses[0] ?? 1;
+        $c2 = $courses[1] ?? 2;
+        $c3 = $courses[2] ?? 3;
+        $c4 = $courses[3] ?? 4;
+        $c5 = $courses[4] ?? 5;
+
         $enrollments = [];
 
         if ($student1) {
             $enrollments[] = [
                 'user_id' => $student1,
-                'course_id' => 1,
+                'course_id' => $c1,
                 'status' => 'active',
                 'progress_percent' => 35.00,
                 'enrolled_at' => now()->subDays(10),
@@ -175,7 +193,7 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $student1,
-                'course_id' => 2,
+                'course_id' => $c2,
                 'status' => 'active',
                 'progress_percent' => 10.00,
                 'enrolled_at' => now()->subDays(5),
@@ -184,7 +202,7 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $student1,
-                'course_id' => 3,
+                'course_id' => $c3,
                 'status' => 'active',
                 'progress_percent' => 0.00,
                 'enrolled_at' => now()->subDays(2),
@@ -196,7 +214,7 @@ class DatabaseSeeder extends Seeder
         if ($student2) {
             $enrollments[] = [
                 'user_id' => $student2,
-                'course_id' => 1,
+                'course_id' => $c1,
                 'status' => 'active',
                 'progress_percent' => 0.00,
                 'enrolled_at' => now()->subDays(3),
@@ -205,7 +223,7 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $student2,
-                'course_id' => 2,
+                'course_id' => $c2,
                 'status' => 'active',
                 'progress_percent' => 45.00,
                 'enrolled_at' => now()->subDays(6),
@@ -217,7 +235,7 @@ class DatabaseSeeder extends Seeder
         if ($student3) {
             $enrollments[] = [
                 'user_id' => $student3,
-                'course_id' => 1,
+                'course_id' => $c1,
                 'status' => 'active',
                 'progress_percent' => 60.00,
                 'enrolled_at' => now()->subDays(8),
@@ -229,7 +247,7 @@ class DatabaseSeeder extends Seeder
         if ($student4) {
             $enrollments[] = [
                 'user_id' => $student4,
-                'course_id' => 1,
+                'course_id' => $c1,
                 'status' => 'active',
                 'progress_percent' => 15.00,
                 'enrolled_at' => now()->subDays(4),
@@ -241,7 +259,7 @@ class DatabaseSeeder extends Seeder
         if ($qtrung) {
             $enrollments[] = [
                 'user_id' => $qtrung,
-                'course_id' => 1,
+                'course_id' => $c1,
                 'status' => 'active',
                 'progress_percent' => 25.00,
                 'enrolled_at' => now()->subDays(10),
@@ -250,7 +268,7 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $qtrung,
-                'course_id' => 2,
+                'course_id' => $c2,
                 'status' => 'active',
                 'progress_percent' => 50.00,
                 'enrolled_at' => now()->subDays(7),
@@ -259,7 +277,7 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $qtrung,
-                'course_id' => 3,
+                'course_id' => $c3,
                 'status' => 'active',
                 'progress_percent' => 0.00,
                 'enrolled_at' => now()->subDays(5),
@@ -268,7 +286,7 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $qtrung,
-                'course_id' => 4,
+                'course_id' => $c4,
                 'status' => 'active',
                 'progress_percent' => 10.00,
                 'enrolled_at' => now()->subDays(3),
@@ -277,11 +295,11 @@ class DatabaseSeeder extends Seeder
             ];
             $enrollments[] = [
                 'user_id' => $qtrung,
-                'course_id' => 5,
+                'course_id' => $c5,
                 'status' => 'active',
                 'progress_percent' => 0.00,
                 'completed_lessons' => 0,
-                'total_lessons' => DB::table('lessons')->where('course_id', 5)->count() ?: 12,
+                'total_lessons' => DB::table('lessons')->where('course_id', $c5)->count() ?: 12,
                 'enrolled_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
