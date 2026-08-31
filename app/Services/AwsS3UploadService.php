@@ -70,6 +70,30 @@ class AwsS3UploadService
         return "originals/courses/{$courseId}/lessons/{$lessonSegment}/{$uuid}.{$extension}";
     }
 
+    public function generateDraftVideoObjectKey(
+        int|string $courseId,
+        int|string $lessonId,
+        int|string $contentUpdateId,
+        int|string $versionNumber,
+        string $filename
+    ): string {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION)) ?: 'mp4';
+        $allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
+        if (! in_array($extension, $allowedExtensions, true)) {
+            $extension = 'mp4';
+        }
+
+        return sprintf(
+            'originals/courses/%s/lessons/%s/content-updates/%s/versions/v%s/%s.%s',
+            $courseId,
+            $lessonId,
+            $contentUpdateId,
+            $versionNumber,
+            Str::uuid(),
+            $extension
+        );
+    }
+
     /**
      * Khởi tạo S3 Multipart Upload
      */

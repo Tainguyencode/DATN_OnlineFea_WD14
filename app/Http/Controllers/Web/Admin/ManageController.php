@@ -19,6 +19,7 @@ use App\Models\Review;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use Illuminate\Http\RedirectResponse;
@@ -237,6 +238,17 @@ class ManageController extends Controller
             })
             ->values();
 
+        $reviewUpdateDiffs = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('status', ContentUpdate::STATUS_PENDING)
+            ->orderByRaw("CASE type WHEN 'course' THEN 1 WHEN 'chapter' THEN 2 WHEN 'lesson' THEN 3 WHEN 'assignment' THEN 4 WHEN 'quiz' THEN 5 ELSE 6 END")
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ContentUpdate $update): array => [
+                'update' => $update,
+                'diff' => app(ContentUpdateDiffService::class)->build($update),
+            ]);
+
         return view('admin.courses.review', [
             'course' => $course,
             'curriculumSections' => $curriculumSections,
@@ -245,6 +257,7 @@ class ManageController extends Controller
             'totalVideoDurationMinutes' => $totalVideoDurationMinutes,
             'attachments' => $attachments,
             'videoLessons' => $videoLessons,
+            'reviewUpdateDiffs' => $reviewUpdateDiffs,
             'checklistKeys' => CourseReviewItem::ADMIN_CHECKLIST_KEYS,
             'checklistLabels' => CourseReviewItem::ITEM_LABELS,
             'instructorPendingCoursesCount' => $instructorPendingCoursesCount,

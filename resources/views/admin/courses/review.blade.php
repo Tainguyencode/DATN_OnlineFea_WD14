@@ -130,6 +130,61 @@
         </div>
     </section>
 
+    @if($reviewUpdateDiffs->isNotEmpty())
+        <section id="pending-update-diffs" class="overflow-hidden rounded-lg border border-indigo-200 bg-white shadow-sm">
+            <div class="border-b border-indigo-100 bg-indigo-50 px-5 py-4 sm:px-6">
+                <p class="text-sm font-semibold uppercase tracking-wide text-indigo-700">Các thay đổi trong lần gửi này</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $reviewUpdateDiffs->count() }} cập nhật đang chờ duyệt</h3>
+                <p class="mt-1 text-sm text-slate-600">Mọi thay đổi bên dưới sẽ được duyệt hoặc từ chối cùng quyết định của khóa học.</p>
+            </div>
+
+            <div class="divide-y divide-slate-200">
+                @foreach($reviewUpdateDiffs as $reviewItem)
+                    @php
+                        $update = $reviewItem['update'];
+                        $updateDiff = $reviewItem['diff'];
+                        $versions = data_get($updateDiff, 'metadata.versions', []);
+                    @endphp
+                    <article class="p-5 sm:p-6" data-content-update-id="{{ $update->id }}">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-indigo-700">{{ $updateDiff['entity_label'] }} · {{ $updateDiff['action_label'] }}</p>
+                                <h4 class="mt-1 font-bold text-slate-950">{{ $updateDiff['label'] }}</h4>
+                                @if(($versions['current'] ?? null) !== null || ($versions['proposed'] ?? null) !== null)
+                                    <p class="mt-1 text-xs text-slate-500">
+                                        V{{ $versions['current'] ?? '—' }} → V{{ $versions['proposed'] ?? '—' }}
+                                    </p>
+                                @endif
+                            </div>
+                            <a href="{{ route('admin.content-updates.show', $update) }}" class="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-indigo-200 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">Xem chi tiết</a>
+                        </div>
+
+                        @foreach($updateDiff['warnings'] as $warning)
+                            <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{{ $warning }}</p>
+                        @endforeach
+
+                        <dl class="mt-4 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                            @forelse($updateDiff['fields'] as $field)
+                                <div class="grid gap-3 p-4 md:grid-cols-[180px_minmax(0,1fr)_24px_minmax(0,1fr)] md:items-start">
+                                    <dt class="text-sm font-bold text-slate-700">{{ $field['label'] }}</dt>
+                                    <dd class="break-words rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ is_array($field['old']) ? json_encode($field['old'], JSON_UNESCAPED_UNICODE) : ($field['old'] ?? '—') }}</dd>
+                                    <span class="hidden pt-2 text-center text-slate-400 md:block" aria-hidden="true">→</span>
+                                    <dd class="break-words rounded-md bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-950">{{ is_array($field['new']) ? json_encode($field['new'], JSON_UNESCAPED_UNICODE) : ($field['new'] ?? '—') }}</dd>
+                                </div>
+                            @empty
+                                <div class="p-4 text-sm text-slate-500">Không có trường dữ liệu thay đổi để hiển thị.</div>
+                            @endforelse
+                        </dl>
+
+                        @if(isset($updateDiff['quiz_questions']))
+                            <p class="mt-3 text-sm text-slate-700">Câu hỏi Quiz: {{ $updateDiff['quiz_questions']['current_count'] }} → {{ $updateDiff['quiz_questions']['proposed_count'] }} · Thêm {{ count($updateDiff['quiz_questions']['added']) }} · Xóa {{ count($updateDiff['quiz_questions']['removed']) }} · Sửa {{ count($updateDiff['quiz_questions']['changed']) }}</p>
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     {{-- ========================================================================= --}}
     {{-- THÔNG TIN GIẢNG VIÊN TẠO KHÓA HỌC                                        --}}
     {{-- ========================================================================= --}}

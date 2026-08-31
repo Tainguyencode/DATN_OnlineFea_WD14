@@ -59,7 +59,7 @@
                         @php
                             $isCurrent = (int)$att['id'] === (int)$attempt->id;
                         @endphp
-                        <a href="{{ route('courses.lessons.quiz.attempts.show', [$course, $lesson, $att['id']]) }}"
+                        <a href="{{ route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $att['id']]) }}"
                            class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition border {{ $isCurrent ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800' }}">
                             <span>Lần {{ $att['attempt_number'] }}</span>
                             <span class="px-1.5 py-0.5 rounded text-[11px] {{ $isCurrent ? 'bg-white/20 text-white' : ($att['passed'] ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300') }}">

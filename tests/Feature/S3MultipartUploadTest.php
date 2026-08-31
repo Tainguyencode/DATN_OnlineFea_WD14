@@ -12,6 +12,8 @@ use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\AwsS3UploadService;
+use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use App\Services\HlsVideoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -24,6 +26,25 @@ use Tests\TestCase;
 class S3MultipartUploadTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $localStorageRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->localStorageRoot = storage_path('framework/testing/s3-multipart/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory(dirname($this->localStorageRoot));
+
+        parent::tearDown();
+    }
 
     public function test_guest_cannot_access_s3_multipart_routes(): void
     {
@@ -58,6 +79,9 @@ class S3MultipartUploadTest extends TestCase
             $mock->shouldReceive('createMultipartUpload')
                 ->once()
                 ->andReturn('test-upload-id-12345');
+            $mock->shouldReceive('getBucket')
+                ->once()
+                ->andReturn('test-bucket');
         });
 
         $response = $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
@@ -149,13 +173,21 @@ class S3MultipartUploadTest extends TestCase
         ]);
     }
 
-    public function test_store_lesson_with_s3_key_does_not_dispatch_hls_while_uploading(): void
+    public function test_store_lesson_with_completed_s3_key_dispatches_hls_job(): void
     {
         Queue::fake();
+        Storage::fake('s3');
 
         $instructor = $this->signInInstructor();
         [$course, $section] = $this->courseWithSection($instructor);
         $s3Key = "originals/courses/{$course->id}/lessons/new/test-video.mp4";
+        Storage::disk('s3')->put($s3Key, 'completed multipart video');
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($s3Key): void {
+            $mock->shouldReceive('doesObjectExist')
+                ->once()
+                ->with($s3Key)
+                ->andReturnTrue();
+        });
 
         $response = $this->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
             'title' => 'Bài học tải lên từ S3',
@@ -179,13 +211,15 @@ class S3MultipartUploadTest extends TestCase
             'original_video_key' => $s3Key,
             'video_original_name' => 'bai_giang_1.mp4',
             'video_size' => 143654912,
-            'upload_status' => 'pending',
+            'upload_status' => 'uploaded',
             'processing_status' => 'pending',
             'duration_seconds' => 1200,
         ]);
 
-        // Tuyệt đối không dispatch HLS khi upload chưa complete
-        Queue::assertNotPushed(ConvertVideoToHLS::class);
+        Queue::assertPushed(ConvertVideoToHLS::class, function (ConvertVideoToHLS $job) use ($course): bool {
+            return $job->lesson->course_id === $course->id
+                && $job->lesson->original_video_key === "originals/courses/{$course->id}/lessons/new/test-video.mp4";
+        });
     }
 
     public function test_s3_multipart_complete_dispatches_hls_job_for_lesson(): void
@@ -237,7 +271,6 @@ class S3MultipartUploadTest extends TestCase
 
     public function test_legacy_video_player_falls_back_to_local_disk_when_s3_key_is_null(): void
     {
-        Storage::fake('local');
         Storage::fake('s3');
         $instructor = $this->signInInstructor();
         [$course, $section] = $this->courseWithSection($instructor);
@@ -247,9 +280,12 @@ class S3MultipartUploadTest extends TestCase
             'section_id' => $section->id,
             'title' => 'Bài học cũ',
             'type' => 'video',
-            'video_path' => 'lesson-hls/100/playlist.m3u8',
             'is_preview' => true,
+            'upload_status' => 'uploaded',
+            'processing_status' => 'completed',
         ]);
+
+        $lesson->update(['video_path' => 'lesson-hls/'.$lesson->id.'/playlist.m3u8']);
 
         Storage::disk('local')->put('lesson-hls/'.$lesson->id.'/playlist.m3u8', "#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n");
 
@@ -377,7 +413,6 @@ class S3MultipartUploadTest extends TestCase
 
     public function test_hls_publication_replaces_local_output_without_leaving_stale_segments(): void
     {
-        Storage::fake('local');
         config()->set('filesystems.disks.s3.key');
         config()->set('filesystems.disks.s3.secret');
         config()->set('filesystems.disks.s3.bucket');
@@ -446,7 +481,10 @@ class S3MultipartUploadTest extends TestCase
             ],
         ]);
 
-        (new ConvertContentUpdateVideoToHLS($contentUpdate))->handle(app(HlsVideoService::class));
+        (new ConvertContentUpdateVideoToHLS($contentUpdate))->handle(
+            app(ContentUpdateService::class),
+            app(ContentVersionService::class),
+        );
 
         $payload = $contentUpdate->fresh()->payload;
         $this->assertSame('failed', $payload['processing_status']);

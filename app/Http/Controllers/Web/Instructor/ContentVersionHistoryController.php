@@ -47,8 +47,7 @@ class ContentVersionHistoryController extends Controller
         $this->authorizeOwner($course, $request);
         $from = $this->history->resolve($course, $type, $version);
         $siblings = $this->history->siblings($course, $type, $from);
-        $toId = (int) $request->query('to', $siblings->firstWhere('status', 'published')?->id);
-        $to = $this->history->resolve($course, $type, $toId);
+        $to = $this->history->comparisonTarget($siblings, $from, $request->filled('to') ? $request->integer('to') : null);
 
         return view('instructor.content-versions.compare', [
             'course' => $course,

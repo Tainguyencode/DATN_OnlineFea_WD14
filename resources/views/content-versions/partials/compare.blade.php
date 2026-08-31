@@ -14,6 +14,7 @@
         <label class="text-sm font-bold text-slate-700">So sánh với
             <select name="to" class="mt-1 rounded-lg border border-slate-300 px-3 py-2">
                 @foreach($siblings as $candidate)
+                    @continue((int) $candidate->id === (int) $from->id)
                     <option value="{{ $candidate->id }}" @selected($candidate->id === $to->id)>V{{ $number($candidate) }} · {{ $candidate->status }}</option>
                 @endforeach
             </select>

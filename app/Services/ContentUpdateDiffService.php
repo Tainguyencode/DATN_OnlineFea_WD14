@@ -95,11 +95,11 @@ class ContentUpdateDiffService
         }
 
         $fields = [
-            'title' => 'Tên khóa học', 'short_description' => 'Mô tả ngắn', 'description' => 'Mô tả chi tiết',
+            'title' => 'Tên khóa học', 'slug' => 'Đường dẫn', 'short_description' => 'Mô tả ngắn', 'description' => 'Mô tả chi tiết',
             'objectives' => 'Mục tiêu', 'requirements' => 'Yêu cầu đầu vào', 'target_audience' => 'Đối tượng học',
             'level' => 'Cấp độ', 'language' => 'Ngôn ngữ', 'price' => 'Giá', 'discount_price' => 'Giá khuyến mãi',
             'sale_price' => 'Giá khuyến mãi', 'thumbnail' => 'Ảnh đại diện', 'preview_video' => 'Video giới thiệu',
-            'category_id' => 'Danh mục',
+            'category_id' => 'Danh mục', 'tags' => 'Thẻ',
         ];
 
         $published = $this->publishedVersion($update, CourseVersion::class, Course::class, 'course_id', $update->course_id);
@@ -164,7 +164,13 @@ class ContentUpdateDiffService
         $fields = [
             'title' => 'Tên bài học', 'type' => 'Loại bài học', 'section_id' => 'Chương học',
             'duration' => 'Thời lượng', 'duration_seconds' => 'Thời lượng', 'content' => 'Nội dung / yêu cầu',
-            'document_file' => 'Tài liệu', 'is_preview' => 'Cho xem thử', 'sort_order' => 'Vị trí',
+            'document_file' => 'Tài liệu', 'is_preview' => 'Cho xem thử', 'is_required' => 'Bắt buộc',
+            'sort_order' => 'Vị trí', 'video_url' => 'URL video', 'video_path' => 'Đường dẫn video',
+            'original_video_key' => 'Khóa video gốc', 'hls_manifest_key' => 'Khóa HLS manifest',
+            'hls_playlist' => 'HLS playlist', 'hls_path' => 'Đường dẫn HLS',
+            'video_original_name' => 'Tên tệp video gốc', 'video_mime' => 'Định dạng video',
+            'video_size' => 'Dung lượng video (byte)', 'attachments' => 'Tệp đính kèm',
+            'subtitles' => 'Phụ đề',
         ];
         foreach ($fields as $key => $label) {
             if ($key === 'duration_seconds' && array_key_exists('duration', $payload)) {
@@ -521,14 +527,17 @@ class ContentUpdateDiffService
 
             return intdiv($seconds, 60).' phút'.($seconds % 60 ? ' '.($seconds % 60).' giây' : '');
         }
-        if (in_array($key, ['is_preview'], true) && is_bool($value)) {
+        if (in_array($key, ['is_preview', 'is_required'], true) && is_bool($value)) {
             return $value ? 'Có' : 'Không';
         }
-        if (in_array($key, ['document_file', 'thumbnail'], true) && is_string($value) && $value !== '') {
+        if (in_array($key, ['document_file', 'thumbnail', 'preview_video', 'video_path', 'original_video_key', 'hls_manifest_key', 'hls_playlist', 'hls_path'], true) && is_string($value) && $value !== '') {
             return basename($value);
         }
         if (in_array($key, ['price', 'discount_price', 'sale_price'], true) && is_numeric($value)) {
             return number_format((float) $value, 0, ',', '.').' đ';
+        }
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
         return $value;

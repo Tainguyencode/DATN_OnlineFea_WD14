@@ -130,6 +130,83 @@ class ContentVersionService
         });
     }
 
+    /**
+     * Create or refresh the mutable candidate while its ContentUpdate is still
+     * an authoring draft. Once submitted, callers must use materializeCandidate
+     * only for legacy repair; pending and terminal candidates stay immutable.
+     */
+    public function prepareDraftCandidate(ContentUpdate $update, User $actor): ?Model
+    {
+        if (! in_array($update->action, [ContentUpdate::ACTION_UPDATE, ContentUpdate::ACTION_REORDER], true)) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($update, $actor): ?Model {
+            $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
+            if (! $update->isDraft()) {
+                throw ValidationException::withMessages(['version' => 'Chỉ bản cập nhật nháp mới có thể chuẩn bị ứng viên phiên bản.']);
+            }
+
+            $payload = $update->payload ?? [];
+            if ($update->action === ContentUpdate::ACTION_REORDER) {
+                $this->materializeReorderCandidates($update, $payload, $actor);
+
+                return null;
+            }
+
+            match ($update->type) {
+                ContentUpdate::TYPE_COURSE => $this->materializeCourseCandidate($update, $payload, $actor),
+                ContentUpdate::TYPE_CHAPTER => $this->materializeSectionCandidate($update, $payload, $actor),
+                ContentUpdate::TYPE_LESSON => $this->materializeLessonCandidate($update, $payload, $actor),
+                ContentUpdate::TYPE_ASSIGNMENT => $this->materializeAssignmentCandidate($update, $payload, $actor),
+                default => null,
+            };
+
+            return match ($update->type) {
+                ContentUpdate::TYPE_COURSE => CourseVersion::query()->where('content_update_id', $update->id)->first(),
+                ContentUpdate::TYPE_CHAPTER => CourseSectionVersion::query()->where('content_update_id', $update->id)->first(),
+                ContentUpdate::TYPE_LESSON => LessonVersion::query()->where('content_update_id', $update->id)->where('lesson_id', $update->entity_id)->first(),
+                ContentUpdate::TYPE_ASSIGNMENT => AssignmentVersion::query()->where('content_update_id', $update->id)->first(),
+                default => null,
+            };
+        });
+    }
+
+    /** Remove only mutable candidates when their authoring draft is deleted. */
+    public function discardDraftCandidates(ContentUpdate $update): void
+    {
+        DB::transaction(function () use ($update): void {
+            $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
+            if (! $update->isDraft()) {
+                throw ValidationException::withMessages(['version' => 'Chỉ ứng viên của bản cập nhật nháp mới có thể bị xóa.']);
+            }
+
+            foreach ([
+                [CourseVersion::class, Course::class, 'course_id'],
+                [CourseSectionVersion::class, CourseSection::class, 'course_section_id'],
+                [LessonVersion::class, Lesson::class, 'lesson_id'],
+                [AssignmentVersion::class, Assignment::class, 'assignment_id'],
+            ] as [$versionClass, $identityClass, $foreignKey]) {
+                $candidates = $versionClass::query()
+                    ->where('content_update_id', $update->id)
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($candidates as $candidate) {
+                    if (! $candidate->isDraft()) {
+                        throw ValidationException::withMessages(['version' => 'Ứng viên đã kết thúc phải được giữ lại trong lịch sử.']);
+                    }
+
+                    $identity = $identityClass::query()->lockForUpdate()->findOrFail($candidate->{$foreignKey});
+                    if ((int) $identity->draft_version_id === (int) $candidate->id) {
+                        $identity->forceFill(['draft_version_id' => null])->save();
+                    }
+                    $candidate->delete();
+                }
+            }
+        });
+    }
+
     /** Activate every candidate tied to one approved ContentUpdate. */
     public function activateCandidates(ContentUpdate $update, User $admin): void
     {
@@ -299,7 +376,15 @@ class ContentVersionService
         return DB::transaction(function () use ($identity, $versionClass, $publishedPointer, $draftPointer, $actor, $snapshot): Model {
             $identity = $identity::query()->lockForUpdate()->findOrFail($identity->id);
             if ($identity->{$draftPointer}) {
-                return $versionClass::query()->findOrFail($identity->{$draftPointer});
+                $draft = $versionClass::query()->lockForUpdate()->findOrFail($identity->{$draftPointer});
+                $update = $draft->content_update_id
+                    ? ContentUpdate::query()->lockForUpdate()->find($draft->content_update_id)
+                    : null;
+                if ($draft->isDraft() && (! $update || in_array($update->status, [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING], true))) {
+                    return $draft;
+                }
+
+                $identity->forceFill([$draftPointer => null])->save();
             }
             $published = $identity->{$publishedPointer} ? $versionClass::query()->lockForUpdate()->findOrFail($identity->{$publishedPointer}) : null;
             if (! $published || ! $published->isPublished()) {
@@ -465,15 +550,24 @@ class ContentVersionService
             ->lockForUpdate()
             ->first();
         if ($existing) {
+            if (! $existing->isDraft() || (int) $identity->draft_version_id !== (int) $existing->id) {
+                throw ValidationException::withMessages(['version' => 'Ứng viên của lần cập nhật này đã kết thúc và không thể được tái sử dụng.']);
+            }
+
             return $existing;
         }
         if ($identity->draft_version_id) {
             $draft = $versionClass::query()->lockForUpdate()->findOrFail($identity->draft_version_id);
-            if ((int) $draft->content_update_id !== (int) $update->id) {
+            $draftUpdate = $draft->content_update_id
+                ? ContentUpdate::query()->lockForUpdate()->find($draft->content_update_id)
+                : null;
+            if (! $draft->isDraft() || ($draftUpdate && in_array($draftUpdate->status, [ContentUpdate::STATUS_APPROVED, ContentUpdate::STATUS_REJECTED], true))) {
+                $identity->forceFill(['draft_version_id' => null])->save();
+            } elseif ((int) $draft->content_update_id !== (int) $update->id) {
                 throw ValidationException::withMessages(['version' => 'Đã có một phiên bản đề xuất khác đang hoạt động cho nội dung này.']);
+            } else {
+                return $draft;
             }
-
-            return $draft;
         }
         $published = $versionClass::query()->lockForUpdate()->findOrFail($identity->published_version_id);
         $basis = $source ?? $published;

@@ -36,6 +36,12 @@ class ContentVersionHistoryService
         foreach ($types as $type) {
             $items = $items->concat($this->versionsForCourse($course, $type)->map(fn (Model $version): array => $this->timelineItem($course, $type, $version)));
         }
+        $siblingCounts = $items->countBy(fn (array $item): string => $item['type'].':'.$item['entity_id']);
+        $items = $items->map(function (array $item) use ($siblingCounts): array {
+            $item['comparison_available'] = ($siblingCounts[$item['type'].':'.$item['entity_id']] ?? 0) > 1;
+
+            return $item;
+        });
         $items = $items->sortByDesc(fn (array $item) => [$item['created_at']?->getTimestamp() ?? 0, $item['version_number']])->values();
         $page = LengthAwarePaginator::resolveCurrentPage();
 
@@ -64,6 +70,34 @@ class ContentVersionHistoryService
             ->filter(fn (Model $candidate): bool => $this->identityId($type, $candidate) === $identityId)
             ->sortByDesc(fn (Model $candidate): int => $this->number($type, $candidate))
             ->values();
+    }
+
+    public function comparisonTarget(Collection $siblings, Model $from, ?int $requestedId = null): Model
+    {
+        $options = $siblings
+            ->reject(fn (Model $candidate): bool => (int) $candidate->id === (int) $from->id)
+            ->values();
+        abort_if($options->isEmpty(), 422, 'Nội dung này chưa có phiên bản khác để so sánh.');
+
+        if ($requestedId) {
+            $requested = $options->firstWhere('id', $requestedId);
+            abort_unless($requested, 404);
+
+            return $requested;
+        }
+
+        $fromNumber = (int) ($from->version_number ?? $from->version);
+
+        $previous = $options
+            ->filter(fn (Model $candidate): bool => (int) ($candidate->version_number ?? $candidate->version) < $fromNumber)
+            ->sortByDesc(fn (Model $candidate): int => (int) ($candidate->version_number ?? $candidate->version))
+            ->first();
+        if ($previous) {
+            return $previous;
+        }
+
+        return $options->firstWhere('status', 'published')
+            ?? $options->sortBy(fn (Model $candidate): int => (int) ($candidate->version_number ?? $candidate->version))->first();
     }
 
     /** @return array<string, mixed> */

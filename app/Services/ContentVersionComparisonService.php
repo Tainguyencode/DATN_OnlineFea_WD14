@@ -54,7 +54,7 @@ class ContentVersionComparisonService
     private function courseValues(Model $version): array
     {
         return $this->fields($version, [
-            'title' => 'Tên khóa học', 'short_description' => 'Mô tả ngắn', 'description' => 'Mô tả',
+            'title' => 'Tên khóa học', 'slug' => 'Đường dẫn', 'short_description' => 'Mô tả ngắn', 'description' => 'Mô tả',
             'objectives' => 'Mục tiêu', 'requirements' => 'Yêu cầu', 'target_audience' => 'Đối tượng',
             'level' => 'Trình độ', 'language' => 'Ngôn ngữ', 'price' => 'Giá',
             'discount_price' => 'Giá khuyến mãi', 'sale_price' => 'Giá bán', 'tags' => 'Thẻ',
@@ -78,6 +78,12 @@ class ContentVersionComparisonService
             'title' => 'Tên bài học', 'type' => 'Loại bài học', 'content' => 'Nội dung',
             'duration_seconds' => 'Thời lượng (giây)', 'section_id' => 'ID chương', 'sort_order' => 'Vị trí',
             'is_preview' => 'Cho xem thử', 'is_required' => 'Bắt buộc',
+            'video_url' => 'URL video', 'video_path' => 'Đường dẫn video',
+            'original_video_key' => 'Khóa video gốc', 'hls_manifest_key' => 'Khóa HLS manifest',
+            'hls_playlist' => 'HLS playlist', 'hls_path' => 'Đường dẫn HLS',
+            'video_original_name' => 'Tên tệp video gốc', 'video_mime' => 'Định dạng video',
+            'video_size' => 'Dung lượng video (byte)', 'attachments' => 'Tệp đính kèm',
+            'subtitles' => 'Phụ đề', 'legacy_chapter_id' => 'ID chương cũ',
         ]);
         $values['document_file'] = ['label' => 'Tài liệu', 'value' => $this->safeFilename($version->document_file)];
         $values['video_source'] = ['label' => 'Nguồn video', 'value' => $this->videoSource($version)];
@@ -113,13 +119,16 @@ class ContentVersionComparisonService
         return collect($map)->mapWithKeys(function (string $label, string $key) use ($version): array {
             $value = $version->{$key};
             if (is_array($value)) {
-                $value = implode(', ', $value);
+                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
             if ($value instanceof \DateTimeInterface) {
                 $value = $value->format('d/m/Y H:i');
             }
             if (is_bool($value)) {
                 $value = $value ? 'Có' : 'Không';
+            }
+            if (in_array($key, ['price', 'discount_price', 'sale_price'], true) && is_numeric($value)) {
+                $value = number_format((float) $value, 0, ',', '.').' đ';
             }
 
             return [$key => ['label' => $label, 'value' => $value]];

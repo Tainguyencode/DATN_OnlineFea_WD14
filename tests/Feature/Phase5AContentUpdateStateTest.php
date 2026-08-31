@@ -13,14 +13,35 @@ use App\Models\User;
 use App\Services\ContentUpdateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class Phase5AContentUpdateStateTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $localStorageRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->localStorageRoot = storage_path('framework/testing/phase5a-content-update/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory($this->localStorageRoot);
+
+        parent::tearDown();
+    }
 
     private function publishedCourse(): array
     {
@@ -326,7 +347,6 @@ class Phase5AContentUpdateStateTest extends TestCase
             'status' => Lesson::STATUS_PUBLISHED,
         ]);
 
-        Storage::fake('local');
         Storage::disk('local')->put('lesson-videos-mp4/live-v1.mp4', 'live-v1');
         Queue::fake();
 
