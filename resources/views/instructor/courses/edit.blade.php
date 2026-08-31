@@ -1,4 +1,4 @@
-<x-instructor-layout :title="$course->title" page-title="Chỉnh sửa khóa học" page-title-class="text-lg sm:text-xl font-bold leading-tight text-slate-900 truncate" breadcrumb="Cập nhật thông tin khóa học và gửi duyệt để xuất bản">
+<x-instructor-layout :title="$course->title" page-title="Chỉnh sửa khóa học" page-title-class="text-lg sm:text-xl font-bold leading-tight text-slate-900 truncate" breadcrumb="Cập nhật thông tin khóa học và gửi duyệt để xuất bản" :back-url="route('instructor.courses.index')">
 
 @php
     $statusStyles = [

@@ -1,4 +1,4 @@
-<x-instructor-layout :title="'Nội dung - '.$course->title" page-title="Quản lý nội dung khóa học" :breadcrumb="$course->title">
+<x-instructor-layout :title="'Nội dung - '.$course->title" page-title="Quản lý nội dung khóa học" :breadcrumb="$course->title" :back-url="route('instructor.courses.index')">
 
 @php
     $typeStyles = [
@@ -143,11 +143,12 @@
                 </div>
             </section>
 
+            <!-- Copyright Commitment Modal -->
             <div id="curriculumCopyrightModal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="curriculum-copyright-title">
                 <div class="flex min-h-screen items-end justify-center px-4 pb-20 pt-4 text-center sm:block sm:p-0">
-                    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" aria-hidden="true" onclick="closeCurriculumCopyrightModal()"></div>
+                    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="closeCurriculumCopyrightModal()"></div>
                     <span class="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                    <div class="relative inline-block w-full max-w-lg transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-2xl sm:my-8 sm:align-middle">
+                    <div class="relative inline-block w-full max-w-lg transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-2xl transition-all sm:my-8">
                         <div class="bg-white px-6 pb-4 pt-6 sm:p-6 sm:pb-4">
                             <div class="sm:flex sm:items-start">
                                 <div class="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:mx-0">
@@ -162,17 +163,30 @@
                                     </div>
                                     <form id="curriculumCopyrightSubmitForm" method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5">
                                         @csrf
-                                        <label class="flex cursor-pointer items-start gap-3 text-sm">
-                                            <input id="curriculumCopyrightAgreement" name="copyright_agreed" type="checkbox" value="1" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                                            <span class="font-semibold text-slate-700">Tôi đã đọc và đồng ý với cam kết bản quyền.</span>
-                                        </label>
+                                        <div class="relative flex items-start">
+                                            <div class="flex h-5 items-center">
+                                                <input id="curriculumCopyrightAgreement" name="copyright_agreed" type="checkbox" value="1"
+                                                       class="h-4.5 w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                                            </div>
+                                            <div class="ml-3 text-sm">
+                                                <label for="curriculumCopyrightAgreement" class="font-semibold text-slate-700 select-none cursor-pointer">
+                                                    Tôi đã đọc và đồng ý với cam kết bản quyền.
+                                                </label>
+                                            </div>
+                                        </div>
                                     </form>
                                 </div>
                             </div>
                         </div>
-                        <div class="flex flex-col gap-2 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
-                            <button type="button" onclick="closeCurriculumCopyrightModal()" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50">Hủy</button>
-                            <button type="button" id="curriculumCopyrightConfirm" onclick="submitCurriculumCopyrightForm()" disabled class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">Xác nhận gửi duyệt</button>
+                        <div class="bg-slate-50 px-6 py-4 sm:flex sm:flex-row-reverse sm:px-6 gap-2">
+                            <button type="button" id="curriculumCopyrightConfirm" onclick="submitCurriculumCopyrightForm()" disabled
+                                    class="inline-flex w-full min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto">
+                                Xác nhận gửi duyệt
+                            </button>
+                            <button type="button" onclick="closeCurriculumCopyrightModal()"
+                                    class="mt-3 inline-flex w-full min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 sm:mt-0 sm:w-auto cursor-pointer">
+                                Hủy
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -368,6 +382,26 @@
                 confirmButton.disabled = !this.checked;
             });
         }
+
+        // The canonical review panel is replaced after AJAX mutations, so
+        // delegate this interaction instead of binding to one rendered button.
+        document.addEventListener('click', function (event) {
+            var target = event.target instanceof Element ? event.target : null;
+            var submitReviewButton = target ? target.closest('#curriculum-submit-review-btn') : null;
+            if (!submitReviewButton || submitReviewButton.disabled || !submitReviewButton.closest('#curriculumSubmitForm')) {
+                return;
+            }
+
+            event.preventDefault();
+            openCurriculumCopyrightModal();
+        });
+
+        // Escape key closes the modal
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeCurriculumCopyrightModal();
+            }
+        });
     });
 
     function openCurriculumCopyrightModal() {
@@ -375,6 +409,13 @@
         if (modal) {
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
+            var cb = document.getElementById('curriculumCopyrightAgreement');
+            if (cb) cb.checked = false;
+            var btn = document.getElementById('curriculumCopyrightConfirm');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Xác nhận gửi duyệt';
+            }
         }
     }
 
@@ -383,13 +424,25 @@
         if (modal) {
             modal.classList.add('hidden');
             document.body.style.overflow = '';
+            var cb = document.getElementById('curriculumCopyrightAgreement');
+            if (cb) cb.checked = false;
+            var btn = document.getElementById('curriculumCopyrightConfirm');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Xác nhận gửi duyệt';
+            }
         }
     }
 
     function submitCurriculumCopyrightForm() {
         var agreement = document.getElementById('curriculumCopyrightAgreement');
         var form = document.getElementById('curriculumCopyrightSubmitForm');
+        var btn = document.getElementById('curriculumCopyrightConfirm');
         if (agreement && agreement.checked && form) {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="inline-flex items-center gap-1.5"><svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Đang gửi...</span>';
+            }
             form.submit();
         }
     }

@@ -33,38 +33,63 @@ class HlsVideoService
         $crf = max(0, min(51, (int) config('video.hls.crf', 23)));
         $playlistPath = $outputDirectory.'/playlist.m3u8';
 
-        $command = [
+        $streamCopyCommand = [
             $ffmpegConfig['ffmpeg.binaries'],
             '-hide_banner',
             '-y',
             '-i', $inputPath,
-            '-map', '0:v:0',
-            '-map', '0:a:0?',
-            '-c:v', 'libx264',
-            '-preset', $preset,
-            '-crf', (string) $crf,
-            '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
-            '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac',
-            '-b:a', '128k',
-            '-ac', '2',
-            '-sc_threshold', '0',
-            '-force_key_frames', 'expr:gte(t,n_forced*'.$segmentSeconds.')',
+            '-c', 'copy',
             '-hls_time', (string) $segmentSeconds,
             '-hls_list_size', '0',
-            '-hls_flags', 'independent_segments',
             '-hls_segment_filename', $outputDirectory.'/segment_%05d.ts',
             '-f', 'hls',
             $playlistPath,
         ];
 
-        $process = new Process($command);
+        $process = new Process($streamCopyCommand);
         $process->setTimeout((float) $ffmpegConfig['timeout']);
-        $process->mustRun();
+        $process->run();
 
         $segments = array_values(File::glob($outputDirectory.'/segment_*.ts') ?: []);
-        if (! is_file($playlistPath) || filesize($playlistPath) === 0 || $segments === []) {
-            throw new RuntimeException('FFmpeg did not produce a complete HLS playlist.');
+        $streamCopySuccessful = $process->isSuccessful() && is_file($playlistPath) && filesize($playlistPath) > 0 && $segments !== [];
+
+        if (! $streamCopySuccessful) {
+            Log::warning('[HlsVideoService] Stream copy failed or unproduced; falling back to re-encode.');
+            File::cleanDirectory($outputDirectory);
+
+            $reencodeCommand = [
+                $ffmpegConfig['ffmpeg.binaries'],
+                '-hide_banner',
+                '-y',
+                '-i', $inputPath,
+                '-map', '0:v:0',
+                '-map', '0:a:0?',
+                '-c:v', 'libx264',
+                '-preset', $preset,
+                '-crf', (string) $crf,
+                '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
+                '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ac', '2',
+                '-sc_threshold', '0',
+                '-force_key_frames', 'expr:gte(t,n_forced*'.$segmentSeconds.')',
+                '-hls_time', (string) $segmentSeconds,
+                '-hls_list_size', '0',
+                '-hls_flags', 'independent_segments',
+                '-hls_segment_filename', $outputDirectory.'/segment_%05d.ts',
+                '-f', 'hls',
+                $playlistPath,
+            ];
+
+            $reencodeProcess = new Process($reencodeCommand);
+            $reencodeProcess->setTimeout((float) $ffmpegConfig['timeout']);
+            $reencodeProcess->mustRun();
+
+            $segments = array_values(File::glob($outputDirectory.'/segment_*.ts') ?: []);
+            if (! is_file($playlistPath) || filesize($playlistPath) === 0 || $segments === []) {
+                throw new RuntimeException('FFmpeg did not produce a complete HLS playlist.');
+            }
         }
 
         $masterContent = $this->masterPlaylist(

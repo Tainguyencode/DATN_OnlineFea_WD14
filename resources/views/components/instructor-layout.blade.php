@@ -3,6 +3,7 @@
     'pageTitle' => 'Instructor Dashboard',
     'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
+    'backUrl' => null,
 ])
 
 @php
@@ -160,6 +161,7 @@
     :pageTitle="$pageTitle"
     :pageTitleClass="$pageTitleClass"
     :breadcrumb="$breadcrumb"
+    :backUrl="$backUrl"
 >
     @if(config('auth.email_verification_enabled', true) && auth()->check() && ! auth()->user()->hasVerifiedEmail())
         <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">

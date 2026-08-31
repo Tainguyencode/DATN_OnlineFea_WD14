@@ -1,4 +1,4 @@
-<x-instructor-layout title="Nhập toàn bộ khóa học" page-title="Nhập toàn bộ khóa học từ Excel" breadcrumb="Tải mẫu, chọn file và xem trước dữ liệu trước khi tạo khóa học">
+<x-instructor-layout title="Nhập toàn bộ khóa học" page-title="Nhập toàn bộ khóa học từ Excel" breadcrumb="Tải mẫu, chọn file và xem trước dữ liệu trước khi tạo khóa học" :back-url="route('instructor.courses.index')">
     <div class="mx-auto w-full max-w-5xl space-y-6" data-full-course-import>
         <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

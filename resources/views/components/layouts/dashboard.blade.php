@@ -7,6 +7,7 @@
     'pageTitle' => 'Dashboard',
     'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
+    'backUrl' => null,
 ])
 
 @php
@@ -274,6 +275,14 @@
                         <button type="button" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen.toString()" aria-label="Mở menu quản lý" class="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-blue-50 dark:hover:bg-slate-800 lg:hidden">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                         </button>
+                        @if($backUrl)
+                            <a href="{{ $backUrl }}"
+                               class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-2xs transition duration-200 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-blue-300"
+                               title="Quay lại"
+                               aria-label="Quay lại">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                            </a>
+                        @endif
                         <div class="min-w-0">
                         <h1 class="{{ $pageTitleClass }} text-slate-950 dark:text-white">{{ $pageTitle }}</h1>
                         @if($breadcrumb)

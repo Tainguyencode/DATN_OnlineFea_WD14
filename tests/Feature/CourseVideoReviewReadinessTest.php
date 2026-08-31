@@ -6,15 +6,24 @@ use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CourseVideoReviewReadinessTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake('local');
+    }
 
     public function test_one_processing_video_blocks_hls_review_readiness(): void
     {
@@ -138,6 +147,8 @@ class CourseVideoReviewReadinessTest extends TestCase
             'slug' => 'readiness-'.uniqid(),
             'status' => true,
         ]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

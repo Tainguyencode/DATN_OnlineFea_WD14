@@ -493,10 +493,10 @@
                                                                         @endphp
                                                                         <li class="flex items-start gap-2 px-3 py-2 hover:bg-amber-50 transition-colors">
                                                                             {{-- Nút seek --}}
-                                                                            @if($lesson->video_path)
+                                                                            @if($hasVideo && !$effectiveVideoUrl)
                                                                                 <button
                                                                                     type="button"
-                                                                                    class="admin-seek-btn flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
+                                                                                    class="admin-seek-btn flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors cursor-pointer"
                                                                                     data-video-id="admin-video-{{ $videoLessonKey }}"
                                                                                     data-timestamp="{{ $tsSeconds }}"
                                                                                     title="Nhảy đến {{ $vf['timestamp'] }} và phát video"

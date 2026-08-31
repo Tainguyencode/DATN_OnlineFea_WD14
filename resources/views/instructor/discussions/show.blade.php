@@ -1,4 +1,4 @@
-<x-instructor-layout title="Trao đổi với học viên" pageTitle="Chi tiết trao đổi" breadcrumb="Giảng viên / Trao đổi / Chi tiết">
+<x-instructor-layout title="Trao đổi với học viên" pageTitle="Chi tiết trao đổi" breadcrumb="Giảng viên / Trao đổi / Chi tiết" :back-url="route('instructor.discussions.index')">
     <div class="space-y-4 max-w-4xl" data-course-chat-root data-current-user-id="{{ auth()->id() }}" data-discussion-id="{{ $discussion->id }}" data-messages-url="{{ route('discussions.messages', $discussion) }}">
         <!-- NÚT QUAY LẠI -->
         <div class="flex items-center justify-between">

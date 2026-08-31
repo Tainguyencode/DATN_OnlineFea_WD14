@@ -1,4 +1,4 @@
-<x-instructor-layout title="Chi tiết bài nộp" pageTitle="Chi tiết bài nộp" breadcrumb="Giảng viên / Bài tập đã nộp / Chi tiết">
+<x-instructor-layout title="Chi tiết bài nộp" pageTitle="Chi tiết bài nộp" breadcrumb="Giảng viên / Bài tập đã nộp / Chi tiết" :back-url="route('instructor.submissions.index')">
     <div class="space-y-6">
         <div class="grid gap-6 lg:grid-cols-3">
             <!-- CỘT TRÁI (65-70%): Thông tin bài nộp, Nội dung bài làm, Tệp đính kèm -->
