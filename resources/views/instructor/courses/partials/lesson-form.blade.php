@@ -143,7 +143,7 @@
                             </svg>
                         </div>
                         <span class="text-sm font-bold text-slate-800">Nhấn để chọn video cho bài học này</span>
-                        <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV — tối đa {{ number_format(config('video.upload.max_bytes') / 1048576, 0) }}MB</span>
+                        <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV — tối đa {{ config('video.upload.max_bytes') >= 1073741824 ? number_format(config('video.upload.max_bytes') / 1073741824, 0).' GB' : number_format(config('video.upload.max_bytes') / 1048576, 0).' MB' }}</span>
                         <input type="file"
                                x-ref="s3FileInput"
                                accept=".mp4,.mov,.avi,.webm,.m4v,.mkv,video/*"

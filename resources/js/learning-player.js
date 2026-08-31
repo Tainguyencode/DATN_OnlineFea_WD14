@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initVideoProgressV2();
     initYouTubeProgress();
     initQuizPlayer();
-    initMarkComplete();
+    initReadingProgress();
     initCertificateDropdown();
     initLessonNotes();
     initStudyNotesPage();
@@ -283,69 +283,46 @@ function updateCurrentLessonProgress(percent, completed = false) {
     if (statusEl) statusEl.textContent = completed ? 'Hoàn thành' : (safe > 0 ? 'Đang học' : 'Chưa học');
 }
 
-function initMarkComplete() {
-    const markCompleteBtn = document.querySelector('[data-mark-lesson-complete]');
-    if (!markCompleteBtn) return;
-
-    markCompleteBtn.addEventListener('click', async (event) => {
-        const button = event.currentTarget;
-        const url = document.querySelector('[data-learning-player]')?.dataset.progressUrl;
-
-        if (!url) return;
-
-        button.disabled = true;
-
+function initReadingProgress() {
+    const root = document.querySelector('[data-learning-player]');
+    if (root?.dataset.lessonType !== 'document' || !root.dataset.progressUrl) return;
+    let seconds = 0;
+    let saving = false;
+    let done = false;
+    const timer = setInterval(async () => {
+        if (done || saving || document.hidden) return;
+        seconds++;
+        if (seconds < 30) return;
+        saving = true;
         try {
-            const response = await fetch(url, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                },
+            const response = await fetch(root.dataset.progressUrl, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
                 body: JSON.stringify({ watched_seconds: 0, completed: true }),
             });
-
-            if (!response.ok) throw new Error('complete_failed');
-
+            if (!response.ok) {
+                if ([401, 403, 404, 419].includes(response.status)) {
+                    clearInterval(timer);
+                    showToast('Không thể lưu tiến độ. Vui lòng tải lại trang để kiểm tra quyền truy cập.', 'error');
+                }
+                seconds = 25;
+                return;
+            }
             const data = await response.json();
-            showToast('Đã đánh dấu hoàn thành bài học.');
-            if (typeof data.course_progress === 'number') {
+            if (data.lesson_completed) {
+                done = true;
+                clearInterval(timer);
                 updateHeaderProgress(data.course_progress);
+                updateCurrentLessonProgress(100, true);
+                showToast('Bạn đã hoàn thành bài đọc.');
             }
-            button.textContent = 'Đã hoàn thành';
         } catch {
-            button.disabled = false;
-            showToast('Không thể đánh dấu hoàn thành.', 'error');
+            seconds = 25;
+        } finally {
+            saving = false;
         }
-    });
-
-    // Nếu là bài học video, lắng nghe sự kiện để hiển thị nút khi xem đủ 30 giây
-    const video = document.querySelector('video');
-    if (video) {
-        const checkTime = () => {
-            if (video.currentTime >= 30) {
-                markCompleteBtn.style.display = 'inline-flex';
-            } else {
-                markCompleteBtn.style.display = 'none';
-            }
-        };
-        
-        checkTime();
-        video.addEventListener('timeupdate', checkTime);
-        video.addEventListener('loadedmetadata', checkTime);
-        video.addEventListener('seeked', checkTime);
-    } else {
-        // Nếu dùng trình phát video dạng nhúng iframe (YouTube, Vimeo...)
-        const iframe = document.querySelector('iframe');
-        if (iframe) {
-            // Tự động hiển thị nút sau 30 giây kể từ khi học viên vào bài học
-            setTimeout(() => {
-                markCompleteBtn.style.display = 'inline-flex';
-            }, 30000);
-        }
-    }
+    }, 1000);
+    window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
 }
 
 function initQuizPlayer() {

@@ -14,8 +14,8 @@ class VideoFrameExtractor
 
     public function __construct()
     {
-        $this->ffmpegBin = env('FFMPEG_BIN') ?: null;
-        $this->ffprobeBin = env('FFPROBE_BIN') ?: null;
+        $this->ffmpegBin = config('video.ffmpeg.binary') ?: null;
+        $this->ffprobeBin = config('video.ffmpeg.probe_binary') ?: null;
     }
 
     public function extract(string $videoPath, int $intervalSeconds = 300, string|int|null $lessonId = null): array

@@ -81,6 +81,25 @@ class PublicNavigationTest extends TestCase
         $response->assertSee('Bảo mật tài khoản');
     }
 
+    public function test_student_home_and_dashboard_use_the_same_primary_navigation(): void
+    {
+        $student = User::factory()->create([
+            'role' => 'student', 'is_active' => true, 'email_verified_at' => now(),
+        ]);
+        $this->actingAs($student)->withSession(['two_factor_passed_at' => now()->timestamp]);
+        $home = $this->get(route('home'))->assertOk();
+        $dashboard = $this->get(route('student.dashboard'))->assertOk();
+        preg_match('/<nav data-primary-navigation.*?<\/nav>/s', $home->getContent(), $homeNav);
+        preg_match('/<nav data-primary-navigation.*?<\/nav>/s', $dashboard->getContent(), $dashboardNav);
+        $this->assertNotEmpty($homeNav);
+        $this->assertSame($dashboardNav[0], $homeNav[0]);
+        $this->assertStringContainsString('Khám phá', $homeNav[0]);
+        $this->assertStringContainsString('Học tập', $homeNav[0]);
+        $this->assertStringContainsString('Hỗ trợ', $homeNav[0]);
+        $home->assertDontSee('studentSidebarDesktopOpen', false);
+        $dashboard->assertSee('toggle-student-sidebar', false);
+    }
+
     public function test_instructor_dashboard_keeps_role_specific_sidebar_shell(): void
     {
         $instructor = User::factory()->create([
@@ -95,7 +114,7 @@ class PublicNavigationTest extends TestCase
             ->get(route('instructor.dashboard'));
 
         $response->assertOk();
-        $response->assertDontSee('data-public-header', false);
+        $response->assertSee('data-public-header', false);
         $response->assertSee('instructor-shell', false);
         $response->assertSee('Quản lý khóa học');
     }

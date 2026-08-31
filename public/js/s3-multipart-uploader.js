@@ -29,7 +29,7 @@ class S3MultipartUploader {
         this.batchSignUrl = options.batchSignUrl;
         this.completeUrl = options.completeUrl;
         this.abortUrl = options.abortUrl;
-        this.maxVideoBytes = Number(options.maxVideoBytes) || (200 * 1024 * 1024);
+        this.maxVideoBytes = Number(options.maxVideoBytes) || (5 * 1024 * 1024 * 1024);
         this.csrfToken = options.csrfToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         // Số luồng upload song song (4 luồng giúp tận dụng tối đa băng thông quốc tế)
@@ -681,7 +681,7 @@ function createLessonFormState(config) {
         signPartUrl: config.signPartUrl,
         completeUrl: config.completeUrl,
         abortUrl: config.abortUrl,
-        maxVideoBytes: Number(config.maxVideoBytes) || (200 * 1024 * 1024),
+        maxVideoBytes: Number(config.maxVideoBytes) || (5 * 1024 * 1024 * 1024),
         currentQueueId: null,
 
         generateS3Key(filename) {
@@ -957,6 +957,14 @@ function createLessonFormState(config) {
                             }
                         }
 
+                        if (!isCreateForm && lessonId) {
+                            try {
+                                await refreshCurriculumLesson(lessonId);
+                            } catch (refreshError) {
+                                window.showCurriculumToast?.('Bài học đã lưu nhưng chưa cập nhật được danh sách. Vui lòng tải lại trang.', true);
+                            }
+                        }
+
                         if (window.triggerHlsPolling) {
                             window.triggerHlsPolling();
                         }
@@ -1187,6 +1195,22 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+async function refreshCurriculumLesson(lessonId) {
+    const current = document.getElementById(`lesson-item-${lessonId}`);
+    if (!current) throw new Error('Lesson row not found');
+    const response = await fetch(window.location.href, {
+        credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'text/html' },
+    });
+    if (!response.ok || response.redirected) throw new Error('Could not refresh lesson');
+    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const fresh = page.getElementById(current.id);
+    if (!fresh) throw new Error('Updated lesson row not found');
+    // Only replace this lesson, preserving other open forms and active upload queues.
+    window.Alpine?.destroyTree?.(current);
+    current.replaceWith(document.importNode(fresh, true));
+    // Alpine's mutation observer initializes the inserted subtree automatically.
 }
 
 function appendLessonToCurriculumDOM(data) {

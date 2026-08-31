@@ -65,7 +65,7 @@ class S3MultipartUploadTest extends TestCase
         $response = $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
             'filename' => 'lecture_1.mp4',
             'content_type' => 'video/mp4',
-            'file_size' => 150000000, // 150MB
+            'file_size' => 5368709120, // Exactly 5 GiB; metadata only, no real upload.
         ]);
 
         $response->assertOk()
@@ -74,6 +74,12 @@ class S3MultipartUploadTest extends TestCase
                 'key' => "originals/courses/{$course->id}/lessons/new/test-uuid.mp4",
                 'bucket' => 'test-bucket',
             ]);
+
+        $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
+            'filename' => 'too-large.mp4',
+            'content_type' => 'video/mp4',
+            'file_size' => 5368709121,
+        ])->assertUnprocessable()->assertJsonValidationErrors('file_size');
     }
 
     public function test_multipart_initialization_rejects_video_over_configured_limit(): void

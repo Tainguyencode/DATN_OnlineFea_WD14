@@ -110,6 +110,95 @@ class VideoProtectionTest extends TestCase
         $this->assertStringContainsString('segment0.ts?token='.urlencode($token), $content);
     }
 
+    public function test_ai_scan_reads_original_s3_video_and_cleans_up_on_success_and_failure(): void
+    {
+        Storage::fake('s3');
+        Storage::fake('local');
+        Storage::fake('public');
+        config(['filesystems.disks.s3.bucket' => 'test-video']);
+        $lesson = $this->createTestLesson();
+        $lesson->update(['original_video_key' => 'videos/original.mp4', 'hls_manifest_key' => 'hls/master.m3u8']);
+        Storage::disk('s3')->put('videos/original.mp4', 'original-video');
+        foreach ([false, true] as $fail) {
+            $temporary = null;
+            $extractor = \Mockery::mock(\App\Services\VideoFrameExtractor::class);
+            $extractor->shouldReceive('extract')->once()->andReturnUsing(function ($path) use (&$temporary, $fail) {
+                $temporary = $path;
+                $this->assertSame('original-video', file_get_contents($path));
+                if ($fail) {
+                    throw new \RuntimeException('Synthetic extraction failure');
+                }
+                return ['frame.jpg'];
+            });
+            $response = app(\App\Http\Controllers\Web\Admin\AiModerationController::class)->extractFrames($lesson->id, $extractor);
+            $this->assertSame($fail ? 500 : 200, $response->getStatusCode());
+            $this->assertFileDoesNotExist($temporary);
+        }
+    }
+
+    public function test_ai_scan_uses_draft_original_instead_of_published_video(): void
+    {
+        Storage::fake('s3');
+        Storage::fake('local');
+        Storage::fake('public');
+        config(['filesystems.disks.s3.bucket' => 'test-video']);
+        $lesson = $this->createTestLesson();
+        $lesson->update(['original_video_key' => 'videos/old.mp4']);
+        \App\Models\ContentUpdate::create([
+            'course_id' => $lesson->course_id, 'entity_id' => $lesson->id,
+            'type' => 'lesson', 'action' => 'update', 'status' => 'pending',
+            'created_by' => $lesson->course->instructor_id,
+            'payload' => ['original_video_key' => 'videos/new.mp4', 'hls_manifest_key' => 'hls/new.m3u8'],
+        ]);
+        Storage::disk('s3')->put('videos/new.mp4', 'draft-video');
+        $extractor = \Mockery::mock(\App\Services\VideoFrameExtractor::class);
+        $extractor->shouldReceive('extract')->once()->andReturnUsing(function ($path) {
+            $this->assertSame('draft-video', file_get_contents($path));
+            return ['frame.jpg'];
+        });
+        $response = app(\App\Http\Controllers\Web\Admin\AiModerationController::class)->extractFrames($lesson->id, $extractor);
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    public function test_bulk_ai_scan_button_includes_s3_originals(): void
+    {
+        $lesson = $this->createTestLesson();
+        $lesson->update(['original_video_key' => 'videos/s3-only.mp4', 'video_path' => null]);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('admin.courses.review', $lesson->course_id))
+            ->assertOk()
+            ->assertSee('id="btn-scan-course-ai"', false)
+            ->assertViewHas('videoLessons', fn ($videos) => $videos->contains('id', $lesson->id));
+    }
+
+    public function test_reading_completion_requires_thirty_seconds_and_is_idempotent(): void
+    {
+        $lesson = $this->createTestLesson();
+        $lesson->update(['type' => 'document']);
+        $student = User::factory()->create(['role' => 'student']);
+        \App\Models\Enrollment::create([
+            'user_id' => $student->id, 'course_id' => $lesson->course_id,
+            'status' => 'active', 'enrolled_at' => now(),
+        ]);
+        $key = 'reading-start:'.$student->id.':'.$lesson->id;
+        \Illuminate\Support\Facades\Cache::put($key, now()->timestamp, 3600);
+        $service = app(\App\Services\LearningProgressService::class);
+        try {
+            $service->recordLessonProgress($student->id, $lesson->course, $lesson, 0, 0, true);
+            $this->fail('Early completion must be rejected.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+        }
+        $this->travel(30)->seconds();
+        $result = $service->recordLessonProgress($student->id, $lesson->course, $lesson, 0, 0, true);
+        $this->assertTrue($result['lesson_completed']);
+        $again = $service->recordLessonProgress($student->id, $lesson->course, $lesson, 0, 0, true);
+        $this->assertSame($result['completed_lessons'], $again['completed_lessons']);
+        $this->travelBack();
+        \Illuminate\Support\Facades\Cache::forget($key);
+    }
+
     private function createTestLesson(?User $instructor = null): Lesson
     {
         $instructor ??= User::create([
