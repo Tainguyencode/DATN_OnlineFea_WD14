@@ -30,7 +30,7 @@ class QuizAttemptService
                 ->with('quizVersion')
                 ->first();
 
-            if ($attempt) {
+            if ($attempt && ! $this->expireIfDue($attempt)) {
                 return $attempt;
             }
 
@@ -95,6 +95,7 @@ class QuizAttemptService
             $attempt->setRelation('quiz', $quiz);
             $attempt->setRelation('quizVersion', $version);
 
+            $this->expireIfDue($attempt);
             if ($attempt->isFinalized()) {
                 return [
                     'attempt' => $attempt->load('attemptAnswers'),
@@ -179,6 +180,7 @@ class QuizAttemptService
             $attempt->setRelation('quiz', $quiz);
             $attempt->setRelation('quizVersion', $version);
 
+            $this->expireIfDue($attempt);
             if ($attempt->isFinalized()) {
                 return [
                     'attempt' => $attempt->load('attemptAnswers'),
@@ -235,14 +237,18 @@ class QuizAttemptService
     {
         $this->assertAccess($course, $lesson, $user);
 
-        return DB::transaction(function () use ($user, $attemptId, $answers, $remainingSeconds): QuizAttempt {
+        return DB::transaction(function () use ($lesson, $user, $attemptId, $answers, $remainingSeconds): QuizAttempt {
             $attempt = QuizAttempt::query()->lockForUpdate()->findOrFail($attemptId);
             abort_unless((int) $attempt->user_id === (int) $user->id, 403);
+            abort_unless($attempt->quiz()->where('lesson_id', $lesson->id)->exists(), 404);
+            if ($this->expireIfDue($attempt)) {
+                return $attempt;
+            }
             abort_unless($attempt->status === QuizAttempt::STATUS_IN_PROGRESS, 409, 'Quiz attempt is no longer in progress.');
 
             $attempt->update([
                 'answers' => $answers,
-                'remaining_seconds' => $remainingSeconds !== null ? max(0, $remainingSeconds) : $this->remainingTime($attempt),
+                'remaining_seconds' => $this->remainingTime($attempt),
             ]);
 
             return $attempt;
@@ -305,7 +311,27 @@ class QuizAttemptService
             return null;
         }
 
-        return max(0, now()->diffInSeconds($attempt->started_at->copy()->addMinutes($minutes), false));
+        return max(0, (int) now()->diffInSeconds($attempt->started_at->copy()->addMinutes($minutes), false));
+    }
+
+    private function expireIfDue(QuizAttempt $attempt): bool
+    {
+        if ($attempt->status !== QuizAttempt::STATUS_IN_PROGRESS || $this->remainingTime($attempt) !== 0) {
+            return false;
+        }
+
+        $attempt->update([
+            'status' => QuizAttempt::STATUS_EXPIRED,
+            'termination_reason' => QuizAttempt::REASON_TIME_EXPIRED,
+            'remaining_seconds' => 0,
+            'score' => 0,
+            'total_score' => 0,
+            'percent' => 0,
+            'passed' => false,
+            'completed_at' => now(),
+        ]);
+
+        return true;
     }
 
     public function completedAttemptsCount(Quiz $quiz, User $user): int
@@ -393,4 +419,3 @@ class QuizAttemptService
         ];
     }
 }
-

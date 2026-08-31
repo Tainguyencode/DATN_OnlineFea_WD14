@@ -9,6 +9,8 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Services\AwsS3UploadService;
+use App\Services\ContentUpdateService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -197,59 +199,61 @@ class S3MultipartUploadController extends Controller
         try {
             $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
 
-            // Kích hoạt ConvertVideoToHLS nếu lesson đã được tạo/lưu trong DB
-            $lesson = null;
-            if ($lessonId) {
-                $lesson = Lesson::where('course_id', $course->id)->where('id', $lessonId)->first();
-            }
-            if (! $lesson) {
+            return DB::transaction(function () use ($course, $lessonId, $key, $duration, $result) {
+                $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+                $this->authorizeCourse($course);
                 $lesson = Lesson::where('course_id', $course->id)
-                    ->where('original_video_key', $key)
-                    ->first();
-            }
+                    ->when($lessonId, fn ($q) => $q->whereKey($lessonId), fn ($q) => $q->where('original_video_key', $key))
+                    ->lockForUpdate()->first();
+                $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
+                    ->where('course_id', $course->id)
+                    ->where('created_by', auth()->id())
+                    ->where('status', ContentUpdate::STATUS_DRAFT)
+                    ->where(function ($q) use ($key, $lessonId) {
+                        $q->whereJsonContains('payload->original_video_key', $key);
+                        if ($lessonId) {
+                            $q->orWhere('entity_id', $lessonId);
+                        }
+                    })->latest()->lockForUpdate()->first();
 
-            if ($lesson) {
-                $lessonUpdateData = [
+                $videoData = [
                     'original_video_key' => $key,
                     'upload_status' => 'uploaded',
                     'processing_status' => 'pending',
                 ];
-                if ($duration > 0 && ($lesson->duration <= 0 || $lesson->duration_seconds <= 0)) {
-                    $lessonUpdateData['duration'] = $duration;
-                    $lessonUpdateData['duration_seconds'] = $duration;
+                if ($duration > 0) {
+                    $videoData += ['duration' => $duration, 'duration_seconds' => $duration];
                 }
-                $lesson->update($lessonUpdateData);
-                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key, 'duration' => $duration]);
-                ConvertVideoToHLS::dispatch($lesson);
-            }
 
-            // Kích hoạt ConvertContentUpdateVideoToHLS nếu có ContentUpdate draft tương ứng
-            $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
-                ->where('course_id', $course->id)
-                ->where('status', ContentUpdate::STATUS_DRAFT)
-                ->where(function ($q) use ($key, $lessonId) {
-                    $q->whereJsonContains('payload->original_video_key', $key);
-                    if ($lessonId) {
-                        $q->orWhere('entity_id', $lessonId);
-                    }
-                })
-                ->latest()
-                ->first();
+                if ($lesson && $course->isContentApproved()) {
+                    // Existing approved lessons may only receive a review candidate.
+                    $payload = array_merge($contentUpdate?->payload ?? [], $videoData, [
+                        'hls_manifest_key' => null,
+                        'video_path' => null,
+                    ]);
+                    $contentUpdate = app(ContentUpdateService::class)->recordPendingUpdate(
+                        ContentUpdate::TYPE_LESSON, ContentUpdate::ACTION_UPDATE,
+                        $course->id, $lesson->id, $payload, auth()->user()
+                    );
+                } elseif ($lesson) {
+                    // Re-check after upload; approval may have changed while S3 was receiving parts.
+                    abort_unless(in_array($course->status, [Course::STATUS_DRAFT, Course::STATUS_REJECTED], true), 409);
+                    $lesson->update($videoData);
+                    ConvertVideoToHLS::dispatch($lesson)->afterCommit();
+                }
 
-            if ($contentUpdate) {
-                $p = $contentUpdate->payload ?? [];
-                $p['original_video_key'] = $key;
-                $p['upload_status'] = 'uploaded';
-                $contentUpdate->update(['payload' => $p]);
-                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
-                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
-            }
+                if ($contentUpdate) {
+                    $contentUpdate->update(['payload' => array_merge($contentUpdate->payload ?? [], $videoData)]);
+                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate)->afterCommit();
+                }
 
-            return response()->json([
-                'status' => 'success',
-                'key' => $key,
-                'location' => $result['location'] ?? null,
-            ]);
+                return response()->json([
+                    'status' => 'success',
+                    'key' => $key,
+                    'content_update_id' => $contentUpdate?->id,
+                    'location' => $result['location'] ?? null,
+                ]);
+            });
         } catch (Throwable $e) {
             Log::error('S3 multipart upload completion failed.', [
                 'exception' => $e,

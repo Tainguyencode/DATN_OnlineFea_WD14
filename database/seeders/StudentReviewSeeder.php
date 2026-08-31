@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Course;
 use App\Models\Lesson;
-use App\Models\LessonComment;
 use App\Models\Review;
 use App\Models\User;
 use Carbon\Carbon;

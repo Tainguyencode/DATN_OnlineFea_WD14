@@ -4,7 +4,7 @@
 
 @section('content')
 @include('partials.financial-clean-icons')
-<div class="bg-slate-50 py-8 dark:bg-slate-950 min-h-[calc(100vh-16rem)]" 
+<div data-refresh-on-history class="bg-slate-50 py-8 dark:bg-slate-950 min-h-[calc(100vh-16rem)]"
      x-data="{
          orderCode: '{{ $order->order_code }}',
          subtotal: {{ (float) ($order->subtotal > 0 ? $order->subtotal : $order->total_amount) }},
@@ -15,7 +15,10 @@
          couponError: '',
          couponSuccess: '',
          isApplying: false,
+         paymentLocked: {{ filled($order->payment?->gateway_order_code) ? 'true' : 'false' }},
+         lockedGateway: '{{ $order->payment?->gateway === 'momo' ? 'momo' : 'bank_transfer' }}',
          timer: null,
+         checkingStatus: false,
          csrfToken: '{{ csrf_token() }}',
          availableCoupons: {{ json_encode(($activeCoupons ?? collect([]))->map(fn($cp) => [
              'id' => $cp->id,
@@ -28,25 +31,44 @@
              return new Intl.NumberFormat('vi-VN').format(val) + 'đ';
          },
          initPolling() {
+             clearInterval(this.timer);
              this.timer = setInterval(() => {
                  this.checkStatus();
              }, 3000);
          },
          async checkStatus() {
+             if (this.checkingStatus) return;
+             this.checkingStatus = true;
              try {
                  let res = await fetch('/student/checkout/' + this.orderCode + '/status', {
                      headers: { 'Accept': 'application/json' }
                  });
-                 let data = await res.json();
-                 if (data.status === 'paid') {
+                 if (res.status === 401 || res.status === 419) {
                      clearInterval(this.timer);
-                     window.location.href = '/student/checkout/' + this.orderCode + '/success';
+                     window.location.href = '{{ route('login') }}';
+                     return;
+                 }
+                 let data = await res.json();
+                 if (!res.ok && res.status !== 404) return;
+                 const destinations = {
+                     paid: '/student/checkout/' + this.orderCode + '/success',
+                     cancelled: '/student/checkout/' + this.orderCode + '/failed',
+                     failed: '/student/checkout/' + this.orderCode + '/failed',
+                     refunded: '{{ route('student.orders.show', $order) }}',
+                     not_found: '{{ route('student.orders') }}'
+                 };
+                 if (destinations[data.status]) {
+                     clearInterval(this.timer);
+                     window.location.href = destinations[data.status];
                  }
              } catch (e) {
                  console.error(e);
+             } finally {
+                 this.checkingStatus = false;
              }
          },
          async applyCoupon(code = null) {
+             if (this.paymentLocked || this.isApplying) return;
              if (code) {
                  this.couponCode = code;
              }
@@ -83,6 +105,7 @@
              }
          },
          async removeCoupon() {
+             if (this.paymentLocked || this.isApplying) return;
              this.isApplying = true;
              try {
                  let res = await fetch('/student/checkout/' + this.orderCode + '/remove-coupon', {
@@ -100,8 +123,11 @@
                      this.couponCode = '';
                      this.couponSuccess = 'Đã gỡ mã giảm giá.';
                      this.couponError = '';
+                 } else {
+                     this.couponError = data.message || 'Không thể gỡ mã giảm giá.';
                  }
              } catch (e) {
+                 this.couponError = 'Không thể gỡ mã giảm giá. Vui lòng thử lại.';
                  console.error(e);
              } finally {
                  this.isApplying = false;
@@ -115,6 +141,14 @@
         @if(session('error'))
             <div role="alert" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                 {{ session('error') }}
+            </div>
+        @endif
+
+        @if(filled($order->payment?->gateway_order_code))
+            <div role="status" class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Đơn đã có mã thanh toán. Vui lòng tiếp tục với cổng đã chọn; số tiền và mã giảm giá được giữ nguyên.
+                Bạn có thể hủy đơn đang chờ tại <a href="{{ route('student.orders.show', $order) }}" class="font-bold underline">chi tiết đơn hàng</a>.
+                Sau khi hủy, không chuyển tiền theo QR cũ. Nếu đã chuyển tiền hoặc liên kết hết hạn, hãy liên hệ hỗ trợ để đối soát.
             </div>
         @endif
 
@@ -143,7 +177,7 @@
                         <label class="relative flex cursor-pointer items-center justify-between rounded-2xl border p-4 transition"
                                :class="selectedGateway === 'bank_transfer' ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20 dark:border-indigo-500 dark:bg-indigo-950/20' : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950'">
                             <div class="flex items-center gap-3">
-                                <input type="radio" name="payment_method" value="bank_transfer" x-model="selectedGateway" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500">
+                                <input type="radio" name="payment_method" value="bank_transfer" x-model="selectedGateway" :disabled="paymentLocked && lockedGateway !== 'bank_transfer'" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500">
                                 <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 font-extrabold text-xs dark:bg-emerald-900/50 dark:text-emerald-300 shrink-0">
                                     QR
                                 </div>
@@ -157,7 +191,7 @@
                         <label class="relative flex cursor-pointer items-center justify-between rounded-2xl border p-4 transition"
                                :class="selectedGateway === 'momo' ? 'border-[#a50064] bg-pink-50/50 ring-2 ring-pink-500/20 dark:border-pink-400 dark:bg-pink-950/20' : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950'">
                             <div class="flex items-center gap-3">
-                                <input type="radio" name="payment_method" value="momo" x-model="selectedGateway" class="h-4 w-4 text-[#a50064] focus:ring-pink-500">
+                                <input type="radio" name="payment_method" value="momo" x-model="selectedGateway" :disabled="paymentLocked && lockedGateway !== 'momo'" class="h-4 w-4 text-[#a50064] focus:ring-pink-500">
                                 <div class="flex h-10 w-14 items-center justify-center rounded-xl bg-[#a50064] text-[10px] font-black text-white shrink-0">
                                     MoMo
                                 </div>
@@ -206,13 +240,13 @@
                         <div class="relative flex items-center">
                             <input type="text" placeholder="Nhập mã giảm giá"
                                    x-model="couponCode"
-                                   :readonly="appliedCouponCode !== ''"
+                                   :readonly="paymentLocked || appliedCouponCode !== ''"
                                    :class="appliedCouponCode !== '' ? 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-emerald-500 font-semibold' : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700'"
                                    class="w-full pl-3 pr-20 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-mono tracking-wider transition">
                             
                             <button type="button" 
                                     @click="appliedCouponCode !== '' ? removeCoupon() : applyCoupon()"
-                                    :disabled="isApplying || (!couponCode && appliedCouponCode === '')"
+                                    :disabled="paymentLocked || isApplying || (!couponCode && appliedCouponCode === '')"
                                     :class="appliedCouponCode !== '' ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'"
                                     class="absolute right-1 px-3 py-1.5 rounded-lg font-extrabold text-xs transition shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                                 <span x-show="isApplying" class="inline-block animate-spin mr-1">⌛</span>
@@ -234,7 +268,7 @@
                                     </div>
                                     <button type="button" 
                                             @click="applyCoupon(cp.code)"
-                                            :disabled="appliedCouponCode === cp.code"
+                                            :disabled="paymentLocked || isApplying || appliedCouponCode === cp.code"
                                             class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 font-extrabold text-[11px] shrink-0 transition disabled:opacity-40 cursor-pointer">
                                         <span x-text="appliedCouponCode === cp.code ? 'Đã dùng' : 'Dùng'"></span>
                                     </button>

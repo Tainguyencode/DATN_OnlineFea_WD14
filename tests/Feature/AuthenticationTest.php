@@ -280,6 +280,21 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_invalid_stored_hash_is_rejected_without_500_or_plaintext_fallback(): void
+    {
+        $user = User::factory()->create(['email' => 'invalid-hash@example.com']);
+        // Simulate an import or direct SQL write bypassing User's hashed cast.
+        DB::table('users')->where('id', $user->id)->update(['password' => 'plain-secret']);
+
+        $this->from(route('login'));
+        $response = $this->postLogin($user->email, 'plain-secret');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('identifier');
+        $this->assertGuest();
+        $this->assertSame('plain-secret', $user->fresh()->getRawOriginal('password'));
+    }
+
     public function test_inactive_user_cannot_login(): void
     {
         User::factory()->create([

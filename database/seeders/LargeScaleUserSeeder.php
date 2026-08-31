@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Certificate;
 use App\Models\Course;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;

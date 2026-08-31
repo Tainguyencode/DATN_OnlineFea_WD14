@@ -3,9 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Course;
-use App\Models\Order;
-use App\Models\OrderItem;
-use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;

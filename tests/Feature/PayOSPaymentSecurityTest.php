@@ -301,7 +301,7 @@ class PayOSPaymentSecurityTest extends TestCase
             ->assertRedirect($checkoutUrl);
     }
 
-    public function test_expired_existing_payos_request_is_recreated_with_a_new_order_code(): void
+    public function test_terminal_payos_request_keeps_reference_for_reconciliation(): void
     {
         Config::set('services.payos.mode', 'live');
         [$order, $payment, $user] = $this->pendingOrder();
@@ -323,11 +323,12 @@ class PayOSPaymentSecurityTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('student.checkout.process_payment', $order->order_code), ['payment_method' => 'payos'])
-            ->assertRedirect($checkoutUrl);
+            ->assertRedirect(route('student.checkout.pay', $order->order_code))
+            ->assertSessionHas('error');
 
-        $this->assertNotSame($oldGatewayOrderCode, $payment->fresh()->gateway_order_code);
+        $this->assertSame($oldGatewayOrderCode, $payment->fresh()->gateway_order_code);
         $this->assertLessThanOrEqual(9007199254740991, (int) $payment->fresh()->gateway_order_code);
-        $this->assertSame(2, $postCount);
+        $this->assertSame(1, $postCount);
     }
 
     public function test_payos_error_returns_to_payment_page_instead_of_500(): void
@@ -350,6 +351,135 @@ class PayOSPaymentSecurityTest extends TestCase
         $this->get('/payments/momo/callback')->assertNotFound();
         $this->get('/payments/vnpay/return')->assertNotFound();
         $this->post('/payments/vnpay/ipn')->assertNotFound();
+    }
+
+    public function test_new_payment_uses_independent_reference_and_reuses_it_on_retry(): void
+    {
+        [$order, $payment] = $this->pendingOrder();
+        $payment->update(['gateway_order_code' => null]);
+        Http::fake(['api-merchant.payos.vn/*' => Http::response(['code' => '00', 'data' => ['checkoutUrl' => 'https://pay.payos.vn/web/new-reference']], 200)]);
+        $service = app(PaymentGatewayService::class);
+        $service->getPaymentUrl($order);
+        $reference = $payment->fresh()->gateway_order_code;
+        $this->assertNotSame((string) $order->id, $reference);
+        $this->assertLessThanOrEqual(9007199254740991, (int) $reference);
+        $service->getPaymentUrl($order->fresh());
+        $this->assertSame($reference, $payment->fresh()->gateway_order_code);
+        Http::assertSentCount(2);
+    }
+
+    public function test_legacy_reference_with_confirmed_different_quote_is_replaced_without_marking_paid(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        $oldReference = $payment->gateway_order_code;
+        Http::fake(function ($request) use ($oldReference) {
+            if ($request->method() === 'GET') {
+                return Http::response(['code' => '00', 'data' => ['orderCode' => (int) $oldReference, 'amount' => 10000, 'amountPaid' => 10000, 'status' => 'PAID']], 200);
+            }
+            if ((string) $request['orderCode'] === $oldReference) {
+                return Http::response(['code' => '231', 'desc' => 'Đơn thanh toán đã tồn tại'], 200);
+            }
+            return Http::response(['code' => '00', 'data' => ['checkoutUrl' => 'https://pay.payos.vn/web/recovered']], 200);
+        });
+        $this->payOrder($order, $user)->assertRedirect('https://pay.payos.vn/web/recovered');
+        $this->assertNotSame($oldReference, $payment->fresh()->gateway_order_code);
+        $this->assertSame('pending', $order->fresh()->status);
+        $this->assertSame(100000.0, (float) $payment->fresh()->amount);
+        $this->assertSame($oldReference, $payment->fresh()->gateway_response['legacy_reference_collision']['reference']);
+        Http::assertSentCount(3);
+    }
+
+    public function test_partial_payment_does_not_allow_reference_replacement(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        $reference = $payment->gateway_order_code;
+        Http::fake(function ($request) use ($reference) {
+            return $request->method() === 'POST'
+                ? Http::response(['code' => '231'], 200)
+                : Http::response(['code' => '00', 'data' => ['orderCode' => (int) $reference, 'amount' => 100000, 'amountPaid' => 10000, 'status' => 'PENDING']], 200);
+        });
+        $this->payOrder($order, $user)->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $this->assertSame($reference, $payment->fresh()->gateway_order_code);
+        Http::assertSentCount(2);
+    }
+
+    public function test_different_amount_on_unpaid_legacy_link_is_not_replaced_or_reused(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        $reference = $payment->gateway_order_code;
+        Http::fake(fn ($request) => $request->method() === 'POST'
+            ? Http::response(['code' => '231'], 200)
+            : Http::response(['code' => '00', 'data' => ['orderCode' => (int) $reference, 'amount' => 10000, 'amountPaid' => 0, 'status' => 'PENDING', 'checkoutUrl' => 'https://pay.payos.vn/web/wrong-amount']], 200));
+        $this->payOrder($order, $user)->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $this->assertSame($reference, $payment->fresh()->gateway_order_code);
+        Http::assertSentCount(2);
+    }
+
+    public function test_payos_cancel_return_renders_success_and_updates_order_once(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        Http::fake(['api-merchant.payos.vn/*' => Http::response(['code' => '00', 'data' => [
+            'orderCode' => (int) $payment->gateway_order_code, 'amount' => 100000, 'amountPaid' => 0, 'status' => 'CANCELLED',
+        ]], 200)]);
+        $url = route('student.checkout.failed', $order->order_code).'?cancel=true&status=CANCELLED';
+        $this->actingAs($user)->get($url)->assertOk()->assertSee('Hủy đơn hàng thành công!');
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame('failed', $payment->fresh()->status);
+        $this->get($url)->assertOk()->assertSee('Hủy đơn hàng thành công!');
+        Http::assertSentCount(1);
+    }
+
+    public function test_cancel_query_string_does_not_override_remote_pending_or_other_owner(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        Http::fake(['api-merchant.payos.vn/*' => Http::response(['code' => '00', 'data' => [
+            'orderCode' => (int) $payment->gateway_order_code, 'amount' => 100000, 'amountPaid' => 0, 'status' => 'PENDING',
+        ]], 200)]);
+        $url = route('student.checkout.failed', $order->order_code).'?cancel=true&status=CANCELLED';
+        $this->actingAs($user)->get($url)->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $this->assertSame('pending', $order->fresh()->status);
+        $other = User::factory()->create(['role' => 'student']);
+        $this->actingAs($other)->get($url)->assertNotFound();
+        Http::assertSentCount(1);
+    }
+
+    public function test_cancel_return_never_replaces_an_already_paid_order(): void
+    {
+        [$order, , $user] = $this->pendingOrder();
+        $order->update(['status' => 'paid']);
+        Http::fake();
+        $this->actingAs($user)->get(route('student.checkout.failed', $order->order_code))
+            ->assertRedirect(route('student.checkout.success', $order->order_code));
+        $this->assertSame('paid', $order->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_signed_cancel_return_cancels_locally_when_payos_is_unavailable(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        Http::fake(['api-merchant.payos.vn/*' => Http::response([], 503)]);
+        $url = \Illuminate\Support\Facades\URL::signedRoute('student.checkout.failed', [
+            'order_code' => $order->order_code,
+            'cancel_reference' => $payment->gateway_order_code,
+        ]).'&cancel=true&status=CANCELLED&code=00&orderCode='.$payment->gateway_order_code;
+        $this->actingAs($user)->get($url)->assertOk()->assertSee('Hủy đơn hàng thành công!');
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame('failed', $payment->fresh()->status);
+        $this->get($url)->assertOk()->assertSee('Hủy đơn hàng thành công!');
+        Http::assertSentCount(1);
+    }
+
+    public function test_tampered_cancel_reference_cannot_cancel_an_order(): void
+    {
+        [$order, $payment, $user] = $this->pendingOrder();
+        Http::fake(['api-merchant.payos.vn/*' => Http::response([], 503)]);
+        $url = \Illuminate\Support\Facades\URL::signedRoute('student.checkout.failed', [
+            'order_code' => $order->order_code,
+            'cancel_reference' => $payment->gateway_order_code,
+        ]);
+        $url = str_replace('cancel_reference='.$payment->gateway_order_code, 'cancel_reference=999999', $url);
+        $this->actingAs($user)->get($url)->assertRedirect(route('student.checkout.pay', $order->order_code));
+        $this->assertSame('pending', $order->fresh()->status);
     }
 
     private function pendingOrder(): array

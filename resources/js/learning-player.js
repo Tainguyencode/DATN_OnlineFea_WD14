@@ -81,110 +81,6 @@ function initLearningSidebar() {
     }
 }
 
-function initVideoProgress() {
-    const video = document.querySelector('[data-lesson-progress-video]');
-    if (!video) return;
-
-    const progressUrl = video.dataset.progressUrl;
-    const requiredPercent = Number(video.dataset.requiredPercent || 90) / 100;
-    const durationHint = Number(video.dataset.durationSeconds || 0);
-    let lastSentAt = 0;
-    let completed = video.dataset.initialCompleted === '1';
-    let requestInFlight = false;
-    let pendingCompleted = false;
-
-    const sendProgress = async (forceCompleted = false, forceSend = false) => {
-        if (!progressUrl) return;
-
-        const watchedSeconds = Math.floor(Math.max(
-            Number(video.currentTime || 0),
-            Number(video.dataset.initialWatched || 0),
-        ));
-
-        const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint;
-        const reachedThreshold = duration > 0 && watchedSeconds >= Math.ceil(duration * requiredPercent);
-        const shouldComplete = forceCompleted || reachedThreshold;
-
-        if (!forceSend && !shouldComplete && watchedSeconds - lastSentAt < 15) {
-            return;
-        }
-
-        if (completed && shouldComplete) return;
-
-        if (requestInFlight) {
-            pendingCompleted = pendingCompleted || shouldComplete;
-            return;
-        }
-
-        requestInFlight = true;
-        lastSentAt = watchedSeconds;
-
-        try {
-            const response = await fetch(progressUrl, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                },
-                body: JSON.stringify({
-                    watched_seconds: watchedSeconds,
-                    completed: shouldComplete,
-                }),
-            });
-
-            if (!response.ok) throw new Error('progress_failed');
-
-            const data = await response.json();
-            if (data.lesson_completed) {
-                completed = true;
-                showToast('Đã lưu tiến độ bài học.');
-            }
-
-            if (typeof data.course_progress === 'number') {
-                updateHeaderProgress(data.course_progress);
-            }
-            if (typeof data.lesson_progress === 'number') {
-                updateCurrentLessonProgress(data.lesson_progress, data.lesson_completed);
-            }
-        } catch {
-            showToast('Chưa lưu được tiến độ. Hệ thống sẽ thử lại.', 'error');
-        } finally {
-            requestInFlight = false;
-            if (pendingCompleted && !completed) {
-                pendingCompleted = false;
-                sendProgress(true, true);
-            }
-        }
-    };
-
-    video.addEventListener('loadedmetadata', () => {
-        if (requestedStartTimeFromUrl() !== null) return;
-
-        const watchedSeconds = Number(video.dataset.initialWatched || 0);
-        if (!completed && watchedSeconds > 0 && Number.isFinite(video.duration) && watchedSeconds < video.duration - 3) {
-            video.currentTime = watchedSeconds;
-        }
-    }, { once: true });
-
-    video.addEventListener('timeupdate', () => sendProgress(false, false));
-    video.addEventListener('pause', () => sendProgress(false, true));
-    video.addEventListener('ended', () => sendProgress(true, true));
-
-    window.addEventListener('beforeunload', () => {
-        if (!completed && video.currentTime > 0) {
-            navigator.sendBeacon?.(
-                progressUrl,
-                new Blob([JSON.stringify({
-                    watched_seconds: Math.floor(video.currentTime),
-                    completed: false,
-                })], { type: 'application/json' }),
-            );
-        }
-    });
-}
-
 function initVideoProgressV2() {
     const video = document.querySelector('[data-lesson-progress-video]');
     if (!video) return;
@@ -197,10 +93,8 @@ function initVideoProgressV2() {
     let unsavedPlayedSeconds = 0;
     let lastPlayhead = null;
     let lastSaveStartedAt = Date.now();
-    let completed = video.dataset.initialCompleted === '1';
     let requestInFlight = false;
     let pendingSave = false;
-    let completedSent = completed;
 
     const durationSeconds = () => Math.floor(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationHint);
     const currentPosition = () => clampVideoTime(video.currentTime || 0, durationSeconds());
@@ -227,7 +121,6 @@ function initVideoProgressV2() {
         played_seconds: Math.floor(unsavedPlayedSeconds),
         video_duration_seconds: durationSeconds(),
         client_updated_at: nowIso(),
-        completed: video.ended || currentPosition() >= durationSeconds() - 1,
     });
 
     const applyProgressResponse = (data) => {
@@ -247,9 +140,6 @@ function initVideoProgressV2() {
             furthestPosition = Math.max(furthestPosition, data.furthest_position_seconds);
         }
 
-        if (data.lesson_completed) {
-            completed = true;
-        }
     };
 
     const sendProgress = async (forceSend = false, options = {}) => {
@@ -258,7 +148,6 @@ function initVideoProgressV2() {
         notePlayedSegment();
         const body = payload();
         const hasPlayed = body.played_seconds > 0;
-        const positionChanged = Math.abs(body.last_position_seconds - lastSavedPosition) >= 1;
         const elapsed = Date.now() - lastSaveStartedAt;
 
         if (!forceSend && (!hasPlayed || elapsed < 10000)) {
@@ -294,7 +183,7 @@ function initVideoProgressV2() {
 
             if (!response.ok) throw new Error('progress_failed');
 
-            unsavedPlayedSeconds = 0;
+            unsavedPlayedSeconds = Math.max(0, unsavedPlayedSeconds - body.played_seconds);
             applyProgressResponse(data);
         } catch {
             if (!options.silent) {
@@ -363,21 +252,11 @@ function initVideoProgressV2() {
 
     video.addEventListener('play', () => {
         lastPlayhead = currentPosition();
+        sendProgress(true, { silent: true });
     });
     video.addEventListener('timeupdate', () => {
         notePlayedSegment();
         sendProgress(false, { silent: true });
-
-        // Auto complete at 95%
-        const duration = durationSeconds();
-        if (duration > 0) {
-            const progress = (video.currentTime / duration) * 100;
-            if (progress >= 95 && !completedSent) {
-                completedSent = true;
-                completed = true;
-                sendCompletionAJAX(progressUrl, Number(video.dataset.lessonId || 0));
-            }
-        }
     });
     video.addEventListener('seeking', () => {
         lastPlayhead = null;
@@ -1136,7 +1015,6 @@ function initLessonNotes() {
         const storeUrl = root.dataset.storeUrl;
         let notes = parseJsonScript(root, '[data-lesson-notes-json]');
         let createInFlight = false;
-        let capturedCurrentTime = false;
 
         const updateTimestampLabel = () => {
             if (timestampLabel && timestampInput) {
@@ -2145,120 +2023,77 @@ function initAiStudyAssistant() {
 
 function initYouTubeProgress() {
     const iframe = document.querySelector('iframe[data-lesson-progress-youtube]');
-    if (!iframe) return;
-
-    const progressUrl = iframe.dataset.progressUrl;
-    const lessonId = Number(iframe.dataset.lessonId || 0);
-    let completedSent = iframe.dataset.initialCompleted === '1';
-
-    if (completedSent) return;
-
-    // Load YouTube API if not already present
+    if (!iframe || !iframe.dataset.progressUrl) return;
     if (!window.YT) {
         const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(tag);
     }
-
-    let ytPollInterval = null;
 
     const initPlayer = () => {
-        const player = new YT.Player(iframe.id, {
+        let unsaved = 0;
+        let previousPosition = null;
+        let previousTime = performance.now();
+        let lastSave = 0;
+        let inFlight = false;
+        let interval = null;
+        let completed = iframe.dataset.initialCompleted === '1';
+        const sample = () => {
+            const position = player.getCurrentTime();
+            const now = performance.now();
+            const delta = previousPosition === null ? 0 : position - previousPosition;
+            if (delta > 0 && delta <= 2.5) unsaved += Math.min(delta, (now - previousTime) / 1000);
+            previousPosition = position;
+            previousTime = now;
+        };
+        const save = async (force = false) => {
+            if (inFlight || (!force && Date.now() - lastSave < 10000)) return;
+            inFlight = true;
+            lastSave = Date.now();
+            const delta = Math.floor(unsaved);
+            try {
+                const response = await fetch(iframe.dataset.progressUrl, {
+                    method: 'POST', credentials: 'same-origin', keepalive: true,
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+                    body: JSON.stringify({
+                        played_seconds: delta,
+                        last_position_seconds: Math.floor(player.getCurrentTime()),
+                        client_updated_at: new Date().toISOString(),
+                    }),
+                });
+                if (!response.ok) throw new Error('progress_failed');
+                const data = await response.json();
+                unsaved = Math.max(0, unsaved - delta);
+                updateCurrentLessonProgress(data.lesson_progress, data.lesson_completed);
+                if (typeof data.course_progress === 'number') updateHeaderProgress(data.course_progress);
+                if (data.lesson_completed && !completed) showToast('Bạn đã hoàn thành bài học!', 'success');
+                completed = Boolean(data.lesson_completed);
+            } catch {
+                showToast('Chưa lưu được tiến độ. Hệ thống sẽ thử lại.', 'error');
+            } finally {
+                inFlight = false;
+            }
+        };
+        const player = new window.YT.Player(iframe.id, {
             events: {
-                'onStateChange': (event) => {
-                    if (event.data === YT.PlayerState.PLAYING) {
-                        if (!ytPollInterval) {
-                            ytPollInterval = setInterval(() => {
-                                const duration = player.getDuration();
-                                const currentTime = player.getCurrentTime();
-                                if (duration > 0) {
-                                    const progress = (currentTime / duration) * 100;
-                                    if (progress >= 95 && !completedSent) {
-                                        completedSent = true;
-                                        clearInterval(ytPollInterval);
-                                        ytPollInterval = null;
-                                        sendCompletionAJAX(progressUrl, lessonId);
-                                    }
-                                }
-                            }, 500);
-                        }
+                onStateChange: (event) => {
+                    if (event.data === window.YT.PlayerState.PLAYING) {
+                        previousPosition = player.getCurrentTime();
+                        previousTime = performance.now();
+                        save(true); // Establish a server heartbeat before accruing watch time.
+                        if (!interval) interval = setInterval(() => { sample(); save(); }, 500);
                     } else {
-                        if (ytPollInterval) {
-                            clearInterval(ytPollInterval);
-                            ytPollInterval = null;
-                        }
+                        if (interval) { sample(); clearInterval(interval); interval = null; }
+                        save(true);
                     }
-                }
-            }
-        });
-    };
-
-    const checkAndInit = () => {
-        if (window.YT && window.YT.Player) {
-            initPlayer();
-        } else {
-            setTimeout(checkAndInit, 100);
-        }
-    };
-
-    checkAndInit();
-}
-
-async function sendCompletionAJAX(progressUrl, lessonId) {
-    if (!progressUrl) return;
-
-    try {
-        const response = await fetch(progressUrl, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': getCsrfToken(),
+                },
             },
-            body: JSON.stringify({
-                lesson_id: lessonId,
-                progress_percent: 100,
-                completed: true
-            }),
         });
-
-        if (!response.ok) throw new Error('completion_failed');
-
-        const data = await response.json();
-        
-        // 1. Sidebar đổi icon bài học thành dấu ✓ màu xanh.
-        const currentItem = document.querySelector('[data-current-lesson-item]');
-        if (currentItem) {
-            const iconSpan = currentItem.querySelector('span');
-            if (iconSpan) {
-                iconSpan.innerHTML = '<svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
-            }
-            const percentEl = currentItem.querySelector('[data-lesson-progress-percent]');
-            const statusEl = currentItem.querySelector('[data-lesson-progress-status]');
-            if (percentEl) percentEl.textContent = '100%';
-            if (statusEl) statusEl.textContent = 'Hoàn thành';
-        }
-
-        // Cập nhật text tỉ lệ X/Y bài hoàn thành trong sidebar
-        const sidebarProgressText = document.querySelector('[data-learning-sidebar] p.text-xs');
-        if (sidebarProgressText && typeof data.completed_lessons === 'number' && typeof data.total_lessons === 'number') {
-            const percent = typeof data.course_progress === 'number' ? data.course_progress : (data.progress_percent || 0);
-            sidebarProgressText.textContent = `${data.completed_lessons}/${data.total_lessons} bài · ${Math.round(percent)}%`;
-        }
-
-        // 2. Thanh tiến độ trên header cập nhật ngay.
-        if (typeof data.course_progress === 'number') {
-            updateHeaderProgress(data.course_progress);
-        } else if (typeof data.progress_percent === 'number') {
-            updateHeaderProgress(data.progress_percent);
-        }
-
-        // 3. Hiển thị Toast: ✅ Bạn đã hoàn thành bài học!
-        showToast('Bạn đã hoàn thành bài học!', 'success');
-
-    } catch (error) {
-        console.error('Error auto completing lesson:', error);
-    }
+        window.addEventListener('pagehide', () => { sample(); save(true); });
+    };
+    const checkAndInit = () => {
+        if (window.YT?.Player) initPlayer();
+        else setTimeout(checkAndInit, 100);
+    };
+    checkAndInit();
 }

@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class AuthService
 {
@@ -25,7 +26,24 @@ class AuthService
         $column = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         $credentials = [$column => $identifier, 'password' => $password];
 
-        if (! Auth::attempt($credentials, $remember)) {
+        try {
+            $authenticated = Auth::attempt($credentials, $remember);
+        } catch (RuntimeException $exception) {
+            // Invalid stored hashes must fail closed, not turn a login into HTTP 500.
+            // Do not hide unrelated infrastructure errors or accept plaintext passwords.
+            if (! in_array($exception->getMessage(), [
+                'This password does not use the Bcrypt algorithm.',
+                'This password does not use the Argon2i algorithm.',
+                'This password does not use the Argon2id algorithm.',
+            ], true)) {
+                throw $exception;
+            }
+
+            Log::warning('Login rejected because the stored password hash does not match the configured algorithm.');
+            $authenticated = false;
+        }
+
+        if (! $authenticated) {
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([

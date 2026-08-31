@@ -276,13 +276,13 @@ class CartController extends Controller
 
         if (! empty($validated['coupon_code'])) {
             $coupon = Coupon::where('code', $validated['coupon_code'])->first();
-            if (! $coupon || ! $coupon->isValid()) {
-                return back()->with('error', 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
-            }
-            if ($coupon->isUsedByUser(auth()->id())) {
+            if ($coupon?->isUsedByUser(auth()->id())) {
                 return back()->with('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
             }
 
+            if (! $coupon || ! $coupon->canBeUsedBy((int) auth()->id())) {
+                return back()->with('error', 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+            }
             $eligibleCourses = $cart->courses->filter(fn ($c) => $coupon->isEligibleForCourse($c));
             if ($eligibleCourses->isEmpty()) {
                 return back()->with('error', 'Mã giảm giá này không áp dụng cho các khóa học trong giỏ hàng của bạn.');
@@ -314,7 +314,7 @@ class CartController extends Controller
                 if ($coupon) {
                     $lockedCoupon = Coupon::query()->lockForUpdate()->find($coupon->id);
 
-                    if (! $lockedCoupon || ! $lockedCoupon->isValid() || $lockedCoupon->isUsedByUser(auth()->id())) {
+                    if (! $lockedCoupon || ! $lockedCoupon->canBeUsedBy((int) auth()->id())) {
                         return false;
                     }
                 }
@@ -335,7 +335,7 @@ class CartController extends Controller
 
                 Payment::create([
                     'order_id' => $order->id,
-                    'gateway' => $validated['payment_method'],
+                    'gateway' => $validated['payment_method'] === 'payos' ? 'bank_transfer' : $validated['payment_method'],
                     'transaction_id' => $order->transaction_id,
                     'amount' => 0,
                     'status' => 'success',
@@ -382,7 +382,7 @@ class CartController extends Controller
 
             Payment::create([
                 'order_id' => $order->id,
-                'gateway' => $validated['payment_method'],
+                'gateway' => $validated['payment_method'] === 'payos' ? 'bank_transfer' : $validated['payment_method'],
                 'amount' => $total,
                 'status' => 'pending',
             ]);
@@ -434,17 +434,17 @@ class CartController extends Controller
             ]);
         }
 
-        if (! $coupon->isValid()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Mã giảm giá đã hết hạn hoặc hết lượt sử dụng.',
-            ]);
-        }
-
-        if ($coupon->isUsedByUser(auth()->id())) {
+        if ($coupon?->isUsedByUser(auth()->id())) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.',
+            ]);
+        }
+
+        if (! $coupon->canBeUsedBy((int) auth()->id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mã giảm giá đã hết hạn hoặc hết lượt sử dụng.',
             ]);
         }
 
@@ -539,12 +539,12 @@ class CartController extends Controller
         $couponCode = $validated['coupon_code'];
         $coupon = Coupon::where('code', $couponCode)->first();
 
-        if (! $coupon || ! $coupon->isValid()) {
-            return response()->json(['success' => false, 'message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.']);
+        if ($coupon?->isUsedByUser(auth()->id())) {
+            return response()->json(['success' => false, 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.']);
         }
 
-        if ($coupon->isUsedByUser(auth()->id())) {
-            return response()->json(['success' => false, 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.']);
+        if (! $coupon || ! $coupon->canBeUsedBy((int) auth()->id())) {
+            return response()->json(['success' => false, 'message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.']);
         }
 
         $orderItems = $order->items()->with('course')->get();
@@ -569,6 +569,8 @@ class CartController extends Controller
         $total = max(0, $subtotal - $discount);
 
         DB::transaction(function () use ($order, $coupon, $discount, $total, $orderItems, $eligibleSubtotal) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $order->assertPaymentEditable();
             $order->update([
                 'coupon_id' => $coupon->id,
                 'discount_amount' => $discount,
@@ -639,6 +641,8 @@ class CartController extends Controller
         $subtotal = (float) $order->subtotal;
 
         DB::transaction(function () use ($order, $subtotal) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $order->assertPaymentEditable();
             $order->update([
                 'coupon_id' => null,
                 'discount_amount' => 0,
@@ -705,21 +709,9 @@ class CartController extends Controller
 
         $paymentMethod = $validated['payment_method'];
 
-        $dbGateway = ($paymentMethod === 'payos') ? 'bank_transfer' : $paymentMethod;
-
-        // Cập nhật phương thức thanh toán cho đơn hàng
-        $order->update(['payment_method' => $paymentMethod]);
-
-        if ($order->payment) {
-            $order->payment->update(['gateway' => $dbGateway]);
-        } else {
-            Payment::create([
-                'order_id' => $order->id,
-                'gateway' => $dbGateway,
-                'amount' => $order->total_amount,
-                'status' => 'pending',
-            ]);
-        }
+        // The gateway service reserves its immutable reference under the order lock.
+        // Do not overwrite a payment that may already have an in-flight callback.
+        $order->payment_method = $paymentMethod;
 
         try {
             $paymentUrl = $paymentMethod === 'momo'
@@ -832,12 +824,44 @@ class CartController extends Controller
      *
      * @return View|RedirectResponse
      */
-    public function failedPage(string $orderCode)
+    public function failedPage(string $orderCode, PaymentGatewayService $paymentService, Request $request)
     {
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
+        if ($order->status === 'pending' && $order->payment?->gateway === 'bank_transfer') {
+            $paymentService->reconcilePayOSCancelReturn($order);
+            $order->refresh();
+        }
+        if ($order->status === 'paid') {
+            return redirect()->route('student.checkout.success', $orderCode);
+        }
+        // PayOS adds these query parameters to the signed cancellation URL.
+        // Only the signed reference authorizes local cancellation, never status/cancel alone.
+        if ($order->status === 'pending' && $request->hasValidSignatureWhileIgnoring(['code', 'id', 'cancel', 'status', 'orderCode'])) {
+            DB::transaction(function () use ($order, $request): void {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                $payment = $lockedOrder->payment()->lockForUpdate()->first();
+                if ($lockedOrder->status === 'pending' && $payment?->status === 'pending'
+                    && $payment->gateway === 'bank_transfer'
+                    && (string) $payment->gateway_order_code === (string) $request->query('cancel_reference')) {
+                    $lockedOrder->update(['status' => 'cancelled']);
+                    $payment->update(['status' => 'failed']);
+                }
+            });
+            $order->refresh();
+        }
+        if ($order->status === 'paid') {
+            return redirect()->route('student.checkout.success', $orderCode);
+        }
+        if ($order->status === 'cancelled') {
+            return view('student.cart.cancelled', compact('order'));
+        }
+        if ($order->status === 'pending') {
+            return redirect()->route('student.checkout.pay', $orderCode)
+                ->with('error', 'Chưa thể hủy đơn từ liên kết này. Bạn có thể hủy trong chi tiết đơn hàng.');
+        }
         if ($order->status !== 'failed') {
             return redirect()->route('student.dashboard')->with('error', 'Đơn hàng này không ở trạng thái thanh toán thất bại.');
         }

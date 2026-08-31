@@ -2,18 +2,8 @@
 
 namespace Tests\Unit;
 
-use App\Models\Category;
-use App\Models\Course;
-use App\Models\CourseSection;
-use App\Models\Enrollment;
-use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
-use App\Models\QuizVersion;
-use App\Models\User;
-use App\Services\QuizAttemptService;
-use App\Services\QuizContentService;
-use App\Services\QuizVersioningService;
 use Tests\TestCase;
 
 class QuizProctoringDomainTest extends TestCase

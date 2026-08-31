@@ -51,6 +51,11 @@ class Coupon extends Model
     {
         return $query
             ->where('is_active', true)
+            ->where(function (Builder $query) use ($userId): void {
+                $query->where('is_private', false)
+                    ->orWhereHas('userCoupons', fn (Builder $grant) => $grant
+                        ->where('user_id', $userId)->whereNull('used_at'));
+            })
             ->whereDoesntHave('userCoupons', function (Builder $query) use ($userId): void {
                 $query->where('user_id', $userId)->whereNotNull('used_at');
             })
@@ -137,6 +142,14 @@ class Coupon extends Model
         }
 
         return true;
+    }
+
+    public function canBeUsedBy(int $userId): bool
+    {
+        return $this->isValid()
+            && ! $this->isUsedByUser($userId)
+            && (! $this->is_private || $this->userCoupons()
+                ->where('user_id', $userId)->whereNull('used_at')->exists());
     }
 
     /**

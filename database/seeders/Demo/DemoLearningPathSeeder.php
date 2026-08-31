@@ -5,8 +5,6 @@ namespace Database\Seeders\Demo;
 use App\Models\Course;
 use App\Models\LearningPath;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class DemoLearningPathSeeder
 {

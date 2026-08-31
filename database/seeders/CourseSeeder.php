@@ -15,7 +15,6 @@ use App\Models\QuizVersion;
 use App\Models\QuizVersionQuestion;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CourseSeeder extends Seeder

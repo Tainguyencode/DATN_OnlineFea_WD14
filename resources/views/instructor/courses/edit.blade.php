@@ -497,14 +497,6 @@
         document.getElementById('copyrightSubmitForm').submit();
     }
 
-    function handleReadinessSubmit(event) {
-        if (hasIncompleteHls) {
-            event.preventDefault();
-            openHlsWarningModal('readinessSubmitForm');
-            return false;
-        }
-        return confirm('Gửi khóa học này cho admin duyệt?');
-    }
 </script>
 
 </x-instructor-layout>

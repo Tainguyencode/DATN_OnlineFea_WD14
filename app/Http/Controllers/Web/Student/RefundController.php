@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Refund;
-use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\InstructorFinanceService;
 use App\Services\PayoutService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,12 +93,13 @@ class RefundController extends Controller
         ]);
 
         $refund = DB::transaction(function () use ($order, $validated) {
+            app(InstructorFinanceService::class)->lockOrderInstructors($order);
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status !== 'paid' || $lockedOrder->refunds()->whereIn('status', ['pending', 'processing', 'approved'])->exists()) {
                 return null;
             }
 
-            return Refund::updateOrCreate(
+            $refund = Refund::updateOrCreate(
                 ['order_id' => $lockedOrder->id],
                 [
                     'user_id' => auth()->id(),
@@ -113,28 +114,20 @@ class RefundController extends Controller
                     'admin_note' => null,
                     'processed_at' => null,
                 ]);
+
+            app(NotificationService::class)->notifyAdmins(
+                'Yêu cầu hoàn tiền mới',
+                'Học viên '.auth()->user()->name.' vừa gửi yêu cầu hoàn tiền cho đơn hàng #'.$order->order_code.'.',
+                'new_refund_request',
+                route('admin.refunds.show', $refund)
+            );
+
+            return $refund;
         });
 
         if (! $refund) {
             return back()->with('error', 'Đơn hàng đã có yêu cầu hoàn tiền đang xử lý hoặc không còn hợp lệ.');
         }
-
-        // 4. Bắn thông báo cho các Admin (Tối ưu hóa query)
-        $notificationService = app(NotificationService::class);
-        $studentName = auth()->user()->name ?? 'Học viên';
-        $redirectUrl = route('admin.refunds.show', $refund);
-
-        User::where('role', 'admin')->chunk(50, function ($admins) use ($notificationService, $studentName, $order, $redirectUrl) {
-            foreach ($admins as $admin) {
-                $notificationService->send(
-                    $admin,
-                    'Yêu cầu hoàn tiền mới',
-                    "Học viên {$studentName} vừa gửi yêu cầu hoàn tiền cho đơn hàng #{$order->order_code}.",
-                    'new_refund_request',
-                    $redirectUrl
-                );
-            }
-        });
 
         return back()->with('success', 'Yêu cầu hoàn tiền của bạn đã được gửi thành công. Ban quản trị sẽ đối soát và xử lý sớm nhất.');
     }

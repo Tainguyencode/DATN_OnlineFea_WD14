@@ -78,7 +78,7 @@ class OrderController extends Controller
 
         $cancelled = DB::transaction(function () use ($order): bool {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
-            if ($lockedOrder->status !== 'pending') {
+            if (! $lockedOrder->canCancel()) {
                 return false;
             }
 
@@ -94,7 +94,7 @@ class OrderController extends Controller
         return redirect()->route('student.orders.show', $order)
             ->with($cancelled ? 'success' : 'error', $cancelled
                 ? 'Đã hủy đơn hàng thành công.'
-                : 'Chỉ có thể hủy đơn hàng đang chờ thanh toán.');
+                : 'Không thể hủy: đơn đã được xử lý hoặc đã hủy trước đó.');
     }
 
     private function authorizeOwner(Request $request, Order $order): void
