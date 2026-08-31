@@ -872,6 +872,17 @@ function createLessonFormState(config) {
                         this.contentUpdateId = resData.content_update_id || this.contentUpdateId;
                         this.draftVersionNumber = resData.version_number || this.draftVersionNumber;
 
+                        // Review controls are server-rendered from the same
+                        // canonical state used by authorization/submission.
+                        // Replace them immediately so no manual refresh is
+                        // needed after an AJAX lesson save.
+                        if (resData.reviewStateHtml) {
+                            const reviewStateRoot = document.getElementById('curriculum-review-state-root');
+                            if (reviewStateRoot) {
+                                reviewStateRoot.outerHTML = resData.reviewStateHtml;
+                            }
+                        }
+
                         // 1. Đồng bộ và duy trì hàng chờ CourseUploadQueue cho cả Tạo mới và Sửa bài học
                         if (this.currentQueueId) {
                             const qItem = CourseUploadQueue.queue.find(q => q.id === this.currentQueueId);
@@ -1074,7 +1085,16 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             const data = await response.json();
             const commonState = data.common_state || 'completed'; // 'completed' | 'processing' | 'failed'
             const commonMessage = data.common_message || '';
-            const canSubmit = !!data.can_submit;
+            const canSubmit = data.reviewState
+                ? !!data.reviewState.canSubmitCourse
+                : !!data.can_submit;
+
+            if (data.reviewStateHtml) {
+                const reviewStateRoot = document.getElementById('curriculum-review-state-root');
+                if (reviewStateRoot) {
+                    reviewStateRoot.outerHTML = data.reviewStateHtml;
+                }
+            }
 
             // 1. CẬP NHẬT BANNER HLS CHUNG TỔNG THỂ
             const bannerWrapper = document.getElementById('common-hls-banner-wrapper');
@@ -1302,4 +1322,14 @@ if (typeof window !== 'undefined') {
     window.initCurriculumHlsPolling = initCurriculumHlsPolling;
     window.showCurriculumToast = showCurriculumToast;
     window.appendLessonToCurriculumDOM = appendLessonToCurriculumDOM;
+
+    document.addEventListener('submit', (event) => {
+        if (event.target?.id !== 'curriculumSubmitForm') return;
+
+        const button = event.target.querySelector('button[type="submit"]');
+        if (!button || button.disabled) return;
+
+        button.disabled = true;
+        button.textContent = 'Đang gửi...';
+    });
 }

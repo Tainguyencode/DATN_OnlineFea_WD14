@@ -178,7 +178,12 @@ class ManageController extends Controller
 
         $instructorTotalCoursesCount = Course::where('instructor_id', $course->instructor_id)->count();
 
-        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
+        // The Admin review is a frozen view of the submitted batch. Drafts
+        // created afterwards belong to the next batch and must not leak here.
+        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates(
+            $course,
+            [ContentUpdate::STATUS_PENDING],
+        );
 
         $allLessons = $curriculumSections->flatMap(fn ($section) => $section->lessons);
         $totalLessons = $allLessons->count();

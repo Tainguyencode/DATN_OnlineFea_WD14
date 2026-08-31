@@ -12,6 +12,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\User;
 use App\Services\ContentUpdateService;
 use App\Services\ContentVersionService;
 use App\Services\CurriculumLessonService;
@@ -30,17 +31,15 @@ class CurriculumController extends Controller
     {
         $this->authorizeCourse($course);
 
-        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
-
-        $pendingContentUpdates = ContentUpdate::where('course_id', $course->id)
-            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
-            ->get();
+        $contentUpdates = app(ContentUpdateService::class);
+        $curriculumSections = $contentUpdates->mergeCurriculumWithUpdates($course);
+        $reviewState = $contentUpdates->instructorReviewState($course, auth()->user());
 
         return view('instructor.courses.curriculum', [
             'course' => $course,
             'submissionCheck' => $course->submissionCheck(),
             'curriculumSections' => $curriculumSections,
-            'pendingContentUpdates' => $pendingContentUpdates,
+            'reviewState' => $reviewState,
             'lessonTypes' => $this->lessonTypes(),
             'lessonStatuses' => $this->lessonStatuses(),
         ]);
@@ -344,6 +343,7 @@ class CurriculumController extends Controller
                     'lesson_id' => $result->id,
                     'title' => $result->payload['title'] ?? 'Bài học',
                     'message' => 'Đã lưu bản nháp bài học mới.',
+                    ...$this->reviewStateResponseData($course, $request->user()),
                 ]);
             }
 
@@ -393,6 +393,7 @@ class CurriculumController extends Controller
                 'html' => $lessonHtml,
                 'title' => $lesson->title,
                 'message' => 'Đã thêm bài học.',
+                ...$this->reviewStateResponseData($course, $request->user()),
             ]);
         }
 
@@ -481,6 +482,7 @@ class CurriculumController extends Controller
                     'lesson_id' => $lesson->id,
                     'title' => $payload['title'] ?? $lesson->title,
                     'message' => 'Đã lưu bản cập nhật nội dung bài học.',
+                    ...$this->reviewStateResponseData($course, $request->user()),
                 ]);
             }
 
@@ -527,6 +529,7 @@ class CurriculumController extends Controller
                 'lesson_id' => $lesson->id,
                 'title' => $lesson->title,
                 'message' => 'Đã cập nhật bài học.',
+                ...$this->reviewStateResponseData($course, $request->user()),
             ]);
         }
 
@@ -587,6 +590,7 @@ class CurriculumController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Đã lưu bản nháp.',
+                ...$this->reviewStateResponseData($course, $request->user()),
             ]);
         }
 
@@ -626,6 +630,27 @@ class CurriculumController extends Controller
     private function authorizeCourse(Course $course): void
     {
         abort_unless($course->isOwnedBy(auth()->user()), 403);
+    }
+
+    /** @return array<string, mixed> */
+    private function reviewStateResponseData(Course $course, User $instructor): array
+    {
+        $course->refresh();
+        $state = app(ContentUpdateService::class)->instructorReviewState($course, $instructor);
+
+        return [
+            'reviewState' => collect($state)->except('updates', 'activeUpdates', 'actionableRejectedUpdates')->all(),
+            'draftCount' => $state['draftCount'],
+            'pendingCount' => $state['pendingCount'],
+            'canSubmit' => $state['canSubmitCourse'],
+            'blockedReason' => $state['submissionBlockedReason'],
+            'publishedVersionLabel' => $state['publishedVersionLabel'],
+            'draftVersionLabels' => $state['draftVersionLabels'],
+            'reviewStateHtml' => view('instructor.courses.partials.curriculum-review-state', [
+                'course' => $course,
+                'reviewState' => $state,
+            ])->render(),
+        ];
     }
 
     private function authorizeSection(Course $course, CourseSection $section): void
@@ -979,6 +1004,7 @@ class CurriculumController extends Controller
             'can_submit' => $totalVideos > 0 ? (! $hasIncompleteHls && $missingSources === [] && ! $hasFailed && ! $hasProcessing) : true,
             'common_state' => $commonState,
             'common_message' => $commonMessage,
+            ...$this->reviewStateResponseData($course, auth()->user()),
         ]);
     }
 }

@@ -58,46 +58,6 @@
             </div>
         </div>
 
-        @if(isset($pendingContentUpdates) && $pendingContentUpdates->isNotEmpty())
-            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <h4 class="text-sm font-bold text-amber-900">Các yêu cầu cập nhật đang lưu nháp / chờ duyệt ({{ $pendingContentUpdates->count() }}):</h4>
-                <ul class="mt-2 space-y-2 text-xs text-amber-900">
-                    @foreach($pendingContentUpdates as $pUpdate)
-                    <li class="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-100/60 p-2 border border-amber-200">
-                            <div>
-                                <span class="font-bold uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-[11px]">{{ $pUpdate->type }}</span>
-                                <span class="font-semibold text-slate-700">({{ $pUpdate->action }})</span>:
-                                <strong class="text-slate-900 font-bold">@if(isset($pUpdate->payload['title'])) "{{ $pUpdate->payload['title'] }}" @else #{{ $pUpdate->entity_id }} @endif</strong>
-                                - <span class="font-bold {{ $pUpdate->isRejected() ? 'text-rose-700' : ($pUpdate->isPending() ? 'text-blue-800' : 'text-amber-800') }}">{{ $pUpdate->isRejected() ? 'Bị từ chối' : ($pUpdate->isPending() ? 'Chờ duyệt' : 'Nháp') }}</span>
-                                @php
-                                    $versionContext = app(\App\Services\ContentUpdateDiffService::class)->versionContext($pUpdate);
-                                @endphp
-                                @if(($versionContext['current'] ?? null) !== null)
-                                    <span class="ml-1 font-semibold text-slate-600">Đang xuất bản: V{{ $versionContext['current'] }}</span>
-                                @endif
-                                @if(($versionContext['proposed'] ?? null) !== null)
-                                    <span class="ml-1 font-semibold {{ $pUpdate->isRejected() ? 'text-rose-700' : ($pUpdate->isPending() ? 'text-blue-800' : 'text-amber-800') }}">
-                                        {{ $pUpdate->isRejected() ? 'V'.$versionContext['proposed'].' — Bị từ chối' : ('Đề xuất: V'.$versionContext['proposed'].' — '.($pUpdate->isPending() ? 'Chờ duyệt' : 'Nháp')) }}
-                                    </span>
-                                @endif
-                                @if($pUpdate->rejection_reason) <span class="text-rose-600 block text-[11px] font-semibold mt-0.5">Lý do từ chối trước đó: {{ $pUpdate->rejection_reason }}</span> @endif
-                            </div>
-                            @if($pUpdate->isRejected())
-                                <form method="POST" action="{{ route('instructor.courses.content-updates.revise', [$course, $pUpdate]) }}">
-                                    @csrf
-                                    <button type="submit" class="rounded bg-rose-700 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-rose-800 cursor-pointer">Tạo bản chỉnh sửa mới</button>
-                                </form>
-                            @elseif($pUpdate->isPending())
-                                <span class="rounded bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-800">Chỉ đọc trong khi chờ duyệt</span>
-                            @else
-                                <span class="rounded bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700">Có thể chỉnh sửa từ biểu mẫu nội dung</span>
-                            @endif
-                        </li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <div class="mt-5 grid gap-3 sm:grid-cols-3">
             <div class="rounded-lg bg-slate-50 p-4">
                 <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Chương học</span>
@@ -117,50 +77,7 @@
     {{-- HÀNG CHỜ UPLOAD VIDEO LÊN S3 --}}
     <div id="global-video-upload-queue-panel" class="hidden"></div>
 
-    {{-- THÔNG BÁO BẢO MẬT HLS CHUNG DUY NHẤT VÀ NÚT GỬI DUYỆT (Requirement 7, 8, 14, 15, 16, 18) --}}
-    @php
-        $totalVideoLessons = $course->lessons()->where('type', 'video')->count();
-        $videoReadinessBlockers = $course->videoReadinessBlockers();
-        $hasVideoReadinessBlockers = $videoReadinessBlockers !== [];
-        $hasIncompleteHls = $course->hasIncompleteHlsVideos();
-        $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasVideoReadinessBlockers;
-        $videoBlockerTitle = $videoReadinessBlockers[0]['title'] ?? null;
-    @endphp
-
-    <div id="common-hls-banner-wrapper"
-         class="rounded-xl border p-4 shadow-xs transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasVideoReadinessBlockers ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-emerald-200 bg-emerald-50/80 text-emerald-900') }}">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-center gap-3">
-                <div>
-                    <p id="common-hls-message" class="text-sm font-bold">
-                        @if($hasVideoReadinessBlockers)
-                            Còn video chưa sẵn sàng: {{ $videoBlockerTitle }}.
-                        @elseif($totalVideoLessons > 0)
-                            Tất cả video đã được xử lý bảo mật thành công.
-                        @endif
-                    </p>
-                </div>
-            </div>
-
-            <div class="shrink-0 flex items-center gap-2">
-                @if($course->canBeSubmittedForReview())
-                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" id="curriculumSubmitForm">
-                        @csrf
-                        <input type="hidden" name="copyright_agreed" value="1">
-                        <button type="submit"
-                                id="curriculum-submit-review-btn"
-                                {{ $hasVideoReadinessBlockers ? 'disabled' : '' }}
-                                @if($hasVideoReadinessBlockers)
-                                    title="Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: {{ $videoBlockerTitle }}."
-                                @endif
-                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasVideoReadinessBlockers ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
-                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
-                        </button>
-                    </form>
-                @endif
-            </div>
-        </div>
-    </div>
+    @include('instructor.courses.partials.curriculum-review-state')
 
     @if(! $submissionCheck->passes())
         <div class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs">
