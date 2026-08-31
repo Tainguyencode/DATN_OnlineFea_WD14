@@ -8,6 +8,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <x-public.header />
 <main class="flex min-h-screen items-center justify-center px-4 py-10">
     <section class="w-full max-w-xl text-center">
         <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full text-4xl text-white {{ $success ? 'bg-emerald-500' : 'bg-rose-500' }}">

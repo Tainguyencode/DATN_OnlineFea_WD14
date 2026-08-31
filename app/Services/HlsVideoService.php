@@ -29,7 +29,7 @@ class HlsVideoService
         $ffmpegConfig = $this->ffmpegConfig();
         $probe = $this->probe($inputPath, $ffmpegConfig);
         $segmentSeconds = max(2, (int) config('video.hls.segment_seconds', 10));
-        $preset = $this->validatedPreset((string) config('video.hls.preset', 'veryfast'));
+        $preset = $this->validatedPreset((string) config('video.hls.preset', 'superfast'));
         $crf = max(0, min(51, (int) config('video.hls.crf', 23)));
         $playlistPath = $outputDirectory.'/playlist.m3u8';
 

@@ -12,6 +12,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <x-public.header />
 <main class="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
 
     <div class="mx-auto w-full max-w-xl text-center space-y-6">

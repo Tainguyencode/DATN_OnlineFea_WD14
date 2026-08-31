@@ -49,6 +49,11 @@ class LearningProgressService
                 ->first();
 
             $previousWatched = (int) ($existing?->watched_seconds ?? 0);
+            if ($lesson->type === Lesson::TYPE_DOCUMENT && $forceCompleted && ! $existing?->is_completed) {
+                $startedAt = \Illuminate\Support\Facades\Cache::get('reading-start:'.$userId.':'.$lesson->id);
+                abort_unless(is_numeric($startedAt) && now()->timestamp - (int) $startedAt >= 30,
+                    422, 'Vui lòng mở bài đọc ít nhất 30 giây trước khi hoàn thành.');
+            }
             $watchedSeconds = max($previousWatched, min($watchedSeconds, $durationSeconds > 0 ? $durationSeconds : $watchedSeconds));
 
             if ($lesson->type === Lesson::TYPE_QUIZ) {
