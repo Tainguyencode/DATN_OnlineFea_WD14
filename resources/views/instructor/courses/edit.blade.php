@@ -32,14 +32,14 @@
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4.5 5.25A2.25 2.25 0 0 1 6.75 3h10.5a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 17.25 21H6.75a2.25 2.25 0 0 1-2.25-2.25V5.25ZM8.25 7.5h7.5m-7.5 4h7.5m-7.5 4h4.5" /></svg>
             Quản lý nội dung
         </a>
-        @if($course->canBeSubmittedForReview() && $submissionCheck->passes())
+        @if($reviewState['canSubmitCourse'])
             <button type="button" onclick="openCopyrightModal()"
                     class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
                 {{ in_array($course->status, ['published', 'rejected_update'], true) ? 'Gửi duyệt cập nhật' : (in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt') }}
             </button>
         @endif
-        <button type="submit" form="course-edit-form"
-                class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+        <button type="submit" form="course-edit-form" data-course-save disabled
+                class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
             Lưu thay đổi
         </button>
     </div>
@@ -54,7 +54,10 @@
                     </span>
                     <span class="text-xs font-semibold text-slate-500">Tạo ngày {{ $course->created_at?->format('d/m/Y') }}</span>
                 </div>
-                <h2 class="mt-3 text-xl font-bold text-slate-950">{{ $course->title }}</h2>
+                <p class="mt-3 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                    Bản đang xuất bản{{ $reviewState['publishedVersionLabel'] ? ' — '.$reviewState['publishedVersionLabel'] : '' }}
+                </p>
+                <h2 class="mt-1 text-xl font-bold text-slate-950">{{ $course->title }}</h2>
                 <p class="mt-1 text-sm text-slate-500">{{ $course->short_description ?: 'Bổ sung mô tả ngắn để học viên hiểu nhanh giá trị khóa học.' }}</p>
             </div>
 
@@ -73,7 +76,7 @@
                         Xem bản đang phát sóng
                     </a>
                 @endif
-                @if($course->canBeSubmittedForReview() && $submissionCheck->passes())
+                @if($reviewState['canSubmitCourse'])
                     <button type="button" onclick="openCopyrightModal()"
                             class="inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer">
                         {{ in_array($course->status, ['published', 'rejected_update'], true) ? 'Gửi duyệt cập nhật' : (in_array($course->status, ['rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt') }}
@@ -109,6 +112,38 @@
             </div>
         @endif
 
+        @if($activeCourseUpdate)
+            <div class="mt-4 rounded-lg border {{ $activeCourseUpdate->isPending() ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900' }} p-4 text-sm">
+                <strong>
+                    Bản đề xuất
+                    @if($activeCourseVersionContext['proposed'] ?? null)
+                        — V{{ $activeCourseVersionContext['proposed'] }}
+                    @endif
+                    · {{ $activeCourseUpdate->isPending() ? 'Chờ duyệt' : 'Nháp' }}
+                </strong>
+                <p class="mt-1">{{ $activeCourseUpdate->isPending() ? 'Phiên bản này đang chờ Admin duyệt.' : 'Biểu mẫu bên dưới đang hiển thị giá trị đề xuất đã lưu.' }}</p>
+                @if($activeCourseUpdate->isDraft())
+                    <p class="mt-1 text-xs font-semibold">{{ $reviewState['draftCount'] }} thay đổi đang lưu nháp.</p>
+                @endif
+            </div>
+        @endif
+
+        @if($reviewState['hasPendingUpdates'])
+            <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900" data-review-state-summary>
+                <p class="font-bold">{{ $reviewState['pendingCount'] }} thay đổi đang chờ Admin duyệt.</p>
+                @if($reviewState['draftCount'] > 0)
+                    <p class="mt-1 font-semibold">{{ $reviewState['draftCount'] }} thay đổi mới đang lưu nháp cho lượt tiếp theo.</p>
+                    <p class="mt-1 text-xs">Bạn có thể tiếp tục lưu thay đổi mới. Sau khi Admin xử lý lượt đang chờ, các bản nháp mới sẽ có thể gửi duyệt.</p>
+                    <button type="button" disabled class="mt-3 rounded-lg bg-slate-300 px-4 py-2 text-xs font-bold text-slate-600 cursor-not-allowed">Chờ lượt duyệt hiện tại</button>
+                @endif
+            </div>
+        @elseif($reviewState['hasDraftUpdates'] && ! $reviewState['canSubmitCourse'])
+            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p class="font-bold">{{ $reviewState['draftCount'] }} thay đổi đang lưu nháp.</p>
+                <p class="mt-1 text-xs">{{ $reviewState['submissionBlockedReason'] }}</p>
+            </div>
+        @endif
+
         @if($errors->has('submission'))
             <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
                 <p class="font-bold">Không thể gửi duyệt khóa học</p>
@@ -121,7 +156,7 @@
         @endif
     </div>
 
-    @if($course->canBeSubmittedForReview())
+    @if($reviewState['canSubmitCourse'] || $reviewState['hasDraftUpdates'])
         @include('instructor.courses.partials.submission-readiness', [
             'course' => $course,
             'submissionCheck' => $submissionCheck,
@@ -139,7 +174,7 @@
     @endif
 
     @include('instructor.courses._form', [
-        'course' => $course,
+        'course' => $formCourse,
         'categories' => $categories,
         'action' => route('instructor.courses.update', $course),
         'method' => 'PUT',
@@ -147,6 +182,7 @@
         'showActionBar' => false,
         'formId' => 'course-edit-form',
         'submitLabel' => 'Lưu nháp',
+        'formReadOnly' => $formReadOnly,
     ])
 
     <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:p-5">
@@ -178,7 +214,7 @@
             <p class="text-xs leading-5 text-slate-500">Khóa học được lưu ở trạng thái nháp cho đến khi bạn gửi duyệt.</p>
             <div class="grid grid-cols-2 gap-2 sm:flex">
                 <a href="{{ route('instructor.courses.index') }}" class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Hủy</a>
-                <button type="submit" form="course-edit-form" class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">Lưu nháp</button>
+                <button type="submit" form="course-edit-form" data-course-save disabled class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">Lưu nháp</button>
             </div>
         </div>
     </div>
@@ -201,7 +237,7 @@
             </div>
 
             {{-- Nút Gửi duyệt lại khi status = need_revision --}}
-            @if($course->status === 'rejected' && $submissionCheck->passes())
+            @if($course->status === 'rejected' && $reviewState['canSubmitCourse'])
                 <button type="button"
                         onclick="openCopyrightModal()"
                         id="btn-resubmit-history"

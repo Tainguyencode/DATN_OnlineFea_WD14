@@ -549,11 +549,36 @@ class ContentUpdateDiffService
         return match ($update->type) {
             ContentUpdate::TYPE_COURSE => 'Khóa học: '.($course?->title ?? 'Không xác định'),
             ContentUpdate::TYPE_CHAPTER => 'Chương học: '.($payload['title'] ?? 'Không xác định'),
-            ContentUpdate::TYPE_LESSON => 'Bài học: '.($payload['title'] ?? 'Không xác định'),
+            ContentUpdate::TYPE_LESSON => 'Bài học: '.$this->lessonDisplayTitle($update, $payload, $course),
             ContentUpdate::TYPE_ASSIGNMENT => 'Bài tập: '.($payload['title'] ?? 'Không xác định'),
             ContentUpdate::TYPE_QUIZ => 'Quiz: '.($payload['title'] ?? 'Không xác định'),
             default => 'Nội dung cập nhật',
         };
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function lessonDisplayTitle(ContentUpdate $update, array $payload, ?Course $course): string
+    {
+        $candidateTitle = LessonVersion::query()
+            ->where('content_update_id', $update->id)
+            ->when($update->entity_id, fn ($query) => $query->where('lesson_id', $update->entity_id))
+            ->value('title');
+        if (filled($candidateTitle)) {
+            return (string) $candidateTitle;
+        }
+
+        if (filled($payload['title'] ?? null)) {
+            return (string) $payload['title'];
+        }
+
+        $identityTitle = $course && $update->entity_id
+            ? Lesson::query()
+                ->where('course_id', $course->id)
+                ->whereKey($update->entity_id)
+                ->value('title')
+            : null;
+
+        return filled($identityTitle) ? (string) $identityTitle : 'Không xác định';
     }
 
     private function entityLabel(string $type): string

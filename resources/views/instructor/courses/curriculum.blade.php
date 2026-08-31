@@ -25,28 +25,14 @@
         return $minutes > 0 ? $minutes.' phút'.($remaining ? ' '.$remaining.' giây' : '') : $remaining.' giây';
     };
 
-    $totalVideoLessons = $course->lessons()->where('type', 'video')->count();
-    $videoReadinessBlockers = $course->videoReadinessBlockers();
-    $hasVideoReadinessBlockers = $videoReadinessBlockers !== [];
-    $hasIncompleteHls = $course->hasIncompleteHlsVideos();
     $submissionCheck = $course->submissionCheck();
-    $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasVideoReadinessBlockers && $submissionCheck->passes();
-    $videoBlockerTitle = $videoReadinessBlockers[0]['title'] ?? null;
     $readinessItems = $submissionCheck->items();
     $passedReadinessItems = count(array_filter($readinessItems, fn ($item) => $item['passed']));
     $readinessProgress = count($readinessItems) > 0
         ? (int) round(($passedReadinessItems / count($readinessItems)) * 100)
         : 0;
-    $courseHasBeenSubmitted = in_array($course->status, ['pending_review', 'approved', 'published'], true);
-    $pendingContentUpdates = \App\Models\ContentUpdate::query()
-        ->where('course_id', $course->id)
-        ->whereIn('status', [
-            \App\Models\ContentUpdate::STATUS_DRAFT,
-            \App\Models\ContentUpdate::STATUS_PENDING,
-            \App\Models\ContentUpdate::STATUS_REJECTED,
-        ])
-        ->orderBy('id')
-        ->get();
+    $courseHasBeenSubmitted = in_array($course->status, ['pending_review', 'pending_update', 'approved', 'published'], true)
+        || $reviewState['hasPendingUpdates'];
 @endphp
 
 <div class="curriculum-builder space-y-4">
@@ -86,69 +72,6 @@
         </div>
     </section>
 
-    @if($pendingContentUpdates->isNotEmpty())
-        <section class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 sm:p-5">
-            <h2 class="text-sm font-black text-amber-950 dark:text-amber-100">
-                Các thay đổi nội dung ({{ $pendingContentUpdates->count() }})
-            </h2>
-            <ul class="mt-3 space-y-2 text-xs text-amber-950 dark:text-amber-100">
-                @foreach($pendingContentUpdates as $pUpdate)
-                    <li class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white/70 p-3 dark:border-amber-500/30 dark:bg-slate-900/60">
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-1.5">
-                                <span class="rounded bg-indigo-50 px-2 py-0.5 text-[11px] font-bold uppercase text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">{{ $pUpdate->type }}</span>
-                                <span class="font-semibold text-slate-700 dark:text-slate-300">({{ $pUpdate->action }})</span>
-                                <strong class="font-bold text-slate-900 dark:text-white">
-                                    @if(isset($pUpdate->payload['title']))
-                                        "{{ $pUpdate->payload['title'] }}"
-                                    @else
-                                        #{{ $pUpdate->entity_id }}
-                                    @endif
-                                </strong>
-                                <span class="font-bold {{ $pUpdate->isRejected() ? 'text-rose-700 dark:text-rose-300' : ($pUpdate->isPending() ? 'text-blue-800 dark:text-blue-300' : 'text-amber-800 dark:text-amber-300') }}">
-                                    {{ $pUpdate->isRejected() ? 'Bị từ chối' : ($pUpdate->isPending() ? 'Chờ duyệt' : 'Nháp') }}
-                                </span>
-                                @php
-                                    $versionContext = app(\App\Services\ContentUpdateDiffService::class)->versionContext($pUpdate);
-                                @endphp
-                                @if(($versionContext['current'] ?? null) !== null)
-                                    <span class="font-semibold text-emerald-700 dark:text-emerald-300">Đang xuất bản: V{{ $versionContext['current'] }}</span>
-                                @endif
-                                @if(($versionContext['proposed'] ?? null) !== null)
-                                    <span class="font-semibold {{ $pUpdate->isRejected() ? 'text-rose-700 dark:text-rose-300' : ($pUpdate->isPending() ? 'text-blue-800 dark:text-blue-300' : 'text-amber-800 dark:text-amber-300') }}">
-                                        {{ $pUpdate->isRejected() ? 'V'.$versionContext['proposed'].' — Bị từ chối' : ('Đề xuất: V'.$versionContext['proposed'].' — '.($pUpdate->isPending() ? 'Chờ duyệt' : 'Nháp')) }}
-                                    </span>
-                                @endif
-                            </div>
-                            @if($pUpdate->rejection_reason)
-                                <p class="mt-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300">
-                                    Lý do từ chối: {{ $pUpdate->rejection_reason }}
-                                </p>
-                            @endif
-                        </div>
-
-                        @if($pUpdate->isRejected())
-                            <form method="POST" action="{{ route('instructor.courses.content-updates.revise', [$course, $pUpdate]) }}">
-                                @csrf
-                                <button type="submit" class="cursor-pointer rounded-lg bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">
-                                    Tạo bản chỉnh sửa mới
-                                </button>
-                            </form>
-                        @elseif($pUpdate->isPending())
-                            <span class="rounded-lg bg-blue-100 px-3 py-1.5 text-[11px] font-bold text-blue-800 dark:bg-blue-500/10 dark:text-blue-300">
-                                Chỉ đọc trong khi chờ duyệt
-                            </span>
-                        @else
-                            <span class="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                Có thể chỉnh sửa từ biểu mẫu nội dung
-                            </span>
-                        @endif
-                    </li>
-                @endforeach
-            </ul>
-        </section>
-    @endif
-
     {{-- HÀNG CHỜ UPLOAD VIDEO LÊN S3 --}}
     <div id="global-video-upload-queue-panel" class="hidden"></div>
 
@@ -185,49 +108,12 @@
                 </ul>
             </section>
 
-            <div id="common-hls-banner-wrapper"
-                 class="rounded-2xl border p-4 shadow-sm transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasVideoReadinessBlockers ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200') }}">
-                <div class="flex items-start gap-3">
-                    <span id="common-hls-icon" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-current/20 text-sm font-black">i</span>
-                    <div>
-                        <p class="text-xs font-black uppercase tracking-wide">Trạng thái video</p>
-                        <p id="common-hls-message" class="mt-1 text-xs font-semibold leading-5">
-                            @if($hasVideoReadinessBlockers)
-                                Còn video chưa sẵn sàng: {{ $videoBlockerTitle }}.
-                            @elseif(!$submissionCheck->passes())
-                                {{ $submissionCheck->summaryMessage() }}
-                            @elseif($totalVideoLessons > 0)
-                                Tất cả video đã được xử lý bảo mật thành công.
-                            @endif
-                        </p>
-                    </div>
-                </div>
-            </div>
+            @include('instructor.courses.partials.curriculum-review-state')
 
             <section class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                    <a href="{{ route('instructor.courses.edit', $course) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                        Thông tin khóa học
-                    </a>
-                    @if($course->canBeSubmittedForReview())
-                        <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" id="curriculumSubmitForm">
-                            @csrf
-                            <input type="hidden" name="copyright_agreed" value="1">
-                            <button type="submit"
-                                    id="curriculum-submit-review-btn"
-                                    {{ !$canSubmitCourse ? 'disabled' : '' }}
-                                    @if(!$canSubmitCourse)
-                                        title="{{ $hasVideoReadinessBlockers ? 'Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: '.$videoBlockerTitle : $submissionCheck->summaryMessage() }}"
-                                    @endif
-                                    class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black transition {{ $hasVideoReadinessBlockers || !$canSubmitCourse ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600' : 'cursor-pointer bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700' }}">
-                                {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
-                            </button>
-                        </form>
-                    @endif
-                </div>
-                @if(! $canSubmitCourse)
-                    <p class="mt-3 text-center text-xs leading-5 text-slate-500 dark:text-slate-400">Hoàn thành các mục còn thiếu để gửi khóa học.</p>
-                @endif
+                <a href="{{ route('instructor.courses.edit', $course) }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    Thông tin khóa học
+                </a>
             </section>
         </aside>
 
@@ -291,7 +177,6 @@
                     </div>
                 </div>
             </div>
-
     <form id="add-course-section" method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="{{ $errors->hasBag('storeSection') ? '' : 'hidden' }} rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         @csrf

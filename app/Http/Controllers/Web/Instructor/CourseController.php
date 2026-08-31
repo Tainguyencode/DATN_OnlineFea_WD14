@@ -11,10 +11,12 @@ use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
 use App\Models\Certificate;
+use App\Models\Category;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\CourseVersion;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
@@ -23,6 +25,7 @@ use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\Submission;
 use App\Models\User;
+use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
@@ -115,8 +118,40 @@ class CourseController extends Controller
         $statusOptions = $this->statusOptions();
         $submissionCheck = $course->submissionCheck();
         $courseReviews = $course->courseReviews;
+        $contentUpdates = app(ContentUpdateService::class);
+        $reviewState = $contentUpdates->instructorReviewState($course, auth()->user());
+        $activeCourseUpdate = $contentUpdates->activeCourseMetadataUpdate($course, auth()->user());
+        $formCourse = clone $course;
+        $activeCourseVersionContext = ['current' => $course->publishedVersion?->version_number, 'proposed' => null];
 
-        return view('instructor.courses.edit', compact('course', 'categories', 'statusOptions', 'submissionCheck', 'courseReviews'));
+        if ($activeCourseUpdate) {
+            $candidate = CourseVersion::query()
+                ->where('content_update_id', $activeCourseUpdate->id)
+                ->where('course_id', $course->id)
+                ->first();
+            $proposal = $candidate
+                ? $candidate->only(['title', 'short_description', 'description', 'objectives', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video'])
+                : ($activeCourseUpdate->payload ?? []);
+            $formCourse->forceFill($proposal);
+            if (array_key_exists('category_id', $proposal)) {
+                $formCourse->setRelation('category', Category::with('parent')->find($proposal['category_id']));
+            }
+            $activeCourseVersionContext = app(ContentUpdateDiffService::class)->versionContext($activeCourseUpdate);
+        }
+        $formReadOnly = $activeCourseUpdate?->isPending() ?? false;
+
+        return view('instructor.courses.edit', compact(
+            'course',
+            'formCourse',
+            'categories',
+            'statusOptions',
+            'submissionCheck',
+            'courseReviews',
+            'reviewState',
+            'activeCourseUpdate',
+            'activeCourseVersionContext',
+            'formReadOnly',
+        ));
     }
 
     public function update(StoreCourseRequest $request, Course $course): RedirectResponse
@@ -125,24 +160,43 @@ class CourseController extends Controller
 
         $validated = $request->validated();
 
-        if ($request->hasFile('thumbnail')) {
-            if (! $course->isPublished()) {
-                $this->deleteThumbnail($course);
-            }
-            $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
-        }
-
         if ($course->isPublished()) {
-            app(ContentUpdateService::class)->recordPendingUpdate(
-                ContentUpdate::TYPE_COURSE,
-                ContentUpdate::ACTION_UPDATE,
-                $course->id,
-                $course->id,
+            $pendingCourseUpdate = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_COURSE)
+                ->where('action', ContentUpdate::ACTION_UPDATE)
+                ->where('entity_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->exists();
+            if ($pendingCourseUpdate) {
+                return back()->with('error', 'Phiên bản này đang chờ Admin duyệt.');
+            }
+
+            if ($request->hasFile('thumbnail')) {
+                $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
+            }
+
+            $result = app(ContentUpdateService::class)->saveCourseMetadataDraft(
+                $course,
                 array_merge($validated, ['sale_price' => $validated['discount_price'] ?? null]),
-                $request->user()
+                $request->user(),
             );
 
+            if (! $result['changed']) {
+                return back()->with(
+                    $result['reverted'] ? 'success' : 'info',
+                    $result['reverted']
+                        ? 'Đã bỏ bản nháp vì thông tin đề xuất trùng với bản đang xuất bản.'
+                        : 'Không có thay đổi mới để lưu.',
+                );
+            }
+
             return back()->with('success', 'Đã lưu bản cập nhật thông tin khóa học. Bản cập nhật sẽ được hiển thị sau khi Admin duyệt.');
+        }
+
+        if ($request->hasFile('thumbnail')) {
+            $this->deleteThumbnail($course);
+            $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
         }
 
         $course->update([
@@ -281,14 +335,28 @@ class CourseController extends Controller
     {
         $this->ensureOwned($course);
 
-        // Nếu khóa học đã được gửi duyệt thành công trước đó (pending_review / pending_update), chuyển hướng êm đẹp về danh sách
+        // Repeated submission is idempotent at the controller boundary.
         if (in_array($course->status, [Course::STATUS_PENDING, Course::STATUS_PENDING_UPDATE, 'under_review'], true)) {
             return redirect()
-                ->route('instructor.courses.index')
-                ->with('success', 'Khóa học đã được gửi và đang trong quá trình chờ Admin duyệt.');
+                ->to($request->headers->get('referer') ?: route('instructor.courses.index'))
+                ->with('info', 'Cập nhật này đã được gửi duyệt.');
         }
 
         abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
+
+        $reviewState = app(ContentUpdateService::class)->instructorReviewState($course, $request->user());
+        $hasPublishedContent = (bool) $course->is_published || in_array($course->status, [
+            Course::STATUS_APPROVED,
+            Course::STATUS_PUBLISHED,
+            Course::STATUS_PENDING_UPDATE,
+            Course::STATUS_REJECTED_UPDATE,
+        ], true);
+        if ($hasPublishedContent && ! $reviewState['hasDraftUpdates']) {
+            return back()->with('error', 'Không có thay đổi mới để gửi duyệt.');
+        }
+        if ($reviewState['hasPendingUpdates']) {
+            return back()->with('error', 'Đang có một lượt duyệt chưa được xử lý.');
+        }
 
         if (! $course->copyright_agreed) {
             $request->validate([
@@ -309,11 +377,17 @@ class CourseController extends Controller
                 ->withErrors(['submission' => $submissionCheck->errorMessages()]);
         }
 
-        $reviewService->submitForReview($course, auth()->user());
+        $submittedCount = $reviewState['draftCount'];
+        $reviewService->submitForReview($course, $request->user());
 
         return redirect()
-            ->route('instructor.courses.index')
-            ->with('success', 'Đã gửi khóa học để admin duyệt.');
+            ->to($request->headers->get('referer') ?: route('instructor.courses.index'))
+            ->with(
+                'success',
+                $submittedCount > 0
+                    ? "Đã gửi {$submittedCount} thay đổi để Admin duyệt."
+                    : 'Đã gửi khóa học để Admin duyệt.',
+            );
     }
 
     public function submitPage(Course $course): RedirectResponse

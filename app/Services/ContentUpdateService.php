@@ -24,6 +24,253 @@ use Illuminate\Validation\ValidationException;
 class ContentUpdateService
 {
     /**
+     * Build the instructor-facing review state for a curriculum.
+     *
+     * A ready course is not, by itself, a change that can be submitted. Only
+     * active draft updates owned by the instructor make a published course
+     * eligible for an update review. Pending and terminal records are kept out
+     * of that decision deliberately.
+     *
+     * @return array{
+     *     updates: Collection<int, ContentUpdate>,
+     *     activeUpdates: Collection<int, ContentUpdate>,
+     *     actionableRejectedUpdates: Collection<int, ContentUpdate>,
+     *     hasDraftUpdates: bool,
+     *     hasPendingUpdates: bool,
+     *     draftCount: int,
+     *     pendingCount: int,
+     *     canSubmitUpdates: bool,
+     *     canSubmitDrafts: bool,
+     *     canSubmitInitialCourse: bool,
+     *     canSubmitCourse: bool,
+     *     videoReadinessBlockers: array<int, array{title: string, state: 'missing_source'|'uploading'|'processing'|'failed'}>,
+     *     allRequiredDraftMediaReady: bool,
+     *     submissionBlockedReason: ?string,
+     *     publishedVersionLabel: ?string,
+     *     draftVersionLabels: array<int, array{contentUpdateId: int, type: string, label: ?string}>
+     * }
+     */
+    public function instructorReviewState(Course $course, User $instructor): array
+    {
+        $allUpdates = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('created_by', $instructor->id)
+            ->orderBy('id')
+            ->get();
+
+        $activeUpdates = $allUpdates
+            ->filter(fn (ContentUpdate $update): bool => $update->isDraft() || $update->isPending())
+            ->values();
+        $actionableRejectedUpdates = $allUpdates
+            ->filter(fn (ContentUpdate $update): bool => $update->isRejected())
+            ->reject(fn (ContentUpdate $rejected): bool => $allUpdates->contains(
+                fn (ContentUpdate $candidate): bool => $this->isRevisionSuccessor($rejected, $candidate)
+            ))
+            ->values();
+        $updates = $activeUpdates->concat($actionableRejectedUpdates)->sortBy('id')->values();
+        $draftUpdates = $activeUpdates->filter(fn (ContentUpdate $update): bool => $update->isDraft())->values();
+        $pendingUpdates = $activeUpdates->filter(fn (ContentUpdate $update): bool => $update->isPending())->values();
+        $draftCount = $draftUpdates->count();
+        $pendingCount = $pendingUpdates->count();
+        $hasDraftUpdates = $draftCount > 0;
+        $hasPendingUpdates = $pendingCount > 0;
+        $videoReadinessBlockers = $course->videoReadinessBlockers();
+        $submissionCheck = $course->submissionCheck();
+        $reviewRequirementsPass = $course->canBeSubmittedForReview()
+            && $submissionCheck->passes()
+            && $videoReadinessBlockers === [];
+        $hasPublishedContent = (bool) $course->is_published || in_array($course->status, [
+            Course::STATUS_APPROVED,
+            Course::STATUS_PUBLISHED,
+            Course::STATUS_PENDING_UPDATE,
+            Course::STATUS_REJECTED_UPDATE,
+        ], true);
+
+        $canSubmitUpdates = $hasDraftUpdates
+            && ! $hasPendingUpdates
+            && $reviewRequirementsPass;
+        $canSubmitInitialCourse = ! $hasPublishedContent
+            && ! $hasPendingUpdates
+            && $reviewRequirementsPass;
+        $canSubmitCourse = $hasPublishedContent ? $canSubmitUpdates : $canSubmitInitialCourse;
+
+        $submissionBlockedReason = null;
+        if ($hasPendingUpdates) {
+            $submissionBlockedReason = $hasDraftUpdates
+                ? 'Chờ Admin xử lý lượt duyệt hiện tại.'
+                : 'Đang có một lượt duyệt chưa được xử lý.';
+        } elseif ($hasPublishedContent && ! $hasDraftUpdates) {
+            $submissionBlockedReason = 'Không có thay đổi mới để gửi duyệt.';
+        } elseif ($videoReadinessBlockers !== []) {
+            $submissionBlockedReason = 'Video của bản nháp vẫn đang được xử lý.';
+        } elseif (! $submissionCheck->passes()) {
+            $submissionBlockedReason = $submissionCheck->summaryMessage();
+        } elseif (! $course->canBeSubmittedForReview()) {
+            $submissionBlockedReason = 'Khóa học không ở trạng thái cho phép gửi duyệt.';
+        }
+
+        $publishedVersionNumber = $course->publishedVersion()->value('version_number');
+        $diffService = app(ContentUpdateDiffService::class);
+        $draftVersionLabels = $draftUpdates->map(function (ContentUpdate $update) use ($diffService): array {
+            $proposed = $diffService->versionContext($update)['proposed'] ?? null;
+
+            return [
+                'contentUpdateId' => $update->id,
+                'type' => $update->type,
+                'label' => $proposed ? 'V'.$proposed : null,
+            ];
+        })->all();
+
+        return [
+            'updates' => $updates,
+            'activeUpdates' => $activeUpdates,
+            'actionableRejectedUpdates' => $actionableRejectedUpdates,
+            'hasDraftUpdates' => $hasDraftUpdates,
+            'hasPendingUpdates' => $hasPendingUpdates,
+            'draftCount' => $draftCount,
+            'pendingCount' => $pendingCount,
+            'canSubmitUpdates' => $canSubmitUpdates,
+            'canSubmitDrafts' => $canSubmitUpdates,
+            'canSubmitInitialCourse' => $canSubmitInitialCourse,
+            'canSubmitCourse' => $canSubmitCourse,
+            'videoReadinessBlockers' => $videoReadinessBlockers,
+            'allRequiredDraftMediaReady' => $videoReadinessBlockers === [],
+            'submissionBlockedReason' => $canSubmitCourse ? null : $submissionBlockedReason,
+            'publishedVersionLabel' => $publishedVersionNumber ? 'V'.$publishedVersionNumber : null,
+            'draftVersionLabels' => $draftVersionLabels,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function instructorReviewStatePayload(Course $course, User $instructor): array
+    {
+        return collect($this->instructorReviewState($course, $instructor))
+            ->except('updates', 'activeUpdates', 'actionableRejectedUpdates')
+            ->all();
+    }
+
+    public function activeCourseMetadataUpdate(Course $course, User $instructor): ?ContentUpdate
+    {
+        return ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('created_by', $instructor->id)
+            ->where('type', ContentUpdate::TYPE_COURSE)
+            ->where('action', ContentUpdate::ACTION_UPDATE)
+            ->where('entity_id', $course->id)
+            ->whereIn('status', [ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_DRAFT])
+            ->orderByRaw("CASE status WHEN 'pending' THEN 1 ELSE 2 END")
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Persist the single mutable Course metadata proposal. A pending proposal
+     * for this entity is immutable, while a draft for another entity may still
+     * be queued for the next review batch.
+     *
+     * @param  array<string, mixed>  $changes
+     * @return array{update: ?ContentUpdate, changed: bool, reverted: bool}
+     */
+    public function saveCourseMetadataDraft(Course $course, array $changes, User $actor): array
+    {
+        $result = DB::transaction(function () use ($course, $changes, $actor): array {
+            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+
+            $active = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_COURSE)
+                ->where('action', ContentUpdate::ACTION_UPDATE)
+                ->where('entity_id', $course->id)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+                ->lockForUpdate()
+                ->get();
+
+            if ($active->contains(fn (ContentUpdate $update): bool => $update->isPending())) {
+                throw ValidationException::withMessages([
+                    'course' => 'Phiên bản này đang chờ Admin duyệt.',
+                ]);
+            }
+
+            $drafts = $active
+                ->filter(fn (ContentUpdate $update): bool => $update->isDraft() && (int) $update->created_by === (int) $actor->id)
+                ->sortByDesc('id')
+                ->values();
+            $draft = $drafts->first();
+
+            foreach ($drafts->slice(1) as $duplicate) {
+                app(ContentVersionService::class)->discardDraftCandidates($duplicate);
+                $duplicate->delete();
+            }
+
+            $current = $this->courseMetadataSnapshot($course);
+            $proposal = array_merge($current, $draft?->payload ?? [], $changes);
+
+            if ($this->normalizedCourseMetadata($proposal) === $this->normalizedCourseMetadata($current)) {
+                if ($draft) {
+                    app(ContentVersionService::class)->discardDraftCandidates($draft);
+                    $draft->delete();
+                }
+
+                return ['update' => null, 'changed' => false, 'reverted' => (bool) $draft];
+            }
+
+            if ($draft && $this->normalizedCourseMetadata($proposal) === $this->normalizedCourseMetadata(array_merge($current, $draft->payload ?? []))) {
+                return ['update' => $draft, 'changed' => false, 'reverted' => false];
+            }
+
+            if ($draft) {
+                $draft->update(['payload' => $proposal]);
+            } else {
+                $draft = ContentUpdate::create([
+                    'type' => ContentUpdate::TYPE_COURSE,
+                    'action' => ContentUpdate::ACTION_UPDATE,
+                    'course_id' => $course->id,
+                    'entity_id' => $course->id,
+                    'payload' => $proposal,
+                    'status' => ContentUpdate::STATUS_DRAFT,
+                    'created_by' => $actor->id,
+                ]);
+            }
+
+            return ['update' => $draft->fresh(), 'changed' => true, 'reverted' => false];
+        });
+
+        if ($result['update'] && $result['changed']) {
+            app(ContentVersionService::class)->prepareDraftCandidate($result['update'], $actor);
+            $result['update'] = $result['update']->fresh();
+        }
+
+        return $result;
+    }
+
+    /** @return array<string, mixed> */
+    private function courseMetadataSnapshot(Course $course): array
+    {
+        return collect($course->getAttributes())
+            ->only(['title', 'short_description', 'description', 'objectives', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video'])
+            ->all();
+    }
+
+    /** @param array<string, mixed> $values @return array<string, mixed> */
+    private function normalizedCourseMetadata(array $values): array
+    {
+        $normalized = collect($values)
+            ->only(['title', 'short_description', 'description', 'objectives', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video'])
+            ->map(function ($value, string $key): mixed {
+                if (in_array($key, ['price', 'discount_price', 'sale_price'], true)) {
+                    return filled($value) ? number_format((float) $value, 2, '.', '') : null;
+                }
+
+                return $value === '' ? null : $value;
+            })
+            ->all();
+
+        ksort($normalized);
+
+        return $normalized;
+    }
+
+    /**
      * Return the single active authoring draft for an existing published lesson.
      *
      * The course row is locked so two browser tabs cannot create two drafts for
@@ -206,7 +453,7 @@ class ContentUpdateService
      */
     public function createRevisionFromRejected(ContentUpdate $rejected, User $actor): ContentUpdate
     {
-        return DB::transaction(function () use ($rejected, $actor): ContentUpdate {
+        $revision = DB::transaction(function () use ($rejected, $actor): ContentUpdate {
             $rejected = ContentUpdate::query()->lockForUpdate()->findOrFail($rejected->id);
             if (! $rejected->isRejected() || (int) $rejected->created_by !== (int) $actor->id) {
                 throw ValidationException::withMessages([
@@ -220,6 +467,7 @@ class ContentUpdateService
                 ->where('action', $rejected->action)
                 ->where('entity_id', $rejected->entity_id)
                 ->where('created_by', $actor->id)
+                ->where('id', '>', $rejected->id)
                 ->where('status', ContentUpdate::STATUS_DRAFT)
                 ->lockForUpdate()
                 ->latest('id')
@@ -235,7 +483,19 @@ class ContentUpdateService
                 });
 
             if ($existing) {
-                return $existing;
+                $existing->update([
+                    'metadata' => array_merge($existing->metadata ?? [], [
+                        'revision_of_content_update_id' => $rejected->id,
+                    ]),
+                ]);
+
+                return $existing->fresh();
+            }
+
+            if ($this->revisionSuccessorsQuery($rejected)->lockForUpdate()->exists()) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Yêu cầu bị từ chối này đã có phiên bản kế nhiệm và chỉ còn trong lịch sử.',
+                ]);
             }
 
             return ContentUpdate::create([
@@ -244,11 +504,45 @@ class ContentUpdateService
                 'course_id' => $rejected->course_id,
                 'entity_id' => $rejected->entity_id,
                 'payload' => $rejected->payload ?? [],
-                'metadata' => $rejected->metadata ?? null,
+                'metadata' => array_merge($rejected->metadata ?? [], [
+                    'revision_of_content_update_id' => $rejected->id,
+                ]),
                 'status' => ContentUpdate::STATUS_DRAFT,
                 'created_by' => $actor->id,
             ]);
         });
+
+        app(ContentVersionService::class)->prepareDraftCandidate($revision, $actor);
+
+        return $revision->fresh();
+    }
+
+    private function isRevisionSuccessor(ContentUpdate $rejected, ContentUpdate $candidate): bool
+    {
+        if ($candidate->id <= $rejected->id) {
+            return false;
+        }
+
+        if ((int) data_get($candidate->metadata, 'revision_of_content_update_id') === (int) $rejected->id) {
+            return true;
+        }
+
+        return (int) $candidate->course_id === (int) $rejected->course_id
+            && $candidate->type === $rejected->type
+            && $candidate->action === $rejected->action
+            && (int) $candidate->entity_id === (int) $rejected->entity_id
+            && (int) $candidate->created_by === (int) $rejected->created_by;
+    }
+
+    private function revisionSuccessorsQuery(ContentUpdate $rejected)
+    {
+        return ContentUpdate::query()
+            ->where('course_id', $rejected->course_id)
+            ->where('type', $rejected->type)
+            ->where('action', $rejected->action)
+            ->where('entity_id', $rejected->entity_id)
+            ->where('created_by', $rejected->created_by)
+            ->where('id', '>', $rejected->id);
     }
 
     /**
@@ -754,9 +1048,9 @@ class ContentUpdateService
     }
 
     /**
-     * Merge published course sections and lessons with active ContentUpdate records (draft, pending, rejected).
+     * Merge published course sections and lessons with active ContentUpdate records (draft or pending).
      */
-    public function mergeCurriculumWithUpdates(Course $course): Collection
+    public function mergeCurriculumWithUpdates(Course $course, array $statuses = [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING]): Collection
     {
         $course->load([
             'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order')->with(['videoModeration', 'assignment']),
@@ -770,11 +1064,15 @@ class ContentUpdateService
         // Only draft/pending records are candidate curriculum. Approved and rejected
         // records are history: the former has already been applied to the real lesson
         // and the latter must not override a later accepted/re-uploaded video.
+        // Approved/rejected updates are immutable history and must never be
+        // projected over the live curriculum. Callers may narrow this active
+        // set (Admin review uses pending-only) but cannot expand it.
+        $activeStatuses = array_values(array_intersect($statuses, [
+            ContentUpdate::STATUS_DRAFT,
+            ContentUpdate::STATUS_PENDING,
+        ]));
         $activeUpdates = ContentUpdate::where('course_id', $course->id)
-            // Approved updates have already been materialized in the canonical tables.
-            // Merging them again duplicates sections/lessons and can make an update id
-            // collide with a real section id owned by another course.
-            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+            ->whereIn('status', $activeStatuses)
             ->orderBy('id')
             ->get();
 

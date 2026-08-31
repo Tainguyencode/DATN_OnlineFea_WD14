@@ -26,6 +26,13 @@ class CourseReviewService
             // only transition drafts. Existing pending/terminal records are
             // never silently rewritten.
             $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $hasPendingBatch = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->lockForUpdate()
+                ->exists();
+            abort_if($hasPendingBatch, 422, 'Đang có một lượt duyệt chưa được xử lý.');
+
             abort_unless(in_array($course->status, [
                 CourseStatus::Draft->value,
                 CourseStatus::Rejected->value,
@@ -34,6 +41,15 @@ class CourseReviewService
                 CourseStatus::RejectedUpdate->value,
             ], true), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
             $isAlreadyPublished = (bool) $course->is_published || in_array($course->status, [CourseStatus::Published->value, CourseStatus::PendingUpdate->value, CourseStatus::RejectedUpdate->value], true);
+            if ($isAlreadyPublished) {
+                $hasDraftUpdates = ContentUpdate::query()
+                    ->where('course_id', $course->id)
+                    ->where('created_by', $instructor->id)
+                    ->where('status', ContentUpdate::STATUS_DRAFT)
+                    ->lockForUpdate()
+                    ->exists();
+                abort_unless($hasDraftUpdates, 422, 'Không có thay đổi mới để gửi duyệt.');
+            }
             $submissionNumber = (int) $course->submission_count + 1;
 
             $review = CourseReview::create([
@@ -60,6 +76,7 @@ class CourseReviewService
             // Cập nhật mốc thời gian submitted_at và chuyển trạng thái pending cho các bản ghi content_updates của khóa học này
             $draftUpdates = ContentUpdate::query()
                 ->where('course_id', $course->id)
+                ->where('created_by', $instructor->id)
                 ->where('status', ContentUpdate::STATUS_DRAFT)
                 ->lockForUpdate()
                 ->get();
