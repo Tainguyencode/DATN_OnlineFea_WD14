@@ -13,6 +13,7 @@ use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
 use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
 use Illuminate\Http\JsonResponse;
@@ -430,6 +431,13 @@ class CurriculumController extends Controller
         }
 
         $validated = $request->validated();
+        $contentUpdate = null;
+        if ($course->isPublished()) {
+            // Establish the canonical ContentUpdate + LessonVersion before any
+            // new media is staged. The live published lesson remains untouched.
+            $contentUpdate = app(ContentUpdateService::class)
+                ->ensureLessonUpdateDraft($course, $lesson, $request->user());
+        }
         $lessonData = $this->lessonData($validated);
         // Published edits stage new files; they must not delete the live V1
         // document/video before the ContentUpdate is approved.
@@ -452,15 +460,9 @@ class CurriculumController extends Controller
                 'status' => $lessonData['status'] ?? Lesson::STATUS_DRAFT,
             ]);
 
-            Log::info('[UPLOAD TRACE] SAVE DATABASE (ContentUpdate Record)');
-            $contentUpdate = app(ContentUpdateService::class)->recordPendingUpdate(
-                ContentUpdate::TYPE_LESSON,
-                ContentUpdate::ACTION_UPDATE,
-                $course->id,
-                $lesson->id,
-                $payload,
-                $request->user()
-            );
+            Log::info('[UPLOAD TRACE] SAVE DATABASE (ContentUpdate Draft)');
+            $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, $payload);
+            $candidate = app(ContentVersionService::class)->prepareDraftCandidate($contentUpdate, $request->user());
 
             if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
                 if ($request->hasFile('video_file')) {
@@ -475,6 +477,7 @@ class CurriculumController extends Controller
                 return response()->json([
                     'success' => true,
                     'content_update_id' => $contentUpdate->id,
+                    'version_number' => $candidate?->version_number,
                     'lesson_id' => $lesson->id,
                     'title' => $payload['title'] ?? $lesson->title,
                     'message' => 'Đã lưu bản cập nhật nội dung bài học.',

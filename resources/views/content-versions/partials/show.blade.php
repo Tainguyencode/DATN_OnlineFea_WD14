@@ -14,7 +14,9 @@
             @endif
         </div>
         <div class="flex flex-wrap gap-2">
-            <a href="{{ route($routePrefix.'.compare', [$course, $detail['type'], $version->id]) }}" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-bold text-indigo-700">So sánh với hiện tại</a>
+            @if($siblings->count() > 1)
+                <a href="{{ route($routePrefix.'.compare', [$course, $detail['type'], $version->id]) }}" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-bold text-indigo-700">So sánh phiên bản</a>
+            @endif
             @if(!$isAdmin && $detail['rollback_eligible'])
                 <a href="{{ route('instructor.courses.versions.rollback.confirm', [$course, $detail['type'], $version->id]) }}" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white">Khôi phục từ phiên bản này</a>
             @endif

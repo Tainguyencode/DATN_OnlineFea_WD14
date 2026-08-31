@@ -400,7 +400,7 @@ class LearningPlayerService
                 'percent' => (float) $att->percent,
                 'passed' => (bool) $att->passed,
                 'completed_at' => $att->completed_at?->format('d/m/Y H:i') ?? $att->created_at?->format('d/m/Y H:i'),
-                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $att]),
+                'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $att]),
             ];
         })->all();
 

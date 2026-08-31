@@ -9,12 +9,33 @@ use App\Models\Lesson;
 use App\Models\User;
 use App\Services\VideoTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class VideoProtectionTest extends TestCase
 {
     use DatabaseTransactions;
+
+    private string $localStorageRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->localStorageRoot = storage_path('framework/testing/video-protection/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory($this->localStorageRoot);
+
+        parent::tearDown();
+    }
 
     public function test_unauthorized_user_cannot_access_hls_key(): void
     {
@@ -41,8 +62,6 @@ class VideoProtectionTest extends TestCase
 
     public function test_authorized_token_can_access_hls_key_when_key_exists(): void
     {
-        Storage::fake('local');
-
         $user = User::create([
             'name' => 'Test User '.uniqid(),
             'email' => 'user_'.uniqid().'@example.com',
@@ -73,8 +92,6 @@ class VideoProtectionTest extends TestCase
 
     public function test_playlist_replaces_key_uri_with_token(): void
     {
-        Storage::fake('local');
-
         $user = User::create([
             'name' => 'Test User '.uniqid(),
             'email' => 'user_'.uniqid().'@example.com',
@@ -155,6 +172,7 @@ class VideoProtectionTest extends TestCase
             'type' => 'video',
             'sort_order' => 1,
             'status' => 'published',
+            'upload_status' => 'uploaded',
             'processing_status' => 'completed',
         ]);
     }

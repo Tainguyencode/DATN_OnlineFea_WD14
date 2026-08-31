@@ -11,13 +11,34 @@ use App\Models\StudyGroupInvitation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class StudyGroupTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $localStorageRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->localStorageRoot = storage_path('framework/testing/study-group/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory($this->localStorageRoot);
+
+        parent::tearDown();
+    }
 
     private function createCourseWithEnrollment(User $student, ?User $instructor = null): Course
     {
@@ -644,8 +665,6 @@ class StudyGroupTest extends TestCase
     // CASE 24: Group chat private file attachment & download security
     public function test_case_24_member_can_upload_and_download_file(): void
     {
-        Storage::fake('local');
-
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->createCourseWithEnrollment($student);
 

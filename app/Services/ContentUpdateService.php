@@ -9,6 +9,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\LessonVersion;
 use App\Models\QuestionVersion;
 use App\Models\Quiz;
 use App\Models\QuizVersion;
@@ -22,6 +23,75 @@ use Illuminate\Validation\ValidationException;
 
 class ContentUpdateService
 {
+    /**
+     * Return the single active authoring draft for an existing published lesson.
+     *
+     * The course row is locked so two browser tabs cannot create two drafts for
+     * the same lesson. Terminal updates are audit history and are never reused.
+     */
+    public function ensureLessonUpdateDraft(Course $course, Lesson $lesson, User $actor): ContentUpdate
+    {
+        $draft = DB::transaction(function () use ($course, $lesson, $actor): ContentUpdate {
+            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $lesson = Lesson::query()->lockForUpdate()->findOrFail($lesson->id);
+
+            if ((int) $lesson->course_id !== (int) $course->id || ! $course->isPublished()) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Chỉ có thể tạo bản nháp cập nhật cho bài học đã xuất bản thuộc khóa học này.',
+                ]);
+            }
+
+            $active = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_LESSON)
+                ->where('action', ContentUpdate::ACTION_UPDATE)
+                ->where('entity_id', $lesson->id)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+                ->lockForUpdate()
+                ->get();
+
+            if ($active->contains(fn (ContentUpdate $update): bool => $update->isPending())) {
+                throw ValidationException::withMessages([
+                    'content_update' => 'Bài học đang có thay đổi chờ Admin duyệt và không thể chỉnh sửa.',
+                ]);
+            }
+
+            $drafts = $active->filter(fn (ContentUpdate $update): bool => $update->isDraft());
+            if ($drafts->count() > 1) {
+                $pointedUpdateId = $lesson->draft_version_id
+                    ? LessonVersion::query()->whereKey($lesson->draft_version_id)->value('content_update_id')
+                    : null;
+                $canonical = $drafts->firstWhere('id', $pointedUpdateId) ?? $drafts->sortByDesc('id')->first();
+                $mergedPayload = $drafts->sortBy('id')->reduce(
+                    fn (array $payload, ContentUpdate $candidate): array => array_merge($payload, $candidate->payload ?? []),
+                    []
+                );
+                $canonical->update(['payload' => $mergedPayload]);
+
+                foreach ($drafts->where('id', '!=', $canonical->id) as $duplicate) {
+                    app(ContentVersionService::class)->discardDraftCandidates($duplicate);
+                    $duplicate->delete();
+                }
+
+                return $canonical->fresh();
+            }
+
+            return $drafts->first() ?? ContentUpdate::create([
+                'type' => ContentUpdate::TYPE_LESSON,
+                'action' => ContentUpdate::ACTION_UPDATE,
+                'course_id' => $course->id,
+                'entity_id' => $lesson->id,
+                'payload' => [],
+                'status' => ContentUpdate::STATUS_DRAFT,
+                'created_by' => $actor->id,
+            ]);
+        });
+
+        app(ContentVersionService::class)->prepareDraftCandidate($draft, $actor);
+
+        return $draft->fresh();
+    }
+
     /**
      * Tạo một record ContentUpdate ở trạng thái draft (mặc định) hoặc pending.
      */
@@ -95,6 +165,7 @@ class ContentUpdateService
             $locked = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $this->assertDraft($locked, 'Thay đổi đã được gửi duyệt và không thể xóa.');
             $payload = $locked->payload ?? [];
+            app(ContentVersionService::class)->discardDraftCandidates($locked);
             $locked->delete();
 
             return $payload;

@@ -8,8 +8,10 @@ use App\Jobs\ConvertVideoToHLS;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\Lesson;
+use App\Models\LessonVersion;
 use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -51,8 +53,27 @@ class S3MultipartUploadController extends Controller
         $contentType = $validated['content_type'] ?: 'video/'.($extension === 'mov' ? 'quicktime' : $extension);
         $lessonId = $validated['lesson_id'] ?? null;
 
+        $lesson = $lessonId
+            ? Lesson::query()->where('course_id', $course->id)->find($lessonId)
+            : null;
+        if ($lessonId && ! $lesson) {
+            throw ValidationException::withMessages(['lesson_id' => 'Bài học không thuộc khóa học này.']);
+        }
+
+        $contentUpdate = null;
+        $candidate = null;
+        if ($course->isPublished() && $lesson) {
+            $contentUpdate = app(ContentUpdateService::class)->ensureLessonUpdateDraft($course, $lesson, $request->user());
+            $candidate = LessonVersion::query()
+                ->where('content_update_id', $contentUpdate->id)
+                ->where('lesson_id', $lesson->id)
+                ->firstOrFail();
+        }
+
         // Sinh hoặc sử dụng S3 object key bảo mật theo cấu trúc quy định
-        $key = $validated['key'] ?? $this->s3Service->generateVideoObjectKey($course->id, $lessonId, $filename);
+        $key = $validated['key'] ?? ($candidate
+            ? $this->s3Service->generateDraftVideoObjectKey($course->id, $lesson->id, $contentUpdate->id, $candidate->version_number, $filename)
+            : $this->s3Service->generateVideoObjectKey($course->id, $lessonId, $filename));
         if (! empty($validated['key'])) {
             $this->validateKeyPrefix($course, $key);
         }
@@ -60,10 +81,21 @@ class S3MultipartUploadController extends Controller
         try {
             $uploadId = $this->s3Service->createMultipartUpload($key, $contentType);
 
+            if ($contentUpdate && $candidate) {
+                $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, [
+                    'original_video_key' => $key,
+                    'upload_status' => 'pending',
+                    'processing_status' => 'pending',
+                ]);
+                app(ContentVersionService::class)->prepareDraftCandidate($contentUpdate, $request->user());
+            }
+
             return response()->json([
                 'uploadId' => $uploadId,
                 'key' => $key,
                 'bucket' => $this->s3Service->getBucket(),
+                'contentUpdateId' => $contentUpdate?->id,
+                'versionNumber' => $candidate?->version_number,
             ]);
         } catch (Throwable $e) {
             Log::error('S3 multipart upload initialization failed.', [
@@ -170,6 +202,7 @@ class S3MultipartUploadController extends Controller
             'parts.*.ETag' => ['required', 'string'],
             'duration' => ['nullable', 'numeric', 'min:0'],
             'lesson_id' => ['nullable', 'integer'],
+            'content_update_id' => ['nullable', 'integer'],
         ]);
 
         $key = $validated['key'];
@@ -178,38 +211,56 @@ class S3MultipartUploadController extends Controller
         $this->validateKeyPrefix($course, $key);
 
         try {
-            $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
-
-            // Kích hoạt ConvertVideoToHLS nếu lesson đã được tạo/lưu trong DB
-            $lesson = null;
-            if ($lessonId) {
-                $lesson = Lesson::where('course_id', $course->id)->where('id', $lessonId)->first();
-            }
+            // Resolve and validate the immutable draft identity before S3 is
+            // completed. A rejected request must not leave an orphaned object.
+            $lesson = $lessonId
+                ? Lesson::query()->where('course_id', $course->id)->find($lessonId)
+                : null;
             if (! $lesson) {
                 $lesson = Lesson::where('course_id', $course->id)
                     ->where('original_video_key', $key)
                     ->first();
             }
 
-            $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
-                ->where('course_id', $course->id)
-                ->where('status', ContentUpdate::STATUS_DRAFT)
-                ->where(function ($q) use ($key, $lessonId) {
-                    $q->whereJsonContains('payload->original_video_key', $key);
-                    if ($lessonId) {
-                        $q->orWhere('entity_id', $lessonId);
-                    }
-                })
-                ->latest()
-                ->first();
-
+            $contentUpdate = null;
+            $candidate = null;
             if ($course->isPublished()) {
-                if (! $contentUpdate) {
-                    return response()->json([
-                        'message' => 'Video của khóa học đã xuất bản phải được lưu qua bản cập nhật nháp trước khi xử lý.',
-                    ], 422);
+                if (! $lesson) {
+                    throw ValidationException::withMessages([
+                        'lesson_id' => 'Hãy lưu bài học trước khi tải video cho khóa học đã xuất bản.',
+                    ]);
                 }
 
+                $requestedUpdateId = (int) ($validated['content_update_id'] ?? 0);
+                $contentUpdate = $requestedUpdateId
+                    ? ContentUpdate::query()
+                        ->whereKey($requestedUpdateId)
+                        ->where('course_id', $course->id)
+                        ->where('type', ContentUpdate::TYPE_LESSON)
+                        ->where('action', ContentUpdate::ACTION_UPDATE)
+                        ->where('entity_id', $lesson->id)
+                        ->where('created_by', $request->user()->id)
+                        ->where('status', ContentUpdate::STATUS_DRAFT)
+                        ->first()
+                    : null;
+                $contentUpdate ??= app(ContentUpdateService::class)->ensureLessonUpdateDraft($course, $lesson, $request->user());
+                $candidate = LessonVersion::query()
+                    ->where('content_update_id', $contentUpdate->id)
+                    ->where('lesson_id', $lesson->id)
+                    ->where('status', LessonVersion::STATUS_DRAFT)
+                    ->firstOrFail();
+
+                $expectedPrefix = "originals/courses/{$course->id}/lessons/{$lesson->id}/content-updates/{$contentUpdate->id}/versions/v{$candidate->version_number}/";
+                if (! Str::startsWith($key, $expectedPrefix)) {
+                    throw ValidationException::withMessages([
+                        'key' => 'Video không thuộc đúng bản nháp bài học đang chỉnh sửa.',
+                    ]);
+                }
+            }
+
+            $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
+
+            if ($contentUpdate && $candidate) {
                 $payload = $contentUpdate->payload ?? [];
                 $changes = [
                     'original_video_key' => $key,
@@ -220,6 +271,7 @@ class S3MultipartUploadController extends Controller
                     $changes['duration_seconds'] = $duration;
                 }
                 $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, $changes);
+                app(ContentVersionService::class)->prepareDraftCandidate($contentUpdate, $request->user());
                 Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
                 ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
 
@@ -227,6 +279,8 @@ class S3MultipartUploadController extends Controller
                     'status' => 'success',
                     'key' => $key,
                     'location' => $result['location'] ?? null,
+                    'contentUpdateId' => $contentUpdate->id,
+                    'versionNumber' => $candidate->version_number,
                 ]);
             }
 
@@ -243,28 +297,6 @@ class S3MultipartUploadController extends Controller
                 $lesson->update($lessonUpdateData);
                 Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for Lesson', ['lesson_id' => $lesson->id, 'key' => $key, 'duration' => $duration]);
                 ConvertVideoToHLS::dispatch($lesson);
-            }
-
-            // Kích hoạt ConvertContentUpdateVideoToHLS nếu có ContentUpdate draft tương ứng
-            $contentUpdate = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
-                ->where('course_id', $course->id)
-                ->where('status', ContentUpdate::STATUS_DRAFT)
-                ->where(function ($q) use ($key, $lessonId) {
-                    $q->whereJsonContains('payload->original_video_key', $key);
-                    if ($lessonId) {
-                        $q->orWhere('entity_id', $lessonId);
-                    }
-                })
-                ->latest()
-                ->first();
-
-            if ($contentUpdate) {
-                $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, [
-                    'original_video_key' => $key,
-                    'upload_status' => 'uploaded',
-                ]);
-                Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'key' => $key]);
-                ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
             }
 
             return response()->json([

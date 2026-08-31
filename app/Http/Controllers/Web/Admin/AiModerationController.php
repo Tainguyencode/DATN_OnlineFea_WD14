@@ -46,7 +46,7 @@ class AiModerationController extends Controller
             // Check if there is a pending or draft ContentUpdate for this lesson override
             $pendingUpdate = ContentUpdate::where('entity_id', $lesson->id)
                 ->where('type', ContentUpdate::TYPE_LESSON)
-                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
                 ->latest()
                 ->first();
 
@@ -145,6 +145,7 @@ class AiModerationController extends Controller
 
         $isUpdate = str_starts_with((string) $lessonId, 'update_les_');
         $rawId = $isUpdate ? str_replace('update_les_', '', $lessonId) : $lessonId;
+        $updatePayload = $isUpdate ? (ContentUpdate::query()->find($rawId)?->payload ?? []) : [];
 
         $cacheKey = 'hls_signed_playlist_'.$lessonId;
         $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
@@ -162,11 +163,12 @@ class AiModerationController extends Controller
 
         // 1. Kiểm tra S3
         if ($useS3) {
+            $s3ManifestKey = $updatePayload['hls_manifest_key'] ?? null;
             $s3PlaylistKey = $isUpdate
-                ? 'hls/updates/'.$rawId.'/playlist.m3u8'
+                ? ($s3ManifestKey ? dirname($s3ManifestKey).'/playlist.m3u8' : 'hls/updates/'.$rawId.'/playlist.m3u8')
                 : 'hls/lessons/'.$rawId.'/playlist.m3u8';
             $s3MasterKey = $isUpdate
-                ? 'hls/updates/'.$rawId.'/master.m3u8'
+                ? ($s3ManifestKey ?: 'hls/updates/'.$rawId.'/master.m3u8')
                 : 'hls/lessons/'.$rawId.'/master.m3u8';
 
             $targetKey = null;
@@ -220,7 +222,7 @@ class AiModerationController extends Controller
         // 2. Fallback: Local
         if ($content === null) {
             $localDir = $isUpdate
-                ? 'lesson-hls/update_'.$rawId
+                ? (filled($updatePayload['video_path'] ?? null) ? dirname($updatePayload['video_path']) : 'lesson-hls/update_'.$rawId)
                 : 'lesson-hls/'.$rawId;
             $localPlaylist = $localDir.'/playlist.m3u8';
             $localMaster = $localDir.'/master.m3u8';
@@ -250,12 +252,13 @@ class AiModerationController extends Controller
     {
         $isUpdate = str_starts_with((string) $lessonId, 'update_les_');
         $rawId = $isUpdate ? str_replace('update_les_', '', $lessonId) : $lessonId;
+        $updatePayload = $isUpdate ? (ContentUpdate::query()->find($rawId)?->payload ?? []) : [];
 
         // 1. Kiểm tra S3 -> Redirect trực tiếp đến S3 Signed URL thay vì proxy qua PHP
         $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
         if ($useS3) {
             $s3SegmentKey = $isUpdate
-                ? 'hls/updates/'.$rawId.'/'.$segment
+                ? (filled($updatePayload['hls_manifest_key'] ?? null) ? dirname($updatePayload['hls_manifest_key']).'/'.$segment : 'hls/updates/'.$rawId.'/'.$segment)
                 : 'hls/lessons/'.$rawId.'/'.$segment;
 
             if (Storage::disk('s3')->exists($s3SegmentKey)) {
@@ -267,7 +270,7 @@ class AiModerationController extends Controller
 
         // 2. Fallback: Local
         $localSegment = $isUpdate
-            ? 'lesson-hls/update_'.$rawId.'/'.$segment
+            ? (filled($updatePayload['video_path'] ?? null) ? dirname($updatePayload['video_path']).'/'.$segment : 'lesson-hls/update_'.$rawId.'/'.$segment)
             : 'lesson-hls/'.$rawId.'/'.$segment;
 
         if (Storage::disk('local')->exists($localSegment)) {

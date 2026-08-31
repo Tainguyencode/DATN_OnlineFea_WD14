@@ -3,6 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\ContentUpdate;
+use App\Models\LessonVersion;
+use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use Aws\Command;
 use Aws\S3\S3Client;
 use Aws\S3\Transfer;
@@ -32,10 +35,20 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
         public ContentUpdate $contentUpdate
     ) {}
 
-    public function handle(): void
+    public function handle(ContentUpdateService $updates, ContentVersionService $versions): void
     {
         $startTime = microtime(true);
         $updateId = $this->contentUpdate->id;
+        $this->contentUpdate = ContentUpdate::query()->findOrFail($updateId);
+        if (! $this->contentUpdate->isDraft()) {
+            throw new \RuntimeException("ContentUpdate {$updateId} is no longer an editable draft.");
+        }
+
+        $candidate = LessonVersion::query()
+            ->where('content_update_id', $updateId)
+            ->where('lesson_id', $this->contentUpdate->entity_id)
+            ->where('status', LessonVersion::STATUS_DRAFT)
+            ->firstOrFail();
         $payload = $this->contentUpdate->payload ?? [];
         $s3OriginalKey = $payload['original_video_key'] ?? null;
         $videoPath = $payload['video_path'] ?? null;
@@ -55,8 +68,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
         }
 
         // Đánh dấu payload đang xử lý
-        $payload['processing_status'] = 'processing';
-        $this->contentUpdate->update(['payload' => $payload]);
+        $this->contentUpdate = $updates->updateDraft($this->contentUpdate, ['processing_status' => 'processing']);
 
         $tmpDir = storage_path('app/tmp_ffmpeg/update_'.$updateId.'_'.Str::random(8));
         File::makeDirectory($tmpDir, 0755, true, true);
@@ -132,7 +144,13 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             ]);
 
             // ─── [BƯỚC 5] UPLOAD HLS ───
-            $s3HlsDir = 'hls/updates/'.$updateId;
+            $s3HlsDir = sprintf(
+                'hls/courses/%s/lessons/%s/content-updates/%s/versions/v%s',
+                $this->contentUpdate->course_id,
+                $this->contentUpdate->entity_id,
+                $updateId,
+                $candidate->version_number
+            );
             $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
 
             Log::info("[ConvertContentUpdateVideoToHLS] [UPLOAD HLS] Uploading {$segmentCount} files to destination", [
@@ -178,7 +196,8 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             }
 
             // Sync sang local storage mirror
-            $localMirrorDir = Storage::disk('local')->path('lesson-hls/update_'.$updateId);
+            $localRelativeDir = "lesson-hls/content-updates/{$updateId}/lesson-versions/{$candidate->id}";
+            $localMirrorDir = Storage::disk('local')->path($localRelativeDir);
             File::makeDirectory($localMirrorDir, 0755, true, true);
             File::copyDirectory($hlsOutDir, $localMirrorDir);
 
@@ -190,7 +209,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
             // ─── [BƯỚC 6] SAVE DATABASE ───
             $payload['processing_status'] = 'completed';
             $payload['upload_status'] = 'uploaded';
-            $payload['video_path'] = 'lesson-hls/update_'.$updateId.'/playlist.m3u8';
+            $payload['video_path'] = $localRelativeDir.'/playlist.m3u8';
 
             // Trích xuất thời lượng video
             try {
@@ -207,9 +226,11 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                 $payload['hls_manifest_key'] = $s3HlsDir.'/master.m3u8';
             }
 
-            $this->contentUpdate->update([
-                'payload' => $payload,
-            ]);
+            $this->contentUpdate = $updates->updateDraft($this->contentUpdate, $payload);
+            $versions->prepareDraftCandidate(
+                $this->contentUpdate,
+                $this->contentUpdate->creator()->firstOrFail()
+            );
 
             Log::info('[ConvertContentUpdateVideoToHLS] [SAVE DATABASE] Database payload updated successfully', [
                 'update_id' => $updateId,
@@ -231,8 +252,10 @@ class ConvertContentUpdateVideoToHLS implements ShouldQueue
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            $payload['processing_status'] = 'failed';
-            $this->contentUpdate->update(['payload' => $payload]);
+            $freshUpdate = ContentUpdate::query()->find($updateId);
+            if ($freshUpdate?->isDraft()) {
+                $updates->updateDraft($freshUpdate, ['processing_status' => 'failed']);
+            }
 
             throw $e;
         } finally {

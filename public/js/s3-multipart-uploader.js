@@ -24,6 +24,8 @@ class S3MultipartUploader {
     constructor(options = {}) {
         this.courseId = options.courseId;
         this.lessonId = options.lessonId || null;
+        this.contentUpdateId = options.contentUpdateId || null;
+        this.draftVersionNumber = options.draftVersionNumber || null;
         this.createUrl = options.createUrl;
         this.signPartUrl = options.signPartUrl;
         this.batchSignUrl = options.batchSignUrl;
@@ -97,6 +99,7 @@ class S3MultipartUploader {
                     content_type: file.type || 'video/mp4',
                     file_size: file.size,
                     lesson_id: this.lessonId,
+                    content_update_id: this.contentUpdateId,
                 }),
             });
 
@@ -112,6 +115,8 @@ class S3MultipartUploader {
             const initData = await initResponse.json();
             this.uploadId = initData.uploadId;
             this.s3Key = initData.key;
+            this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
+            this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
 
             if (typeof this.onInit === 'function') {
                 this.onInit(initData);
@@ -160,6 +165,7 @@ class S3MultipartUploader {
                     })),
                     duration: duration,
                     lesson_id: this.lessonId || null,
+                    content_update_id: this.contentUpdateId || null,
                 }),
             });
 
@@ -183,6 +189,8 @@ class S3MultipartUploader {
                 mime: file.type || 'video/mp4',
                 duration: duration,
                 location: completeData.location,
+                contentUpdateId: completeData.contentUpdateId || this.contentUpdateId,
+                versionNumber: completeData.versionNumber || this.draftVersionNumber,
             });
 
         } catch (error) {
@@ -495,6 +503,8 @@ class CourseUploadQueueManager {
         const uploader = new S3MultipartUploader({
             courseId: next.config.courseId,
             lessonId: next.config.lessonId,
+            contentUpdateId: next.config.contentUpdateId,
+            draftVersionNumber: next.config.draftVersionNumber,
             createUrl: next.config.createUrl,
             signPartUrl: next.config.signPartUrl,
             completeUrl: next.config.completeUrl,
@@ -503,6 +513,8 @@ class CourseUploadQueueManager {
             onInit: (initData) => {
                 next.key = initData.key;
                 next.uploadId = initData.uploadId;
+                next.config.contentUpdateId = initData.contentUpdateId || next.config.contentUpdateId;
+                next.config.draftVersionNumber = initData.versionNumber || next.config.draftVersionNumber;
                 if (typeof next.config.onInit === 'function') {
                     next.config.onInit(initData);
                 }
@@ -672,6 +684,8 @@ function createLessonFormState(config) {
         videoPath: config.videoPath || '',
         courseId: config.courseId,
         lessonId: config.lessonId || null,
+        contentUpdateId: config.contentUpdateId || null,
+        draftVersionNumber: config.draftVersionNumber || null,
         createUrl: config.createUrl,
         signPartUrl: config.signPartUrl,
         completeUrl: config.completeUrl,
@@ -731,6 +745,8 @@ function createLessonFormState(config) {
                 key: preKey,
                 courseId: this.courseId,
                 lessonId: this.lessonId,
+                contentUpdateId: this.contentUpdateId,
+                draftVersionNumber: this.draftVersionNumber,
                 createUrl: this.createUrl,
                 signPartUrl: this.signPartUrl,
                 completeUrl: this.completeUrl,
@@ -738,6 +754,8 @@ function createLessonFormState(config) {
                 onInit: (initData) => {
                     if (this.currentQueueId === queueItem.id) {
                         this.s3Key = initData.key;
+                        this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
+                        this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
                     }
                 },
                 onProgress: (prog) => {
@@ -758,6 +776,8 @@ function createLessonFormState(config) {
                         this.videoOriginalName = data.filename;
                         this.videoSize = data.size;
                         this.videoMime = data.mime;
+                        this.contentUpdateId = data.contentUpdateId || this.contentUpdateId;
+                        this.draftVersionNumber = data.versionNumber || this.draftVersionNumber;
 
                         if (data.duration && data.duration > 0 && formElement) {
                             const durationInput = formElement.querySelector("input[name='duration']");
@@ -849,6 +869,8 @@ function createLessonFormState(config) {
                         const resData = await response.json();
                         const lessonId = resData.lesson_id || (resData.lesson ? resData.lesson.id : this.lessonId);
                         const lessonTitle = resData.title || (resData.lesson ? resData.lesson.title : '');
+                        this.contentUpdateId = resData.content_update_id || this.contentUpdateId;
+                        this.draftVersionNumber = resData.version_number || this.draftVersionNumber;
 
                         // 1. Đồng bộ và duy trì hàng chờ CourseUploadQueue cho cả Tạo mới và Sửa bài học
                         if (this.currentQueueId) {

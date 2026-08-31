@@ -65,13 +65,15 @@ class CourseReviewService
                 ->get();
 
             foreach ($draftUpdates as $draftUpdate) {
+                if ($isAlreadyPublished) {
+                    // Finalize the mutable authoring candidate before crossing
+                    // the immutable draft -> pending boundary.
+                    app(ContentVersionService::class)->prepareDraftCandidate($draftUpdate, $instructor);
+                }
                 $draftUpdate->update([
                     'status' => ContentUpdate::STATUS_PENDING,
                     'submitted_at' => now(),
                 ]);
-                if ($isAlreadyPublished) {
-                    app(ContentVersionService::class)->materializeCandidate($draftUpdate, $instructor);
-                }
             }
 
             $noticeMsg = $isAlreadyPublished

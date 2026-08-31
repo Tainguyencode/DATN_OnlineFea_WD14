@@ -35,7 +35,9 @@
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <a href="{{ route($routePrefix.'.show', [$course, $item['type'], $item['version']->id]) }}" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Xem snapshot</a>
-                        <a href="{{ route($routePrefix.'.compare', [$course, $item['type'], $item['version']->id]) }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-700">So sánh hiện tại</a>
+                        @if($item['comparison_available'])
+                            <a href="{{ route($routePrefix.'.compare', [$course, $item['type'], $item['version']->id]) }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-700">So sánh phiên bản</a>
+                        @endif
                         @if(!$isAdmin && $item['rollback_eligible'])
                             <a href="{{ route('instructor.courses.versions.rollback.confirm', [$course, $item['type'], $item['version']->id]) }}" class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white">Khôi phục từ phiên bản này</a>
                         @endif

@@ -49,7 +49,9 @@
                     if (!$lessonUpdate && isset($lesson->id)) {
                         $lessonUpdate = \App\Models\ContentUpdate::where('course_id', $course->id)
                             ->where('type', \App\Models\ContentUpdate::TYPE_LESSON)
+                            ->where('action', \App\Models\ContentUpdate::ACTION_UPDATE)
                             ->where('entity_id', $lesson->id)
+                            ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING])
                             ->latest()
                             ->first();
                     }
@@ -87,7 +89,7 @@
                 @endif
                 @if(($lessonVersionContext['proposed'] ?? null) !== null)
                     <span class="rounded-full border {{ $lessonUpdate?->isRejected() ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200 bg-blue-50 text-blue-800' }} px-2.5 py-0.5 text-xs font-bold">
-                        {{ $lessonUpdate?->isRejected() ? 'V'.$lessonVersionContext['proposed'].' — Bị từ chối' : 'Đề xuất: V'.$lessonVersionContext['proposed'].' — '.($lessonUpdate?->isPending() ? 'Chờ duyệt' : 'Nháp') }}
+                        {{ $lessonUpdate?->isRejected() ? 'V'.$lessonVersionContext['proposed'].' — Bị từ chối' : ($lessonUpdate?->isPending() ? 'V'.$lessonVersionContext['proposed'].' — Chờ duyệt' : 'Đang chỉnh sửa bản nháp V'.$lessonVersionContext['proposed']) }}
                     </span>
                 @endif
                 @if($lesson->is_preview)
@@ -293,6 +295,7 @@
                         'errorBag' => $errorBagKey,
                         'lessonTypes' => $lessonTypes,
                         'lessonStatuses' => $lessonStatuses,
+                        'lessonUpdate' => $lessonUpdate,
                         'submitLabel' => 'Lưu thay đổi',
                     ])
                 </div>

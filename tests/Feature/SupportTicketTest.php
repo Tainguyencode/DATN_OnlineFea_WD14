@@ -16,18 +16,33 @@ use App\Services\SupportTicketService;
 use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class SupportTicketTest extends TestCase
 {
     use RefreshDatabase;
 
+    private string $localStorageRoot;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->localStorageRoot = storage_path('framework/testing/support-ticket/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
         app(RoleSyncService::class)->ensurePrimaryRolesExist();
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory($this->localStorageRoot);
+
+        parent::tearDown();
     }
 
     public function test_student_can_create_ticket_without_duplicating_initial_message(): void
@@ -197,7 +212,6 @@ class SupportTicketTest extends TestCase
 
     public function test_attachment_stores_mime_type_file_size_on_private_disk(): void
     {
-        Storage::fake('local');
         Notification::fake();
 
         $student = $this->makeUser('student');
@@ -221,13 +235,11 @@ class SupportTicketTest extends TestCase
         $this->assertArrayHasKey('file_size', $attachment->getAttributes());
         $this->assertArrayNotHasKey('mime', $attachment->getAttributes());
         $this->assertArrayNotHasKey('size', $attachment->getAttributes());
-        Storage::disk('local')->assertExists($attachment->file_path);
+        $this->assertTrue(Storage::disk('local')->exists($attachment->file_path));
     }
 
     public function test_email_failure_does_not_rollback_ticket_create(): void
     {
-        Storage::fake('local');
-
         $student = $this->makeUser('student');
         $this->makeUser('admin');
 
@@ -246,8 +258,6 @@ class SupportTicketTest extends TestCase
 
     public function test_other_user_cannot_download_attachment(): void
     {
-        Storage::fake('local');
-
         $owner = $this->makeUser('student');
         $other = $this->makeUser('student');
         $ticket = app(SupportTicketService::class)->create($owner, [
@@ -267,8 +277,6 @@ class SupportTicketTest extends TestCase
 
     public function test_owner_can_download_attachment_and_missing_file_returns_404(): void
     {
-        Storage::fake('local');
-
         $owner = $this->makeUser('student');
         $ticket = app(SupportTicketService::class)->create($owner, [
             'subject' => 'Download ok',
