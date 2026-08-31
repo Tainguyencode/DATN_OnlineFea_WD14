@@ -3,7 +3,6 @@
 namespace Database\Seeders\Demo;
 
 use App\Models\Certificate;
-use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
@@ -13,8 +12,6 @@ use App\Models\Payment;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\Review;
-use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class DemoInteractionSeeder

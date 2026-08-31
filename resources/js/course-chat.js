@@ -28,14 +28,16 @@ function appendChatMessage(form, message, result = {}) {
             }
         }
     }
-    if (!container || document.getElementById(`msg-reply-${message.id}`)) return;
+    const kind = message.kind || result.kind || 'reply';
+    const messageId = `${kind === 'discussion' ? 'msg-disc' : 'msg-reply'}-${message.id}`;
+    if (!container || document.getElementById(messageId)) return;
     const root = form.closest('[data-course-chat-root]');
     const mine = Number(message.user_id) === Number(root?.dataset.currentUserId);
     const instructorPage = container.id === 'chat-messages';
     const color = instructorPage ? 'bg-emerald-600' : 'bg-[#0056D2]';
     const time = new Date(message.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     const row = document.createElement('div');
-    row.id = `msg-reply-${message.id}`;
+    row.id = messageId;
     row.className = `group flex items-end gap-2.5 ${mine ? 'justify-end' : 'justify-start'} rounded-2xl p-1.5`;
     const avatar = `<div class="h-8 w-8 shrink-0 rounded-full ${mine ? color : 'bg-slate-700'} text-white font-bold flex items-center justify-center text-xs">${escapeChat((message.user?.name || 'U')[0].toUpperCase())}</div>`;
     const attachment = message.attachment_url

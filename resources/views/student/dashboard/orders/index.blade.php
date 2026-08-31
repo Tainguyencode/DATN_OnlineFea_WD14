@@ -1,4 +1,5 @@
 <x-student-layout title="Đơn hàng" page-title="Lịch sử đơn hàng" breadcrumb="Tra cứu duy nhất các giao dịch khóa học của bạn.">
+    <div data-refresh-on-history>
     @include('student.dashboard.orders.partials.filter')
 
     @if($orders->isEmpty())
@@ -11,4 +12,5 @@
         </div>
         <x-student.dashboard.pagination :paginator="$orders" />
     @endif
+    </div>
 </x-student-layout>

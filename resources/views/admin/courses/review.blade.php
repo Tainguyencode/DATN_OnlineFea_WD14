@@ -1010,17 +1010,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function adminSeekAndPlay(video, seconds) {
         seconds = Math.max(0, parseFloat(seconds) || 0);
 
-        var seekableInfo = 'none';
-        if (video.seekable && video.seekable.length > 0) {
-            seekableInfo = video.seekable.start(0) + 's – ' + video.seekable.end(0) + 's';
-        }
-        console.log('[AdminSeek] target=' + seconds + 's | readyState=' + video.readyState
-            + ' | duration=' + video.duration + ' | seekable=' + seekableInfo);
-
         function doSeek() {
             video.pause();
             video.currentTime = seconds;
-            console.log('[AdminSeek] currentTime sau set:', video.currentTime);
 
             var done = false;
 
@@ -1036,7 +1028,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 done = true;
                 clearTimeout(fallback);
                 video.removeEventListener('seeked', onSeeked);
-                console.log('[AdminSeek] seeked OK @ ' + video.currentTime);
                 video.play().catch(function () {});
             }, { once: true });
         }

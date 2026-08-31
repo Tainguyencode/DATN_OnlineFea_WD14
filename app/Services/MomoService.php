@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Payment;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -19,19 +18,9 @@ class MomoService
         $amount = (int) round((float) $order->total_amount);
         if ($amount <= 0) throw new RuntimeException('Số tiền thanh toán MoMo phải lớn hơn 0.');
 
-        $payment = DB::transaction(function () use ($order): Payment {
-            $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
-            $payment = $locked->payment()->lockForUpdate()->first() ?? new Payment(['order_id' => $locked->id]);
-            $reuse = $payment->exists && $payment->gateway === 'momo' && $payment->status === 'pending'
-                && filled($payment->gateway_order_code) && is_string(data_get($payment->gateway_response, 'payUrl'));
-            $payment->fill([
-                'gateway' => 'momo',
-                'gateway_order_code' => $reuse ? $payment->gateway_order_code : $this->newOrderId($locked),
-                'transaction_id' => null, 'amount' => $locked->total_amount, 'status' => 'pending',
-                'gateway_response' => $reuse ? $payment->gateway_response : null, 'paid_at' => null,
-            ])->save();
-            return $payment->fresh();
-        });
+        $payment = $order->prepareGatewayPayment('momo', $this->newOrderId($order));
+        $order->refresh();
+        $amount = (int) round((float) $payment->amount);
 
         if (is_string(data_get($payment->gateway_response, 'payUrl'))) return $payment->gateway_response['payUrl'];
 
