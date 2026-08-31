@@ -95,8 +95,15 @@ class InstructorCourseCategoryAccess
 
     public function canManageCourse(User $instructor, Course $course): bool
     {
-        return $course->isOwnedBy($instructor)
-            && $this->canTeachCategory($instructor, (int) $course->category_id);
+        if (! $course->isOwnedBy($instructor)) {
+            return false;
+        }
+
+        if (empty($course->category_id)) {
+            return true;
+        }
+
+        return $this->canTeachCategory($instructor, (int) $course->category_id);
     }
 
     /**

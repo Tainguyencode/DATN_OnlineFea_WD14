@@ -344,6 +344,7 @@
                             <th class="px-4 py-4 w-16 text-center">STT</th>
                             <th class="px-6 py-4 font-black">Giảng viên</th>
                             <th class="px-6 py-4 font-black">Chuyên môn</th>
+                            <th class="px-6 py-4 font-black">Minh chứng</th>
                             <th class="px-6 py-4 font-black">Kinh nghiệm giảng dạy</th>
                             <th class="px-6 py-4 font-black">Trạng thái</th>
                             <th class="px-6 py-4 font-black">Ngày đăng ký</th>
@@ -406,6 +407,29 @@
                                             </span>
                                         @endif
                                     </div>
+                                </td>
+
+                                {{-- Minh chứng (Certificate Progress) --}}
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @php
+                                        $progress = $app->certificate_progress ?? null;
+                                        $reqCount = $progress['required_count'] ?? 0;
+                                        $completedCount = $progress['completed_count'] ?? 0;
+                                        $pct = $progress['percentage'] ?? null;
+                                    @endphp
+                                    @if($reqCount > 0)
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                <span>{{ $completedCount }}/{{ $reqCount }}</span>
+                                                <span>{{ $pct !== null ? $pct.'%' : '0%' }}</span>
+                                            </div>
+                                            <div class="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                                <div class="h-full rounded-full transition-all duration-300 {{ ($pct ?? 0) >= 100 ? 'bg-emerald-500' : 'bg-blue-600' }}" style="width: {{ $pct ?? 0 }}%"></div>
+                                            </div>
+                                        </div>
+                                    @else
+                                        <span class="text-xs text-slate-400">Không bắt buộc</span>
+                                    @endif
                                 </td>
 
                                 {{-- Kinh nghiệm giảng dạy --}}

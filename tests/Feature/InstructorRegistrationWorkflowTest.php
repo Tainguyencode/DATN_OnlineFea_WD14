@@ -60,7 +60,11 @@ class InstructorRegistrationWorkflowTest extends TestCase
         $category = Category::create([
             'name' => 'Lập trình',
             'slug' => 'lap-trinh',
-            'is_active' => true,
+            'status' => true,
+        ]);
+
+        $user->instructorProfile()->create([
+            'category_id' => $category->id,
         ]);
 
         $response = $this->actingAs($user)

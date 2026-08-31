@@ -137,7 +137,7 @@
                                     @if(!$canSubmitCourse)
                                         title="{{ $hasVideoReadinessBlockers ? 'Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: '.$videoBlockerTitle : $submissionCheck->summaryMessage() }}"
                                     @endif
-                                    class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black transition {{ !$canSubmitCourse ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600' : 'cursor-pointer bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700' }}">
+                                    class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black transition {{ $hasVideoReadinessBlockers || !$canSubmitCourse ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600' : 'cursor-pointer bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700' }}">
                                 {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
                             </button>
                         </form>
@@ -145,27 +145,10 @@
                 </div>
                 @if(! $canSubmitCourse)
                     <p class="mt-3 text-center text-xs leading-5 text-slate-500 dark:text-slate-400">Hoàn thành các mục còn thiếu để gửi khóa học.</p>
-=======
-            <div class="shrink-0 flex items-center gap-2">
-                @if($course->canBeSubmittedForReview())
-                    <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" id="curriculumSubmitForm">
-                        @csrf
-                        <button type="button" onclick="openCurriculumCopyrightModal()"
-                                id="curriculum-submit-review-btn"
-                                {{ $hasVideoReadinessBlockers ? 'disabled' : '' }}
-                                @if($hasVideoReadinessBlockers)
-                                    title="Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: {{ $videoBlockerTitle }}."
-                                @endif
-                                class="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 {{ $hasVideoReadinessBlockers ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' }}">
-                            {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
-                        </button>
-                    </form>
->>>>>>> 272ad29 (Edit Course category, AI quét Category, edit quản lý giảng viên admin)
                 @endif
             </section>
         </aside>
 
-<<<<<<< HEAD
         <main class="order-1 min-w-0 space-y-4">
             <section class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -191,48 +174,41 @@
                     <button type="button" onclick="const panel=document.getElementById('add-course-section'); panel.classList.toggle('hidden'); if(!panel.classList.contains('hidden')) panel.scrollIntoView({behavior:'smooth',block:'center'});" class="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700">+ Thêm chương</button>
                 </div>
             </section>
-=======
-    <div id="curriculumCopyrightModal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="curriculum-copyright-title">
-        <div class="flex min-h-screen items-end justify-center px-4 pb-20 pt-4 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" aria-hidden="true" onclick="closeCurriculumCopyrightModal()"></div>
-            <span class="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-            <div class="relative inline-block w-full max-w-lg transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-2xl sm:my-8 sm:align-middle">
-                <div class="bg-white px-6 pb-4 pt-6 sm:p-6 sm:pb-4">
-                    <div class="sm:flex sm:items-start">
-                        <div class="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:mx-0">
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                        </div>
-                        <div class="mt-3 w-full text-center sm:ml-4 sm:mt-0 sm:text-left">
-                            <h3 id="curriculum-copyright-title" class="text-base font-bold leading-6 text-slate-900">CAM KẾT BẢN QUYỀN</h3>
-                            <div class="mt-4 max-h-60 space-y-3 overflow-y-auto rounded-xl border border-slate-200/60 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
-                                <p class="font-medium text-slate-700">Tôi xác nhận rằng toàn bộ video, hình ảnh, âm thanh, tài liệu và các nội dung khác trong khóa học là do tôi sở hữu hoặc tôi có đầy đủ quyền sử dụng theo quy định của pháp luật.</p>
-                                <p>Tôi chịu hoàn toàn trách nhiệm đối với mọi khiếu nại, tranh chấp hoặc vi phạm liên quan đến quyền sở hữu trí tuệ và bản quyền phát sinh từ khóa học này.</p>
-                                <p>Tôi hiểu rằng Fea Learning chỉ cung cấp nền tảng đăng tải khóa học. Nếu phát hiện hoặc nhận được khiếu nại hợp lệ về bản quyền, nền tảng có quyền từ chối duyệt, tạm khóa hoặc gỡ bỏ khóa học.</p>
+
+            <div id="curriculumCopyrightModal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="curriculum-copyright-title">
+                <div class="flex min-h-screen items-end justify-center px-4 pb-20 pt-4 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" aria-hidden="true" onclick="closeCurriculumCopyrightModal()"></div>
+                    <span class="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                    <div class="relative inline-block w-full max-w-lg transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-2xl sm:my-8 sm:align-middle">
+                        <div class="bg-white px-6 pb-4 pt-6 sm:p-6 sm:pb-4">
+                            <div class="sm:flex sm:items-start">
+                                <div class="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:mx-0">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                </div>
+                                <div class="mt-3 w-full text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                    <h3 id="curriculum-copyright-title" class="text-base font-bold leading-6 text-slate-900">CAM KẾT BẢN QUYỀN</h3>
+                                    <div class="mt-4 max-h-60 space-y-3 overflow-y-auto rounded-xl border border-slate-200/60 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
+                                        <p class="font-medium text-slate-700">Tôi xác nhận rằng toàn bộ video, hình ảnh, âm thanh, tài liệu và các nội dung khác trong khóa học là do tôi sở hữu hoặc tôi có đầy đủ quyền sử dụng theo quy định của pháp luật.</p>
+                                        <p>Tôi chịu hoàn toàn trách nhiệm đối với mọi khiếu nại, tranh chấp hoặc vi phạm liên quan đến quyền sở hữu trí tuệ và bản quyền phát sinh từ khóa học này.</p>
+                                        <p>Tôi hiểu rằng Fea Learning chỉ cung cấp nền tảng đăng tải khóa học. Nếu phát hiện hoặc nhận được khiếu nại hợp lệ về bản quyền, nền tảng có quyền từ chối duyệt, tạm khóa hoặc gỡ bỏ khóa học.</p>
+                                    </div>
+                                    <form id="curriculumCopyrightSubmitForm" method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5">
+                                        @csrf
+                                        <label class="flex cursor-pointer items-start gap-3 text-sm">
+                                            <input id="curriculumCopyrightAgreement" name="copyright_agreed" type="checkbox" value="1" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                            <span class="font-semibold text-slate-700">Tôi đã đọc và đồng ý với cam kết bản quyền.</span>
+                                        </label>
+                                    </form>
+                                </div>
                             </div>
-                            <form id="curriculumCopyrightSubmitForm" method="POST" action="{{ route('instructor.courses.submit', $course) }}" class="mt-5">
-                                @csrf
-                                <label class="flex cursor-pointer items-start gap-3 text-sm">
-                                    <input id="curriculumCopyrightAgreement" name="copyright_agreed" type="checkbox" value="1" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                                    <span class="font-semibold text-slate-700">Tôi đã đọc và đồng ý với cam kết bản quyền.</span>
-                                </label>
-                            </form>
+                        </div>
+                        <div class="flex flex-col gap-2 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+                            <button type="button" onclick="closeCurriculumCopyrightModal()" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50">Hủy</button>
+                            <button type="button" id="curriculumCopyrightConfirm" onclick="submitCurriculumCopyrightForm()" disabled class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">Xác nhận gửi duyệt</button>
                         </div>
                     </div>
                 </div>
-                <div class="flex flex-col gap-2 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
-                    <button type="button" onclick="closeCurriculumCopyrightModal()" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50">Hủy</button>
-                    <button type="button" id="curriculumCopyrightConfirm" onclick="submitCurriculumCopyrightForm()" disabled class="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">Xác nhận gửi duyệt</button>
-                </div>
             </div>
-        </div>
-    </div>
-
-    @if(! $submissionCheck->passes())
-        <div class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs">
-            <p class="text-sm font-bold">Video đã sẵn sàng, nhưng khóa học vẫn chưa đủ điều kiện gửi duyệt.</p>
-            <p class="mt-1 text-xs leading-5">Hoàn tất các mục trong checklist bên dưới để gửi khóa học cho admin duyệt.</p>
-        </div>
->>>>>>> 272ad29 (Edit Course category, AI quét Category, edit quản lý giảng viên admin)
 
     <form id="add-course-section" method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="{{ $errors->hasBag('storeSection') ? '' : 'hidden' }} rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">

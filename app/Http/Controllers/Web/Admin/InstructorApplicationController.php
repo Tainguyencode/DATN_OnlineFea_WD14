@@ -71,15 +71,7 @@ class InstructorApplicationController extends Controller
             });
         }
 
-        // 3. Bộ lọc: Lọc theo chuyên ngành giảng dạy
-        if ($request->filled('category_id')) {
-            $categoryId = $request->query('category_id');
-            $query->whereHas('instructorProfile.teachingCategories', function ($q) use ($categoryId) {
-                $q->where('categories.id', $categoryId);
-            });
-        }
-
-        // 4. Bộ lọc: Lọc theo ngày đăng ký (users.created_at)
+        // 3. Bộ lọc: Lọc theo ngày đăng ký (users.created_at)
         if ($request->filled('date')) {
             $date = $request->query('date');
             $query->whereDate('created_at', $date);
