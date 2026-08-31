@@ -4,7 +4,6 @@ namespace Database\Seeders\Demo;
 
 use App\Models\Lesson;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
 

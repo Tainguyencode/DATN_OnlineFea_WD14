@@ -90,9 +90,6 @@ class AppServiceProvider extends ServiceProvider
 
             $user = Auth::user();
             $favoriteCourseCount = 0;
-            $isStudentDashboardHeader = $view->getName() === 'components.public.header'
-                && (bool) ($view->getData()['studentDashboard'] ?? false);
-            $isStudentPublicHeader = $view->getName() === 'components.public.header' && $user->isStudent();
             $isHeaderLayout = in_array($view->getName(), ['components.layouts.dashboard', 'components.public.header'], true);
             $needsCartCount = $isHeaderLayout;
             $studentCartCount = 0;

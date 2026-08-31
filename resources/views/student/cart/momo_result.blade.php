@@ -29,7 +29,7 @@
             </dl>
             <div class="mt-6 flex gap-3 border-t border-slate-100 pt-5">
                 @if($success)
-                    <a href="{{ route('student.dashboard') }}" class="flex-1 rounded-xl bg-pink-700 px-4 py-3 text-center text-xs font-bold text-white">Vào học ngay →</a>
+                    <x-payment-learning-links :order="$order" />
                 @else
                     <a href="{{ route('student.checkout.pay', $order->order_code) }}" class="flex-1 rounded-xl bg-pink-700 px-4 py-3 text-center text-xs font-bold text-white">Thử thanh toán lại</a>
                 @endif

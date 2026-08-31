@@ -80,9 +80,7 @@
 
             <!-- Action Buttons -->
             <div class="pt-4 flex items-center gap-3 border-t border-slate-100 dark:border-slate-800">
-                <a href="{{ route('student.dashboard') }}" class="flex-1 text-center bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold py-3 rounded-xl transition shadow-sm">
-                    Vào học ngay →
-                </a>
+                <x-payment-learning-links :order="$order" />
                 <a href="{{ route('home') }}" class="text-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl transition dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
                     Trang chủ
                 </a>

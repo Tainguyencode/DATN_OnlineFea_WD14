@@ -1143,13 +1143,13 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                     } else if (u.has_pending_invite) {
                         actionBtn = '<span class="text-xs text-amber-600 font-semibold">Đã gửi lời mời</span>';
                     } else {
-                        actionBtn = `<button type="button" onclick="sendInvite(${u.id}, '${escapeHtml(u.name)}')" class="px-3 py-1 bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold rounded-lg transition cursor-pointer">Mời</button>`;
+                        actionBtn = ''; // Button is bound below without inline JavaScript.
                     }
 
                     return `
                         <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                             <div class="flex items-center gap-3 min-w-0">
-                                <img src="${u.avatar_url}" alt="${escapeHtml(u.name)}" class="w-9 h-9 rounded-full object-cover shrink-0">
+                                <img src="${escapeHtml(u.avatar_url)}" alt="${escapeHtml(u.name)}" class="w-9 h-9 rounded-full object-cover shrink-0">
                                 <div class="min-w-0 leading-tight">
                                     <p class="text-sm font-bold text-slate-900 dark:text-white truncate">${escapeHtml(u.name)}</p>
                                     <p class="text-xs text-slate-500 truncate">@${escapeHtml(u.username)} · ${escapeHtml(u.email)}</p>
@@ -1161,11 +1161,24 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                         </div>
                     `;
                 }).join('');
+                data.data.filter(u => !u.is_self && !u.is_member && !u.has_pending_invite).forEach(u => {
+                    renderInviteButton(document.getElementById(`invite-btn-${u.id}`), u.id, u.name);
+                });
             }
         } catch (e) {
             loadingEl.classList.add('hidden');
             resultsEl.innerHTML = '<p class="text-center text-xs text-rose-500 py-4">Lỗi tìm kiếm.</p>';
         }
+    }
+
+    function renderInviteButton(container, userId, userName) {
+        if (!container) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'px-3 py-1 bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold rounded-lg transition cursor-pointer';
+        button.textContent = 'Mời';
+        button.addEventListener('click', () => sendInvite(userId, userName));
+        container.replaceChildren(button);
     }
 
     async function sendInvite(userId, userName) {
@@ -1191,12 +1204,12 @@ $canManageGroup = $studyGroup->canManage(Auth::user());
                 setTimeout(() => window.location.reload(), 1200);
             } else {
                 showStudyGroupToast(data.message || 'Không thể gửi lời mời.');
-                if (btnContainer) btnContainer.innerHTML = `<button type="button" onclick="sendInvite(${userId}, '${userName}')" class="px-3 py-1 bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold rounded-lg transition cursor-pointer">Mời</button>`;
+                renderInviteButton(btnContainer, userId, userName);
             }
         } catch (e) {
             console.error(e);
             showStudyGroupToast('Không thể kết nối tới máy chủ. Vui lòng thử lại.');
-            if (btnContainer) btnContainer.innerHTML = `<button type="button" onclick="sendInvite(${userId}, '${userName}')" class="px-3 py-1 bg-[#0056D2] hover:bg-[#0046B8] text-white text-xs font-bold rounded-lg transition cursor-pointer">Mời</button>`;
+            renderInviteButton(btnContainer, userId, userName);
         }
     }
 

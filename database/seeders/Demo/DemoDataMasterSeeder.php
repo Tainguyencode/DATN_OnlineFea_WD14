@@ -2,7 +2,6 @@
 
 namespace Database\Seeders\Demo;
 
-use App\Models\Course;
 use App\Models\Lesson;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;

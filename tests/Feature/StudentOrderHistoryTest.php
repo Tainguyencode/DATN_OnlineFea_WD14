@@ -44,6 +44,26 @@ class StudentOrderHistoryTest extends TestCase
         $this->assertSame('failed', $payment->fresh()->status);
     }
 
+    public function test_issued_payment_can_be_cancelled_and_shows_confirmation(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $order = Order::create(['user_id' => $student->id, 'order_code' => 'LOCKED-CANCEL', 'subtotal' => 50000, 'total_amount' => 50000, 'status' => 'pending']);
+        $this->assertTrue($order->canCancel());
+        Payment::create(['order_id' => $order->id, 'gateway' => 'bank_transfer', 'amount' => 50000, 'status' => 'pending', 'gateway_order_code' => '123456789']);
+        $this->assertTrue($order->fresh()->canCancel());
+        $this->actingAs($student)->get(route('student.orders.show', $order))->assertOk()
+            ->assertSee('Hủy đơn hàng');
+        $this->actingAs($student)->delete(route('student.orders.cancel', $order))
+            ->assertRedirect(route('student.orders.show', $order))
+            ->assertSessionHas('success', 'Đã hủy đơn hàng thành công.');
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame('123456789', $order->payment->gateway_order_code);
+        $this->get(route('student.orders.show', $order))->assertOk()->assertSee('Đã hủy đơn hàng thành công.')->assertSee('Đơn hàng đã được hủy.')
+            ->assertSee('href="'.route('student.orders').'" data-explicit-back', false);
+        $this->get(route('student.orders'))->assertOk()->assertDontSee('Đã hủy đơn hàng thành công.')
+            ->assertViewHas('orders', fn ($orders) => $orders->firstWhere('id', $order->id)?->status === 'cancelled');
+    }
+
     public function test_student_cannot_cancel_paid_or_another_students_order(): void
     {
         $owner = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);

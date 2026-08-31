@@ -13,8 +13,6 @@ use App\Models\QuizOption;
 use App\Models\QuizQuestion;
 use App\Models\QuizVersion;
 use App\Models\QuizVersionQuestion;
-use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class DemoCourseSeeder

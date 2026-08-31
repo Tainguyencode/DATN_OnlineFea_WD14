@@ -28,7 +28,7 @@
             this.bankOwner = owner;
             this.vietQrUrl = qr;
             this.transferContent = 'RUT TIEN MAGV ' + userId + ' REQ' + id;
-            this.transactionRef = 'FT' + new Date().toISOString().replace(/\D/g,'').slice(0,14);
+            this.transactionRef = '';
             this.qrModalOpen = true;
         },
 
@@ -238,10 +238,15 @@
                                                 @click="openQrModal({{ $item->id }}, {{ $item->user_id }}, '{{ addslashes($item->user?->name) }}', {{ $item->amount }}, '{{ addslashes($item->bank_name) }}', '{{ $item->bank_code ?? 'MB' }}', '{{ $item->bank_account_number }}', '{{ addslashes($item->bank_account_name) }}', '{{ $item->viet_qr_url }}')"
                                                 class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition active:scale-95 cursor-pointer"
                                                 title="Quét mã VietQR bằng App ngân hàng"
+                                                @disabled(! ($settlementAllowed[$item->user_id] ?? false))
                                             >
                                                 <svg class="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                                                 Quét VietQR
                                             </button>
+
+                                            @if(! ($settlementAllowed[$item->user_id] ?? false))
+                                                <span class="text-xs text-rose-600">Thiếu nguồn tiền sau đối soát. Không chuyển tiền.</span>
+                                            @endif
 
                                             <button
                                                 type="button"
@@ -458,7 +463,13 @@
                         </div>
 
                         {{-- Hidden inputs --}}
-                        <input type="hidden" name="transaction_ref" :value="transactionRef">
+                        {{-- Tạm ẩn khối nhập mã giao dịch theo yêu cầu; backend cho phép bỏ trống transaction_ref.
+                        <div class="mt-4 space-y-2">
+                            <label for="withdrawal-transaction-ref" class="block text-sm font-bold">Mã giao dịch ngân hàng thực tế</label>
+                            <input id="withdrawal-transaction-ref" type="text" name="transaction_ref" x-model="transactionRef" required minlength="4" maxlength="100" class="w-full rounded-xl border border-slate-300 p-3" placeholder="Nhập mã giao dịch sau khi đã chuyển tiền">
+                            <p class="text-xs text-rose-600">Kiểm tra nguồn tiền trước khi chuyển. Chỉ xác nhận sau khi giao dịch ngân hàng thành công; hệ thống không tự chuyển tiền hoặc xác minh mã này.</p>
+                        </div>
+                        --}}
                         <input type="hidden" name="admin_note" value="Đã chuyển khoản VietQR Napas247 thành công.">
                     </form>
                 </div>

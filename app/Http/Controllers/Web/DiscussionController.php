@@ -411,6 +411,7 @@ class DiscussionController extends Controller
     private function chatMessagePayload(Discussion|DiscussionReply $message): array
     {
         return [
+            'kind' => $message instanceof Discussion ? 'discussion' : 'reply',
             'id' => $message->id,
             'user_id' => $message->user_id,
             'content' => $message->content,

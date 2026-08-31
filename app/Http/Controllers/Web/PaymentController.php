@@ -62,7 +62,9 @@ class PaymentController extends Controller
         }
 
         $reference = (string) ($data['reference'] ?? 'PAYOS-'.$gatewayOrderCode);
-        $this->paymentService->completePayOSPayment($payment->order, $reference, $data);
+        if (! $this->paymentService->completePayOSPayment($payment->order, $reference, $data)) {
+            return response()->json(['success' => false, 'message' => 'Payment requires reconciliation'], 409);
+        }
 
         return response()->json(['success' => true]);
     }
@@ -114,7 +116,10 @@ class PaymentController extends Controller
         }
         $success = (int) ($data['resultCode'] ?? -1) === 0 && filled($data['transId'] ?? null)
             && $this->paymentService->completeMomoPayment($order, (string) $data['transId'], $momoService->sanitize($data));
-        if (! $success && $payment->status !== 'success') $this->paymentService->failMomoPayment($order, $momoService->sanitize($data));
+        if (! $success && (int) ($data['resultCode'] ?? -1) === 0 && $ipn) {
+            return response()->json(['success' => false, 'message' => 'Payment requires reconciliation'], 409);
+        }
+        if (! $success && (int) ($data['resultCode'] ?? -1) !== 0 && $payment->status !== 'success') $this->paymentService->failMomoPayment($order, $momoService->sanitize($data));
         if ($ipn) return response()->json(['success' => true]);
         $payment->refresh(); $order->refresh();
         return view('student.cart.momo_result', compact('success', 'order', 'payment') + ['message' => $success ? 'Thanh toán thành công.' : ((string) ($data['message'] ?? 'Thanh toán không thành công.'))]);

@@ -540,7 +540,31 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getAvailableBalanceAttribute(): float
     {
-        return max(0, $this->total_earnings - $this->total_withdrawn - $this->pending_withdrawal);
+        return max(0, $this->total_earnings - $this->refund_reserve - $this->total_withdrawn - $this->pending_withdrawal);
+    }
+
+    public function getRefundReserveAttribute(): float
+    {
+        return (float) DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->join('courses', 'courses.id', '=', 'order_items.course_id')
+            ->where('courses.instructor_id', $this->id)
+            ->where('orders.status', 'paid')
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('refunds')
+                ->whereColumn('refunds.order_id', 'orders.id')
+                ->whereIn('refunds.status', ['pending', 'processing']))
+            ->sum('order_items.instructor_earning');
+    }
+
+    /** Amount already paid to the instructor exceeding current earned revenue after refunds. */
+    public function getSettlementDeficitAttribute(): float
+    {
+        return max(0, $this->total_withdrawn - $this->total_earnings);
+    }
+
+    public function canSettlePendingWithdrawals(): bool
+    {
+        return round($this->total_earnings - $this->refund_reserve - $this->total_withdrawn - $this->pending_withdrawal, 2) >= 0;
     }
 
     /**

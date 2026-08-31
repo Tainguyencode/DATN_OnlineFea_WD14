@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Withdrawal;
 use App\Services\ActivityLogService;
+use App\Services\NotificationService;
 use App\Services\PayoutService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -134,6 +135,11 @@ class WalletController extends Controller
             if (! $lockedUser || $lockedUser->available_balance < $amount) {
                 return false;
             }
+            if (! empty($validated['idempotency_key']) && Withdrawal::query()
+                ->where('user_id', $lockedUser->id)
+                ->where('idempotency_key', $validated['idempotency_key'])->exists()) {
+                return false;
+            }
 
             $withdrawal = Withdrawal::create([
                 'user_id' => $lockedUser->id,
@@ -145,6 +151,14 @@ class WalletController extends Controller
                 'bank_account_name' => $lockedUser->bank_account_name,
                 'status' => Withdrawal::STATUS_PENDING,
             ]);
+
+            app(NotificationService::class)->notifyAdmins(
+                'Yêu cầu rút tiền mới',
+                "Giảng viên {$lockedUser->name} đã gửi yêu cầu rút tiền #{$withdrawal->id}: "
+                    .number_format($amount, 0, ',', '.').' VNĐ. Vui lòng kiểm tra và xử lý.',
+                'withdrawal_requested',
+                route('admin.withdrawals.index', ['status' => Withdrawal::STATUS_PENDING])
+            );
 
             return $withdrawal;
         });

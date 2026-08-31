@@ -18,6 +18,12 @@
         @endisset
 
         @if($showBack)
+            @if($backUrl)
+            <a href="{{ $backUrl }}" data-explicit-back
+               class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                <span aria-hidden="true">←</span><span>Quay lại</span>
+            </a>
+            @else
             <button type="button"
                     onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '{{ $backUrl ?? route('student.dashboard') }}'; }"
                     class="group inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-x-1 hover:border-[#0056D2]/40 hover:bg-blue-50/60 hover:text-[#0056D2] hover:shadow active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-slate-800 dark:hover:text-blue-400 dark:hover:shadow-slate-950/50">
@@ -26,6 +32,7 @@
                 </svg>
                 <span>Quay lại</span>
             </button>
+            @endif
         @endif
     </div>
 </div>
