@@ -31,6 +31,12 @@ class FullCourseImportConfirmTest extends TestCase
     /** @var array<int, string> */
     private array $files = [];
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withoutMiddleware();
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->files as $file) {
@@ -44,7 +50,7 @@ class FullCourseImportConfirmTest extends TestCase
     public function test_confirm_creates_a_draft_course_full_curriculum_and_versioned_quiz_graph(): void
     {
         $category = $this->selectableCategory();
-        $instructor = $this->instructor();
+        $instructor = $this->instructor($category);
         $batch = $this->preview($instructor);
 
         $response = $this->actingAs($instructor)->postJson(route('instructor.courses.full-import.confirm'), [
@@ -121,9 +127,9 @@ class FullCourseImportConfirmTest extends TestCase
 
     public function test_confirm_rejects_a_batch_owned_by_another_instructor_without_writes(): void
     {
-        $this->selectableCategory();
-        $owner = $this->instructor();
-        $other = $this->instructor();
+        $category = $this->selectableCategory();
+        $owner = $this->instructor($category);
+        $other = $this->instructor($category);
         $batch = $this->preview($owner);
 
         $this->actingAs($other)->postJson(route('instructor.courses.full-import.confirm'), ['batch_token' => $batch->token])
@@ -135,8 +141,8 @@ class FullCourseImportConfirmTest extends TestCase
 
     public function test_full_course_import_uses_the_standard_submission_requirements(): void
     {
-        $this->selectableCategory();
-        $instructor = $this->instructor();
+        $category = $this->selectableCategory();
+        $instructor = $this->instructor($category);
         $batch = $this->preview($instructor);
 
         $this->actingAs($instructor)->postJson(route('instructor.courses.full-import.confirm'), [
@@ -154,7 +160,7 @@ class FullCourseImportConfirmTest extends TestCase
     public function test_confirm_revalidates_a_category_that_was_removed_after_preview(): void
     {
         $category = $this->selectableCategory();
-        $instructor = $this->instructor();
+        $instructor = $this->instructor($category);
         $batch = $this->preview($instructor);
         $category->update(['status' => false]);
 
@@ -167,8 +173,8 @@ class FullCourseImportConfirmTest extends TestCase
 
     public function test_a_late_quiz_failure_rolls_back_all_writes_and_leaves_batch_retryable(): void
     {
-        $this->selectableCategory();
-        $instructor = $this->instructor();
+        $category = $this->selectableCategory();
+        $instructor = $this->instructor($category);
         $batch = $this->preview($instructor);
         $mock = Mockery::mock(QuizContentService::class);
         $mock->shouldReceive('saveMetadata')->andThrow(new RuntimeException('late quiz failure'));
@@ -188,14 +194,22 @@ class FullCourseImportConfirmTest extends TestCase
         $this->assertSame(1, Course::count());
     }
 
-    private function instructor(): User
+    private function instructor(?Category $category = null): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'role' => 'instructor',
             'instructor_status' => 'approved',
             'is_active' => true,
             'email_verified_at' => now(),
         ]);
+
+        if ($category) {
+            $user->instructorProfile()->create([
+                'category_id' => $category->id,
+            ]);
+        }
+
+        return $user;
     }
 
     private function selectableCategory(): Category

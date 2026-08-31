@@ -11,7 +11,12 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
-        $this->withoutMiddleware(SingleSessionMiddleware::class);
+        $this->withoutMiddleware([
+            SingleSessionMiddleware::class,
+            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+        ]);
         $this->ensureViteManifestExists();
     }
 
