@@ -189,17 +189,17 @@
     </div>
 
     {{-- BẢNG DANH SÁCH NGƯỜI DÙNG --}}
-    <form method="POST" action="{{ route('admin.users.bulk') }}" class="rounded-2xl border border-blue-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        @csrf
+    <form id="users-bulk-form" method="POST" action="{{ route('admin.users.bulk') }}">@csrf</form>
+    <div class="rounded-2xl border border-blue-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4 dark:border-slate-800">
             <div class="flex items-center gap-3">
-                <select name="action" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                <select name="action" form="users-bulk-form" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white">
                     <option value="activate">Bulk Active</option>
                     <option value="block">Bulk Block</option>
                     <option value="delete">Bulk Delete</option>
                     <option value="restore">Bulk Restore</option>
                 </select>
-                <button class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white dark:bg-blue-600" x-bind:disabled="selected.length === 0">Áp dụng</button>
+                <button type="submit" form="users-bulk-form" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white dark:bg-blue-600" x-bind:disabled="selected.length === 0">Áp dụng</button>
             </div>
             <div class="text-sm font-semibold text-slate-500"><span x-text="selected.length"></span> đã chọn</div>
         </div>
@@ -220,7 +220,7 @@
                     @forelse($users as $user)
                         <tr class="transition hover:bg-blue-50/40 dark:hover:bg-slate-800/60">
                             <td class="px-5 py-4">
-                                <input type="checkbox" name="users[]" value="{{ $user->id }}" class="user-checkbox rounded border-slate-300 text-blue-600" x-model="selected">
+                                <input type="checkbox" name="users[]" form="users-bulk-form" value="{{ $user->id }}" class="user-checkbox rounded border-slate-300 text-blue-600" x-model="selected">
                             </td>
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-3">
@@ -300,7 +300,7 @@
         </div>
 
         <div class="border-t border-slate-100 p-4 dark:border-slate-800">{{ $users->links() }}</div>
-    </form>
+    </div>
 
     {{-- MODAL TẠO USER --}}
     <div x-show="createOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" x-cloak>

@@ -114,9 +114,24 @@ class PublicNavigationTest extends TestCase
             ->get(route('instructor.dashboard'));
 
         $response->assertOk();
-        $response->assertSee('data-public-header', false);
+        $response->assertDontSee('data-public-header', false);
+        $response->assertSee('data-dashboard-header', false);
         $response->assertSee('instructor-shell', false);
         $response->assertSee('Quản lý khóa học');
+    }
+
+    public function test_admin_dashboard_uses_management_header(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+
+        $this->actingAs($admin)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('data-dashboard-header', false)
+            ->assertDontSee('data-public-header', false)
+            ->assertSee('aria-label="Thông báo"', false)
+            ->assertSee('aria-label="Trang chủ"', false);
     }
 
     public function test_public_instructors_page_loads_and_searches_without_query_exception(): void

@@ -17,6 +17,13 @@ class LearningPathController extends Controller
     /**
      * Danh sách Lộ trình học tập do Giảng viên này tạo.
      */
+    public function show(LearningPath $learningPath): RedirectResponse
+    {
+        $this->authorizeInstructor($learningPath);
+
+        return redirect()->route('instructor.learning-paths.edit', $learningPath);
+    }
+
     public function index(Request $request): View
     {
         $instructorId = auth()->id();

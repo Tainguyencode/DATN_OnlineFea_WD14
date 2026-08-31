@@ -58,9 +58,6 @@ class S3MultipartUploadTest extends TestCase
             $mock->shouldReceive('createMultipartUpload')
                 ->once()
                 ->andReturn('test-upload-id-12345');
-            $mock->shouldReceive('getBucket')
-                ->once()
-                ->andReturn('test-bucket');
         });
 
         $response = $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
@@ -73,7 +70,6 @@ class S3MultipartUploadTest extends TestCase
             ->assertJson([
                 'uploadId' => 'test-upload-id-12345',
                 'key' => "originals/courses/{$course->id}/lessons/new/test-uuid.mp4",
-                'bucket' => 'test-bucket',
             ]);
 
         $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
@@ -127,6 +123,30 @@ class S3MultipartUploadTest extends TestCase
             ->assertJson([
                 'url' => 'https://s3.amazonaws.com/test-bucket/part1-signed-url',
             ]);
+    }
+
+    public function test_instructor_can_batch_sign_s3_parts(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $key = "originals/courses/{$course->id}/lessons/1/uuid.mp4";
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($key) {
+            foreach ([1, 2] as $partNumber) {
+                $mock->shouldReceive('createPresignedPartUrl')
+                    ->with($key, 'upload-123', $partNumber)
+                    ->once()
+                    ->andReturn("https://example.test/part-{$partNumber}");
+            }
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.batch-sign', $course), [
+            'key' => $key,
+            'uploadId' => 'upload-123',
+            'partNumbers' => [1, 2],
+        ])->assertOk()->assertJson([
+            'urls' => [1 => 'https://example.test/part-1', 2 => 'https://example.test/part-2'],
+        ]);
     }
 
     public function test_store_lesson_with_s3_key_does_not_dispatch_hls_while_uploading(): void

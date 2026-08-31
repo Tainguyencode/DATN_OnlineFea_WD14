@@ -77,7 +77,7 @@
                         class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 cursor-pointer @error('type', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
                     <option value="">Chọn loại bài học</option>
                     @foreach($lessonTypes as $value => $label)
-                        <option value="{{ $value }}">{{ $label }}</option>
+                        <option value="{{ $value }}" @selected($selectedType === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
                 @error('type', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror

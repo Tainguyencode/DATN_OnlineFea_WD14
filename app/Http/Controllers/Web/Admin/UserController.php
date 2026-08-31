@@ -5,17 +5,191 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
+use App\Models\Enrollment;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class UserController extends Controller
 {
+    public function bulk(Request $request): RedirectResponse
+    {
+        Gate::authorize('users.manage');
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['activate', 'block', 'delete', 'restore'])],
+            'users' => ['required', 'array', 'min:1', 'max:200'],
+            'users.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+        ]);
+
+        DB::transaction(function () use ($data, $request) {
+            $users = User::withTrashed()->whereIn('id', $data['users'])->orderBy('id')->lockForUpdate()->get();
+            foreach ($users as $user) {
+                if (in_array($data['action'], ['block', 'delete'], true)
+                    && ($user->id === auth()->id() || $user->role === 'admin')) {
+                    throw ValidationException::withMessages(['users' => 'Không thể khóa hoặc xóa tài khoản của bạn hay quản trị viên bằng thao tác hàng loạt.']);
+                }
+                if ($data['action'] === 'restore') {
+                    $user->restore();
+                } elseif (! $user->trashed()) {
+                    if ($data['action'] === 'delete') {
+                        $user->delete();
+                    } else {
+                        $user->update(['is_active' => $data['action'] === 'activate']);
+                    }
+                }
+            }
+            ActivityLogService::log(auth()->id(), 'bulk_users', User::class, null, $data, $request);
+        });
+
+        return back()->with('success', 'Đã xử lý danh sách người dùng.');
+    }
+
+    public function restore(Request $request, int $user): RedirectResponse
+    {
+        Gate::authorize('users.manage');
+        DB::transaction(function () use ($user, $request) {
+            $record = User::onlyTrashed()->lockForUpdate()->findOrFail($user);
+            $record->restore();
+            ActivityLogService::log(auth()->id(), 'restore_user', User::class, $user, null, $request);
+        });
+
+        return back()->with('success', 'Khôi phục người dùng thành công!');
+    }
+
+    public function forceDelete(Request $request, int $user): RedirectResponse
+    {
+        Gate::authorize('users.manage');
+        try {
+            DB::transaction(function () use ($user, $request) {
+                $record = User::onlyTrashed()->lockForUpdate()->findOrFail($user);
+                if ($record->id === auth()->id() || $record->role === 'admin') {
+                    throw ValidationException::withMessages(['user' => 'Không thể xóa vĩnh viễn tài khoản quản trị viên.']);
+                }
+                // Giữ lịch sử học tập và tài chính, không để khóa ngoại cascade xóa theo.
+                if ($record->orders()->exists() || $record->enrollments()->exists()
+                    || $record->courses()->exists() || $record->withdrawals()->exists()) {
+                    throw ValidationException::withMessages(['user' => 'Người dùng còn dữ liệu học tập hoặc tài chính. Hãy giữ tài khoản trong thùng rác.']);
+                }
+                $record->forceDelete();
+                ActivityLogService::log(auth()->id(), 'force_delete_user', User::class, $user, null, $request);
+            });
+        } catch (QueryException) {
+            return back()->withErrors(['user' => 'Không thể xóa vĩnh viễn do còn dữ liệu liên quan.']);
+        }
+
+        return redirect()->route('admin.users')->with('success', 'Xóa vĩnh viễn người dùng thành công!');
+    }
+
+    public function exportCsv()
+    {
+        Gate::authorize('users.view');
+
+        return response()->streamDownload(function () {
+            $stream = fopen('php://output', 'w');
+            fwrite($stream, "\xEF\xBB\xBF");
+            fputcsv($stream, ['name', 'username', 'email', 'phone', 'role', 'status'], ',', '"', '');
+            foreach (User::withTrashed()->select(['id', 'name', 'username', 'email', 'phone', 'role', 'is_active', 'deleted_at'])->lazyById() as $user) {
+                $row = [$user->name, $user->username, $user->email, $user->phone, $user->role,
+                    $user->trashed() ? 'deleted' : ($user->is_active ? 'active' : 'blocked')];
+                $row = array_map(static function ($value) {
+                    $value = (string) $value;
+
+                    return preg_match('/^[\s]*[=+@-]|^[\t\r\n]/u', $value) ? "'".$value : $value;
+                }, $row);
+                fputcsv($stream, $row, ',', '"', '');
+            }
+            fclose($stream);
+        }, 'users.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function exportPdf(): View
+    {
+        Gate::authorize('users.view');
+
+        // Trang in hiện có hỗ trợ chọn Save as PDF trong trình duyệt.
+        return view('admin.users.export-pdf', ['users' => User::withTrashed()->orderBy('id')->get()]);
+    }
+
+    public function import(Request $request): RedirectResponse
+    {
+        Gate::authorize('users.manage');
+        $request->validate(['file' => ['required', 'file', 'mimes:csv,txt', 'max:2048']]);
+        $stream = fopen($request->file('file')->getRealPath(), 'r');
+        $rows = [];
+        try {
+            $headers = fgetcsv($stream, 0, ',', '"', '');
+            $expected = ['name', 'username', 'email', 'phone', 'role', 'password', 'status'];
+            if ($headers) {
+                $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headers[0]);
+                $headers = array_map('trim', $headers);
+            }
+            if (! $headers || count($headers) !== count(array_unique($headers)) || array_diff($expected, $headers)) {
+                throw ValidationException::withMessages(['file' => 'CSV phải có đủ các cột: '.implode(', ', $expected)]);
+            }
+            $line = 1;
+            while (($values = fgetcsv($stream, 0, ',', '"', '')) !== false) {
+                $line++;
+                if ($values === [null]) {
+                    continue;
+                }
+                if (count($rows) >= 1000 || count($values) !== count($headers)) {
+                    throw ValidationException::withMessages(['file' => "Dòng {$line} không hợp lệ hoặc file vượt quá 1.000 người dùng."]);
+                }
+                $row = array_intersect_key(array_combine($headers, $values), array_flip($expected));
+                foreach (['name', 'username', 'email', 'phone', 'role', 'status'] as $field) {
+                    $row[$field] = trim($row[$field] ?? '');
+                }
+                $rows[] = $row;
+            }
+        } finally {
+            fclose($stream);
+        }
+
+        // Không flash input/mật khẩu CSV khi dữ liệu không hợp lệ.
+        $validator = Validator::make(['rows' => $rows], [
+            'rows' => ['required', 'array', 'min:1'],
+            'rows.*.name' => ['required', 'string', 'max:255'],
+            'rows.*.username' => ['nullable', 'string', 'max:255', 'distinct:ignore_case', 'unique:users,username'],
+            'rows.*.email' => ['required', 'email', 'max:255', 'distinct:ignore_case', 'unique:users,email'],
+            'rows.*.phone' => ['nullable', 'regex:/^[0-9+\-\s().]{8,20}$/'],
+            'rows.*.role' => ['required', Rule::in(['student', 'instructor', 'admin'])],
+            'rows.*.password' => ['required', 'string', Password::defaults()],
+            'rows.*.status' => ['required', Rule::in(['active', 'blocked'])],
+        ]);
+        if ($validator->fails()) {
+            return back()->withErrors(['file' => 'Không nhập dữ liệu: '.$validator->errors()->first()]);
+        }
+        try {
+            DB::transaction(function () use ($rows, $request) {
+                foreach ($rows as $row) {
+                    $row['is_active'] = $row['status'] === 'active';
+                    unset($row['status']);
+                    $row['username'] = $row['username'] ?: null;
+                    if ($row['role'] === 'instructor') {
+                        $row['instructor_status'] = 'pending';
+                        $row['needs_admin_review'] = false;
+                    }
+                    User::create($row);
+                }
+                ActivityLogService::log(auth()->id(), 'import_users', User::class, null, ['count' => count($rows)], $request);
+            });
+        } catch (QueryException) {
+            return back()->withErrors(['file' => 'Không nhập dữ liệu do trùng tài khoản hoặc lỗi cơ sở dữ liệu. Không có dòng nào được lưu.']);
+        }
+
+        return back()->with('success', 'Đã nhập '.count($rows).' người dùng.');
+    }
+
     public function index(Request $request): View
     {
         $query = User::query()
@@ -54,19 +228,19 @@ class UserController extends Controller
             ->pluck('user_id');
 
         // Thống kê phân nhóm người dùng theo tiến độ học tập (Hoàn thành, Đang học, Mới, Chưa hoàn thành)
-        $completedStudentsCount = \App\Models\Enrollment::where('status', 'completed')
+        $completedStudentsCount = Enrollment::where('status', 'completed')
             ->orWhere('progress_percent', '>=', 100)
             ->count();
 
-        $inProgressStudentsCount = \App\Models\Enrollment::where('status', 'active')
+        $inProgressStudentsCount = Enrollment::where('status', 'active')
             ->whereBetween('progress_percent', [15, 99.99])
             ->count();
 
-        $incompleteStudentsCount = \App\Models\Enrollment::where('status', 'active')
+        $incompleteStudentsCount = Enrollment::where('status', 'active')
             ->whereBetween('progress_percent', [0.01, 14.99])
             ->count();
 
-        $newStudentsCount = \App\Models\Enrollment::where('status', 'active')
+        $newStudentsCount = Enrollment::where('status', 'active')
             ->where('progress_percent', '<=', 0)
             ->count();
 
@@ -93,10 +267,10 @@ class UserController extends Controller
         // Tạo chuỗi 20 tháng từ Tháng 01/2025 đến Tháng 08/2026
         $monthTimeline = [];
         for ($m = 1; $m <= 12; $m++) {
-            $monthTimeline[] = \Carbon\Carbon::create(2025, $m, 1, 0, 0, 0);
+            $monthTimeline[] = Carbon::create(2025, $m, 1, 0, 0, 0);
         }
         for ($m = 1; $m <= 8; $m++) {
-            $monthTimeline[] = \Carbon\Carbon::create(2026, $m, 1, 0, 0, 0);
+            $monthTimeline[] = Carbon::create(2026, $m, 1, 0, 0, 0);
         }
 
         $driver = DB::connection()->getDriverName();
@@ -110,29 +284,29 @@ class UserController extends Controller
 
         // Lấy số lượng học tập theo tháng trực tiếp từ DB
         $enrollMonthExpr = $driver === 'sqlite' ? "strftime('%Y-%m', created_at)" : "DATE_FORMAT(created_at, '%Y-%m')";
-        $completedByMonth = \App\Models\Enrollment::where(function ($q) {
-                $q->where('status', 'completed')->orWhere('progress_percent', '>=', 100);
-            })
+        $completedByMonth = Enrollment::where(function ($q) {
+            $q->where('status', 'completed')->orWhere('progress_percent', '>=', 100);
+        })
             ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
             ->groupBy('m_label')
             ->pluck('count', 'm_label')
             ->all();
 
-        $inProgressByMonth = \App\Models\Enrollment::where('status', 'active')
+        $inProgressByMonth = Enrollment::where('status', 'active')
             ->whereBetween('progress_percent', [15, 99.99])
             ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
             ->groupBy('m_label')
             ->pluck('count', 'm_label')
             ->all();
 
-        $incompleteByMonth = \App\Models\Enrollment::where('status', 'active')
+        $incompleteByMonth = Enrollment::where('status', 'active')
             ->whereBetween('progress_percent', [0.01, 14.99])
             ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
             ->groupBy('m_label')
             ->pluck('count', 'm_label')
             ->all();
 
-        $newEnrolledByMonth = \App\Models\Enrollment::where('status', 'active')
+        $newEnrolledByMonth = Enrollment::where('status', 'active')
             ->where('progress_percent', '<=', 0)
             ->selectRaw("{$enrollMonthExpr} as m_label, COUNT(*) as count")
             ->groupBy('m_label')
@@ -140,7 +314,7 @@ class UserController extends Controller
             ->all();
 
         $runningTotal = 0;
-        $registrationGrowth = collect($monthTimeline)->map(function (\Carbon\Carbon $start) use (&$runningTotal, $userCountsByMonth, $completedByMonth, $inProgressByMonth, $incompleteByMonth, $newEnrolledByMonth): array {
+        $registrationGrowth = collect($monthTimeline)->map(function (Carbon $start) use (&$runningTotal, $userCountsByMonth, $completedByMonth, $inProgressByMonth, $incompleteByMonth, $newEnrolledByMonth): array {
             $key = $start->format('Y-m');
             $totalMonthUsers = $userCountsByMonth[$key] ?? 0;
             $completedCount = $completedByMonth[$key] ?? 0;
@@ -156,7 +330,7 @@ class UserController extends Controller
 
             return [
                 'label' => $start->format('m/y'),
-                'full_label' => 'Tháng ' . $start->format('m/Y'),
+                'full_label' => 'Tháng '.$start->format('m/Y'),
                 'total' => $totalMonthUsers,
                 'new_users' => $newCount,
                 'completed' => $completedCount,

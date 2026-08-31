@@ -121,7 +121,6 @@
                 </div>
             </div>
 
-<<<<<<< HEAD
             <section class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                 <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                     <a href="{{ route('instructor.courses.edit', $course) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
