@@ -1,4 +1,4 @@
-<x-instructor-layout :title="'Chi tiết học viên - ' . $student->name" page-title="Tiến độ học viên" :breadcrumb="$course->title">
+<x-instructor-layout :title="'Chi tiết học viên - ' . $student->name" page-title="Tiến độ học viên" :breadcrumb="$course->title" :back-url="route('instructor.courses.students', $course)">
 
     @php
         // Eager load the chapter relation in O(1) query to group lessons by chapter without N+1 query loops

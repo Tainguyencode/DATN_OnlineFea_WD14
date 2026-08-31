@@ -1,4 +1,4 @@
-<x-instructor-layout :title="'Quiz - ' . $lesson->title" page-title="Quan ly quiz" :breadcrumb="$course->title">
+<x-instructor-layout :title="'Quiz - ' . $lesson->title" page-title="Quản lý Quiz" :breadcrumb="$course->title" :back-url="route('instructor.courses.curriculum', $course)">
 
     @php
         $quizTitle = old('title', $quiz->title ?? $lesson->title);

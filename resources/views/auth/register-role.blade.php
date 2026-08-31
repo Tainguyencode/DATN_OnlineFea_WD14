@@ -265,7 +265,6 @@
                             type="checkbox"
                             name="terms"
                             value="1"
-                            required
                             data-student-terms-checkbox
                             @checked(old('terms'))
                             class="mt-1 rounded border-slate-300 text-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700"
