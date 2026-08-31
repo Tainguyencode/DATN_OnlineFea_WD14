@@ -388,8 +388,8 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
             Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
             Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
             Route::post('/courses/{course}/s3/multipart/create', [S3MultipartUploadController::class, 'create'])->name('courses.s3.multipart.create');
-            Route::post('/courses/{course}/s3/multipart/batch-sign', [S3MultipartUploadController::class, 'batchSign'])->name('courses.s3.multipart.batch-sign');
-            Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'signPart'])->name('courses.s3.multipart.sign-part');
+            Route::post('/courses/{course}/s3/multipart/batch-sign', [S3MultipartUploadController::class, 'batchSignParts'])->name('courses.s3.multipart.batch-sign');
+            Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'getPartUrl'])->name('courses.s3.multipart.sign-part');
             Route::post('/courses/{course}/s3/multipart/complete', [S3MultipartUploadController::class, 'complete'])->name('courses.s3.multipart.complete');
             Route::post('/courses/{course}/s3/multipart/abort', [S3MultipartUploadController::class, 'abort'])->name('courses.s3.multipart.abort');
             Route::get('/courses/{course}/hls-status', [InstructorCurriculumController::class, 'getHlsStatus'])->name('courses.hls-status');

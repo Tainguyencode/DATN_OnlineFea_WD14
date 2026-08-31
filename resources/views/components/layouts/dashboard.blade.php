@@ -39,6 +39,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title }} - EduPlatform</title>
     @include('partials.theme-init', ['useSystemPreference' => $role !== 'admin'])
+    @if($role === 'instructor')
+        <script src="{{ asset('js/s3-multipart-uploader.js') }}?v={{ filemtime(public_path('js/s3-multipart-uploader.js')) }}"></script>
+    @endif
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/learning-player.js'])
     <style>
         /* Custom scrollbar cho Sidebar */
@@ -157,9 +160,12 @@
     'admin-shell' => $role === 'admin',
     'bg-[#f5f8fc] text-slate-900 antialiased',
 ])>
-    <x-public.header />
-    <div class="flex min-h-[calc(100vh-3.5rem)]">
-        <aside class="fixed bottom-0 top-14 z-30 hidden w-64 border-r border-blue-100 bg-white text-slate-800 shadow-[10px_0_30px_rgba(37,99,235,0.05)] dark:border-blue-950/50 dark:bg-[#0b1220] dark:text-white lg:flex lg:flex-col">
+    @if(!in_array($role, ['admin', 'instructor'], true))
+        <x-public.header />
+    @endif
+    <div class="flex min-h-screen" x-data="{ sidebarOpen: false }" @keydown.escape.window="sidebarOpen = false">
+        <button x-show="sidebarOpen" x-cloak @click="sidebarOpen = false" type="button" aria-label="Đóng menu" class="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"></button>
+        <aside :class="sidebarOpen ? 'flex' : 'hidden lg:flex'" class="fixed bottom-0 {{ in_array($role, ['admin', 'instructor'], true) ? 'top-0' : 'top-14' }} z-50 hidden w-64 flex-col border-r border-blue-100 bg-white text-slate-800 shadow-[10px_0_30px_rgba(37,99,235,0.05)] dark:border-blue-950/50 dark:bg-[#0b1220] dark:text-white lg:flex">
             <div class="flex h-20 items-center border-b border-blue-100 px-5 dark:border-white/5">
                 <a href="{{ route('home') }}" class="flex items-center gap-3 min-w-0">
                     <div class="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br {{ $c['gradient'] }} text-[11px] font-black tracking-wide text-white shadow-lg shadow-blue-500/20">FEA</div>
@@ -263,13 +269,22 @@
         </aside>
 
         <div class="min-w-0 flex-1 lg:ml-64">
-            <div class="flex items-center justify-between gap-3 px-4 pt-5 sm:px-6 xl:px-8">
-                    <div class="min-w-0">
+            <header data-dashboard-header class="sticky top-0 z-30 flex min-h-20 items-center justify-between gap-3 border-b border-blue-100 bg-white px-4 py-3 dark:border-slate-700 dark:bg-[#0b1220] sm:px-6 xl:px-8">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <button type="button" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen.toString()" aria-label="Mở menu quản lý" class="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-blue-50 dark:hover:bg-slate-800 lg:hidden">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        </button>
+                        <div class="min-w-0">
                         <h1 class="{{ $pageTitleClass }} text-slate-950 dark:text-white">{{ $pageTitle }}</h1>
                         @if($breadcrumb)
                             <p class="text-xs text-slate-500 mt-1 truncate">{{ $breadcrumb }}</p>
                         @endif
+                        </div>
                     </div>
+                    <div class="flex shrink-0 items-center gap-1 sm:gap-2">
+                        <button type="button" data-theme-toggle onclick="toggleTheme()" aria-label="Đổi giao diện" aria-pressed="false" class="rounded-xl p-2.5 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646Z"/></svg>
+                        </button>
                         <a href="{{ route('study-groups.index') }}" 
                            class="relative flex cursor-pointer items-center justify-center rounded-xl p-2.5 text-slate-500 transition duration-200 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300"
                            title="Nhóm học tập"
@@ -281,7 +296,13 @@
                                 </span>
                             @endif
                         </a>
-            </div>
+                        <x-notifications.bell :recent-notifications="$recentNotifications ?? collect()" :unread-count="$unreadNotificationCount ?? 0" />
+                        <a href="{{ route('home') }}" aria-label="Trang chủ" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-slate-800">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m3 10 9-7 9 7M5 9v11h5v-6h4v6h5V9"/></svg>
+                            <span class="hidden sm:inline">Trang chủ</span>
+                        </a>
+                    </div>
+            </header>
 
             <x-toast-container />
 
