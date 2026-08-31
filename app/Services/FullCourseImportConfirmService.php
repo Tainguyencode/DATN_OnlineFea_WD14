@@ -153,7 +153,7 @@ class FullCourseImportConfirmService
                 'assignment_max_score' => $row['assignment_max_score'],
                 'assignment_passing_score' => $row['assignment_passing_score'],
                 'sort_order' => max(0, (int) $row['order'] - 1),
-                'status' => Lesson::STATUS_DRAFT,
+                'status' => Lesson::STATUS_PUBLISHED,
                 'is_preview' => false,
             ]);
         }

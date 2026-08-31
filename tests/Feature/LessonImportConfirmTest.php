@@ -38,7 +38,7 @@ class LessonImportConfirmTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_confirm_imports_all_supported_types_in_order_as_draft_non_preview_shells(): void
+    public function test_confirm_imports_all_supported_types_in_order_as_ready_non_preview_shells(): void
     {
         Queue::fake();
         $instructor = $this->signInInstructor();
@@ -98,7 +98,7 @@ class LessonImportConfirmTest extends TestCase
         foreach ($imported as $lesson) {
             $this->assertSame($course->id, $lesson->course_id);
             $this->assertSame($section->id, $lesson->section_id);
-            $this->assertSame(Lesson::STATUS_DRAFT, $lesson->status);
+            $this->assertSame(Lesson::STATUS_PUBLISHED, $lesson->status);
             $this->assertFalse($lesson->is_preview);
         }
 

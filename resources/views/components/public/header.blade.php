@@ -11,6 +11,32 @@
         ['label' => 'Lộ trình', 'route' => 'learning-paths.index', 'active' => ['learning-paths.*']],
         ['label' => 'Giảng viên', 'route' => 'instructors.index', 'active' => ['instructors.*']],
     ];
+    $navigationMenus = [
+        'explore' => ['label' => 'Khám phá', 'links' => [
+            ['Khóa học', route('courses.index')], ['Lộ trình học', route('learning-paths.index')],
+            ['Giảng viên', route('instructors.index')], ['Xếp hạng', route('leaderboard')],
+        ]],
+    ];
+    if ($user?->isStudent()) {
+        $navigationMenus['learning'] = ['label' => 'Học tập', 'links' => [
+            ['Tổng quan', route('student.dashboard')], ['Khóa học của tôi', route('student.courses')],
+            ['Nhóm học tập', route('student.study-groups.index')],
+        ]];
+        $navigationMenus['support'] = ['label' => 'Hỗ trợ', 'links' => [
+            ['Trung tâm hỗ trợ', route('support.tickets.index')], ['Hồ sơ cá nhân', route('student.profile')],
+            ['Bảo mật tài khoản', route('student.profile.security')],
+        ]];
+    } elseif ($user) {
+        $navigationMenus['management'] = ['label' => 'Quản lý', 'links' => [
+            ['Tổng quan', $user->dashboardUrl()],
+            ['Hồ sơ', route($user->isInstructor() ? 'instructor.profile' : 'admin.profile')],
+            ['Nhóm học tập', route('study-groups.index')],
+        ]];
+    } else {
+        $navigationMenus['account'] = ['label' => 'Tài khoản', 'links' => [
+            ['Đăng nhập', route('login')], ['Đăng ký', route('register')],
+        ]];
+    }
     $menuItemClass = 'flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-blue-50 hover:text-[#0056D2] focus-visible:bg-blue-50 focus-visible:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0056D2] dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-blue-300';
     $accountActive = $user && (
         ($user->isStudent() && request()->routeIs('student.dashboard', 'student.profile*', 'student.orders*', 'student.wishlist*', 'student.cart*', 'student.checkout.*', 'favorites.*'))
@@ -34,7 +60,7 @@
                     @else
                         x-on:click="mobileOpen = true"
                     @endif
-                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-200 dark:hover:bg-slate-800 {{ $studentDashboard ? '' : 'xl:hidden' }}"
+                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:text-slate-200 dark:hover:bg-slate-800"
                     aria-label="{{ $studentDashboard ? 'Ẩn/hiện menu học viên' : 'Mở menu điều hướng' }}">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>
             </button>
@@ -43,21 +69,10 @@
                 <img src="{{ asset('images/fea-logo.png') }}" alt="FEA Learning" class="h-full w-full scale-[1.65] object-contain">
             </a>
 
-            @if($studentDashboard)
                 <nav data-primary-navigation class="hidden h-14 items-center gap-0.5 lg:flex" aria-label="Điều hướng chính">
                     <a href="{{ route('home') }}" class="inline-flex h-full items-center px-2.5 text-sm font-medium text-slate-700 transition hover:text-[#0056D2] dark:text-slate-200 dark:hover:text-blue-300">Trang chủ</a>
 
-                    @foreach([
-                        'explore' => ['label' => 'Khám phá', 'links' => [
-                            ['Khóa học', route('courses.index')], ['Lộ trình học', route('learning-paths.index')], ['Giảng viên', route('instructors.index')], ['Xếp hạng', route('leaderboard')],
-                        ]],
-                        'learning' => ['label' => 'Học tập', 'links' => [
-                            ['Tổng quan', route('student.dashboard')], ['Khóa học của tôi', route('student.courses')], ['Nhóm học tập', route('student.study-groups.index')],
-                        ]],
-                        'support' => ['label' => 'Hỗ trợ', 'links' => [
-                            ['Trung tâm hỗ trợ', route('support.tickets.index')], ['Hồ sơ cá nhân', route('student.profile')], ['Bảo mật tài khoản', route('student.profile.security')],
-                        ]],
-                    ] as $menuKey => $menu)
+                    @foreach($navigationMenus as $menuKey => $menu)
                         <div class="relative h-full" x-on:click.outside="if (isOpen('{{ $menuKey }}')) closeMenus()">
                             <button type="button" x-on:click="toggleMenu('{{ $menuKey }}')" class="inline-flex h-full items-center gap-1 px-2.5 text-sm font-medium text-slate-700 transition hover:text-[#0056D2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0056D2] dark:text-slate-200 dark:hover:text-blue-300" :aria-expanded="isOpen('{{ $menuKey }}').toString()">
                                 {{ $menu['label'] }}
@@ -71,18 +86,7 @@
                         </div>
                     @endforeach
                 </nav>
-            @else
-            <nav data-primary-navigation class="hidden h-14 items-center gap-1 xl:flex" aria-label="Điều hướng chính">
-                @foreach($primaryNav as $item)
-                    @php $active = request()->routeIs(...$item['active']); @endphp
-                    <a href="{{ route($item['route']) }}"
-                       @if($active) aria-current="page" @endif
-                       class="inline-flex h-full items-center border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0056D2] {{ $active ? 'border-[#0056D2] text-[#0056D2] dark:border-blue-400 dark:text-blue-300' : 'border-transparent text-slate-600 hover:border-blue-200 hover:text-[#0056D2] dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-blue-300' }}">
-                        {{ $item['label'] }}
-                    </a>
-                @endforeach
-            </nav>
-            @endif
+
         </div>
 
         <div data-header-right class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-0.5 sm:gap-1">
@@ -213,7 +217,7 @@
         </form>
     </div>
 
-    <div x-show="mobileOpen" x-cloak class="fixed inset-0 z-[60] xl:hidden" role="dialog" aria-modal="true" aria-label="Menu chính">
+    <div x-show="mobileOpen" x-cloak class="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Menu chính">
         <div class="absolute inset-0 bg-slate-950/45" x-on:click="mobileOpen = false"></div>
         <aside x-show="mobileOpen"
                x-transition:enter="transition ease-out duration-200" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
@@ -232,17 +236,15 @@
                        class="rounded-lg px-3 py-3 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0056D2] dark:hover:bg-slate-800 {{ $active ? 'bg-blue-50 text-[#0056D2] dark:bg-slate-800 dark:text-blue-300' : '' }}">{{ $item['label'] }}</a>
                 @endforeach
             </nav>
-            @auth
-                @if($user->isStudent())
-                    <div class="mx-5 border-t border-slate-200 py-4 dark:border-slate-800">
-                        <p class="mb-2 px-3 text-xs font-bold uppercase tracking-wider text-slate-400">Học tập</p>
-                        <a href="{{ route('student.dashboard') }}" x-on:click="closeMobile()" class="{{ $menuItemClass }}">Tổng quan</a>
-                        <a href="{{ route('student.courses') }}" x-on:click="closeMobile()" class="{{ $menuItemClass }}">Khóa học của tôi</a>
-                        <a href="{{ route('student.study-groups.index') }}" x-on:click="closeMobile()" class="{{ $menuItemClass }}">Nhóm học tập</a>
-                        <a href="{{ route('support.tickets.index') }}" x-on:click="closeMobile()" class="{{ $menuItemClass }}">Hỗ trợ</a>
-                    </div>
-                @endif
-            @endauth
+            @foreach($navigationMenus as $menuKey => $menu)
+                @continue($menuKey === 'explore')
+                <div class="mx-5 border-t border-slate-200 py-4 dark:border-slate-800">
+                    <p class="mb-2 px-3 text-xs font-bold uppercase tracking-wider text-slate-400">{{ $menu['label'] }}</p>
+                    @foreach($menu['links'] as [$label, $url])
+                        <a href="{{ $url }}" x-on:click="closeMobile()" class="{{ $menuItemClass }}">{{ $label }}</a>
+                    @endforeach
+                </div>
+            @endforeach
         </aside>
     </div>
 </header>

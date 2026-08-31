@@ -21,7 +21,7 @@ class AiModerationController extends Controller
     /**
      * Helper resolve Lesson model or draft ContentUpdate lesson and video path
      */
-    private function resolveLessonAndVideoPath(string|int $lessonId): array
+    private function resolveLessonAndVideoPath(string|int $lessonId, bool $preferOriginal = false): array
     {
         $useS3 = ! empty(config('filesystems.disks.s3.key')) && ! empty(config('filesystems.disks.s3.bucket'));
 
@@ -39,7 +39,9 @@ class AiModerationController extends Controller
                 ]);
                 $draftLesson->id = $lessonId;
 
-                return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
+                return [$draftLesson, $preferOriginal
+                    ? (($payload['original_video_key'] ?? null) ?: ($payload['video_path'] ?? null))
+                    : ($payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null)];
             }
         }
 
@@ -55,11 +57,15 @@ class AiModerationController extends Controller
             if ($pendingUpdate) {
                 $p = $pendingUpdate->payload ?? [];
                 if (! empty($p['original_video_key']) || ! empty($p['hls_manifest_key']) || ! empty($p['video_path'])) {
-                    return [$lesson, $p['video_path'] ?? $p['hls_manifest_key'] ?? $p['original_video_key']];
+                    return [$lesson, $preferOriginal
+                        ? (($p['original_video_key'] ?? null) ?: ($p['video_path'] ?? null))
+                        : ($p['video_path'] ?? $p['hls_manifest_key'] ?? $p['original_video_key'])];
                 }
             }
 
-            return [$lesson, $lesson->video_path ?: ($lesson->hls_manifest_key ?: $lesson->original_video_key)];
+            return [$lesson, $preferOriginal
+                ? ($lesson->original_video_key ?: $lesson->video_path)
+                : ($lesson->video_path ?: ($lesson->hls_manifest_key ?: $lesson->original_video_key))];
         }
 
         // Fallback check if $lessonId is a numeric ContentUpdate ID
@@ -75,7 +81,9 @@ class AiModerationController extends Controller
             ]);
             $draftLesson->id = 'update_les_'.$update->id;
 
-            return [$draftLesson, $payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null];
+            return [$draftLesson, $preferOriginal
+                ? (($payload['original_video_key'] ?? null) ?: ($payload['video_path'] ?? null))
+                : ($payload['video_path'] ?? $payload['hls_manifest_key'] ?? $payload['original_video_key'] ?? null)];
         }
 
         return [null, null];
@@ -290,7 +298,7 @@ class AiModerationController extends Controller
      */
     public function extractFrames(string|int $lessonId, VideoFrameExtractor $extractor)
     {
-        [$lesson, $videoPathRel] = $this->resolveLessonAndVideoPath($lessonId);
+        [$lesson, $videoPathRel] = $this->resolveLessonAndVideoPath($lessonId, true);
 
         if (! $videoPathRel) {
             return response()->json(['error' => 'Bài học này không có video hợp lệ.'], 400);
@@ -303,11 +311,40 @@ class AiModerationController extends Controller
             $videoPath = Storage::disk('public')->path($videoPathRel);
         }
 
-        if (! $videoPath || ! file_exists($videoPath)) {
-            return response()->json(['error' => 'File video không tồn tại trên máy chủ.'], 404);
-        }
-
+        $temporaryVideo = null;
         try {
+            if (! $videoPath && filled(config('filesystems.disks.s3.bucket'))) {
+                // FFmpeg needs a local source; never treat an HLS manifest as the original upload.
+                if (str_ends_with(strtolower($videoPathRel), '.m3u8')) {
+                    return response()->json(['error' => 'Không tìm thấy video gốc để quét AI. Vui lòng tải lại video gốc.'], 404);
+                }
+                $source = Storage::disk('s3')->readStream($videoPathRel);
+                if (! is_resource($source)) {
+                    return response()->json(['error' => 'Không đọc được video gốc từ kho lưu trữ. Vui lòng thử lại.'], 404);
+                }
+                $destination = null;
+                try {
+                    $directory = storage_path('app/tmp_ai_video');
+                    File::ensureDirectoryExists($directory);
+                    $temporaryVideo = tempnam($directory, 'scan_');
+                    if ($temporaryVideo === false) {
+                        throw new \RuntimeException('Could not create moderation source file.');
+                    }
+                    $destination = fopen($temporaryVideo, 'wb');
+                    if (! is_resource($destination) || stream_copy_to_stream($source, $destination) === false) {
+                        throw new \RuntimeException('Could not download moderation source file.');
+                    }
+                } finally {
+                    fclose($source);
+                    if (is_resource($destination)) {
+                        fclose($destination);
+                    }
+                }
+                $videoPath = $temporaryVideo;
+            }
+            if (! $videoPath || ! is_file($videoPath)) {
+                return response()->json(['error' => 'Không tìm thấy video gốc trên máy chủ hoặc kho lưu trữ.'], 404);
+            }
             $frames = $extractor->extract($videoPath, 300, $lessonId);
 
             if (empty($frames)) {
@@ -327,6 +364,10 @@ class AiModerationController extends Controller
             return response()->json([
                 'error' => 'Không thể trích xuất khung hình lúc này. Vui lòng thử lại.',
             ], 500);
+        } finally {
+            if ($temporaryVideo && is_file($temporaryVideo)) {
+                unlink($temporaryVideo);
+            }
         }
     }
 

@@ -8,6 +8,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-white">
+    <x-public.header />
     <main data-refresh-on-history class="flex min-h-screen items-center justify-center px-4 py-10">
         <div class="w-full max-w-xl space-y-6 text-center">
             <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-amber-700">

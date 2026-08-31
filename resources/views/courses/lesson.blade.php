@@ -8,6 +8,8 @@
     data-learning-player
     data-course-progress="{{ $courseProgress }}"
     data-progress-url="{{ $progressUrl }}"
+    data-lesson-type="{{ $lesson->type }}"
+    @if($lesson->type === 'document') data-refresh-on-history @endif
 >
     <x-learning.header
         :course="$course"

@@ -157,8 +157,9 @@
     'admin-shell' => $role === 'admin',
     'bg-[#f5f8fc] text-slate-900 antialiased',
 ])>
-    <div class="flex min-h-screen">
-        <aside class="fixed inset-y-0 z-30 hidden w-64 border-r border-blue-100 bg-white text-slate-800 shadow-[10px_0_30px_rgba(37,99,235,0.05)] dark:border-blue-950/50 dark:bg-[#0b1220] dark:text-white lg:flex lg:flex-col">
+    <x-public.header />
+    <div class="flex min-h-[calc(100vh-3.5rem)]">
+        <aside class="fixed bottom-0 top-14 z-30 hidden w-64 border-r border-blue-100 bg-white text-slate-800 shadow-[10px_0_30px_rgba(37,99,235,0.05)] dark:border-blue-950/50 dark:bg-[#0b1220] dark:text-white lg:flex lg:flex-col">
             <div class="flex h-20 items-center border-b border-blue-100 px-5 dark:border-white/5">
                 <a href="{{ route('home') }}" class="flex items-center gap-3 min-w-0">
                     <div class="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br {{ $c['gradient'] }} text-[11px] font-black tracking-wide text-white shadow-lg shadow-blue-500/20">FEA</div>
@@ -262,21 +263,13 @@
         </aside>
 
         <div class="min-w-0 flex-1 lg:ml-64">
-            <header class="sticky top-0 z-20 border-b border-blue-100 bg-white/95 shadow-[0_1px_10px_rgba(37,99,235,0.03)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-                <div class="flex h-20 items-center justify-between px-4 sm:px-6 xl:px-8">
+            <div class="flex items-center justify-between gap-3 px-4 pt-5 sm:px-6 xl:px-8">
                     <div class="min-w-0">
                         <h1 class="{{ $pageTitleClass }} text-slate-950 dark:text-white">{{ $pageTitle }}</h1>
                         @if($breadcrumb)
                             <p class="text-xs text-slate-500 mt-1 truncate">{{ $breadcrumb }}</p>
                         @endif
                     </div>
-                    <div class="flex items-center gap-2">
-                        <!-- Nút chuyển chế độ Sáng/Tối -->
-                        <button onclick="toggleTheme()" class="cursor-pointer rounded-xl p-2.5 text-slate-500 transition duration-200 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300" aria-label="Đổi giao diện">
-                            <svg class="hidden dark:block h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
-                            <svg class="block dark:hidden h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-                        </button>
-                        {{-- Icon Nhóm học tập --}}
                         <a href="{{ route('study-groups.index') }}" 
                            class="relative flex cursor-pointer items-center justify-center rounded-xl p-2.5 text-slate-500 transition duration-200 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300"
                            title="Nhóm học tập"
@@ -288,17 +281,7 @@
                                 </span>
                             @endif
                         </a>
-                        <x-notifications.bell
-                            :recent-notifications="$recentNotifications ?? collect()"
-                            :unread-count="$unreadNotificationCount ?? 0"
-                        />
-                        <a href="{{ route('home') }}" class="hidden items-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition duration-200 hover:border-blue-200 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-500/10 dark:text-blue-300 sm:inline-flex">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m3 12 2-2m0 0 7-7 7 7M5 10v10a1 1 0 0 0 1 1h3m10-11 2 2m-2-2v10a1 1 0 0 1-1 1h-3m-6 0a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1m-6 0h6"/></svg>
-                            Trang chủ
-                        </a>
-                    </div>
-                </div>
-            </header>
+            </div>
 
             <x-toast-container />
 

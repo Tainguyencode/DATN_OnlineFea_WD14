@@ -243,6 +243,12 @@ class CourseController extends Controller
             ? route('courses.lessons.progress', [$course, $lesson])
             : null;
 
+        if ($progressUrl && $lesson->type === 'document') {
+            \Illuminate\Support\Facades\Cache::add(
+                'reading-start:'.$user->id.':'.$lesson->id, now()->timestamp, now()->addHour()
+            );
+        }
+
         $canUseLessonAi = (bool) $user && (
             $player['isEnrolled']
             || ($user->isInstructor() && $course->isOwnedBy($user))

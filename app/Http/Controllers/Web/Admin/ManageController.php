@@ -185,9 +185,17 @@ class ManageController extends Controller
         $totalVideoDurationMinutes = $course->totalVideoDurationMinutes();
 
         $videoLessons = $allLessons
-            ->filter(fn ($lesson) => $lesson->type === 'video' && filled($lesson->video_path))
+            ->filter(function ($lesson) {
+                if ($lesson->type !== 'video') {
+                    return false;
+                }
+                $source = $lesson->draft_update?->payload ?? $lesson;
+
+                return filled(data_get($source, 'original_video_key'))
+                    || filled(data_get($source, 'video_path'));
+            })
             ->map(fn ($lesson) => [
-                'id' => $lesson->id,
+                'id' => $lesson->draft_update ? 'update_les_'.$lesson->draft_update->id : $lesson->id,
                 'title' => $lesson->title,
             ])
             ->values();

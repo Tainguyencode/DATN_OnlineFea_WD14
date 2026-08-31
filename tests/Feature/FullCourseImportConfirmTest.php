@@ -81,6 +81,7 @@ class FullCourseImportConfirmTest extends TestCase
         $this->assertSame(['Chương video', 'Chương tài liệu', 'Chương kiểm tra'], $sections->pluck('title')->all());
         $this->assertSame([0, 1, 2], $sections->pluck('sort_order')->all());
         $this->assertSame(4, Lesson::where('course_id', $course->id)->count());
+        $this->assertSame(4, Lesson::where('course_id', $course->id)->where('status', Lesson::STATUS_PUBLISHED)->count());
 
         $video = Lesson::where('course_id', $course->id)->where('type', Lesson::TYPE_VIDEO)->firstOrFail();
         $this->assertSame(120, $video->duration_seconds);
