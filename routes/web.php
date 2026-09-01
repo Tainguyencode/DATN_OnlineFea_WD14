@@ -342,6 +342,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->middleware('verified')->name('profile.documents.view');
     Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware(['verified', 'throttle:5,1'])->name('profile.submit-review');
     Route::post('/profile/teaching-fields/{teachingField}/submit-review', [InstructorProfileController::class, 'submitTeachingFieldForReview'])->middleware(['verified', 'throttle:5,1'])->name('profile.teaching-fields.submit-review');
+    Route::post('/profile/teaching-fields/{teachingField}/submit-supplement', [InstructorProfileController::class, 'submitTeachingFieldSupplement'])->middleware(['verified', 'throttle:5,1'])->name('profile.teaching-fields.submit-supplement');
     Route::post('/profile/request-reactivation', [InstructorProfileController::class, 'requestReactivation'])->middleware('throttle:5,1')->name('profile.request-reactivation');
 
     // Backward compatibility aliases for certificate upload/view/delete

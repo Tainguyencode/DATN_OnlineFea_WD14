@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -328,7 +329,13 @@ class InstructorProfileController extends Controller
                 if ($teachingFieldId) {
                     $teachingField = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingFieldId);
                     $teachingField->loadMissing(['profile', 'category.parent']);
-                    abort_unless((int) $teachingField->profile?->user_id === (int) $lockedUser->id && $teachingField->isEditable(), 403);
+                    abort_unless((int) $teachingField->profile?->user_id === (int) $lockedUser->id && $teachingField->acceptsDocumentUploads(), 403);
+
+                    if (! $requirementId) {
+                        throw ValidationException::withMessages([
+                            'requirement_id' => 'Vui lòng chọn đúng yêu cầu tài liệu của ngành.',
+                        ]);
+                    }
                 }
 
                 $defaultTitle = null;
@@ -338,6 +345,16 @@ class InstructorProfileController extends Controller
                         : app(InstructorRequirementService::class)->validateRequirementForInstructor($lockedUser, $requirementId);
                     $documentType = $requirement->document_type;
                     $defaultTitle = $requirement->document_title;
+
+                    if ($teachingField?->isApproved()
+                        && $teachingField->certificates()
+                            ->where('requirement_id', $requirement->id)
+                            ->whereIn('status', ['draft', 'pending', 'approved'])
+                            ->exists()) {
+                        throw ValidationException::withMessages([
+                            'requirement_id' => 'Yêu cầu này đã có tài liệu hợp lệ hoặc đang chờ xử lý. Vui lòng thay thế bản nháp hiện có thay vì tải thêm.',
+                        ]);
+                    }
                 }
 
                 if ($sourceType === 'url') {
@@ -724,6 +741,77 @@ class InstructorProfileController extends Controller
         }
 
         return back()->with('active_tab', 'documents')->with('success', 'Đã gửi xét duyệt ngành này. Quyền tạo khóa học chỉ được cấp sau khi Admin phê duyệt.');
+    }
+
+    public function submitTeachingFieldSupplement(Request $request, InstructorTeachingField $teachingField): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $requirements = app(InstructorRequirementService::class);
+        $result = DB::transaction(function () use ($teachingField, $requirements, $user): array {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            $locked = InstructorTeachingField::query()
+                ->with(['profile', 'category.parent'])
+                ->lockForUpdate()
+                ->findOrFail($teachingField->id);
+            abort_unless((int) $locked->profile?->user_id === (int) $lockedUser->id, 403);
+
+            if (! $locked->isApproved()) {
+                return ['submitted' => false, 'error' => 'Chỉ ngành đã được duyệt mới dùng luồng gửi bổ sung hồ sơ.'];
+            }
+
+            $allowedRequirementIds = $requirements->getRequirementsForTeachingField($locked)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $drafts = InstructorCertificate::query()
+                ->where('user_id', $lockedUser->id)
+                ->where('instructor_teaching_field_id', $locked->id)
+                ->where('status', 'draft')
+                ->lockForUpdate()
+                ->get();
+
+            if ($drafts->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'documents' => 'Ngành này chưa có tài liệu bổ sung ở trạng thái nháp để gửi.',
+                ]);
+            }
+
+            if ($drafts->contains(fn (InstructorCertificate $certificate) => ! in_array((int) $certificate->requirement_id, $allowedRequirementIds, true))) {
+                throw ValidationException::withMessages([
+                    'documents' => 'Có tài liệu nháp không còn thuộc yêu cầu hiện hành của ngành. Vui lòng kiểm tra lại trước khi gửi.',
+                ]);
+            }
+
+            return [
+                'submitted' => true,
+                'certificates_count' => $requirements->promoteDraftCertificatesForTeachingField($locked),
+            ];
+        });
+
+        if (! $result['submitted']) {
+            return back()->with('active_tab', 'documents')->with('error', $result['error']);
+        }
+
+        $submittedCount = $result['certificates_count'];
+
+        ActivityLogService::log($user->id, 'submit_instructor_document_supplement', InstructorTeachingField::class, $teachingField->id, [
+            'certificates_count' => $submittedCount,
+        ], $request);
+
+        try {
+            app(NotificationService::class)->notifyAdmins(
+                'Hồ sơ ngành đã duyệt cần xét duyệt bổ sung',
+                "Giảng viên {$user->name} vừa gửi {$submittedCount} tài liệu bổ sung cho ngành {$teachingField->category?->name}.",
+                'instructor_document_supplement_submitted',
+                route('admin.instructors.applications.show', $user)
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Không thể gửi thông báo duyệt tài liệu bổ sung: '.$e->getMessage());
+        }
+
+        return back()->with('active_tab', 'documents')->with('success', 'Đã gửi bổ sung hồ sơ ngành này. Các tài liệu đang chờ Admin duyệt.');
     }
 
     /** @param array{missing_count: int, missing_titles: array<int, string>, reason: ?string} $eligibility */

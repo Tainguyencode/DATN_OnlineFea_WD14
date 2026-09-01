@@ -281,7 +281,7 @@ class InstructorRequirementService
 
     public function validateRequirementForTeachingField(User $instructor, InstructorTeachingField $field, int $requirementId): InstructorDocumentRequirement
     {
-        if ((int) $field->profile?->user_id !== (int) $instructor->id || ! $field->isEditable()) {
+        if ((int) $field->profile?->user_id !== (int) $instructor->id || ! $field->acceptsDocumentUploads()) {
             throw ValidationException::withMessages([
                 'instructor_teaching_field_id' => 'Ngành này không ở trạng thái cho phép bổ sung tài liệu.',
             ]);
