@@ -220,6 +220,8 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
         $response->assertViewHas('selectedCategoryIds', [$child1->id, $child2->id]);
         $response->assertSee('Web Dev');
         $response->assertSee('Mobile Dev');
+        $response->assertSee('x-show="isDirty"', false);
+        $response->assertSee('profile-form-fields-changed', false);
     }
 
     public function test_case_6_child_category_saves_exact_child_category_id()

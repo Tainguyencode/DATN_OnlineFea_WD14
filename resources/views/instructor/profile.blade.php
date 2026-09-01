@@ -1,7 +1,7 @@
 <x-instructor-layout title="Hồ sơ & Chứng chỉ" page-title="Hồ sơ & Chứng chỉ Giảng viên" breadcrumb="Quản lý thông tin cá nhân, chuyên môn và tài liệu minh chứng">
 
-<div class="space-y-8" x-data="{ 
-    activeTab: '{{ session('active_tab', request()->query('tab')) }}' || (['general', 'documents', 'security'].includes(window.location.hash.replace('#', '')) ? window.location.hash.replace('#', '') : 'general'), 
+<div class="space-y-8" x-data="{
+    activeTab: '{{ session('active_tab', request()->query('tab')) }}' || (['general', 'documents', 'security'].includes(window.location.hash.replace('#', '')) ? window.location.hash.replace('#', '') : 'general'),
     showUploadModal: false,
     setTab(tab) {
         this.activeTab = tab;
@@ -215,7 +215,32 @@
     {{-- TAB 1: THÔNG TIN CÁ NHÂN & NGHỀ NGHIỆP                                    --}}
     {{-- ========================================================================= --}}
     <div x-show="activeTab === 'general'" x-cloak class="space-y-6">
-        <form method="POST" action="{{ route('instructor.profile.update') }}" enctype="multipart/form-data" class="space-y-6">
+        @php
+            $profileValidationFailed = collect($errors->keys())->contains(fn ($key) => in_array($key, [
+                'name', 'username', 'phone', 'avatar', 'bio', 'bank_name', 'bank_account_number', 'bank_account_name',
+                'category_ids', 'teaching_fields',
+            ], true) || str_starts_with($key, 'category_ids.') || str_starts_with($key, 'teaching_fields.'));
+        @endphp
+        <form method="POST" action="{{ route('instructor.profile.update') }}" enctype="multipart/form-data" class="space-y-6"
+            x-data="{
+                baseline: '',
+                isDirty: false,
+                hasProfileValidationError: @js($profileValidationFailed),
+                snapshot() {
+                    return JSON.stringify(Array.from(new FormData(this.$el).entries())
+                        .filter(([name]) => !['_token', '_method'].includes(name))
+                        .map(([name, value]) => [name, value instanceof File ? [value.name, value.size, value.lastModified] : value]));
+                },
+                checkDirty() {
+                    this.$nextTick(() => {
+                        this.isDirty = this.hasProfileValidationError || this.snapshot() !== this.baseline;
+                    });
+                }
+            }"
+            x-init="$nextTick(() => { baseline = snapshot(); isDirty = hasProfileValidationError; })"
+            @input="checkDirty()"
+            @change="checkDirty()"
+            @profile-form-fields-changed="checkDirty()">
             @csrf
             @method('PUT')
 
@@ -319,7 +344,7 @@
                     }
                 }
             }" class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6">
-                
+
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
                     <div>
                         <h3 class="text-base font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
@@ -329,7 +354,7 @@
                         <p class="mt-1 text-xs text-slate-500">Mỗi ngành giảng dạy có thể khai báo đơn vị công tác, chức vụ và kinh nghiệm riêng biệt.</p>
                     </div>
 
-                    <button type="button" @click="addField()"
+                    <button type="button" @click="addField(); $dispatch('profile-form-fields-changed')"
                             class="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-4 py-2 text-xs font-bold text-[#0056D2] transition hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span>+ Thêm ngành giảng dạy</span>
@@ -346,7 +371,7 @@
                 <div class="space-y-6">
                     <template x-for="(field, index) in fields" :key="index">
                         <div class="relative rounded-2xl border-2 border-slate-200/80 bg-slate-50/60 p-5 sm:p-6 transition hover:border-blue-300 dark:border-slate-800 dark:bg-slate-800/40 space-y-5">
-                            
+
                             {{-- Header của từng Khối Ngành --}}
                             <div class="flex items-center justify-between border-b border-slate-200/70 pb-3 dark:border-slate-700/60">
                                 <div class="flex items-center gap-2.5">
@@ -355,7 +380,7 @@
                                 </div>
 
                                 <template x-if="fields.length > 1">
-                                    <button type="button" @click="removeField(index)"
+                                    <button type="button" @click="removeField(index); $dispatch('profile-form-fields-changed')"
                                             class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         <span>Xóa ngành này</span>
@@ -441,10 +466,10 @@
 
                 {{-- Nút Thêm Ngành ở cuối --}}
                 <div class="pt-2">
-                    <button type="button" @click="addField()"
+                    <button type="button" @click="addField(); $dispatch('profile-form-fields-changed')"
                             class="w-full rounded-2xl border-2 border-dashed border-slate-300 p-4 text-center text-xs font-bold text-slate-600 transition hover:border-[#0056D2] hover:bg-blue-50/50 hover:text-[#0056D2] dark:border-slate-700 dark:text-slate-400 dark:hover:border-blue-500 dark:hover:bg-slate-800/60 dark:hover:text-blue-300 flex items-center justify-center gap-2">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        <span>+ Thêm một ngành / lĩnh vực giảng dạy khác</span>
+                        <span>Thêm một ngành / lĩnh vực giảng dạy khác</span>
                     </button>
                 </div>
             </div>
@@ -472,7 +497,7 @@
                 </div>
             </div>
 
-            <div class="flex justify-end">
+            <div class="flex justify-end" x-show="isDirty" x-cloak>
                 <button type="submit" class="inline-flex items-center gap-2 rounded-2xl bg-[#0056D2] px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:bg-[#0046B8]">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <span>Lưu thay đổi hồ sơ</span>
