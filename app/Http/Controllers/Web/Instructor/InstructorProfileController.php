@@ -253,6 +253,8 @@ class InstructorProfileController extends Controller
             'requirement_id' => ['nullable', 'integer'],
             'document_type' => ['nullable', 'string', 'in:certificate,degree,employment_contract,transcript,employment_confirmation,other'],
             'title' => ['nullable', 'string', 'max:255'],
+            'source_type' => ['nullable', 'in:file,url'],
+            'document_url' => ['nullable', 'url', 'max:2048', 'regex:/^https?:\/\//i'],
             'files' => ['nullable', 'array', 'max:10'],
             'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
             'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
@@ -263,15 +265,24 @@ class InstructorProfileController extends Controller
             'file.max' => 'Dung lượng tài liệu tối đa là 10MB.',
         ]);
 
+        // Keep legacy upload endpoints working while requiring the new UI to state its intent.
+        $sourceType = $request->input('source_type') ?: ($request->hasFile('files') || $request->hasFile('file') ? 'file' : null);
+        if (! $sourceType) {
+            return back()->withErrors(['source_type' => 'Vui lòng chọn phương thức nộp tài liệu.'])->withInput();
+        }
         $files = [];
-        if ($request->hasFile('files')) {
+        if ($sourceType === 'file' && $request->hasFile('files')) {
             $files = $request->file('files');
-        } elseif ($request->hasFile('file')) {
+        } elseif ($sourceType === 'file' && $request->hasFile('file')) {
             $files = [$request->file('file')];
         }
 
-        if (empty($files)) {
+        if ($sourceType === 'file' && empty($files)) {
             return back()->with('error', 'Vui lòng chọn ít nhất một tệp để tải lên.');
+        }
+
+        if ($sourceType === 'url' && ! $request->filled('document_url')) {
+            return back()->withErrors(['document_url' => 'Vui lòng nhập URL tài liệu hợp lệ.'])->withInput();
         }
 
         $requirementId = $request->input('requirement_id');
@@ -289,6 +300,21 @@ class InstructorProfileController extends Controller
 
         $customTitle = $request->input('title') ?: $defaultTitle;
         $uploadedCount = 0;
+
+        if ($sourceType === 'url') {
+            $documentUrl = $request->input('document_url');
+            InstructorCertificate::create([
+                'user_id' => $user->id,
+                'requirement_id' => $requirement?->id,
+                'source_type' => 'url',
+                'document_url' => $documentUrl,
+                'title' => $customTitle ?: $defaultTitle ?: 'Tài liệu liên kết',
+                'document_type' => $documentType,
+                'status' => 'pending',
+                'uploaded_at' => now(),
+            ]);
+            $uploadedCount = 1;
+        }
 
         foreach ($files as $file) {
             if (! $file || ! $file->isValid()) {
@@ -309,6 +335,7 @@ class InstructorProfileController extends Controller
             InstructorCertificate::create([
                 'user_id' => $user->id,
                 'requirement_id' => $requirement?->id,
+                'source_type' => 'file',
                 'file_path' => $storedPath,
                 'original_name' => $originalName,
                 'mime_type' => $mimeType,
@@ -333,12 +360,13 @@ class InstructorProfileController extends Controller
             'document_type' => $documentType,
             'requirement_id' => $requirement?->id,
             'uploaded_count' => $uploadedCount,
+            'source_type' => $sourceType,
         ], $request);
 
         try {
             app(NotificationService::class)->notifyAdmins(
                 'Giảng viên nộp tài liệu minh chứng',
-                "Giảng viên {$user->name} ({$user->email}) vừa tải lên {$uploadedCount} tài liệu minh chứng mới.",
+                "Giảng viên {$user->name} ({$user->email}) vừa nộp {$uploadedCount} tài liệu minh chứng mới.",
                 'instructor_documents_uploaded',
                 route('admin.instructors.applications.show', $user)
             );
@@ -346,7 +374,7 @@ class InstructorProfileController extends Controller
             Log::error('Gửi thông báo nộp tài liệu giảng viên cho admin thất bại: '.$e->getMessage());
         }
 
-        return back()->with('active_tab', 'documents')->with('success', "Đã tải lên {$uploadedCount} tài liệu minh chứng thành công. Hồ sơ đang chờ Ban quản trị kiểm duyệt.");
+        return back()->with('active_tab', 'documents')->with('success', "Đã nộp {$uploadedCount} tài liệu minh chứng thành công. Hồ sơ đang chờ Ban quản trị kiểm duyệt.");
     }
 
     public function deleteDocument(Request $request, InstructorCertificate $certificate): RedirectResponse
@@ -362,7 +390,7 @@ class InstructorProfileController extends Controller
             return back()->with('active_tab', 'documents')->with('error', 'Tài liệu đã được phê duyệt, không thể xóa.');
         }
 
-        if (Storage::disk('local')->exists($certificate->file_path)) {
+        if (! $certificate->isUrlSource() && $certificate->file_path && Storage::disk('local')->exists($certificate->file_path)) {
             Storage::disk('local')->delete($certificate->file_path);
         }
 
@@ -377,7 +405,40 @@ class InstructorProfileController extends Controller
         return back()->with('active_tab', 'documents')->with('success', 'Đã xóa tài liệu thành công.');
     }
 
-    public function viewDocument(Request $request, InstructorCertificate $certificate): BinaryFileResponse
+    public function updateDocumentUrl(Request $request, InstructorCertificate $certificate): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        abort_unless($certificate->user_id === $user->id && $certificate->isUrlSource(), 403);
+
+        if ($certificate->isApproved()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Tài liệu đã được phê duyệt, không thể sửa liên kết.');
+        }
+
+        $validated = $request->validate([
+            'document_url' => ['required', 'url', 'max:2048', 'regex:/^https?:\/\//i'],
+        ], [
+            'document_url.url' => 'URL tài liệu không hợp lệ.',
+            'document_url.regex' => 'Chỉ chấp nhận URL bắt đầu bằng http:// hoặc https://.',
+        ]);
+
+        $certificate->update([
+            'document_url' => $validated['document_url'],
+            'status' => 'pending',
+            'rejection_reason' => null,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+        ]);
+
+        $user->update(['needs_admin_review' => true]);
+
+        ActivityLogService::log($user->id, 'update_instructor_document_url', InstructorCertificate::class, $certificate->id, [], $request);
+
+        return back()->with('active_tab', 'documents')->with('success', 'Đã cập nhật liên kết tài liệu và chuyển về trạng thái chờ duyệt.');
+    }
+
+    public function viewDocument(Request $request, InstructorCertificate $certificate): BinaryFileResponse|RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -388,6 +449,12 @@ class InstructorProfileController extends Controller
 
         if (! $user->isAdmin() && $certificate->user_id !== $user->id) {
             abort(403, 'Bạn không có quyền truy cập tài liệu này.');
+        }
+
+        if ($certificate->isUrlSource()) {
+            abort_unless(filled($certificate->document_url), 404, 'URL tài liệu không tồn tại.');
+
+            return redirect()->away($certificate->document_url);
         }
 
         $relativePath = $certificate->file_path;

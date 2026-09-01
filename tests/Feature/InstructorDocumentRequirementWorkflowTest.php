@@ -193,7 +193,94 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'requirement_id' => $this->reqDegree->id,
             'document_type' => 'degree',
             'status' => 'pending',
+            'source_type' => 'file',
         ]);
+    }
+
+    public function test_instructor_can_submit_https_url_for_a_requirement(): void
+    {
+        $response = $this->actingAs($this->instructor)->post(route('instructor.profile.documents.upload'), [
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/documents/degree.pdf',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('instructor_certificates', [
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/documents/degree.pdf',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_instructor_can_submit_http_url_when_policy_allows_http(): void
+    {
+        $response = $this->actingAs($this->instructor)->post(route('instructor.profile.documents.upload'), [
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'http://example.com/degree.pdf',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+    }
+
+    public function test_instructor_cannot_submit_unsafe_or_malformed_document_url(): void
+    {
+        foreach (['javascript:alert(1)', 'data:text/html,test', 'file:///etc/passwd', 'not-a-url'] as $url) {
+            $this->actingAs($this->instructor)
+                ->post(route('instructor.profile.documents.upload'), [
+                    'requirement_id' => $this->reqDegree->id,
+                    'source_type' => 'url',
+                    'document_url' => $url,
+                ])
+                ->assertSessionHasErrors(['document_url']);
+        }
+
+        $this->assertDatabaseMissing('instructor_certificates', ['user_id' => $this->instructor->id, 'source_type' => 'url']);
+    }
+
+    public function test_admin_can_review_url_and_an_approved_url_fulfils_its_requirement(): void
+    {
+        $document = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/degree.pdf',
+            'title' => 'Bằng CNTT trực tuyến',
+            'document_type' => 'degree',
+            'status' => 'pending',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.instructors.applications.documents.review', [$this->instructor, $document]), ['status' => 'approved'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('instructor_certificates', ['id' => $document->id, 'status' => 'approved']);
+        $summary = app(InstructorRequirementService::class)->getRequirementsForInstructor($this->instructor)['summary'];
+        $this->assertSame(1, $summary['required_approved_count']);
+    }
+
+    public function test_owner_can_delete_url_record_without_touching_file_storage(): void
+    {
+        $document = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/degree.pdf',
+            'title' => 'Bằng CNTT trực tuyến',
+            'document_type' => 'degree',
+            'status' => 'pending',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($this->instructor)
+            ->delete(route('instructor.profile.documents.delete', $document))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('instructor_certificates', ['id' => $document->id]);
     }
 
     /**

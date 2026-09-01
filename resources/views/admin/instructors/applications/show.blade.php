@@ -1,5 +1,82 @@
 <x-admin-layout title="Chi tiết hồ sơ Giảng viên" page-title="Chi tiết hồ sơ ứng tuyển giảng viên" breadcrumb="Quản lý giảng viên / Chi tiết">
-    <div class="space-y-6" x-data="{ approveModal: false, rejectModal: false, rejectDocModal: false, selectedDocId: null, selectedDocTitle: '', rejectReactivationModal: false }">
+    <div class="space-y-6" x-data="{
+        approveModal: false, rejectModal: false, rejectDocModal: false, selectedDocId: null, selectedDocTitle: '', rejectReactivationModal: false,
+        previewModal: false, previewUrl: '', previewTitle: '', previewKind: 'iframe', previewProvider: '', previewMessage: '', youtubeVideoId: '', youtubePlayer: null,
+        openPreview(url, title, source) {
+            this.previewTitle = title;
+            this.previewUrl = url;
+            this.previewKind = 'iframe';
+            this.previewProvider = '';
+            this.previewMessage = '';
+            if (source === 'file-video') {
+                this.previewKind = 'video';
+                this.previewProvider = 'Tệp video đã tải lên';
+            } else if (source === 'url') {
+                try {
+                    const parsedUrl = new URL(url);
+                    const host = parsedUrl.hostname.toLowerCase().replace(/^www\./, '');
+                    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+                    let videoId = null;
+
+                    if (host === 'youtu.be') videoId = pathParts[0];
+                    if (host.endsWith('youtube.com')) videoId = parsedUrl.searchParams.get('v') || (['embed', 'shorts', 'live'].includes(pathParts[0]) ? pathParts[1] : null);
+
+                    if (videoId && /^[\w-]{11}$/.test(videoId)) {
+                        this.youtubeVideoId = videoId;
+                        this.previewKind = 'youtube';
+                        this.previewProvider = 'YouTube';
+                    } else if (host.endsWith('vimeo.com') && /^\d+$/.test(pathParts[0] || '')) {
+                        this.previewUrl = 'https://player.vimeo.com/video/' + pathParts[0];
+                        this.previewProvider = 'Vimeo';
+                    } else if (host === 'drive.google.com') {
+                        const fileIndex = pathParts.indexOf('d');
+                        if (pathParts[0] === 'file' && fileIndex !== -1 && pathParts[fileIndex + 1]) {
+                            this.previewUrl = 'https://drive.google.com/file/d/' + pathParts[fileIndex + 1] + '/preview';
+                            this.previewProvider = 'Google Drive';
+                        } else {
+                            this.previewKind = 'unsupported';
+                            this.previewMessage = 'Liên kết Google Drive này không có định dạng preview được hỗ trợ.';
+                        }
+                    } else if (/\.(mp4|webm|ogv|ogg)(?:[?#].*)?$/i.test(url)) {
+                        this.previewKind = 'video';
+                        this.previewProvider = 'Video trực tiếp';
+                    } else {
+                        this.previewKind = 'unsupported';
+                        this.previewMessage = 'Nguồn video này không hỗ trợ nhúng trực tiếp trên website.';
+                    }
+                } catch (_) {
+                    this.previewKind = 'unsupported';
+                    this.previewMessage = 'URL video không hợp lệ hoặc không thể nhúng.';
+                }
+            }
+            this.previewModal = true;
+            if (this.previewKind === 'youtube') this.$nextTick(() => this.startYouTubePlayer());
+        },
+        startYouTubePlayer() {
+            window.youtubeIframeApiReady?.then(() => {
+                if (!this.previewModal || this.previewKind !== 'youtube' || !window.YT?.Player) return;
+                this.youtubePlayer?.destroy();
+                this.youtubePlayer = new window.YT.Player(this.$refs.youtubePlayer, {
+                    videoId: this.youtubeVideoId,
+                    playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+                    events: {
+                        onError: () => {
+                            this.youtubePlayer?.destroy();
+                            this.youtubePlayer = null;
+                            this.previewKind = 'unsupported';
+                            this.previewMessage = 'Video này không thể phát trực tiếp trên website vì nguồn video không cho phép nhúng.';
+                        },
+                    },
+                });
+            });
+        },
+        closePreview() {
+            this.youtubePlayer?.destroy();
+            this.youtubePlayer = null;
+            this.previewModal = false;
+            this.previewUrl = '';
+        }
+    }">
         <div class="flex items-center justify-between relative z-10">
             <a href="{{ route('admin.instructors.applications.index') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-violet-600 dark:text-slate-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 19-7-7 7-7"/></svg>
@@ -418,14 +495,15 @@
                                                                                 <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
                                                                             @endif
                                                                         </div>
-                                                                        <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->original_name }} · {{ $doc->formattedFileSize() }} · Tải lên: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
+                                                                    <p class="text-[11px] text-slate-400 mt-0.5">Nguồn: {{ $doc->sourceLabel() }} · {{ $doc->isUrlSource() ? 'Liên kết tài liệu' : $doc->original_name.' · '.$doc->formattedFileSize() }} · Nộp: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
                                                                     </div>
                                                                 </div>
 
                                                                 <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
-                                                                    <a href="{{ route('admin.instructors.applications.certificates.view', $doc) }}" target="_blank" class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200">
-                                                                        Xem tệp
-                                                                    </a>
+                                                                    @php($isVideoFile = str_starts_with((string) $doc->mime_type, 'video/') || preg_match('/\.(mp4|webm|ogv|ogg)$/i', (string) $doc->original_name))
+                                                                    <button type="button" @click="openPreview(@js($doc->isUrlSource() ? $doc->document_url : route('admin.instructors.applications.certificates.view', $doc)), @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'), '{{ $doc->isUrlSource() ? 'url' : ($isVideoFile ? 'file-video' : 'file') }}')" class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200">
+                                                                        {{ $doc->isUrlSource() || $isVideoFile ? 'Xem video' : 'Xem tệp' }}
+                                                                    </button>
                                                                     @if($doc->status !== 'approved')
                                                                         <form method="POST" action="{{ route('admin.instructors.applications.documents.review', [$application, $doc]) }}">
                                                                             @csrf
@@ -473,12 +551,13 @@
                                         <div class="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
                                             <div>
                                                 <h6 class="font-bold text-xs text-slate-800 dark:text-white">{{ $doc->title ?: $doc->original_name }}</h6>
-                                                <p class="text-[11px] text-slate-400">{{ $doc->documentTypeLabel() }} · {{ $doc->formattedFileSize() }}</p>
+                                                <p class="text-[11px] text-slate-400">{{ $doc->documentTypeLabel() }} · Nguồn: {{ $doc->sourceLabel() }}{{ $doc->isUrlSource() ? '' : ' · '.$doc->formattedFileSize() }}</p>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <a href="{{ route('admin.instructors.applications.certificates.view', $doc) }}" target="_blank" class="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">
-                                                    Xem tệp
-                                                </a>
+                                                @php($isVideoFile = str_starts_with((string) $doc->mime_type, 'video/') || preg_match('/\.(mp4|webm|ogv|ogg)$/i', (string) $doc->original_name))
+                                                <button type="button" @click="openPreview(@js($doc->isUrlSource() ? $doc->document_url : route('admin.instructors.applications.certificates.view', $doc)), @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'), '{{ $doc->isUrlSource() ? 'url' : ($isVideoFile ? 'file-video' : 'file') }}')" class="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">
+                                                    {{ $doc->isUrlSource() || $isVideoFile ? 'Xem video' : 'Xem tệp' }}
+                                                </button>
                                                 @if($doc->status !== 'approved')
                                                     <form method="POST" action="{{ route('admin.instructors.applications.documents.review', [$application, $doc]) }}">
                                                         @csrf
@@ -605,5 +684,45 @@
             </div>
         </div>
 
+        <div x-show="previewModal" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" @keydown.escape.window="closePreview()">
+            <div class="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900" @click.away="closePreview()">
+                <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                    <div class="min-w-0">
+                        <h3 class="truncate text-sm font-black text-slate-900 dark:text-white" x-text="previewTitle"></h3>
+                        <p class="mt-0.5 text-xs text-slate-500" x-text="previewProvider ? 'Nguồn: ' + previewProvider : 'Xem tài liệu trực tiếp trong hệ thống'"></p>
+                    </div>
+                    <button type="button" @click="closePreview()" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800" aria-label="Đóng cửa sổ xem tài liệu">✕</button>
+                </div>
+                <div class="min-h-0 flex-1 bg-slate-100 dark:bg-slate-950">
+                    <template x-if="previewKind === 'video'">
+                        <video :src="previewUrl" controls autoplay class="h-full w-full bg-black" title="Xem video minh chứng">Trình duyệt không hỗ trợ phát video này.</video>
+                    </template>
+                    <template x-if="previewKind === 'youtube'">
+                        <div x-ref="youtubePlayer" class="h-full w-full bg-black"></div>
+                    </template>
+                    <template x-if="previewKind === 'iframe'">
+                        <iframe :src="previewUrl" sandbox="allow-scripts allow-same-origin allow-presentation" class="h-full w-full border-0" title="Xem tài liệu hoặc video minh chứng" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </template>
+                    <template x-if="previewKind === 'unsupported'">
+                        <div class="flex h-full items-center justify-center p-6 text-center">
+                            <div class="max-w-md rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                                <p class="font-black">Không thể phát trực tiếp</p>
+                                <p class="mt-2 text-sm" x-text="previewMessage || 'Video này không thể phát trực tiếp trên website vì nguồn video không cho phép nhúng.'"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <p class="border-t border-slate-200 px-5 py-2 text-[11px] text-slate-500 dark:border-slate-700">Video YouTube/Vimeo chỉ phát được khi chủ video cho phép nhúng. Nếu nền tảng từ chối phát, hãy yêu cầu giảng viên cung cấp video công khai, được phép nhúng hoặc tệp video trực tiếp.</p>
+            </div>
+        </div>
     </div>
+    <script>
+        window.youtubeIframeApiReady = new Promise((resolve) => {
+            if (window.YT?.Player) return resolve();
+            const script = document.createElement('script');
+            script.src = 'https://www.youtube.com/iframe_api';
+            window.onYouTubeIframeAPIReady = resolve;
+            document.head.appendChild(script);
+        });
+    </script>
 </x-admin-layout>

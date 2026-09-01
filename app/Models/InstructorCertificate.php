@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 class InstructorCertificate extends Model
 {
@@ -13,7 +14,9 @@ class InstructorCertificate extends Model
     protected $fillable = [
         'user_id',
         'requirement_id',
+        'source_type',
         'file_path',
+        'document_url',
         'original_name',
         'mime_type',
         'file_size',
@@ -51,7 +54,7 @@ class InstructorCertificate extends Model
         return $this->title ?: $this->original_name;
     }
 
-    public function getIssuedAtAttribute(): ?\Illuminate\Support\Carbon
+    public function getIssuedAtAttribute(): ?Carbon
     {
         return $this->reviewed_at ?: $this->uploaded_at ?: $this->created_at;
     }
@@ -111,6 +114,16 @@ class InstructorCertificate extends Model
         }
 
         return $bytes > 0 ? $bytes.' B' : 'N/A';
+    }
+
+    public function isUrlSource(): bool
+    {
+        return $this->source_type === 'url';
+    }
+
+    public function sourceLabel(): string
+    {
+        return $this->isUrlSource() ? 'URL' : 'File upload';
     }
 
     public function isImage(): bool

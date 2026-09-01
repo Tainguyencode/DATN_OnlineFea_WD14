@@ -63,11 +63,11 @@ class InstructorApplicationController extends Controller
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhereHas('instructorProfile', function ($qp) use ($search) {
-                      $qp->where('phone', 'like', "%{$search}%");
-                  });
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhereHas('instructorProfile', function ($qp) use ($search) {
+                        $qp->where('phone', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -227,10 +227,16 @@ class InstructorApplicationController extends Controller
         abort(404, 'Tệp chứng chỉ không tồn tại trên hệ thống.');
     }
 
-    public function viewCertificateItem(Request $request, InstructorCertificate $certificate): BinaryFileResponse
+    public function viewCertificateItem(Request $request, InstructorCertificate $certificate): BinaryFileResponse|RedirectResponse
     {
         if (! $request->user()?->isAdmin() && $request->user()?->id !== $certificate->user_id) {
             abort(403, 'Bạn không có quyền truy cập tài liệu này.');
+        }
+
+        if ($certificate->isUrlSource()) {
+            abort_unless(filled($certificate->document_url), 404, 'URL tài liệu không tồn tại.');
+
+            return redirect()->away($certificate->document_url);
         }
 
         $relativePath = $certificate->file_path;
