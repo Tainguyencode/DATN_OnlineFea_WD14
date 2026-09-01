@@ -25,6 +25,8 @@
             phoneMessage: '',
             phoneOk: null,
             termsModalOpen: false,
+            certificateFiles: [],
+            certificateUploadError: '',
             availabilityUrl: '{{ route('auth.availability') }}',
             get strength() {
                 let score = 0;
@@ -42,6 +44,58 @@
                 const data = await response.json();
                 this[`${field}Ok`] = data.available;
                 this[`${field}Message`] = data.message;
+            },
+            addCertificateFiles(newFiles) {
+                this.certificateUploadError = '';
+                const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+                const maxSizeBytes = 5 * 1024 * 1024;
+
+                Array.from(newFiles).forEach(file => {
+                    const extension = '.' + file.name.split('.').pop().toLowerCase();
+
+                    if (!allowedExtensions.includes(extension)) {
+                        this.certificateUploadError = `Tệp '${file.name}' không đúng định dạng (chỉ nhận PDF, JPG, JPEG, PNG).`;
+                        return;
+                    }
+
+                    if (file.size > maxSizeBytes) {
+                        this.certificateUploadError = `Tệp '${file.name}' vượt quá dung lượng tối đa 5MB.`;
+                        return;
+                    }
+
+                    if (this.certificateFiles.length >= 10) {
+                        this.certificateUploadError = 'Bạn chỉ có thể chọn tối đa 10 tệp chứng chỉ.';
+                        return;
+                    }
+
+                    const alreadySelected = this.certificateFiles.some(selected => selected.name === file.name && selected.size === file.size);
+                    if (!alreadySelected) {
+                        this.certificateFiles.push(file);
+                    }
+                });
+
+                this.syncCertificateFiles();
+            },
+            removeCertificateFile(index) {
+                this.certificateFiles.splice(index, 1);
+                this.certificateUploadError = '';
+                this.syncCertificateFiles();
+            },
+            syncCertificateFiles() {
+                const input = this.$refs.certificateInput;
+                if (!input) return;
+
+                try {
+                    const transfer = new DataTransfer();
+                    this.certificateFiles.forEach(file => transfer.items.add(file));
+                    input.files = transfer.files;
+                } catch (error) {
+                    this.certificateUploadError = 'Trình duyệt không hỗ trợ cập nhật danh sách tệp. Vui lòng chọn lại tệp.';
+                }
+            },
+            formatCertificateFileSize(bytes) {
+                if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                return `${Math.max(1, Math.round(bytes / 1024))} KB`;
             }
         }"
     >
@@ -243,14 +297,37 @@
                         </label>
                         <input
                             type="file"
-                            name="certificate"
+                            x-ref="certificateInput"
+                            name="certificates[]"
+                            multiple
                             accept=".pdf,.jpg,.jpeg,.png"
-                            class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-violet-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 @error('certificate') border-red-500 @enderror"
+                            class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-violet-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 @error('certificates') border-red-500 @enderror"
+                            x-on:change="addCertificateFiles($event.target.files)"
                         >
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Bạn có thể tải lên chứng chỉ sau tại trang hoàn thiện hồ sơ.</p>
-                        @error('certificate')
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Bạn có thể chọn tối đa 10 tệp (PDF, JPG, JPEG, PNG), mỗi tệp tối đa 5MB.</p>
+                        <p x-show="certificateUploadError" x-text="certificateUploadError" class="mt-2 text-xs font-semibold text-red-600 dark:text-red-400"></p>
+
+                        <div x-show="certificateFiles.length > 0" x-cloak class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                            <p class="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><span x-text="certificateFiles.length"></span> tệp đã chọn</p>
+                            <ul class="space-y-2">
+                                <template x-for="(file, index) in certificateFiles" :key="`${file.name}-${file.size}-${index}`">
+                                    <li class="flex items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-300">
+                                        <span class="min-w-0 truncate" x-text="file.name"></span>
+                                        <span class="shrink-0 text-slate-500 dark:text-slate-400" x-text="formatCertificateFileSize(file.size)"></span>
+                                        <button type="button" x-on:click="removeCertificateFile(index)" class="shrink-0 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40" :aria-label="`Xóa ${file.name}`">×</button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+
+                        @error('certificates')
                             <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
+                        @foreach($errors->get('certificates.*') as $messages)
+                            @foreach($messages as $message)
+                                <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @endforeach
+                        @endforeach
                     </div>
                 </div>
             @endunless

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\InstructorCertificate;
 use App\Models\User;
 use App\Notifications\VerifyEmailCodeNotification;
 use App\Services\CaptchaService;
@@ -14,7 +15,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use RuntimeException;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -137,6 +140,163 @@ class AuthenticationTest extends TestCase
         $user = User::query()->where('email', 'new-instructor@example.com')->firstOrFail();
         $this->assertSame('instructor', $user->role);
         $this->assertTrue($this->userHasPrimaryRolePivot($user, 'instructor'));
+    }
+
+    public function test_instructor_registration_allows_no_certificates(): void
+    {
+        Notification::fake();
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-no-certificates@example.com',
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-no-certificates@example.com')->firstOrFail();
+
+        $this->assertSame(0, $user->instructorCertificates()->count());
+        $this->assertNull($user->instructorApplication?->certificate_path);
+    }
+
+    public function test_instructor_registration_stores_multiple_certificates_and_first_legacy_path(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $files = [
+            UploadedFile::fake()->create('degree.pdf', 400, 'application/pdf'),
+            UploadedFile::fake()->image('ielts.jpg'),
+        ];
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-multiple-certificates@example.com',
+            'certificates' => $files,
+            'cv' => UploadedFile::fake()->create('cv.pdf', 200, 'application/pdf'),
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-multiple-certificates@example.com')->firstOrFail();
+        $certificates = $user->instructorCertificates()->orderBy('id')->get();
+
+        $this->assertCount(2, $certificates);
+        $this->assertSame(['degree.pdf', 'ielts.jpg'], $certificates->pluck('original_name')->all());
+        $this->assertSame(['certificate', 'certificate'], $certificates->pluck('document_type')->all());
+        $this->assertSame($certificates->first()->file_path, $user->instructorApplication?->certificate_path);
+        $this->assertDatabaseHas('instructor_certificates', ['user_id' => $user->id, 'original_name' => 'degree.pdf']);
+        $this->assertDatabaseHas('instructor_certificates', ['user_id' => $user->id, 'original_name' => 'ielts.jpg']);
+        Storage::disk('local')->assertExists($certificates->pluck('file_path')->all());
+        Storage::disk('public')->assertExists($user->instructorProfile?->cv);
+
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $response = $this->actingAs($admin)
+            ->get(route('admin.instructors.applications.show', $user))
+            ->assertOk();
+        $response->assertSee('degree')
+            ->assertSee('ielts')
+            ->assertSee(route('admin.instructors.applications.certificates.view', $certificates->first()), false)
+            ->assertSee(route('admin.instructors.applications.certificates.view', $certificates->last()), false);
+    }
+
+    public function test_instructor_registration_accepts_up_to_ten_certificates(): void
+    {
+        Notification::fake();
+
+        $files = collect(range(1, 10))
+            ->map(fn (int $number) => UploadedFile::fake()->create("certificate-{$number}.pdf", 100, 'application/pdf'))
+            ->all();
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-ten-certificates@example.com',
+            'certificates' => $files,
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-ten-certificates@example.com')->firstOrFail();
+        $this->assertSame(10, $user->instructorCertificates()->count());
+    }
+
+    public function test_instructor_registration_accepts_all_supported_certificate_extensions(): void
+    {
+        Notification::fake();
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-supported-certificates@example.com',
+            'certificates' => [
+                UploadedFile::fake()->create('certificate.pdf', 100, 'application/pdf'),
+                UploadedFile::fake()->image('certificate.jpg'),
+                UploadedFile::fake()->image('certificate.jpeg'),
+                UploadedFile::fake()->image('certificate.png'),
+            ],
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-supported-certificates@example.com')->firstOrFail();
+        $this->assertSame(4, $user->instructorCertificates()->count());
+    }
+
+    public function test_instructor_registration_rejects_more_than_ten_certificates(): void
+    {
+        $files = collect(range(1, 11))
+            ->map(fn (int $number) => UploadedFile::fake()->create("certificate-{$number}.pdf", 100, 'application/pdf'))
+            ->all();
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-too-many-certificates@example.com',
+            'certificates' => $files,
+        ])->assertSessionHasErrors('certificates');
+
+        $this->assertDatabaseMissing('users', ['email' => 'instructor-too-many-certificates@example.com']);
+    }
+
+    public function test_instructor_registration_rejects_invalid_certificate_files(): void
+    {
+        $this->postRegister('instructor', [
+            'email' => 'instructor-invalid-certificate@example.com',
+            'certificates' => [UploadedFile::fake()->create('certificate.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')],
+        ])->assertSessionHasErrors('certificates.0');
+
+        $this->assertDatabaseMissing('users', ['email' => 'instructor-invalid-certificate@example.com']);
+    }
+
+    public function test_instructor_registration_rejects_certificate_larger_than_five_megabytes(): void
+    {
+        $this->postRegister('instructor', [
+            'email' => 'instructor-oversized-certificate@example.com',
+            'certificates' => [UploadedFile::fake()->create('certificate.pdf', 5121, 'application/pdf')],
+        ])->assertSessionHasErrors('certificates.0');
+
+        $this->assertDatabaseMissing('users', ['email' => 'instructor-oversized-certificate@example.com']);
+    }
+
+    public function test_instructor_registration_rolls_back_and_cleans_up_uploaded_files_when_certificate_creation_fails(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $created = 0;
+        InstructorCertificate::creating(function () use (&$created): void {
+            $created++;
+            if ($created === 2) {
+                throw new RuntimeException('Simulated certificate persistence failure.');
+            }
+        });
+
+        try {
+            $this->withoutExceptionHandling();
+            $this->postRegister('instructor', [
+                'email' => 'instructor-upload-rollback@example.com',
+                'cv' => UploadedFile::fake()->create('cv.pdf', 200, 'application/pdf'),
+                'certificates' => [
+                    UploadedFile::fake()->create('certificate-one.pdf', 100, 'application/pdf'),
+                    UploadedFile::fake()->create('certificate-two.pdf', 100, 'application/pdf'),
+                ],
+            ]);
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Simulated certificate persistence failure.', $exception->getMessage());
+        } finally {
+            InstructorCertificate::flushEventListeners();
+        }
+
+        $this->assertDatabaseMissing('users', ['email' => 'instructor-upload-rollback@example.com']);
+        $this->assertSame([], Storage::disk('local')->allFiles('instructor-certificates'));
+        $this->assertSame([], Storage::disk('public')->allFiles('instructor_cvs'));
     }
 
     public function test_duplicate_email_registration_is_rejected(): void
@@ -487,7 +647,6 @@ class AuthenticationTest extends TestCase
                 'specialty' => 'Công nghệ thông tin',
                 'experience' => '5 năm kinh nghiệm lập trình',
                 'bio' => 'Giới thiệu bản thân ngắn gọn.',
-                'certificate' => UploadedFile::fake()->create('certificate.pdf', 100, 'application/pdf'),
                 'agree_information' => '1',
                 'agree_terms' => '1',
             ]);
