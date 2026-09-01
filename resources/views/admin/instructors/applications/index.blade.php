@@ -2,36 +2,13 @@
     <div class="space-y-6" x-data="{ 
         rejectModal: false, 
         rejectUrl: '', 
-        rejectName: '',
-        selectedIds: [],
-        applicationsCount: {{ $applications->count() }},
-        toggleSelectAll() {
-            if (this.selectedIds.length === this.applicationsCount) {
-                this.selectedIds = [];
-            } else {
-                this.selectedIds = Array.from(document.querySelectorAll('.row-checkbox')).map(el => parseInt(el.value));
-            }
-        },
-        isAllSelected() {
-            return this.selectedIds.length > 0 && this.selectedIds.length === this.applicationsCount;
-        },
-        toggleSelect(id) {
-            const idx = this.selectedIds.indexOf(id);
-            if (idx > -1) {
-                this.selectedIds.splice(idx, 1);
-            } else {
-                this.selectedIds.push(id);
-            }
-        },
-        clearSelection() {
-            this.selectedIds = [];
-        }
+        rejectName: ''
     }">
         {{-- ========================================================================= --}}
         {{-- HEADER SECTION WITH CONFIG BUTTON                                         --}}
         {{-- ========================================================================= --}}
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Thống kê & Quản lý ứng tuyển</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Quản lý ứng tuyển giảng viên</h2>
             <div>
                 <a href="{{ route('admin.instructors.requirements.index') }}"
                    class="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs sm:text-sm font-bold text-[#0056D2] shadow-sm transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60">
@@ -47,6 +24,7 @@
         {{-- ========================================================================= --}}
         {{-- SUMMARY STAT TABLE                                                        --}}
         {{-- ========================================================================= --}}
+        @if(false) {{-- Statistics moved to admin.instructors.statistics --}}
         <div class="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,.75fr)]">
             <section class="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -220,11 +198,13 @@
             </div>
         </div>
 
+        @endif
+
         {{-- ========================================================================= --}}
         {{-- FILTER BAR (ADVANCED FILTER)                                              --}}
         {{-- ========================================================================= --}}
         <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <form method="GET" action="{{ route('admin.instructors.applications.index') }}" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end">
+            <form method="GET" action="{{ route('admin.instructors.applications.index') }}" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-6">
                 {{-- Ô tìm kiếm --}}
                 <div class="space-y-1">
                     <label for="search" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tìm kiếm</label>
@@ -254,10 +234,17 @@
                     </select>
                 </div>
 
-                {{-- Ô ngày đăng ký --}}
+                {{-- Khoảng ngày đăng ký --}}
                 <div class="space-y-1">
-                    <label for="date" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ngày đăng ký</label>
-                    <input type="date" id="date" name="date" value="{{ $date }}" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <label for="date_from" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Từ ngày</label>
+                    <input type="date" id="date_from" name="date_from" value="{{ $dateFrom }}" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    @error('date_from')<p class="text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
+                </div>
+
+                <div class="space-y-1">
+                    <label for="date_to" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Đến ngày</label>
+                    <input type="date" id="date_to" name="date_to" value="{{ $dateTo }}" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    @error('date_to')<p class="text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
                 </div>
 
                 {{-- Nút hành động --}}
@@ -309,28 +296,6 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- BULK ACTIONS BAR (UI ONLY)                                                --}}
-        {{-- ========================================================================= --}}
-        <div x-show="selectedIds.length > 0" x-cloak class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-blue-50 p-4 border border-blue-100 dark:bg-blue-950/40 dark:border-blue-900/60 transition duration-200">
-            <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-[#0056D2] dark:text-blue-300">
-                    Đã chọn <span x-text="selectedIds.length"></span> giảng viên
-                </span>
-            </div>
-            <div class="flex items-center gap-2">
-                <button type="button" disabled class="opacity-50 cursor-not-allowed inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition">
-                    Duyệt đã chọn
-                </button>
-                <button type="button" disabled class="opacity-50 cursor-not-allowed inline-flex items-center gap-1 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition">
-                    Từ chối đã chọn
-                </button>
-                <button type="button" @click="clearSelection()" class="inline-flex items-center gap-1 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 px-3.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 transition">
-                    Bỏ chọn
-                </button>
-            </div>
-        </div>
-
-        {{-- ========================================================================= --}}
         {{-- APPLICATIONS TABLE                                                        --}}
         {{-- ========================================================================= --}}
         <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -338,10 +303,6 @@
                 <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                     <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                         <tr>
-                            <th class="px-4 py-4 w-12 text-center">
-                                <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" :checked="isAllSelected()" @change="toggleSelectAll()">
-                            </th>
-                            <th class="px-4 py-4 w-16 text-center">STT</th>
                             <th class="px-6 py-4 font-black">Giảng viên</th>
                             <th class="px-6 py-4 font-black">Chuyên môn</th>
                             <th class="px-6 py-4 font-black">Minh chứng</th>
@@ -354,16 +315,6 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @forelse($applications as $app)
                             <tr class="transition duration-150 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 {{ $app->needs_admin_review ? 'bg-rose-50/30 dark:bg-rose-950/10' : '' }}">
-                                {{-- Checkbox --}}
-                                <td class="px-4 py-4 text-center">
-                                    <input type="checkbox" value="{{ $app->id }}" class="row-checkbox rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" :checked="selectedIds.includes({{ $app->id }})" @change="toggleSelect({{ $app->id }})">
-                                </td>
-
-                                {{-- STT --}}
-                                <td class="px-4 py-4 text-center font-bold text-slate-400 dark:text-slate-500">
-                                    {{ ($applications->currentPage() - 1) * $applications->perPage() + $loop->iteration }}
-                                </td>
-
                                 {{-- Giảng viên (Gộp basic info: Avatar, Name, Username, Email, Phone) --}}
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
@@ -579,6 +530,7 @@
         </div>
     </div>
 
+    @if(false) {{-- Chart script moved to admin.instructors.statistics --}}
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         if (!window.Chart) return;
@@ -645,4 +597,5 @@
         });
     });
     </script>
+    @endif
 </x-admin-layout>

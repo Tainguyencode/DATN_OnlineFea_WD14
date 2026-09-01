@@ -926,7 +926,7 @@ class ContentUpdateService
                 $payload['chapter_id'] = $chapId;
             }
 
-            $lesson = Lesson::create(array_merge([
+            $lessonData = array_merge([
                 'course_id' => $update->course_id,
                 'content_version' => 1,
             ], array_intersect_key($payload, array_flip([
@@ -936,7 +936,16 @@ class ContentUpdateService
                 'video_original_name', 'video_mime', 'video_size',
                 'content', 'document_file', 'duration', 'duration_seconds',
                 'is_preview', 'is_required', 'sort_order', 'status', 'attachments',
-            ]))));
+            ])));
+            $lesson = $update->entity_id
+                ? Lesson::query()->where('course_id', $update->course_id)->find($update->entity_id)
+                : null;
+            if ($lesson) {
+                $lesson->update($lessonData);
+            } else {
+                $lesson = Lesson::create($lessonData);
+                $update->update(['entity_id' => $lesson->id]);
+            }
 
             app(CurriculumLessonService::class)->syncAssignment($lesson, $payload);
 
@@ -1133,6 +1142,31 @@ class ContentUpdateService
             $secId ??= $payload['chapter_id'] ?? null;
 
             if ($lUpdate->action === ContentUpdate::ACTION_CREATE) {
+                // New approved-course lessons now have a persisted draft identity
+                // before video upload. Decorate that row instead of adding the old
+                // synthetic ContentUpdate-ID lesson a second time.
+                $persistedLesson = $lUpdate->entity_id
+                    ? $sections->flatMap(fn ($section) => $section->lessons)
+                        ->first(fn ($lesson) => (int) $lesson->id === (int) $lUpdate->entity_id)
+                    : null;
+                if ($persistedLesson) {
+                    foreach ($payload as $key => $value) {
+                        if (in_array($key, [
+                            'title', 'type', 'video_url', 'video_path', 'original_video_key',
+                            'hls_manifest_key', 'upload_status', 'processing_status',
+                            'video_original_name', 'video_mime', 'video_size', 'content',
+                            'document_file', 'duration', 'duration_seconds', 'is_preview',
+                            'sort_order', 'status',
+                        ], true)) {
+                            $persistedLesson->{$key} = $value;
+                        }
+                    }
+                    $persistedLesson->draft_update = $lUpdate;
+                    $persistedLesson->update_status = $lUpdate->status;
+                    $persistedLesson->is_draft_create = true;
+                    continue;
+                }
+
                 $draftLesson = new Lesson([
                     'course_id' => $course->id,
                     'section_id' => $secId,

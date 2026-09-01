@@ -348,10 +348,36 @@ class CurriculumController extends Controller
             Log::info('[UPLOAD TRACE] RETURN RESPONSE (ContentUpdate)');
 
             if ($request->wantsJson() || $request->ajax()) {
+                $lesson = Lesson::query()
+                    ->where('course_id', $course->id)
+                    ->findOrFail($result->entity_id);
+                $lesson->draft_update = $result;
+                $lesson->update_status = $result->status;
+                $lesson->is_draft_create = true;
+                $lessonHtml = view('instructor.courses.partials.lesson-item', [
+                    'course' => $course,
+                    'section' => $sectionModel,
+                    'lesson' => $lesson,
+                    'lessonTypes' => $this->lessonTypes(),
+                    'lessonStatuses' => $this->lessonStatuses(),
+                ])->render();
+
                 return response()->json([
                     'success' => true,
-                    'lesson_id' => $result->id,
-                    'title' => $result->payload['title'] ?? 'Bài học',
+                    'lesson_id' => $lesson->id,
+                    'content_update_id' => $result->id,
+                    'title' => $lesson->title,
+                    'lesson' => [
+                        'id' => $lesson->id,
+                        'section_id' => $lesson->section_id,
+                        'title' => $lesson->title,
+                        'type' => $lesson->type,
+                        'sort_order' => $lesson->sort_order,
+                        'status' => $lesson->status,
+                        'upload_status' => $lesson->upload_status,
+                        'processing_status' => $lesson->processing_status,
+                    ],
+                    'html' => $lessonHtml,
                     'message' => 'Đã lưu bản nháp bài học mới.',
                     ...$this->reviewStateResponseData($course, $request->user()),
                 ]);
@@ -485,7 +511,11 @@ class CurriculumController extends Controller
                         'content_update_id' => $contentUpdate->id,
                         'source' => $request->hasFile('video_file') ? 'local' : 's3',
                     ]);
-                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                    ConvertContentUpdateVideoToHLS::dispatch(
+                        $contentUpdate,
+                        data_get($contentUpdate->payload, 'original_video_key'),
+                        data_get($contentUpdate->payload, 'video_path'),
+                    );
                 }
             }
 
@@ -650,7 +680,19 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
         abort_unless((int) $contentUpdate->course_id === (int) $course->id, 404);
 
+        $draftLesson = $contentUpdate->type === ContentUpdate::TYPE_LESSON
+            && $contentUpdate->action === ContentUpdate::ACTION_CREATE
+            && $contentUpdate->entity_id
+            ? Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('status', Lesson::STATUS_DRAFT)
+                ->find($contentUpdate->entity_id)
+            : null;
         $payload = app(ContentUpdateService::class)->deleteDraft($contentUpdate);
+        if ($draftLesson) {
+            $this->deleteLessonFiles($draftLesson);
+            $draftLesson->delete();
+        }
         if (! empty($payload['video_path'])) {
             Storage::disk('local')->delete($payload['video_path']);
         }

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
 use App\Services\ContentVersionService;
+use App\Services\HlsVideoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,150 @@ use Tests\TestCase;
 class PublishedVideoDraftWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_video_revisions_in_the_same_content_update_have_different_unique_ids(): void
+    {
+        [$instructor, , $course, $lesson] = $this->publishedVideoCourse();
+        $update = ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'entity_id' => $lesson->id,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => ['original_video_key' => 'originals/revisions/video-a.mp4'],
+        ]);
+
+        $jobA = new ConvertContentUpdateVideoToHLS($update, 'originals/revisions/video-a.mp4');
+        $jobARepeat = new ConvertContentUpdateVideoToHLS($update, 'originals/revisions/video-a.mp4');
+        $jobB = new ConvertContentUpdateVideoToHLS($update, 'originals/revisions/video-b.mp4');
+
+        $this->assertSame($jobA->uniqueId(), $jobARepeat->uniqueId());
+        $this->assertNotSame($jobA->uniqueId(), $jobB->uniqueId());
+    }
+
+    public function test_stale_video_job_does_not_mutate_the_replacement_video(): void
+    {
+        Storage::fake('s3');
+        [$instructor, , $course, $lesson] = $this->publishedVideoCourse();
+        $updates = app(ContentUpdateService::class);
+        $versions = app(ContentVersionService::class);
+        $videoA = 'originals/revisions/video-a.mp4';
+        $videoB = 'originals/revisions/video-b.mp4';
+        $update = ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'entity_id' => $lesson->id,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => [
+                'type' => Lesson::TYPE_VIDEO,
+                'original_video_key' => $videoA,
+                'upload_status' => 'uploaded',
+                'processing_status' => 'pending',
+            ],
+        ]);
+        $jobA = new ConvertContentUpdateVideoToHLS($update, $videoA);
+
+        $updates->updateDraft($update, [
+            'original_video_key' => $videoB,
+            'processing_status' => 'pending',
+            'hls_manifest_key' => null,
+            'video_path' => null,
+        ]);
+        $jobA->handle($updates, $versions);
+
+        $payload = $update->fresh()->payload;
+        $this->assertSame($videoB, $payload['original_video_key']);
+        $this->assertSame('pending', $payload['processing_status']);
+        $this->assertNull($payload['hls_manifest_key']);
+        $this->assertNull($payload['video_path']);
+    }
+
+    public function test_job_becoming_stale_during_encode_cannot_commit_over_the_new_video(): void
+    {
+        Storage::fake('s3');
+        [$instructor, , $course, $lesson] = $this->publishedVideoCourse();
+        $updates = app(ContentUpdateService::class);
+        $versions = app(ContentVersionService::class);
+        $videoA = 'originals/revisions/video-a.mp4';
+        $videoB = 'originals/revisions/video-b.mp4';
+        Storage::disk('s3')->put($videoA, 'video-a');
+        Storage::disk('s3')->put($videoB, 'video-b');
+        $update = ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => ContentUpdate::ACTION_CREATE,
+            'entity_id' => $lesson->id,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $instructor->id,
+            'payload' => [
+                'type' => Lesson::TYPE_VIDEO,
+                'original_video_key' => $videoA,
+                'upload_status' => 'uploaded',
+                'processing_status' => 'pending',
+            ],
+        ]);
+
+        $this->mock(HlsVideoService::class, function (MockInterface $mock) use ($updates, $update, $videoB): void {
+            $mock->shouldReceive('transcode')->once()->andReturnUsing(function () use ($updates, $update, $videoB): array {
+                $updates->updateDraft($update->fresh(), [
+                    'original_video_key' => $videoB,
+                    'processing_status' => 'pending',
+                    'hls_manifest_key' => null,
+                    'video_path' => null,
+                ]);
+
+                return ['duration_seconds' => 20, 'file_count' => 3, 'segment_count' => 1];
+            });
+            $mock->shouldReceive('publish')->once()->andReturn([
+                'use_s3' => true,
+                'mirrored_locally' => false,
+                'file_count' => 3,
+                'obsolete_s3_files_removed' => 0,
+            ]);
+        });
+
+        (new ConvertContentUpdateVideoToHLS($update, $videoA))->handle($updates, $versions);
+
+        $payloadAfterA = $update->fresh()->payload;
+        $this->assertSame($videoB, $payloadAfterA['original_video_key']);
+        $this->assertSame('pending', $payloadAfterA['processing_status']);
+        $this->assertNull($payloadAfterA['hls_manifest_key']);
+        $this->assertNull($payloadAfterA['video_path']);
+
+        $publishedS3Directory = null;
+        $this->mock(HlsVideoService::class, function (MockInterface $mock) use (&$publishedS3Directory): void {
+            $mock->shouldReceive('transcode')->once()->andReturn([
+                'duration_seconds' => 30,
+                'file_count' => 4,
+                'segment_count' => 2,
+            ]);
+            $mock->shouldReceive('publish')->once()->andReturnUsing(
+                function (string $outputDirectory, string $s3Directory) use (&$publishedS3Directory): array {
+                    $publishedS3Directory = $s3Directory;
+
+                    return [
+                        'use_s3' => true,
+                        'mirrored_locally' => false,
+                        'file_count' => 4,
+                        'obsolete_s3_files_removed' => 0,
+                    ];
+                }
+            );
+        });
+
+        $jobB = new ConvertContentUpdateVideoToHLS($update->fresh(), $videoB);
+        $jobB->handle($updates, $versions);
+
+        $payloadAfterB = $update->fresh()->payload;
+        $this->assertSame($videoB, $payloadAfterB['original_video_key']);
+        $this->assertSame('completed', $payloadAfterB['processing_status']);
+        $this->assertStringContainsString('/revisions/', $payloadAfterB['hls_manifest_key']);
+        $this->assertSame($publishedS3Directory.'/master.m3u8', $payloadAfterB['hls_manifest_key']);
+        $this->assertSame(30, $payloadAfterB['duration_seconds']);
+    }
 
     public function test_legacy_duplicate_lesson_drafts_are_consolidated_and_draft_candidate_is_cleanly_deleted(): void
     {
@@ -172,7 +317,8 @@ class PublishedVideoDraftWorkflowTest extends TestCase
             'content_update_id' => $second->json('contentUpdateId'),
         ])->assertOk()->assertJsonPath('versionNumber', 3);
 
-        Queue::assertPushed(ConvertContentUpdateVideoToHLS::class, fn (ConvertContentUpdateVideoToHLS $job): bool => (int) $job->contentUpdate->id === (int) $second->json('contentUpdateId'));
+        Queue::assertPushed(ConvertContentUpdateVideoToHLS::class, fn (ConvertContentUpdateVideoToHLS $job): bool => (int) $job->contentUpdate->id === (int) $second->json('contentUpdateId')
+            && $job->expectedOriginalVideoKey === $second->json('key'));
         Storage::disk('s3')->put($second->json('key'), 'video-v3');
 
         $this->putJson(route('instructor.courses.lessons.update', [$course, $lesson]), [

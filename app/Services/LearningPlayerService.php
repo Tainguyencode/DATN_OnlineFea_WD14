@@ -428,6 +428,7 @@ class LearningPlayerService
             'remaining_seconds' => $attempt ? $attemptService->remainingTime($attempt) : null,
             'saved_answers' => $attempt?->answers ?? [],
             'start_url' => route('courses.lessons.quiz.start', [$course, $lesson]),
+            'standalone_url' => route('learn.lessons.quiz.show', [$course->slug, $lesson]),
             'submit_url' => route('courses.lessons.quiz.submit', [$course, $lesson]),
             'save_progress_url' => route('courses.lessons.quiz.save-progress', [$course, $lesson]),
             'terminate_url' => route('courses.lessons.quiz.terminate', [$course, $lesson]),

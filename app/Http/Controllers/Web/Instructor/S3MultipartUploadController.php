@@ -44,8 +44,8 @@ class S3MultipartUploadController extends Controller
             'lesson_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('lessons', 'id')->where('course_id', $course->id),
             ],
+            'content_update_id' => ['nullable', 'integer'],
             'file_size' => [
                 'required',
                 'integer',
@@ -66,6 +66,14 @@ class S3MultipartUploadController extends Controller
         $lesson = $lessonId
             ? Lesson::query()->where('course_id', $course->id)->find($lessonId)
             : null;
+        if (! $lesson && $lessonId) {
+            $lesson = $this->materializeLegacyDraftCreateLesson(
+                $course,
+                (int) $lessonId,
+                (int) ($validated['content_update_id'] ?? 0),
+                $request->user(),
+            );
+        }
         if ($lessonId && ! $lesson) {
             throw ValidationException::withMessages(['lesson_id' => 'Bài học không thuộc khóa học này.']);
         }
@@ -73,28 +81,42 @@ class S3MultipartUploadController extends Controller
         $contentUpdate = null;
         $candidate = null;
         if ($course->isPublished() && $lesson) {
-            $contentUpdate = app(ContentUpdateService::class)->ensureLessonUpdateDraft($course, $lesson, $request->user());
+            $requestedUpdateId = (int) ($validated['content_update_id'] ?? 0);
+            $contentUpdate = $requestedUpdateId > 0
+                ? ContentUpdate::query()
+                    ->whereKey($requestedUpdateId)
+                    ->where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_LESSON)
+                    ->where('action', ContentUpdate::ACTION_CREATE)
+                    ->where('entity_id', $lesson->id)
+                    ->where('created_by', $request->user()->id)
+                    ->where('status', ContentUpdate::STATUS_DRAFT)
+                    ->first()
+                : null;
+            $contentUpdate ??= app(ContentUpdateService::class)->ensureLessonUpdateDraft($course, $lesson, $request->user());
             if ((int) $contentUpdate->created_by !== (int) $request->user()->id) {
                 throw ValidationException::withMessages([
                     'content_update_id' => 'Bản nháp video không thuộc giảng viên đang thao tác.',
                 ]);
             }
-            $candidate = LessonVersion::query()
-                ->where('content_update_id', $contentUpdate->id)
-                ->where('lesson_id', $lesson->id)
-                ->where('status', LessonVersion::STATUS_DRAFT)
-                ->firstOrFail();
-            if ((int) $lesson->fresh()->draft_version_id !== (int) $candidate->id) {
-                throw ValidationException::withMessages([
-                    'content_update_id' => 'Phiên bản nháp video không khớp với bài học.',
-                ]);
+            if ($contentUpdate->action === ContentUpdate::ACTION_UPDATE) {
+                $candidate = LessonVersion::query()
+                    ->where('content_update_id', $contentUpdate->id)
+                    ->where('lesson_id', $lesson->id)
+                    ->where('status', LessonVersion::STATUS_DRAFT)
+                    ->firstOrFail();
+                if ((int) $lesson->fresh()->draft_version_id !== (int) $candidate->id) {
+                    throw ValidationException::withMessages([
+                        'content_update_id' => 'Phiên bản nháp video không khớp với bài học.',
+                    ]);
+                }
             }
         }
 
         // Sinh hoặc sử dụng S3 object key bảo mật theo cấu trúc quy định
         $key = $validated['key'] ?? ($candidate
             ? $this->s3Service->generateDraftVideoObjectKey($course->id, $lesson->id, $contentUpdate->id, $candidate->version_number, $filename)
-            : $this->s3Service->generateVideoObjectKey($course->id, $lessonId, $filename));
+            : $this->s3Service->generateVideoObjectKey($course->id, $lesson?->id ?? $lessonId, $filename));
         if ($contentUpdate && $candidate && ! Str::startsWith($key, $this->draftVideoKeyPrefix($course, $lesson, $contentUpdate, $candidate))) {
             throw ValidationException::withMessages([
                 'key' => 'Video không thuộc đúng bản nháp bài học đang chỉnh sửa.',
@@ -124,6 +146,7 @@ class S3MultipartUploadController extends Controller
             return response()->json([
                 'uploadId' => $uploadId,
                 'key' => $key,
+                'lessonId' => $lesson?->id,
                 'status' => 'initialized',
                 'bucket' => $this->s3Service->getBucket(),
                 'contentUpdateId' => $contentUpdate?->id,
@@ -284,11 +307,11 @@ class S3MultipartUploadController extends Controller
                         ]);
                     }
 
-                    $contentUpdate = ContentUpdate::query()
-                        ->whereKey($requestedUpdateId)
-                        ->where('course_id', $course->id)
-                        ->where('type', ContentUpdate::TYPE_LESSON)
-                        ->where('action', ContentUpdate::ACTION_UPDATE)
+                $contentUpdate = ContentUpdate::query()
+                    ->whereKey($requestedUpdateId)
+                    ->where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_LESSON)
+                    ->whereIn('action', [ContentUpdate::ACTION_CREATE, ContentUpdate::ACTION_UPDATE])
                         ->where('entity_id', $lesson->id)
                         ->where('created_by', $request->user()->id)
                         ->where('status', ContentUpdate::STATUS_DRAFT)
@@ -300,28 +323,36 @@ class S3MultipartUploadController extends Controller
                         ]);
                     }
 
-                    $candidate = LessonVersion::query()
-                        ->where('content_update_id', $contentUpdate->id)
-                        ->where('lesson_id', $lesson->id)
-                        ->where('status', LessonVersion::STATUS_DRAFT)
-                        ->lockForUpdate()
-                        ->first();
-                    if (! $candidate || (int) $lesson->draft_version_id !== (int) $candidate->id) {
-                        throw ValidationException::withMessages([
-                            'content_update_id' => 'Phiên bản nháp video không khớp với bài học đang chỉnh sửa.',
-                        ]);
-                    }
+                    if ($contentUpdate->action === ContentUpdate::ACTION_UPDATE) {
+                        $candidate = LessonVersion::query()
+                            ->where('content_update_id', $contentUpdate->id)
+                            ->where('lesson_id', $lesson->id)
+                            ->where('status', LessonVersion::STATUS_DRAFT)
+                            ->lockForUpdate()
+                            ->first();
+                        if (! $candidate || (int) $lesson->draft_version_id !== (int) $candidate->id) {
+                            throw ValidationException::withMessages([
+                                'content_update_id' => 'Phiên bản nháp video không khớp với bài học đang chỉnh sửa.',
+                            ]);
+                        }
 
-                    if (! Str::startsWith($key, $this->draftVideoKeyPrefix($course, $lesson, $contentUpdate, $candidate))) {
-                        throw ValidationException::withMessages([
-                            'key' => 'Video không thuộc đúng bản nháp bài học đang chỉnh sửa.',
-                        ]);
+                        if (! Str::startsWith($key, $this->draftVideoKeyPrefix($course, $lesson, $contentUpdate, $candidate))) {
+                            throw ValidationException::withMessages([
+                                'key' => 'Video không thuộc đúng bản nháp bài học đang chỉnh sửa.',
+                            ]);
+                        }
                     }
                 }
 
                 $result = $this->s3Service->completeMultipartUpload($key, $validated['uploadId'], $validated['parts']);
 
-                if ($contentUpdate && $candidate) {
+                // A published-course video can belong to either an existing
+                // lesson update (with a LessonVersion candidate) or a new
+                // draft lesson (CREATE, intentionally without a candidate).
+                // Both cases must finish the multipart upload through the
+                // content-update pipeline so HLS is queued after S3 confirms
+                // every part.
+                if ($contentUpdate) {
                     $payload = $contentUpdate->payload ?? [];
                     $changes = [
                         'original_video_key' => $key,
@@ -332,14 +363,27 @@ class S3MultipartUploadController extends Controller
                         $changes['duration_seconds'] = $duration;
                     }
                     $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, $changes);
-                    $preparedCandidate = app(ContentVersionService::class)->prepareDraftCandidate($contentUpdate, $request->user());
-                    if (! $preparedCandidate || (int) $preparedCandidate->id !== (int) $candidate->id) {
-                        throw ValidationException::withMessages([
-                            'content_update_id' => 'Phiên bản nháp video đã thay đổi trong khi hoàn tất tải lên.',
+                    // A CREATE update owns a draft-only Lesson row. Keeping the
+                    // original object key on that real row makes the upload-to-
+                    // lesson mapping durable without touching a live lesson.
+                    if ($contentUpdate->action === ContentUpdate::ACTION_CREATE) {
+                        $lesson->update([
+                            'original_video_key' => $key,
+                            'upload_status' => 'uploaded',
+                            'processing_status' => 'pending',
+                            ...($duration > 0 ? ['duration' => $duration, 'duration_seconds' => $duration] : []),
                         ]);
                     }
-                    Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'lesson_version_id' => $candidate->id, 'key' => $key]);
-                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate)->afterCommit();
+                    if ($candidate) {
+                        $preparedCandidate = app(ContentVersionService::class)->prepareDraftCandidate($contentUpdate, $request->user());
+                        if (! $preparedCandidate || (int) $preparedCandidate->id !== (int) $candidate->id) {
+                            throw ValidationException::withMessages([
+                                'content_update_id' => 'Phiên bản nháp video đã thay đổi trong khi hoàn tất tải lên.',
+                            ]);
+                        }
+                    }
+                    Log::info('[S3 MULTIPART COMPLETE] DISPATCH HLS JOB for ContentUpdate', ['content_update_id' => $contentUpdate->id, 'lesson_version_id' => $candidate?->id, 'key' => $key]);
+                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate, $key)->afterCommit();
 
                     return response()->json([
                         'status' => 'success',
@@ -347,7 +391,7 @@ class S3MultipartUploadController extends Controller
                         'location' => $result['location'] ?? null,
                         'content_update_id' => $contentUpdate->id,
                         'contentUpdateId' => $contentUpdate->id,
-                        'versionNumber' => $candidate->version_number,
+                        'versionNumber' => $candidate?->version_number,
                     ]);
                 }
 
@@ -437,5 +481,66 @@ class S3MultipartUploadController extends Controller
         LessonVersion $candidate
     ): string {
         return "originals/courses/{$course->id}/lessons/{$lesson->id}/content-updates/{$contentUpdate->id}/versions/v{$candidate->version_number}/";
+    }
+
+    /**
+     * Legacy draft-create rows used their ContentUpdate ID as a temporary UI
+     * lesson ID. Materialize one real draft Lesson only for that exact record,
+     * so the existing multipart security checks can continue using lesson_id.
+     */
+    private function materializeLegacyDraftCreateLesson(Course $course, int $providedLessonId, int $contentUpdateId, $user): ?Lesson
+    {
+        if ($contentUpdateId <= 0 || $providedLessonId !== $contentUpdateId) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($course, $contentUpdateId, $user): ?Lesson {
+            $update = ContentUpdate::query()
+                ->whereKey($contentUpdateId)
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_LESSON)
+                ->where('action', ContentUpdate::ACTION_CREATE)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->where('created_by', $user->id)
+                ->lockForUpdate()
+                ->first();
+            if (! $update) {
+                return null;
+            }
+
+            if ($update->entity_id) {
+                return Lesson::query()->where('course_id', $course->id)->find($update->entity_id);
+            }
+
+            $payload = $update->payload ?? [];
+            $sectionId = (int) ($payload['section_id'] ?? 0);
+            $sectionExists = $sectionId > 0
+                && $course->courseSections()->whereKey($sectionId)->exists();
+            if (! $sectionExists) {
+                throw ValidationException::withMessages(['lesson_id' => 'Chương học của bài học nháp không hợp lệ.']);
+            }
+
+            $lesson = Lesson::create([
+                ...array_intersect_key($payload, array_flip([
+                    'title', 'type', 'video_url', 'video_path', 'original_video_key',
+                    'hls_manifest_key', 'upload_status', 'processing_status',
+                    'video_original_name', 'video_mime', 'video_size', 'content',
+                    'document_file', 'duration', 'duration_seconds', 'is_preview',
+                    'is_required', 'sort_order', 'attachments', 'subtitles',
+                ])),
+                'course_id' => $course->id,
+                'section_id' => $sectionId,
+                'status' => Lesson::STATUS_DRAFT,
+            ]);
+            $update->update(['entity_id' => $lesson->id]);
+
+            Log::info('[S3 MULTIPART] Materialized legacy draft lesson identity.', [
+                'course_id' => $course->id,
+                'content_update_id' => $update->id,
+                'lesson_id' => $lesson->id,
+            ]);
+
+            return $lesson;
+        });
     }
 }

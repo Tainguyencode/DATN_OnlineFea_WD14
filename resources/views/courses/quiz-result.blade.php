@@ -257,9 +257,6 @@
             </a>
 
             <div class="flex flex-wrap items-center gap-3">
-                <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="inline-flex h-11 items-center rounded-xl border border-indigo-600 px-5 text-sm font-extrabold text-indigo-600 transition hover:bg-indigo-50 dark:border-indigo-400 dark:text-indigo-400 dark:hover:bg-indigo-950/50">
-                    Làm lại Quiz
-                </a>
                 <a href="{{ route('courses.show', $course->slug) }}" class="inline-flex h-11 items-center rounded-xl bg-indigo-600 px-6 text-sm font-extrabold text-white transition hover:bg-indigo-700 shadow-sm">
                     Về trang khóa học
                 </a>

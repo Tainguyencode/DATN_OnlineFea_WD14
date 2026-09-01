@@ -14,8 +14,10 @@ use App\Services\InstructorRequirementService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -27,6 +29,17 @@ class InstructorApplicationController extends Controller
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
         $categoryId = $request->query('category_id');
+
+        $request->validate([
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+        ]);
+
+        if ($dateFrom && $dateTo && Carbon::parse($dateFrom)->gt(Carbon::parse($dateTo))) {
+            throw ValidationException::withMessages([
+                'date_from' => 'Ngày bắt đầu không được lớn hơn ngày kết thúc.',
+            ]);
+        }
 
         $query = User::where('users.role', 'instructor')
             ->with(['instructorProfile.category', 'instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
@@ -71,7 +84,7 @@ class InstructorApplicationController extends Controller
             });
         }
 
-        // 3. Bộ lọc: Lọc theo ngày đăng ký (users.created_at)
+        // Backward compatibility for older bookmarked links using a single registration date.
         if ($request->filled('date')) {
             $date = $request->query('date');
             $query->whereDate('created_at', $date);
@@ -97,7 +110,14 @@ class InstructorApplicationController extends Controller
             ]);
         });
 
-        // Thống kê tổng quan hệ thống (Phương án A - không thay đổi khi sử dụng bộ lọc)
+        // Thống kê được hiển thị trên trang statistics riêng.
+        $categories = Category::query()
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($q) => $q->orderBy('name')])
+            ->orderBy('name')
+            ->get();
+
+        // Counts remain necessary for the management-page status tabs only.
         $counts = [
             'all' => User::where('role', 'instructor')->count(),
             'new_updates' => User::where('role', 'instructor')->where('needs_admin_review', true)->count(),
@@ -106,9 +126,71 @@ class InstructorApplicationController extends Controller
             'rejected' => User::where('role', 'instructor')->where('instructor_status', 'rejected')->count(),
         ];
 
-        $growthUsers = User::query()
-            ->where('role', 'instructor')
-            ->get(['created_at', 'approved_at']);
+        return view('admin.instructors.applications.index', [
+            'applications' => $applications,
+            'status' => $status,
+            'counts' => $counts,
+            'categories' => $categories,
+            'search' => $request->query('search'),
+            'categoryId' => $categoryId,
+            'date' => $request->query('date'),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+        ]);
+    }
+
+    public function statistics(Request $request): View
+    {
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+        $month = $request->query('month');
+        $week = $request->query('week');
+
+        $request->validate([
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'month' => ['nullable', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+            'week' => ['nullable', 'regex:/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/'],
+        ]);
+
+        if ($dateFrom && $dateTo && Carbon::parse($dateFrom)->gt(Carbon::parse($dateTo))) {
+            throw ValidationException::withMessages([
+                'date_from' => 'Ngày bắt đầu không được lớn hơn ngày kết thúc.',
+            ]);
+        }
+
+        if ($month && $week) {
+            throw ValidationException::withMessages([
+                'month' => 'Vui lòng chọn một trong hai bộ lọc tháng hoặc tuần.',
+            ]);
+        }
+
+        $statisticsQuery = User::query()->where('role', 'instructor');
+        if ($dateFrom) {
+            $statisticsQuery->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $statisticsQuery->whereDate('created_at', '<=', $dateTo);
+        }
+        if ($month) {
+            $monthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $statisticsQuery->whereBetween('created_at', [$monthStart, $monthStart->copy()->endOfMonth()]);
+        }
+        if ($week) {
+            [$weekYear, $weekNumber] = sscanf($week, '%d-W%d');
+            $weekStart = Carbon::now()->setISODate($weekYear, $weekNumber)->startOfWeek();
+            $statisticsQuery->whereBetween('created_at', [$weekStart, $weekStart->copy()->endOfWeek()]);
+        }
+
+        $counts = [
+            'all' => (clone $statisticsQuery)->count(),
+            'new_updates' => (clone $statisticsQuery)->where('needs_admin_review', true)->count(),
+            'pending' => (clone $statisticsQuery)->where('instructor_status', 'pending')->count(),
+            'approved' => (clone $statisticsQuery)->where('instructor_status', 'approved')->count(),
+            'rejected' => (clone $statisticsQuery)->where('instructor_status', 'rejected')->count(),
+        ];
+
+        $growthUsers = (clone $statisticsQuery)->get(['created_at', 'approved_at']);
         $firstGrowthYear = (int) ($growthUsers->min(fn (User $user) => $user->created_at?->year) ?: now()->year);
         $growthYears = collect(range($firstGrowthYear, now()->year))->sortDesc()->values();
         $growthYear = $growthYears->contains($request->integer('growth_year'))
@@ -127,36 +209,10 @@ class InstructorApplicationController extends Controller
             ];
         })->values();
         $yearRegistered = (int) $growthData->sum('registered');
-        $previousYearRegistered = $growthUsers->filter(
-            fn (User $user) => $user->created_at?->year === $growthYear - 1
-        )->count();
-        $growthRate = $previousYearRegistered > 0
-            ? round((($yearRegistered - $previousYearRegistered) / $previousYearRegistered) * 100, 1)
-            : ($yearRegistered > 0 ? 100 : 0);
+        $previousYearRegistered = $growthUsers->filter(fn (User $user) => $user->created_at?->year === $growthYear - 1)->count();
+        $growthRate = $previousYearRegistered > 0 ? round((($yearRegistered - $previousYearRegistered) / $previousYearRegistered) * 100, 1) : ($yearRegistered > 0 ? 100 : 0);
 
-        // Lấy danh sách các chuyên ngành (cả dạng cây / active)
-        $categories = Category::query()
-            ->whereNull('parent_id')
-            ->with(['children' => fn ($q) => $q->orderBy('name')])
-            ->orderBy('name')
-            ->get();
-
-        return view('admin.instructors.applications.index', [
-            'applications' => $applications,
-            'status' => $status,
-            'counts' => $counts,
-            'growthData' => $growthData,
-            'growthRate' => $growthRate,
-            'growthYear' => $growthYear,
-            'growthYears' => $growthYears,
-            'yearRegistered' => $yearRegistered,
-            'categories' => $categories,
-            'search' => $request->query('search'),
-            'categoryId' => $categoryId,
-            'date' => $request->query('date'),
-            'dateFrom' => $dateFrom,
-            'dateTo' => $dateTo,
-        ]);
+        return view('admin.instructors.statistics', compact('counts', 'growthData', 'growthRate', 'growthYear', 'growthYears', 'yearRegistered', 'dateFrom', 'dateTo', 'month', 'week'));
     }
 
     public function show(User $user): View|RedirectResponse

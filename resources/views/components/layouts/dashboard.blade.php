@@ -216,7 +216,7 @@
                             >
                                 @foreach($children as $child)
                                     @php $childActive = $isMenuItemActive($child); @endphp
-                                    <a href="{{ route($child['route']) }}"
+                                    <a href="{{ route($child['route']).($child['fragment'] ?? '') }}"
                                        class="group flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium leading-5 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 {{ $childActive ? 'bg-blue-600 text-white shadow-[0_7px_18px_rgba(37,99,235,0.2)]' : 'text-slate-500 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white' }}">
                                         <span class="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 group-hover:text-blue-600 dark:group-hover:text-white {{ $childActive ? 'text-white group-hover:text-white' : '' }}">
                                             {!! $child['icon'] !!}
@@ -324,7 +324,7 @@
     <nav class="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-blue-100 bg-white/95 py-2 shadow-[0_-8px_24px_rgba(37,99,235,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 lg:hidden">
         @foreach($mobileMenu as $item)
             @php $active = $isMenuItemActive($item); @endphp
-            <a href="{{ route($item['route']) }}" class="flex flex-col items-center gap-0.5 px-3 py-1 text-xs {{ $active ? $c['text'] : 'text-slate-400' }}">
+            <a href="{{ route($item['route']).($item['fragment'] ?? '') }}" class="flex flex-col items-center gap-0.5 px-3 py-1 text-xs {{ $active ? $c['text'] : 'text-slate-400' }}">
                 <span class="flex h-5 w-5 items-center justify-center">
                     @if(isset($item['icon']))
                         {!! $item['icon'] !!}

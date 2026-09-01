@@ -39,6 +39,12 @@
                     'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0l-3 3m3-3l3 3M9 7h6"/></svg>',
                 ],
                 [
+                    'route' => 'admin.instructors.statistics',
+                    'active' => ['admin.instructors.statistics'],
+                    'label' => 'Thống kê giảng viên',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-5m5 5V7m5 9v-3"/></svg>',
+                ],
+                [
                     'route' => 'admin.roles.index',
                     'active' => ['admin.roles.*'],
                     'label' => 'Vai trò',

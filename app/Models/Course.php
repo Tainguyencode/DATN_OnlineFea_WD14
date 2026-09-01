@@ -505,6 +505,15 @@ class Course extends Model
         $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
         $blockers = [];
         $checkedLessonIds = [];
+        $activeLessonUpdates = ContentUpdate::query()
+            ->where('course_id', $this->id)
+            ->where('type', ContentUpdate::TYPE_LESSON)
+            ->whereIn('action', [ContentUpdate::ACTION_CREATE, ContentUpdate::ACTION_UPDATE])
+            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+            ->whereNotNull('entity_id')
+            ->orderBy('id')
+            ->get()
+            ->keyBy(fn (ContentUpdate $update): int => (int) $update->entity_id);
 
         foreach ($sections as $section) {
             foreach ($section->lessons as $lesson) {
@@ -516,11 +525,16 @@ class Course extends Model
                     continue;
                 }
 
-                if (! empty($lesson->id) && empty($lesson->is_draft_create)) {
-                    $checkedLessonIds[] = $lesson->id;
+                // A persisted draft-create lesson is already represented by its
+                // ContentUpdate projection. Excluding it here makes the fallback
+                // query read the unprojected lessons row and report a false blocker.
+                if ($lesson->exists && ! empty($lesson->id)) {
+                    $checkedLessonIds[] = (int) $lesson->id;
                 }
 
-                $blocker = $this->videoReadinessBlockerFor($lesson);
+                $draftUpdate = $lesson->draft_update
+                    ?? $activeLessonUpdates->get((int) $lesson->id);
+                $blocker = $this->videoReadinessBlockerFor($lesson, $draftUpdate);
                 if ($blocker) {
                     $blockers[] = $blocker;
                 }
@@ -532,7 +546,10 @@ class Course extends Model
             ->whereNotIn('id', $checkedLessonIds)
             ->get();
         foreach ($orphanedLessons as $lesson) {
-            $blocker = $this->videoReadinessBlockerFor($lesson);
+            $blocker = $this->videoReadinessBlockerFor(
+                $lesson,
+                $activeLessonUpdates->get((int) $lesson->id),
+            );
             if ($blocker) {
                 $blockers[] = $blocker;
             }
@@ -541,8 +558,12 @@ class Course extends Model
         return $blockers;
     }
 
-    private function videoReadinessBlockerFor(Lesson $lesson): ?array
+    private function videoReadinessBlockerFor(Lesson $lesson, ?ContentUpdate $draftUpdate = null): ?array
     {
+        if ($draftUpdate) {
+            return $this->draftVideoReadinessBlockerFor($lesson, $draftUpdate);
+        }
+
         if (! $lesson->hasVideoSource()) {
             return ['title' => $lesson->title, 'state' => 'missing_source'];
         }
@@ -570,6 +591,47 @@ class Course extends Model
         return [
             'title' => $lesson->title,
             'state' => $lesson->upload_status === 'pending' ? 'uploading' : 'processing',
+        ];
+    }
+
+    /**
+     * Check the exact video revision carried by an active ContentUpdate.
+     * Published lesson media must not make a newer draft video look ready.
+     */
+    private function draftVideoReadinessBlockerFor(Lesson $lesson, ContentUpdate $update): ?array
+    {
+        $payload = $update->payload ?? [];
+        $title = (string) ($payload['title'] ?? $lesson->title);
+        $processingStatus = $payload['processing_status'] ?? null;
+        $uploadStatus = $payload['upload_status'] ?? null;
+        $manifestKey = $payload['hls_manifest_key'] ?? null;
+        $hasInternalSource = filled($payload['original_video_key'] ?? null)
+            || filled($payload['video_path'] ?? null)
+            || filled($manifestKey);
+        $hasExternalSource = filled($payload['video_url'] ?? null) && ! $hasInternalSource;
+
+        if (! $hasInternalSource && ! $hasExternalSource) {
+            return ['title' => $title, 'state' => 'missing_source'];
+        }
+
+        if ($hasExternalSource) {
+            return null;
+        }
+
+        // Both fields are committed together by the ContentUpdate HLS job for
+        // the current source revision. Neither an old manifest nor a completed
+        // flag on its own is sufficient.
+        if ($processingStatus === 'completed' && filled($manifestKey)) {
+            return null;
+        }
+
+        if ($processingStatus === 'failed') {
+            return ['title' => $title, 'state' => 'failed'];
+        }
+
+        return [
+            'title' => $title,
+            'state' => $uploadStatus === 'pending' ? 'uploading' : 'processing',
         ];
     }
 

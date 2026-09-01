@@ -51,7 +51,11 @@ class QuizController extends Controller
         $canSubmit = $attempt !== null;
         $canStart = auth()->user()?->isStudent() && $isEnrolled && (! $attemptLimitReached || $attempt !== null);
 
-        return view('courses.quiz', compact('course', 'lesson', 'quiz', 'isEnrolled', 'attempt', 'canStart', 'canSubmit', 'attemptsCount', 'attemptLimitReached'));
+        $player = app(LearningPlayerService::class)->buildPlayerContext($course, $lesson, auth()->user(), $canBypass);
+        $quizContext = $player['quizContext'];
+        abort_unless($quizContext, 404);
+
+        return view('courses.quiz-fullscreen', compact('course', 'lesson', 'quizContext'));
     }
 
     public function start(Request $request, Course $course, Lesson $lesson): JsonResponse|RedirectResponse
@@ -149,6 +153,7 @@ class QuizController extends Controller
                 'percent' => (float) $attempt->percent,
                 'passed' => (bool) $attempt->passed,
                 'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]),
+                'result_url' => route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]),
             ],
             'attempts_count' => $completedAttempts,
             'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
@@ -240,6 +245,7 @@ class QuizController extends Controller
                 'total_questions' => count($graded['questions']),
                 'pass_score' => (int) $quiz->pass_score,
                 'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]),
+                'result_url' => route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]),
             ],
             'graded' => ['questions' => collect($graded['questions'])->map(fn ($result, $questionId) => [
                 'question_id' => (int) $questionId,

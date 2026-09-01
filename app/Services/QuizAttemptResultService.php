@@ -29,7 +29,7 @@ class QuizAttemptResultService
             ->findOrFail($requestedAttempt->id);
 
         abort_unless((int) $attempt->user_id === (int) $user->id, 403);
-        abort_unless($attempt->status === 'completed', 404);
+        abort_unless($attempt->isFinalized(), 404);
         abort_unless($attempt->quiz && (int) $attempt->quiz->lesson_id === (int) $lesson->id, 404);
         abort_unless($attempt->quizVersion && (int) $attempt->quizVersion->quiz_id === (int) $attempt->quiz_id, 404);
 

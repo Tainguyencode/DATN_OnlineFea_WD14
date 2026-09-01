@@ -134,6 +134,112 @@ class CourseVideoReviewReadinessTest extends TestCase
         $this->assertSame([], $course->videoReadinessBlockers());
     }
 
+    public function test_published_course_draft_create_lessons_use_completed_content_update_hls(): void
+    {
+        [$course, $section] = $this->publishedCourseWithSection();
+
+        foreach (range(1, 4) as $index) {
+            $lesson = $this->video($course, $section, 'Draft video '.$index);
+            $this->lessonUpdate($course, $lesson, ContentUpdate::ACTION_CREATE, [
+                'section_id' => $section->id,
+                'title' => $lesson->title,
+                'type' => Lesson::TYPE_VIDEO,
+                'original_video_key' => "originals/drafts/{$index}.mp4",
+                'upload_status' => 'uploaded',
+                'processing_status' => 'completed',
+                'hls_manifest_key' => "hls/updates/{$index}/master.m3u8",
+            ]);
+        }
+
+        $this->assertSame([], $course->fresh()->videoReadinessBlockers());
+    }
+
+    public function test_one_processing_draft_create_video_blocks_published_course(): void
+    {
+        [$course, $section] = $this->publishedCourseWithSection();
+
+        foreach (range(1, 4) as $index) {
+            $lesson = $this->video($course, $section, 'Draft processing '.$index);
+            $this->lessonUpdate($course, $lesson, ContentUpdate::ACTION_CREATE, [
+                'section_id' => $section->id,
+                'title' => $lesson->title,
+                'type' => Lesson::TYPE_VIDEO,
+                'original_video_key' => "originals/processing-drafts/{$index}.mp4",
+                'upload_status' => 'uploaded',
+                'processing_status' => $index === 4 ? 'processing' : 'completed',
+                'hls_manifest_key' => $index === 4 ? null : "hls/processing-drafts/{$index}/master.m3u8",
+            ]);
+        }
+
+        $blockers = $course->fresh()->videoReadinessBlockers();
+        $this->assertCount(1, $blockers);
+        $this->assertSame('processing', $blockers[0]['state']);
+    }
+
+    public function test_completed_replacement_video_uses_content_update_even_when_lesson_manifest_is_null(): void
+    {
+        [$course, $section] = $this->publishedCourseWithSection();
+        $lesson = $this->video($course, $section, 'Published lesson without manifest', [
+            'original_video_key' => 'originals/video-a.mp4',
+            'upload_status' => 'uploaded',
+            'processing_status' => 'completed',
+            'status' => Lesson::STATUS_PUBLISHED,
+        ]);
+        $this->lessonUpdate($course, $lesson, ContentUpdate::ACTION_UPDATE, [
+            'section_id' => $section->id,
+            'title' => 'Replacement video B',
+            'type' => Lesson::TYPE_VIDEO,
+            'original_video_key' => 'originals/video-b.mp4',
+            'upload_status' => 'uploaded',
+            'processing_status' => 'completed',
+            'hls_manifest_key' => 'hls/video-b/master.m3u8',
+        ]);
+
+        $this->assertNull($lesson->fresh()->hls_manifest_key);
+        $this->assertSame([], $course->fresh()->videoReadinessBlockers());
+    }
+
+    public function test_old_ready_hls_does_not_hide_processing_or_failed_replacement(): void
+    {
+        [$course, $section] = $this->publishedCourseWithSection();
+        $lesson = $this->readyVideo($course, $section, 'Published video A');
+        $update = $this->lessonUpdate($course, $lesson, ContentUpdate::ACTION_UPDATE, [
+            'section_id' => $section->id,
+            'title' => 'Replacement video B',
+            'type' => Lesson::TYPE_VIDEO,
+            'original_video_key' => 'originals/replacement-b.mp4',
+            'upload_status' => 'uploaded',
+            'processing_status' => 'processing',
+            'hls_manifest_key' => null,
+        ]);
+
+        $this->assertSame('processing', $course->fresh()->videoReadinessBlockers()[0]['state']);
+
+        $update->update(['payload' => [
+            ...$update->payload,
+            'processing_status' => 'failed',
+        ]]);
+
+        $this->assertSame('failed', $course->fresh()->videoReadinessBlockers()[0]['state']);
+    }
+
+    public function test_completed_flag_without_current_draft_manifest_still_blocks_submission(): void
+    {
+        [$course, $section] = $this->publishedCourseWithSection();
+        $lesson = $this->readyVideo($course, $section, 'Published source video');
+        $this->lessonUpdate($course, $lesson, ContentUpdate::ACTION_UPDATE, [
+            'section_id' => $section->id,
+            'title' => 'Replacement without manifest',
+            'type' => Lesson::TYPE_VIDEO,
+            'original_video_key' => 'originals/replacement-no-manifest.mp4',
+            'upload_status' => 'uploaded',
+            'processing_status' => 'completed',
+            'hls_manifest_key' => null,
+        ]);
+
+        $this->assertSame('processing', $course->fresh()->videoReadinessBlockers()[0]['state']);
+    }
+
     /** @return array{0: Course, 1: CourseSection} */
     private function courseWithSection(): array
     {
@@ -169,6 +275,33 @@ class CourseVideoReviewReadinessTest extends TestCase
         ]);
 
         return [$course, $section];
+    }
+
+    /** @return array{0: Course, 1: CourseSection} */
+    private function publishedCourseWithSection(): array
+    {
+        [$course, $section] = $this->courseWithSection();
+        $course->update([
+            'status' => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        return [$course->fresh(), $section];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function lessonUpdate(Course $course, Lesson $lesson, string $action, array $payload): ContentUpdate
+    {
+        return ContentUpdate::create([
+            'course_id' => $course->id,
+            'type' => ContentUpdate::TYPE_LESSON,
+            'action' => $action,
+            'entity_id' => $lesson->id,
+            'status' => ContentUpdate::STATUS_DRAFT,
+            'created_by' => $course->instructor_id,
+            'payload' => $payload,
+        ]);
     }
 
     private function readyVideo(Course $course, CourseSection $section, string $title): Lesson

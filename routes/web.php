@@ -469,6 +469,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
 
     // Quản lý duyệt Giảng viên
+    Route::get('/instructors/statistics', [InstructorApplicationController::class, 'statistics'])->name('instructors.statistics');
     Route::prefix('instructors/applications')->name('instructors.applications.')->group(function () {
         Route::get('/', [InstructorApplicationController::class, 'index'])->name('index');
         Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');

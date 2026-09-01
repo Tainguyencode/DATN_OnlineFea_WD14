@@ -1,12 +1,14 @@
 @props([
     'quizContext',
     'lesson',
+    'standalone' => false,
 ])
 
 @if($quizContext)
     <div
         class="learning-quiz-panel relative min-h-[320px] bg-[#1c1d1f] p-4 sm:p-6 lg:min-h-[calc(100vh-14rem)] select-none"
         data-quiz-player
+        data-quiz-standalone="{{ $standalone ? 'true' : 'false' }}"
         data-quiz='@json($quizContext)'
     >
         {{-- Offline Network Banner --}}
@@ -220,4 +222,3 @@
         });
     </script>
 @endif
-

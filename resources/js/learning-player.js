@@ -331,6 +331,13 @@ function initQuizPlayer() {
 
     const quiz = JSON.parse(root.dataset.quiz || '{}');
     if (!quiz.questions?.length) return;
+    const isStandalone = root.dataset.quizStandalone === 'true';
+
+    // Một lượt đang diễn ra luôn tiếp tục ở màn hình Quiz riêng, không nằm trong lesson player.
+    if (!isStandalone && quiz.attempt_id && quiz.standalone_url) {
+        window.location.replace(quiz.standalone_url);
+        return;
+    }
 
     const intro = root.querySelector('[data-quiz-intro]');
     const active = root.querySelector('[data-quiz-active]');
@@ -567,6 +574,9 @@ function initQuizPlayer() {
                         if (terminatedRetryBtn && (remaining === null || remaining > 0)) {
                             terminatedRetryBtn.hidden = false;
                         }
+                        if (isStandalone && data.attempt?.result_url) {
+                            window.location.replace(data.attempt.result_url);
+                        }
                     }
                 })
                 .catch(() => {});
@@ -650,6 +660,27 @@ function initQuizPlayer() {
     };
 
     const startQuiz = async () => {
+        // Lesson chỉ là màn hình khởi động. Attempt vẫn được tạo bằng endpoint hiện có,
+        // sau đó toàn bộ phiên làm bài tiếp tục ở route Quiz độc lập.
+        if (!isStandalone && quiz.standalone_url) {
+            if (!quiz.start_url || !startButton) return;
+            startButton.disabled = true;
+            try {
+                const response = await fetch(quiz.start_url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw createUserFacingError(data.message || 'Không thể bắt đầu quiz.');
+                window.location.assign(quiz.standalone_url);
+            } catch (error) {
+                startButton.disabled = false;
+                showToast(getUserFacingErrorMessage(error, 'Không thể bắt đầu quiz.'), 'error');
+            }
+            return;
+        }
+
         // Yêu cầu Fullscreen trước khi bắt đầu
         try {
             if (document.documentElement.requestFullscreen) {
@@ -734,6 +765,10 @@ function initQuizPlayer() {
             if (typeof data.course_progress === 'number') {
                 updateHeaderProgress(data.course_progress);
             }
+
+            if (isStandalone && data.attempt?.result_url) {
+                window.location.replace(data.attempt.result_url);
+            }
         } catch (error) {
             nextBtn.disabled = false;
             nextBtn.textContent = 'Nộp bài';
@@ -779,7 +814,11 @@ function initQuizPlayer() {
     terminatedRetryBtn?.addEventListener('click', () => window.location.reload());
 
     if (quiz.attempt_id) {
-        startQuiz();
+        if (isStandalone) {
+            activateQuiz();
+        } else {
+            startQuiz();
+        }
     }
 
     prevBtn?.addEventListener('click', () => {

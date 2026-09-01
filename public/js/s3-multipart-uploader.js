@@ -119,6 +119,7 @@ class S3MultipartUploader {
             const initData = await initResponse.json();
             this.uploadId = initData.uploadId;
             this.s3Key = initData.key;
+            this.lessonId = initData.lessonId || this.lessonId;
             this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
             this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
 
@@ -518,6 +519,7 @@ class CourseUploadQueueManager {
             onInit: (initData) => {
                 next.key = initData.key;
                 next.uploadId = initData.uploadId;
+                next.config.lessonId = initData.lessonId || next.config.lessonId;
                 next.config.contentUpdateId = initData.contentUpdateId || next.config.contentUpdateId;
                 next.config.draftVersionNumber = initData.versionNumber || next.config.draftVersionNumber;
                 if (typeof next.config.onInit === 'function') {
@@ -697,6 +699,8 @@ function createLessonFormState(config) {
         abortUrl: config.abortUrl,
         maxVideoBytes: Number(config.maxVideoBytes) || (5 * 1024 * 1024 * 1024),
         currentQueueId: null,
+        pendingVideoFile: null,
+        pendingVideoForm: null,
         formBaseline: null,
         isDirty: false,
         isSaving: false,
@@ -773,9 +777,24 @@ function createLessonFormState(config) {
                 return;
             }
 
-            const formElement = event.target.closest('form');
+            const formElement = event.target.closest?.('form') || this.pendingVideoForm || null;
             const titleInput = formElement ? formElement.querySelector("input[name='title']") : null;
             const lessonTitle = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : file.name;
+
+            // A new lesson in an approved course has no server identity until
+            // Save is pressed. Keep the file locally, persist the lesson first,
+            // then queue this exact file with the returned lesson_id.
+            if (!this.lessonId) {
+                this.pendingVideoFile = file;
+                this.pendingVideoForm = formElement;
+                this.videoOriginalName = file.name;
+                this.videoSize = file.size;
+                this.videoMime = file.type || 'video/mp4';
+                this.uploadStatus = 'pending_save';
+                this.uploadStatusMessage = 'Video sẽ được tải lên nền ngay sau khi lưu bài học.';
+                this.updateDirtyState(formElement);
+                return;
+            }
 
             const preKey = this.generateS3Key(file.name);
             this.videoOriginalName = file.name;
@@ -824,6 +843,7 @@ function createLessonFormState(config) {
                 onInit: (initData) => {
                     if (this.currentQueueId === queueItem.id) {
                         this.s3Key = initData.key;
+                        this.lessonId = initData.lessonId || this.lessonId;
                         this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
                         this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
                     }
@@ -977,6 +997,7 @@ function createLessonFormState(config) {
                         }
 
                         if (isCreateForm) {
+                            const pendingVideoFile = this.pendingVideoFile;
                             // 2. Render ngay lập tức bài học vào danh sách Curriculum DOM
                             if (resData.lesson || resData.html) {
                                 appendLessonToCurriculumDOM(resData);
@@ -1004,6 +1025,19 @@ function createLessonFormState(config) {
                             this.uploadStatus = 'idle';
                             this.uploadStatusMessage = '';
                             this.currentQueueId = null;
+
+                            // Start the existing multipart queue only after the
+                            // server has returned the persisted Lesson identity.
+                            if (pendingVideoFile && lessonId) {
+                                this.lessonId = lessonId;
+                                this.pendingVideoFile = null;
+                                this.startS3Upload({
+                                    target: {
+                                        files: [pendingVideoFile],
+                                        closest: () => form,
+                                    },
+                                });
+                            }
 
                             // 4. Đóng accordion "+ Thêm bài học" để sẵn sàng cho bài tiếp theo
                             const parentDetails = form.closest('details');

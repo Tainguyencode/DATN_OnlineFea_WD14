@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.quiz')
 
 @section('title', 'Ket qua quiz - ' . $result['version']->title)
 
@@ -7,7 +7,7 @@
     <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
-                <a href="{{ route('courses.show', $course->slug) }}" class="text-sm font-bold text-indigo-600 hover:underline dark:text-indigo-300">Quay lai khoa hoc</a>
+                <a href="{{ route('courses.lessons.show', [$course, $lesson]) }}" class="text-sm font-bold text-indigo-600 hover:underline dark:text-indigo-300">Quay lại bài học</a>
                 <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-3xl">Ket qua Quiz - Phien ban V{{ $result['version']->version }}</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $result['version']->title }}</p>
             </div>
@@ -22,6 +22,13 @@
                 <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70"><span class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Diem dat</span><strong class="mt-1 block text-2xl text-slate-950 dark:text-white">{{ $result['version']->pass_score }}%</strong></div>
             </div>
         </article>
+
+        @if($result['attempt']->termination_reason !== \App\Models\QuizAttempt::REASON_SUBMITTED)
+            <aside class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-100" role="status">
+                <p class="font-extrabold">Phiên làm bài đã kết thúc.</p>
+                <p class="mt-1">Lý do: {{ $result['attempt']->getTerminationReasonLabel() }}. Kết quả đã được ghi nhận.</p>
+            </aside>
+        @endif
 
         @if(!$result['regrade'] && collect($result['questions'])->contains('is_excluded', true))
             <aside class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-semibold text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" role="status">
