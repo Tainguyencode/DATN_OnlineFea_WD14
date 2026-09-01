@@ -10,12 +10,18 @@ use App\Models\User;
 use App\Services\InstructorRequirementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class InstructorDocumentRequirementWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $localStorageRoot;
+
+    private string $publicStorageRoot;
 
     protected User $admin;
 
@@ -32,8 +38,14 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Storage::fake('local');
-        Storage::fake('public');
+        $this->localStorageRoot = storage_path('framework/testing/instructor-document-requirements/local/'.Str::uuid());
+        $this->publicStorageRoot = storage_path('framework/testing/instructor-document-requirements/public/'.Str::uuid());
+        config([
+            'filesystems.disks.local.root' => $this->localStorageRoot,
+            'filesystems.disks.public.root' => $this->publicStorageRoot,
+        ]);
+        Storage::forgetDisk('local');
+        Storage::forgetDisk('public');
 
         $this->admin = User::factory()->create([
             'role' => 'admin',
@@ -93,6 +105,16 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'agree_information' => true,
             'agree_terms' => true,
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        Storage::forgetDisk('public');
+        File::deleteDirectory(dirname($this->localStorageRoot));
+        File::deleteDirectory(dirname($this->publicStorageRoot));
+
+        parent::tearDown();
     }
 
     /**

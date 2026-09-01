@@ -7,6 +7,7 @@ use App\Models\Assignment;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\LessonImportBatch;
 use App\Models\QuestionVersion;
 use App\Models\Quiz;
@@ -355,7 +356,10 @@ class LessonImportV2ParserValidatorTest extends TestCase
         $category = Category::create([
             'name' => 'Import category '.uniqid(),
             'slug' => 'import-category-'.uniqid(),
+            'status' => true,
         ]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

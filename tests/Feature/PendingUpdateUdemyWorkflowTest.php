@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Assignment;
 use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\ContentUpdateService;
+use App\Services\CourseReviewService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,7 +26,9 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
             'instructor_status' => 'approved',
             'is_active' => true,
         ]);
-        $category = Category::create(['name' => 'Web Dev', 'slug' => 'web-dev']);
+        $category = Category::create(['name' => 'Web Dev', 'slug' => 'web-dev', 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
 
         $course = Course::create([
             'instructor_id' => $instructor->id,
@@ -324,12 +329,23 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
             ->latest('id')
             ->firstOrFail();
 
+        $course->update(['copyright_agreed' => true]);
+        app(CourseReviewService::class)->submitForReview($course->fresh(), $instructor);
+
+        $this->assertSame(ContentUpdate::STATUS_PENDING, $update->fresh()->status);
+
         app(ContentUpdateService::class)->applyApprovedUpdate($update, $admin);
 
         $lesson = Lesson::query()
             ->where('course_id', $course->id)
             ->where('title', 'Published assignment update')
             ->firstOrFail();
+
+        $this->assertDatabaseHas('lessons', [
+            'id' => $lesson->id,
+            'course_id' => $course->id,
+            'title' => 'Published assignment update',
+        ]);
 
         $this->assertDatabaseHas('assignments', [
             'course_id' => $course->id,
@@ -340,5 +356,60 @@ class PendingUpdateUdemyWorkflowTest extends TestCase
             'max_score' => 120,
             'passing_score' => 80,
         ]);
+
+        $this->assertSame(ContentUpdate::STATUS_APPROVED, $update->fresh()->status);
+    }
+
+    public function test_assignment_approval_rolls_back_lesson_assignment_and_status_when_assignment_persistence_fails(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$instructor, $course, $section] = $this->createPublishedCourseWithSection();
+
+        $this->actingAs($instructor)
+            ->withSession(['two_factor_passed_at' => now()->timestamp])
+            ->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
+                'title' => 'Assignment that must roll back',
+                'type' => Lesson::TYPE_ASSIGNMENT,
+                'content' => 'This write is intentionally failed.',
+                'assignment_due_days' => 7,
+                'assignment_max_score' => 100,
+                'assignment_passing_score' => 70,
+                'duration' => 600,
+            ])
+            ->assertRedirect();
+
+        $update = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('type', ContentUpdate::TYPE_LESSON)
+            ->where('action', ContentUpdate::ACTION_CREATE)
+            ->latest('id')
+            ->firstOrFail();
+
+        $course->update(['copyright_agreed' => true]);
+        app(CourseReviewService::class)->submitForReview($course->fresh(), $instructor);
+        $this->assertSame(ContentUpdate::STATUS_PENDING, $update->fresh()->status);
+
+        Assignment::creating(static function (): void {
+            throw new \RuntimeException('Simulated assignment persistence failure.');
+        });
+
+        try {
+            app(ContentUpdateService::class)->applyApprovedUpdate($update, $admin);
+            $this->fail('The simulated assignment failure was not raised.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Simulated assignment persistence failure.', $exception->getMessage());
+        } finally {
+            Assignment::flushEventListeners();
+        }
+
+        $this->assertDatabaseMissing('lessons', [
+            'course_id' => $course->id,
+            'title' => 'Assignment that must roll back',
+        ]);
+        $this->assertDatabaseMissing('assignments', [
+            'course_id' => $course->id,
+            'title' => 'Assignment that must roll back',
+        ]);
+        $this->assertSame(ContentUpdate::STATUS_PENDING, $update->fresh()->status);
     }
 }

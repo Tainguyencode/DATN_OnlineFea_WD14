@@ -11,6 +11,7 @@ use App\Services\LearningProgressService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -56,9 +57,6 @@ class AssignmentController extends Controller
     /**
      * Tải tài liệu bài tập về máy và kích hoạt thời gian làm bài (6 giờ) cho lần làm hiện tại.
      *
-     * @param  Request  $request
-     * @param  Course  $course
-     * @param  Lesson  $lesson
      * @return mixed
      */
     public function download(Request $request, Course $course, Lesson $lesson)
@@ -86,6 +84,7 @@ class AssignmentController extends Controller
         if (! $submission) {
             $submission = Submission::create([
                 'assignment_id' => $assignment->id,
+                'assignment_version_id' => $assignment->published_version_id,
                 'user_id' => $request->user()->id,
                 'attempt_number' => 1,
                 'allowed_attempts' => 2,
@@ -104,7 +103,7 @@ class AssignmentController extends Controller
         // 4. Trả về file tải nếu có
         if ($lesson->document_file && Storage::disk('public')->exists($lesson->document_file)) {
             $ext = strtolower(pathinfo($lesson->document_file, PATHINFO_EXTENSION));
-            $downloadName = \Illuminate\Support\Str::slug($lesson->title ?: 'bai-tap-thuc-hanh').($ext ? '.'.$ext : '');
+            $downloadName = Str::slug($lesson->title ?: 'bai-tap-thuc-hanh').($ext ? '.'.$ext : '');
 
             return Storage::disk('public')->download($lesson->document_file, $downloadName);
         }
@@ -169,6 +168,7 @@ class AssignmentController extends Controller
 
         Submission::create([
             'assignment_id' => $assignment->id,
+            'assignment_version_id' => $assignment->published_version_id,
             'user_id' => $request->user()->id,
             'attempt_number' => $nextAttemptNumber,
             'allowed_attempts' => $allowedAttempts,

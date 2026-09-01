@@ -9,7 +9,9 @@ use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class InstructorRegistrationWorkflowTest extends TestCase
@@ -18,13 +20,33 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
     private const PASSWORD = 'Password1!';
 
+    private string $localStorageRoot;
+
+    private string $publicStorageRoot;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        Storage::fake('local');
-        Storage::fake('public');
+        $this->localStorageRoot = storage_path('framework/testing/instructor-registration/local/'.Str::uuid());
+        $this->publicStorageRoot = storage_path('framework/testing/instructor-registration/public/'.Str::uuid());
+        config([
+            'filesystems.disks.local.root' => $this->localStorageRoot,
+            'filesystems.disks.public.root' => $this->publicStorageRoot,
+        ]);
+        Storage::forgetDisk('local');
+        Storage::forgetDisk('public');
         app(RoleSyncService::class)->ensurePrimaryRolesExist();
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        Storage::forgetDisk('public');
+        File::deleteDirectory(dirname($this->localStorageRoot));
+        File::deleteDirectory(dirname($this->publicStorageRoot));
+
+        parent::tearDown();
     }
 
     /**

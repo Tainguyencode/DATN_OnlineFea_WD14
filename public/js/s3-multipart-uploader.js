@@ -24,6 +24,8 @@ class S3MultipartUploader {
     constructor(options = {}) {
         this.courseId = options.courseId;
         this.lessonId = options.lessonId || null;
+        this.contentUpdateId = options.contentUpdateId || null;
+        this.draftVersionNumber = options.draftVersionNumber || null;
         this.createUrl = options.createUrl;
         this.signPartUrl = options.signPartUrl;
         this.batchSignUrl = options.batchSignUrl;
@@ -101,6 +103,7 @@ class S3MultipartUploader {
                     content_type: file.type || 'video/mp4',
                     file_size: file.size,
                     lesson_id: this.lessonId,
+                    content_update_id: this.contentUpdateId,
                 }),
             });
 
@@ -116,6 +119,8 @@ class S3MultipartUploader {
             const initData = await initResponse.json();
             this.uploadId = initData.uploadId;
             this.s3Key = initData.key;
+            this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
+            this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
 
             if (typeof this.onInit === 'function') {
                 this.onInit(initData);
@@ -164,6 +169,7 @@ class S3MultipartUploader {
                     })),
                     duration: duration,
                     lesson_id: this.lessonId || null,
+                    content_update_id: this.contentUpdateId || null,
                 }),
             });
 
@@ -187,6 +193,8 @@ class S3MultipartUploader {
                 mime: file.type || 'video/mp4',
                 duration: duration,
                 location: completeData.location,
+                contentUpdateId: completeData.contentUpdateId || this.contentUpdateId,
+                versionNumber: completeData.versionNumber || this.draftVersionNumber,
             });
 
         } catch (error) {
@@ -499,6 +507,8 @@ class CourseUploadQueueManager {
         const uploader = new S3MultipartUploader({
             courseId: next.config.courseId,
             lessonId: next.config.lessonId,
+            contentUpdateId: next.config.contentUpdateId,
+            draftVersionNumber: next.config.draftVersionNumber,
             createUrl: next.config.createUrl,
             signPartUrl: next.config.signPartUrl,
             completeUrl: next.config.completeUrl,
@@ -508,6 +518,8 @@ class CourseUploadQueueManager {
             onInit: (initData) => {
                 next.key = initData.key;
                 next.uploadId = initData.uploadId;
+                next.config.contentUpdateId = initData.contentUpdateId || next.config.contentUpdateId;
+                next.config.draftVersionNumber = initData.versionNumber || next.config.draftVersionNumber;
                 if (typeof next.config.onInit === 'function') {
                     next.config.onInit(initData);
                 }
@@ -677,12 +689,68 @@ function createLessonFormState(config) {
         videoPath: config.videoPath || '',
         courseId: config.courseId,
         lessonId: config.lessonId || null,
+        contentUpdateId: config.contentUpdateId || null,
+        draftVersionNumber: config.draftVersionNumber || null,
         createUrl: config.createUrl,
         signPartUrl: config.signPartUrl,
         completeUrl: config.completeUrl,
         abortUrl: config.abortUrl,
         maxVideoBytes: Number(config.maxVideoBytes) || (5 * 1024 * 1024 * 1024),
         currentQueueId: null,
+        formBaseline: null,
+        isDirty: false,
+        isSaving: false,
+
+        init() {
+            this.$nextTick(() => {
+                const form = this.$root;
+                if (!(form instanceof HTMLFormElement)) return;
+
+                this.formBaseline = this.serializeForm(form);
+                const updateDirtyState = () => this.updateDirtyState(form);
+                form.addEventListener('input', updateDirtyState);
+                form.addEventListener('change', updateDirtyState);
+                this.updateDirtyState(form);
+            });
+        },
+
+        serializeForm(form) {
+            const entries = [];
+            for (const [name, value] of new FormData(form).entries()) {
+                if (['_token', '_method'].includes(name)) continue;
+
+                const serializedValue = typeof File !== 'undefined' && value instanceof File
+                    ? [value.name, value.size, value.lastModified]
+                    : String(value);
+                entries.push([name, serializedValue]);
+            }
+
+            return JSON.stringify(entries);
+        },
+
+        updateDirtyState(form = this.$root) {
+            this.$nextTick(() => {
+                if (!(form instanceof HTMLFormElement) || this.formBaseline === null) return;
+
+                this.isDirty = this.serializeForm(form) !== this.formBaseline;
+                form.dataset.dirty = this.isDirty ? 'true' : 'false';
+                const submitButton = form.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = this.isSaving || !this.isDirty;
+                }
+            });
+        },
+
+        markFormSaved(form = this.$root) {
+            this.$nextTick(() => {
+                if (!(form instanceof HTMLFormElement) || !form.isConnected) return;
+
+                this.formBaseline = this.serializeForm(form);
+                this.isDirty = false;
+                form.dataset.dirty = 'false';
+                this.updateDirtyState(form);
+            });
+        },
 
         generateS3Key(filename) {
             const ext = (filename.split('.').pop() || 'mp4').toLowerCase();
@@ -746,6 +814,8 @@ function createLessonFormState(config) {
                 key: preKey,
                 courseId: this.courseId,
                 lessonId: this.lessonId,
+                contentUpdateId: this.contentUpdateId,
+                draftVersionNumber: this.draftVersionNumber,
                 createUrl: this.createUrl,
                 signPartUrl: this.signPartUrl,
                 completeUrl: this.completeUrl,
@@ -754,6 +824,8 @@ function createLessonFormState(config) {
                 onInit: (initData) => {
                     if (this.currentQueueId === queueItem.id) {
                         this.s3Key = initData.key;
+                        this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
+                        this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
                     }
                 },
                 onProgress: (prog) => {
@@ -774,6 +846,8 @@ function createLessonFormState(config) {
                         this.videoOriginalName = data.filename;
                         this.videoSize = data.size;
                         this.videoMime = data.mime;
+                        this.contentUpdateId = data.contentUpdateId || this.contentUpdateId;
+                        this.draftVersionNumber = data.versionNumber || this.draftVersionNumber;
 
                         if (data.duration && data.duration > 0 && formElement) {
                             const durationInput = formElement.querySelector("input[name='duration']");
@@ -804,6 +878,13 @@ function createLessonFormState(config) {
             const form = event.target;
             const isCreateForm = !this.lessonId;
 
+            if (!this.isDirty) {
+                event.preventDefault();
+                this.updateDirtyState(form);
+
+                return;
+            }
+
             if (this.selectedType === 'video' && this.uploadStatus === 'error') {
                 event.preventDefault();
                 if (window.showCurriculumToast) {
@@ -832,6 +913,7 @@ function createLessonFormState(config) {
 
                 const submitBtn = form.querySelector('button[type="submit"]');
                 const origBtnText = submitBtn ? submitBtn.innerHTML : '';
+                this.isSaving = true;
                 if (submitBtn) {
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = '<span class="flex items-center gap-1.5"><svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Đang lưu...</span></span>';
@@ -865,6 +947,10 @@ function createLessonFormState(config) {
                         const resData = await response.json();
                         const lessonId = resData.lesson_id || (resData.lesson ? resData.lesson.id : this.lessonId);
                         const lessonTitle = resData.title || (resData.lesson ? resData.lesson.title : '');
+                        this.contentUpdateId = resData.content_update_id || this.contentUpdateId;
+                        this.draftVersionNumber = resData.version_number || this.draftVersionNumber;
+
+                        refreshCurriculumReviewState(resData);
 
                         // 1. Đồng bộ và duy trì hàng chờ CourseUploadQueue cho cả Tạo mới và Sửa bài học
                         if (this.currentQueueId) {
@@ -983,6 +1069,8 @@ function createLessonFormState(config) {
                             window.triggerHlsPolling();
                         }
 
+                        this.markFormSaved(form);
+
                         // Hiển thị thông báo thành công
                         if (window.showCurriculumToast) {
                             const isStillUploading = CourseUploadQueue.queue.some(i => i.status === 'uploading' || i.status === 'queued');
@@ -1009,10 +1097,11 @@ function createLessonFormState(config) {
                         window.showCurriculumToast('Không thể kết nối máy chủ để lưu bài học. Vui lòng thử lại.', true);
                     }
                 } finally {
+                    this.isSaving = false;
                     if (submitBtn) {
-                        submitBtn.disabled = false;
                         submitBtn.innerHTML = origBtnText;
                     }
+                    this.updateDirtyState(form);
                 }
             }
         },
@@ -1038,8 +1127,18 @@ function createLessonFormState(config) {
             this.videoMime = '';
             this.uploadStatus = 'idle';
             this.uploadStatusMessage = '';
+            this.updateDirtyState();
         }
     };
+}
+
+function refreshCurriculumReviewState(data) {
+    if (!data?.reviewStateHtml) return;
+
+    const reviewStateRoot = document.getElementById('curriculum-review-state-root');
+    if (reviewStateRoot) {
+        reviewStateRoot.outerHTML = data.reviewStateHtml;
+    }
 }
 
 function showCurriculumToast(message, isError = false) {
@@ -1090,8 +1189,14 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             const data = await response.json();
             const commonState = data.common_state || 'completed'; // 'completed' | 'processing' | 'failed'
             const commonMessage = data.common_message || '';
-            const canSubmit = !!data.can_submit;
-            const submissionMessage = data.submission_message || 'Khóa học chưa đủ điều kiện để gửi duyệt.';
+            const canSubmit = data.reviewState
+                ? !!data.reviewState.canSubmitCourse
+                : !!data.can_submit;
+            const submissionMessage = data.reviewState?.submissionBlockedReason
+                || data.submission_message
+                || 'Khóa học chưa đủ điều kiện để gửi duyệt.';
+
+            refreshCurriculumReviewState(data);
 
             // 1. CẬP NHẬT BANNER HLS CHUNG TỔNG THỂ
             const bannerWrapper = document.getElementById('common-hls-banner-wrapper');
@@ -1335,4 +1440,14 @@ if (typeof window !== 'undefined') {
     window.initCurriculumHlsPolling = initCurriculumHlsPolling;
     window.showCurriculumToast = showCurriculumToast;
     window.appendLessonToCurriculumDOM = appendLessonToCurriculumDOM;
+
+    document.addEventListener('submit', (event) => {
+        if (event.target?.id !== 'curriculumSubmitForm') return;
+
+        const button = event.target.querySelector('button[type="submit"]');
+        if (!button || button.disabled) return;
+
+        button.disabled = true;
+        button.textContent = 'Đang gửi...';
+    });
 }

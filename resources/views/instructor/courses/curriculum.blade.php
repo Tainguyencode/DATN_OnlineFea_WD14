@@ -25,19 +25,14 @@
         return $minutes > 0 ? $minutes.' phút'.($remaining ? ' '.$remaining.' giây' : '') : $remaining.' giây';
     };
 
-    $totalVideoLessons = $course->lessons()->where('type', 'video')->count();
-    $videoReadinessBlockers = $course->videoReadinessBlockers();
-    $hasVideoReadinessBlockers = $videoReadinessBlockers !== [];
-    $hasIncompleteHls = $course->hasIncompleteHlsVideos();
     $submissionCheck = $course->submissionCheck();
-    $canSubmitCourse = $course->canBeSubmittedForReview() && ! $hasVideoReadinessBlockers && $submissionCheck->passes();
-    $videoBlockerTitle = $videoReadinessBlockers[0]['title'] ?? null;
     $readinessItems = $submissionCheck->items();
     $passedReadinessItems = count(array_filter($readinessItems, fn ($item) => $item['passed']));
     $readinessProgress = count($readinessItems) > 0
         ? (int) round(($passedReadinessItems / count($readinessItems)) * 100)
         : 0;
-    $courseHasBeenSubmitted = in_array($course->status, ['pending_review', 'approved', 'published'], true);
+    $courseHasBeenSubmitted = in_array($course->status, ['pending_review', 'pending_update', 'approved', 'published'], true)
+        || $reviewState['hasPendingUpdates'];
 @endphp
 
 <div class="curriculum-builder space-y-4">
@@ -63,6 +58,17 @@
                     </div>
                 </div>
             @endforeach
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-blue-100 pt-4 text-xs font-bold dark:border-slate-700">
+            @if($course->publishedVersion?->version_number)
+                <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                    Đang xuất bản: V{{ $course->publishedVersion->version_number }}
+                </span>
+            @endif
+            <a href="{{ route('instructor.courses.versions.index', $course) }}"
+               class="ml-auto inline-flex min-h-9 items-center justify-center rounded-lg border border-indigo-200 bg-white px-3 text-xs font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-500/30 dark:bg-slate-800 dark:text-indigo-300 dark:hover:bg-indigo-500/10">
+                Lịch sử phiên bản
+            </a>
         </div>
     </section>
 
@@ -102,52 +108,12 @@
                 </ul>
             </section>
 
-            <div id="common-hls-banner-wrapper"
-                 class="rounded-2xl border p-4 shadow-sm transition-all duration-300 {{ $totalVideoLessons === 0 ? 'hidden' : ($hasVideoReadinessBlockers ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200') }}">
-                <div class="flex items-start gap-3">
-                    <span id="common-hls-icon" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-current/20 text-sm font-black">i</span>
-                    <div>
-                        <p class="text-xs font-black uppercase tracking-wide">Trạng thái video</p>
-                        <p id="common-hls-message" class="mt-1 text-xs font-semibold leading-5">
-                            @if($hasVideoReadinessBlockers)
-                                Còn video chưa sẵn sàng: {{ $videoBlockerTitle }}.
-                            @elseif(!$submissionCheck->passes())
-                                {{ $submissionCheck->summaryMessage() }}
-                            @elseif($totalVideoLessons > 0)
-                                Tất cả video đã được xử lý bảo mật thành công.
-                            @endif
-                        </p>
-                    </div>
-                </div>
-            </div>
+            @include('instructor.courses.partials.curriculum-review-state')
 
             <section class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                    <a href="{{ route('instructor.courses.edit', $course) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                        Thông tin khóa học
-                    </a>
-                    @if($course->canBeSubmittedForReview())
-                        @if($canSubmitCourse && !$hasVideoReadinessBlockers)
-                            <button type="button"
-                                    id="curriculum-submit-review-btn"
-                                    onclick="openCurriculumCopyrightModal()"
-                                    class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black transition cursor-pointer bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700">
-                                {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
-                            </button>
-                        @else
-                            <button type="button"
-                                    id="curriculum-submit-review-btn"
-                                    disabled
-                                    title="{{ $hasVideoReadinessBlockers ? 'Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: '.$videoBlockerTitle : $submissionCheck->summaryMessage() }}"
-                                    class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black transition cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600">
-                                {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
-                            </button>
-                        @endif
-                    @endif
-                </div>
-                @if(! $canSubmitCourse)
-                    <p class="mt-3 text-center text-xs leading-5 text-slate-500 dark:text-slate-400">Hoàn thành các mục còn thiếu để gửi khóa học.</p>
-                @endif
+                <a href="{{ route('instructor.courses.edit', $course) }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    Thông tin khóa học
+                </a>
             </section>
         </aside>
 
@@ -225,7 +191,6 @@
                     </div>
                 </div>
             </div>
-
     <form id="add-course-section" method="POST" action="{{ route('instructor.courses.sections.store', $course) }}"
           class="{{ $errors->hasBag('storeSection') ? '' : 'hidden' }} rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         @csrf
@@ -266,6 +231,11 @@
                 $hasInvalidSectionDescription = filled($section->description)
                     && \App\Models\CourseSection::descriptionContainsMarkup($section->description);
                 $safeSectionDescription = $hasInvalidSectionDescription ? null : $section->description;
+                $sectionUpdate = $section->draft_update ?? null;
+                $sectionReadOnly = $sectionUpdate?->isPending() ?? false;
+                $sectionVersionContext = $sectionUpdate
+                    ? app(\App\Services\ContentUpdateDiffService::class)->versionContext($sectionUpdate)
+                    : ['current' => $section->publishedVersion?->version_number, 'proposed' => null];
             @endphp
             <article class="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm transition hover:border-blue-200 dark:border-slate-700 dark:bg-slate-900" data-curriculum-section>
                 <div class="border-b border-blue-100 bg-blue-50/60 px-5 py-4 dark:border-slate-700 dark:bg-slate-800/70">
@@ -283,6 +253,14 @@
                                         <span class="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">Chương bị từ chối</span>
                                     @endif
                                 @endif
+                                @if(($sectionVersionContext['current'] ?? null) !== null)
+                                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">Đang xuất bản: V{{ $sectionVersionContext['current'] }}</span>
+                                @endif
+                                @if(($sectionVersionContext['proposed'] ?? null) !== null)
+                                    <span class="rounded-full border {{ $sectionUpdate?->isRejected() ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200 bg-blue-50 text-blue-800' }} px-2.5 py-0.5 text-xs font-bold">
+                                        {{ $sectionUpdate?->isRejected() ? 'V'.$sectionVersionContext['proposed'].' — Bị từ chối' : 'Đề xuất: V'.$sectionVersionContext['proposed'].' — '.($sectionUpdate?->isPending() ? 'Chờ duyệt' : 'Nháp') }}
+                                    </span>
+                                @endif
                             </div>
                             <h3 class="mt-2 text-base font-black text-slate-950 dark:text-white">{{ $section->title }}</h3>
                             @if(filled($safeSectionDescription))
@@ -290,6 +268,11 @@
                             @endif
                         </div>
                         <div class="flex shrink-0 flex-wrap gap-2">
+                            @if($sectionReadOnly)
+                                <span class="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-800">
+                                    Thay đổi đang chờ Admin duyệt và không thể chỉnh sửa.
+                                </span>
+                            @else
                             <details class="group">
                                 <summary class="inline-flex min-h-9 cursor-pointer list-none items-center justify-center rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition-colors duration-200 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-800 dark:text-blue-300">
                                     Sửa chương
@@ -322,6 +305,7 @@
                                     Xóa chương
                                 </button>
                             </form>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -398,6 +382,19 @@
                 confirmButton.disabled = !this.checked;
             });
         }
+
+        // The canonical review panel is replaced after AJAX mutations, so
+        // delegate this interaction instead of binding to one rendered button.
+        document.addEventListener('click', function (event) {
+            var target = event.target instanceof Element ? event.target : null;
+            var submitReviewButton = target ? target.closest('#curriculum-submit-review-btn') : null;
+            if (!submitReviewButton || submitReviewButton.disabled || !submitReviewButton.closest('#curriculumSubmitForm')) {
+                return;
+            }
+
+            event.preventDefault();
+            openCurriculumCopyrightModal();
+        });
 
         // Escape key closes the modal
         document.addEventListener('keydown', function(event) {

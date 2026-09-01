@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\LessonImportBatch;
 use App\Models\User;
@@ -424,6 +425,11 @@ class LessonImportConfirmTest extends TestCase
         $category = Category::create([
             'name' => 'Confirm category '.uniqid(),
             'slug' => 'confirm-category-'.uniqid(),
+            'status' => true,
+        ]);
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->syncWithoutDetaching([
+            $category->id => ['is_primary' => ! $profile->teachingCategories()->exists()],
         ]);
         $course = Course::create([
             'instructor_id' => $instructor->id,

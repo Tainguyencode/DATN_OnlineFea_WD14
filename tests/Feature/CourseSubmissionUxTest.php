@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,6 +84,8 @@ class CourseSubmissionUxTest extends TestCase
             'slug' => 'child-'.uniqid(),
             'status' => true,
         ]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

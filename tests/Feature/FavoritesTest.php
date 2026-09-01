@@ -161,7 +161,8 @@ class FavoritesTest extends TestCase
         $response = $this->actingAs($this->student)->get(route('courses.index'));
 
         $response->assertSee('data-favorite-count="0"', false);
-        $response->assertDontSee('data-favorite-badge', false);
+        $response->assertSee('data-favorite-badge', false);
+        $response->assertSee('x-show="count > 0"', false);
     }
 
     public function test_owned_course_uses_learning_action_and_course_in_cart_uses_existing_cart_state(): void

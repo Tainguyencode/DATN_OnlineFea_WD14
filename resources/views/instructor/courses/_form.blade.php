@@ -12,6 +12,7 @@
     $editLayout = $editLayout ?? false;
     $showActionBar = $showActionBar ?? true;
     $formId = $formId ?? null;
+    $formReadOnly = $formReadOnly ?? false;
     $existingThumbnailUrl = $isEdit && $course->thumbnail
         ? asset('storage/' . $course->thumbnail)
         : '';
@@ -29,10 +30,16 @@
     </div>
 @endif --}}
 
-<form @if($formId) id="{{ $formId }}" @endif method="POST" action="{{ $action }}" enctype="multipart/form-data" class="w-full min-w-0 space-y-4 {{ $wideLayout ? 'lg:flex lg:min-h-[calc(100vh-9rem)] lg:flex-col' : '' }}">
+<form @if($formId) id="{{ $formId }}" @endif data-read-only="{{ $formReadOnly ? 'true' : 'false' }}" method="POST" action="{{ $action }}" enctype="multipart/form-data" class="w-full min-w-0 space-y-4 {{ $wideLayout ? 'lg:flex lg:min-h-[calc(100vh-9rem)] lg:flex-col' : '' }}">
     @csrf
     @if($method !== 'POST')
         @method($method)
+    @endif
+
+    @if($formReadOnly)
+        <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-900">
+            Phiên bản này đang chờ Admin duyệt. Thông tin đề xuất được hiển thị ở chế độ chỉ đọc.
+        </div>
     @endif
 
     <div class="grid min-w-0 items-stretch gap-4 lg:flex-1 {{ $wideLayout ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)_minmax(320px,1.05fr)]' : ($editLayout ? 'min-[992px]:grid-cols-[minmax(0,1.7fr)_minmax(330px,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_320px]') }}">
@@ -476,4 +483,63 @@
         formatPricePreview('price', 'price-preview-txt');
         formatPricePreview('discount_price', 'discount-preview-txt');
     });
+
+    @if($formId)
+    (() => {
+        const form = document.getElementById(@json($formId));
+        if (!form) return;
+
+        const readOnly = form.dataset.readOnly === 'true';
+        const saveButtons = Array.from(document.querySelectorAll(`[data-course-save][form="${form.id}"]`));
+        const controls = () => Array.from(form.elements).filter((control) => {
+            if (!control.name || control.disabled) return false;
+            if (['_token', '_method'].includes(control.name)) return false;
+            return control.type !== 'hidden' && !['submit', 'button', 'reset'].includes(control.type);
+        });
+        const snapshot = () => JSON.stringify(controls().map((control) => {
+            if (['checkbox', 'radio'].includes(control.type)) {
+                return [control.name, control.checked, control.checked ? control.value : null];
+            }
+            if (control.type === 'file') {
+                return [control.name, Array.from(control.files || []).map((file) => [file.name, file.size, file.lastModified])];
+            }
+            if (control instanceof HTMLSelectElement && control.multiple) {
+                return [control.name, Array.from(control.selectedOptions).map((option) => option.value)];
+            }
+
+            return [control.name, control.value];
+        }));
+
+        if (readOnly) {
+            Array.from(form.elements).forEach((control) => {
+                if (!['_token', '_method'].includes(control.name)) control.disabled = true;
+            });
+        }
+
+        const initialSnapshot = snapshot();
+        const updateDirtyState = () => {
+            const dirty = !readOnly && snapshot() !== initialSnapshot;
+            form.dataset.dirty = dirty ? 'true' : 'false';
+            saveButtons.forEach((button) => {
+                button.disabled = !dirty;
+            });
+        };
+
+        form.addEventListener('input', updateDirtyState);
+        form.addEventListener('change', updateDirtyState);
+        form.addEventListener('submit', (event) => {
+            if (readOnly || snapshot() === initialSnapshot) {
+                event.preventDefault();
+                updateDirtyState();
+                return;
+            }
+
+            saveButtons.forEach((button) => {
+                button.disabled = true;
+                button.textContent = 'Đang lưu...';
+            });
+        });
+        updateDirtyState();
+    })();
+    @endif
 </script>

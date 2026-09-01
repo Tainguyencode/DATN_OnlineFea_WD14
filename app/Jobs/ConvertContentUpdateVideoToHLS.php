@@ -3,6 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\ContentUpdate;
+use App\Models\LessonVersion;
+use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use App\Services\HlsVideoService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -11,7 +14,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -38,24 +40,32 @@ class ConvertContentUpdateVideoToHLS implements ShouldBeUnique, ShouldQueue
         return 'content-update:'.$this->contentUpdate->getKey();
     }
 
-    public function handle(HlsVideoService $hlsVideo): void
+    public function handle(ContentUpdateService $updates, ContentVersionService $versions): void
     {
+        $hlsVideo = app(HlsVideoService::class);
         $startTime = microtime(true);
-        $this->contentUpdate = $this->contentUpdate->fresh() ?? $this->contentUpdate;
-        $updateId = (int) $this->contentUpdate->id;
+        $updateId = (int) $this->contentUpdate->getKey();
+        $this->contentUpdate = ContentUpdate::query()->findOrFail($updateId);
+        if (! $this->contentUpdate->isDraft()) {
+            throw new RuntimeException("ContentUpdate {$updateId} is no longer an editable draft.");
+        }
+
+        $candidate = $this->draftCandidate($this->contentUpdate);
         $payload = $this->contentUpdate->payload ?? [];
         $s3OriginalKey = $payload['original_video_key'] ?? null;
         $videoPath = $payload['video_path'] ?? null;
 
         Log::info('[ConvertContentUpdateVideoToHLS] Job started.', [
             'update_id' => $updateId,
+            'lesson_version_id' => $candidate?->id,
+            'version_number' => $candidate?->version_number,
             'has_s3_original' => filled($s3OriginalKey),
             'has_local_path' => filled($videoPath),
             'queue_attempts' => $this->attempts(),
         ]);
 
         if (! $s3OriginalKey && ! $videoPath) {
-            $this->mergePayload(['processing_status' => 'failed']);
+            $this->contentUpdate = $updates->updateDraft($this->contentUpdate, ['processing_status' => 'failed']);
             Log::warning('[ConvertContentUpdateVideoToHLS] Content update has no video source.', [
                 'update_id' => $updateId,
             ]);
@@ -63,7 +73,7 @@ class ConvertContentUpdateVideoToHLS implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $this->mergePayload(['processing_status' => 'processing']);
+        $this->contentUpdate = $updates->updateDraft($this->contentUpdate, ['processing_status' => 'processing']);
         $tmpDir = storage_path('app/tmp_ffmpeg/update_'.$updateId.'_'.Str::random(8));
         File::ensureDirectoryExists($tmpDir);
 
@@ -75,13 +85,27 @@ class ConvertContentUpdateVideoToHLS implements ShouldBeUnique, ShouldQueue
 
             Log::info('[ConvertContentUpdateVideoToHLS] FFmpeg conversion completed.', [
                 'update_id' => $updateId,
+                'lesson_version_id' => $candidate?->id,
                 'files_generated' => $conversion['file_count'],
                 'segments_generated' => $conversion['segment_count'],
                 'duration_seconds' => round(microtime(true) - $encodeStartedAt, 2),
             ]);
 
-            $s3Directory = 'hls/updates/'.$updateId;
-            $localDirectory = 'lesson-hls/update_'.$updateId;
+            if ($candidate) {
+                $s3Directory = sprintf(
+                    'hls/courses/%s/lessons/%s/content-updates/%s/versions/v%s',
+                    $this->contentUpdate->course_id,
+                    $this->contentUpdate->entity_id,
+                    $updateId,
+                    $candidate->version_number,
+                );
+                $localDirectory = "lesson-hls/content-updates/{$updateId}/lesson-versions/{$candidate->id}";
+            } else {
+                // Legacy/new-identity drafts have no immutable lesson identity yet.
+                $s3Directory = 'hls/updates/'.$updateId;
+                $localDirectory = 'lesson-hls/update_'.$updateId;
+            }
+
             $publication = $hlsVideo->publish($hlsOutputDirectory, $s3Directory, $localDirectory);
             $changes = [
                 'processing_status' => 'completed',
@@ -93,18 +117,30 @@ class ConvertContentUpdateVideoToHLS implements ShouldBeUnique, ShouldQueue
                 $changes['duration_seconds'] = $conversion['duration_seconds'];
                 $changes['duration'] = $conversion['duration_seconds'];
             }
-            $payload = $this->mergePayload($changes);
+
+            $this->contentUpdate = $updates->updateDraft($this->contentUpdate, $changes);
+            if ($candidate) {
+                $prepared = $versions->prepareDraftCandidate(
+                    $this->contentUpdate,
+                    $this->contentUpdate->creator()->firstOrFail(),
+                );
+                if (! $prepared || (int) $prepared->id !== (int) $candidate->id) {
+                    throw new RuntimeException("ContentUpdate {$updateId} no longer points to the expected lesson candidate.");
+                }
+            }
 
             Log::info('[ConvertContentUpdateVideoToHLS] Job completed.', [
                 'update_id' => $updateId,
-                'hls_manifest_key' => $payload['hls_manifest_key'] ?? null,
+                'lesson_version_id' => $candidate?->id,
+                'hls_manifest_key' => $this->contentUpdate->payload['hls_manifest_key'] ?? null,
                 'obsolete_s3_files_removed' => $publication['obsolete_s3_files_removed'],
                 'duration_seconds' => round(microtime(true) - $startTime, 2),
             ]);
         } catch (Throwable $exception) {
-            $this->mergePayload(['processing_status' => 'failed']);
+            $this->markFailedIfEditable($updates);
             Log::error('[ConvertContentUpdateVideoToHLS] Conversion failed.', [
                 'update_id' => $updateId,
+                'lesson_version_id' => $candidate?->id,
                 'message' => $exception->getMessage(),
                 'exception' => $exception,
             ]);
@@ -120,13 +156,55 @@ class ConvertContentUpdateVideoToHLS implements ShouldBeUnique, ShouldQueue
 
     public function failed(?Throwable $exception): void
     {
-        $this->mergePayload(['processing_status' => 'failed']);
+        $this->markFailedIfEditable(app(ContentUpdateService::class));
         Cache::forget('video_processing_update_'.$this->contentUpdate->getKey());
 
         Log::error('[ConvertContentUpdateVideoToHLS] Job exhausted all attempts.', [
             'update_id' => $this->contentUpdate->getKey(),
             'message' => $exception?->getMessage(),
         ]);
+    }
+
+    private function draftCandidate(ContentUpdate $update): ?LessonVersion
+    {
+        if ($update->type !== ContentUpdate::TYPE_LESSON
+            || $update->action !== ContentUpdate::ACTION_UPDATE
+            || ! $update->entity_id) {
+            return null;
+        }
+
+        $candidate = LessonVersion::query()
+            ->where('content_update_id', $update->id)
+            ->where('lesson_id', $update->entity_id)
+            ->where('status', LessonVersion::STATUS_DRAFT)
+            ->first();
+        if (! $candidate) {
+            throw new RuntimeException("ContentUpdate {$update->id} has no editable lesson candidate.");
+        }
+
+        $draftVersionId = $candidate->lesson()->value('draft_version_id');
+        if ((int) $draftVersionId !== (int) $candidate->id) {
+            throw new RuntimeException("ContentUpdate {$update->id} is not the active lesson candidate.");
+        }
+
+        return $candidate;
+    }
+
+    private function markFailedIfEditable(ContentUpdateService $updates): void
+    {
+        $fresh = ContentUpdate::query()->find($this->contentUpdate->getKey());
+        if (! $fresh?->isDraft()) {
+            return;
+        }
+
+        try {
+            $this->contentUpdate = $updates->updateDraft($fresh, ['processing_status' => 'failed']);
+        } catch (Throwable $exception) {
+            Log::warning('[ConvertContentUpdateVideoToHLS] Could not mark editable draft as failed.', [
+                'update_id' => $this->contentUpdate->getKey(),
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function resolveInputPath(string $tmpDir, ?string $s3OriginalKey, ?string $videoPath): string
@@ -169,24 +247,5 @@ class ConvertContentUpdateVideoToHLS implements ShouldBeUnique, ShouldQueue
         }
 
         throw new RuntimeException('Source video not found for content update ID '.$this->contentUpdate->getKey().'.');
-    }
-
-    /** @param array<string, mixed> $changes */
-    private function mergePayload(array $changes): array
-    {
-        return DB::transaction(function () use ($changes): array {
-            $contentUpdate = ContentUpdate::query()
-                ->lockForUpdate()
-                ->find($this->contentUpdate->getKey());
-            if (! $contentUpdate) {
-                return [];
-            }
-
-            $payload = array_merge($contentUpdate->payload ?? [], $changes);
-            $contentUpdate->update(['payload' => $payload]);
-            $this->contentUpdate = $contentUpdate;
-
-            return $payload;
-        });
     }
 }

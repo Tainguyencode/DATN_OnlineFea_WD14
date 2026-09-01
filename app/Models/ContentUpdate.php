@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ContentUpdate extends Model
 {
@@ -14,6 +15,8 @@ class ContentUpdate extends Model
     public const TYPE_LESSON = 'lesson';
 
     public const TYPE_QUIZ = 'quiz';
+
+    public const TYPE_ASSIGNMENT = 'assignment';
 
     public const ACTION_CREATE = 'create';
 
@@ -37,6 +40,7 @@ class ContentUpdate extends Model
         'course_id',
         'action',
         'payload',
+        'metadata',
         'status',
         'rejection_reason',
         'created_by',
@@ -51,6 +55,7 @@ class ContentUpdate extends Model
             'entity_id' => 'integer',
             'course_id' => 'integer',
             'payload' => 'array',
+            'metadata' => 'array',
             'created_by' => 'integer',
             'reviewed_by' => 'integer',
             'submitted_at' => 'datetime',
@@ -71,6 +76,26 @@ class ContentUpdate extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function courseVersions(): HasMany
+    {
+        return $this->hasMany(CourseVersion::class);
+    }
+
+    public function sectionVersions(): HasMany
+    {
+        return $this->hasMany(CourseSectionVersion::class);
+    }
+
+    public function lessonVersions(): HasMany
+    {
+        return $this->hasMany(LessonVersion::class);
+    }
+
+    public function assignmentVersions(): HasMany
+    {
+        return $this->hasMany(AssignmentVersion::class);
     }
 
     public function scopeDraft($query)
@@ -106,6 +131,11 @@ class ContentUpdate extends Model
     public function isApproved(): bool
     {
         return $this->status === self::STATUS_APPROVED;
+    }
+
+    public function isRollback(): bool
+    {
+        return data_get($this->metadata, 'operation_origin') === 'rollback';
     }
 
     public function isRejected(): bool

@@ -3,14 +3,18 @@
 namespace Tests\Feature;
 
 use App\Jobs\ConvertVideoToHLS;
+use App\Jobs\ConvertContentUpdateVideoToHLS;
 use App\Models\Assignment;
 use App\Models\Cart;
 use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Coupon;
 use App\Models\Course;
+use App\Models\CourseSection;
 use App\Models\Enrollment;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
+use App\Models\LessonVersion;
 use App\Models\LessonProgress;
 use App\Models\Order;
 use App\Models\Payment;
@@ -20,6 +24,7 @@ use App\Models\UserCoupon;
 use App\Services\AwsS3UploadService;
 use App\Services\MomoService;
 use App\Services\PaymentGatewayService;
+use App\Services\ContentVersionService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -41,16 +46,29 @@ class DefenseTopTenRegressionTest extends TestCase
         Queue::fake();
         $this->student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
+        $category = Category::create([
+            'name' => 'Test',
+            'slug' => (string) Str::uuid(),
+            'status' => true,
+        ]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
         $this->course = Course::create([
             'title' => 'Defense regression', 'slug' => (string) Str::uuid(),
-            'category_id' => Category::create(['name' => 'Test', 'slug' => (string) Str::uuid()])->id,
+            'category_id' => $category->id,
             'instructor_id' => $instructor->id, 'price' => 100000,
             'status' => 'published', 'is_published' => true, 'certificate_enabled' => false,
         ]);
+        $section = CourseSection::create([
+            'course_id' => $this->course->id,
+            'title' => 'Defense section',
+            'sort_order' => 0,
+        ]);
         $this->video = Lesson::create([
-            'course_id' => $this->course->id, 'title' => 'Video', 'type' => 'video',
+            'course_id' => $this->course->id, 'section_id' => $section->id, 'title' => 'Video', 'type' => 'video',
             'duration_seconds' => 600, 'duration' => 600, 'status' => 'published', 'is_required' => true,
         ]);
+        app(ContentVersionService::class)->publishInitialCourseTree($this->course, $instructor);
         Enrollment::create(['user_id' => $this->student->id, 'course_id' => $this->course->id, 'status' => 'active']);
         $this->actingAs($this->student);
     }
@@ -206,17 +224,40 @@ class DefenseTopTenRegressionTest extends TestCase
     {
         $this->actingAs($this->course->instructor);
         $this->video->update(['original_video_key' => 'live.mp4', 'hls_manifest_key' => 'live/master.m3u8']);
-        $key = "originals/courses/{$this->course->id}/replacement.mp4";
-        $this->mock(AwsS3UploadService::class)->shouldReceive('completeMultipartUpload')->once()->andReturn([]);
+        $publishedVersion = LessonVersion::query()->findOrFail($this->video->fresh()->published_version_id);
+        $this->mock(AwsS3UploadService::class, function ($mock): void {
+            $mock->shouldReceive('generateDraftVideoObjectKey')
+                ->once()
+                ->andReturnUsing(fn ($courseId, $lessonId, $updateId, $version, $filename): string => "originals/courses/{$courseId}/lessons/{$lessonId}/content-updates/{$updateId}/versions/v{$version}/{$filename}");
+            $mock->shouldReceive('createMultipartUpload')->once()->andReturn('upload');
+            $mock->shouldReceive('getBucket')->once()->andReturn('test-bucket');
+            $mock->shouldReceive('completeMultipartUpload')->once()->andReturn([]);
+        });
+        $upload = $this->postJson(route('instructor.courses.s3.multipart.create', $this->course), [
+            'filename' => 'replacement.mp4',
+            'content_type' => 'video/mp4',
+            'file_size' => 10_000,
+            'lesson_id' => $this->video->id,
+        ])->assertOk();
+        $key = $upload->json('key');
+        $contentUpdateId = $upload->json('contentUpdateId');
+
         $this->postJson(route('instructor.courses.s3.multipart.complete', $this->course), [
             'key' => $key, 'uploadId' => 'upload', 'lesson_id' => $this->video->id,
-            'parts' => [['PartNumber' => 1, 'ETag' => 'etag']],
-        ])->assertOk();
+            'parts' => [['PartNumber' => 1, 'ETag' => 'etag']], 'content_update_id' => $contentUpdateId,
+        ])->assertOk()->assertJsonPath('contentUpdateId', $contentUpdateId);
         $this->assertSame('live.mp4', $this->video->fresh()->original_video_key);
         $this->assertSame('live/master.m3u8', $this->video->fresh()->hls_manifest_key);
-        $candidate = ContentUpdate::where('entity_id', $this->video->id)->firstOrFail();
-        $this->assertSame('draft', $candidate->status);
-        $this->assertSame($key, $candidate->payload['original_video_key']);
+        $contentUpdate = ContentUpdate::query()->findOrFail($contentUpdateId);
+        $candidate = LessonVersion::query()->where('content_update_id', $contentUpdate->id)->firstOrFail();
+        $this->assertSame(ContentUpdate::STATUS_DRAFT, $contentUpdate->status);
+        $this->assertSame($this->video->id, $contentUpdate->entity_id);
+        $this->assertSame($key, $contentUpdate->payload['original_video_key']);
+        $this->assertSame($publishedVersion->id, $this->video->fresh()->published_version_id);
+        $this->assertSame($candidate->id, $this->video->fresh()->draft_version_id);
+        $this->assertSame($publishedVersion->version_number + 1, $candidate->version_number);
+        $this->assertSame($key, $candidate->original_video_key);
+        Queue::assertPushed(ConvertContentUpdateVideoToHLS::class);
         Queue::assertNotPushed(ConvertVideoToHLS::class);
     }
 
@@ -224,14 +265,15 @@ class DefenseTopTenRegressionTest extends TestCase
     {
         [$order, $payment] = $this->order(['status' => 'paid']);
         $lessonUrl = route('courses.lessons.show', [$this->course, $this->video]);
+        $learningCta = '#<a\s+href="'.preg_quote($lessonUrl, '#').'"\s+data-purchased-course="'.$this->course->id.'"#';
 
-        $this->get(route('student.checkout.success', $order->order_code))
-            ->assertOk()->assertSee('href="'.$lessonUrl.'"', false)
-            ->assertDontSee('href="'.route('student.dashboard').'"', false);
-        $this->view('student.cart.momo_result', [
+        $this->assertMatchesRegularExpression(
+            $learningCta,
+            $this->get(route('student.checkout.success', $order->order_code))->assertOk()->getContent()
+        );
+        $this->assertMatchesRegularExpression($learningCta, $this->view('student.cart.momo_result', [
             'order' => $order, 'payment' => $payment, 'success' => true, 'message' => 'Success',
-        ])->assertSee('href="'.$lessonUrl.'"', false)
-            ->assertDontSee('href="'.route('student.dashboard').'"', false);
+        ]));
 
         $this->get($lessonUrl)->assertOk();
     }

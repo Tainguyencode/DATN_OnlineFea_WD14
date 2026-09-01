@@ -7,11 +7,15 @@ use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\QuestionVersion;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
+use App\Models\QuizVersion;
+use App\Models\QuizVersionQuestion;
 use App\Models\User;
+use App\Services\QuizContentService;
 use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -94,9 +98,12 @@ class QuizReviewTest extends TestCase
             'sort_order' => 2,
         ]);
 
+        $version = $this->publishQuizVersion($quiz);
+
         $attempt = QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'quiz_version_id' => $version->id,
             'score' => 10,
             'total_score' => 10,
             'percent' => 100,
@@ -113,7 +120,7 @@ class QuizReviewTest extends TestCase
         ]);
 
         // Access review as student
-        $response = $this->actingAs($student)->get(route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]));
+        $response = $this->actingAs($student)->get(route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]));
 
         $response->assertStatus(200);
         $response->assertSee('Xem lại kết quả bài Quiz');
@@ -159,9 +166,25 @@ class QuizReviewTest extends TestCase
             'is_active' => true,
         ]);
 
+        $question = QuizQuestion::create([
+            'quiz_id' => $quiz->id,
+            'question' => 'Vue là gì?',
+            'type' => 'single',
+            'points' => 10,
+            'sort_order' => 1,
+        ]);
+        QuizOption::create([
+            'quiz_question_id' => $question->id,
+            'option_text' => 'Một JavaScript framework',
+            'is_correct' => true,
+            'sort_order' => 1,
+        ]);
+        $version = $this->publishQuizVersion($quiz);
+
         $attemptA = QuizAttempt::create([
             'user_id' => $studentA->id,
             'quiz_id' => $quiz->id,
+            'quiz_version_id' => $version->id,
             'score' => 10,
             'total_score' => 10,
             'percent' => 100,
@@ -172,7 +195,7 @@ class QuizReviewTest extends TestCase
         ]);
 
         // Student B tries to access Student A's attempt
-        $response = $this->actingAs($studentB)->get(route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attemptA]));
+        $response = $this->actingAs($studentB)->get(route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attemptA]));
         $response->assertStatus(403);
     }
 
@@ -240,9 +263,12 @@ class QuizReviewTest extends TestCase
             'sort_order' => 2,
         ]);
 
+        $version = $this->publishQuizVersion($quiz);
+
         $attempt = QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'quiz_version_id' => $version->id,
             'score' => 10,
             'total_score' => 10,
             'percent' => 100,
@@ -386,10 +412,13 @@ class QuizReviewTest extends TestCase
             'sort_order' => 2,
         ]);
 
+        $version = $this->publishQuizVersion($quiz);
+
         // Student chose wrong answer optB
         $attempt = QuizAttempt::create([
             'user_id' => $student->id,
             'quiz_id' => $quiz->id,
+            'quiz_version_id' => $version->id,
             'score' => 0,
             'total_score' => 10,
             'percent' => 0,
@@ -405,7 +434,7 @@ class QuizReviewTest extends TestCase
             'is_correct' => false,
         ]);
 
-        $response = $this->actingAs($student)->get(route('courses.lessons.quiz.attempts.show', [$course, $lesson, $attempt]));
+        $response = $this->actingAs($student)->get(route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]));
 
         $response->assertStatus(200);
         $response->assertSee('CHƯA ĐẠT');
@@ -471,13 +500,96 @@ class QuizReviewTest extends TestCase
             'sort_order' => 1,
         ]);
 
+        $this->publishQuizVersion($quiz);
+        $start = $this->actingAs($student)->postJson(route('courses.lessons.quiz.start', [$course, $lesson]));
+        $start->assertOk();
+        $attemptId = $start->json('attempt.id');
+
         $response = $this->actingAs($student)->postJson(route('courses.lessons.quiz.submit', [$course, $lesson]), [
+            'attempt_id' => $attemptId,
             'answers' => [
                 $question->id => $opt->id,
             ],
         ]);
 
-        $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['attempt_id']);
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('attempt.review_url', route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attemptId]));
+        $response->assertJsonStructure([
+            'attempt' => [
+                'id',
+                'score',
+                'total_score',
+                'percent',
+                'passed',
+                'review_url',
+            ],
+        ]);
+    }
+
+    private function publishQuizVersion(Quiz $quiz): QuizVersion
+    {
+        $questions = $quiz->questions()->with('options')->orderBy('sort_order')->get();
+        for ($sortOrder = $questions->count(); $sortOrder < QuizContentService::MIN_QUESTIONS; $sortOrder++) {
+            $question = QuizQuestion::create([
+                'quiz_id' => $quiz->id,
+                'question' => "Bổ sung câu hỏi {$sortOrder}",
+                'type' => 'single',
+                'points' => 1,
+                'sort_order' => $sortOrder,
+            ]);
+            QuizOption::create([
+                'quiz_question_id' => $question->id,
+                'option_text' => 'Đáp án đúng',
+                'is_correct' => true,
+                'sort_order' => 0,
+            ]);
+        }
+        $questions = $quiz->questions()->with('options')->orderBy('sort_order')->get();
+
+        foreach ($questions as $question) {
+            for ($sortOrder = $question->options->count(); $sortOrder < QuizContentService::MIN_OPTIONS; $sortOrder++) {
+                QuizOption::create([
+                    'quiz_question_id' => $question->id,
+                    'option_text' => "Đáp án bổ sung {$question->id}-{$sortOrder}",
+                    'is_correct' => false,
+                    'sort_order' => $sortOrder,
+                ]);
+            }
+        }
+        $questions = $quiz->questions()->with('options')->orderBy('sort_order')->get();
+
+        $version = QuizVersion::create([
+            'quiz_id' => $quiz->id,
+            'version' => 1,
+            'title' => $quiz->title,
+            'pass_score' => $quiz->pass_score,
+            'status' => QuizVersion::STATUS_PUBLISHED,
+            'published_at' => now(),
+        ]);
+
+        foreach ($questions as $index => $question) {
+            $questionVersion = QuestionVersion::create([
+                'question_id' => $question->id,
+                'version' => 1,
+                'question' => $question->question,
+                'type' => $question->type,
+                'points' => $question->points,
+                'explanation' => $question->explanation,
+                'status' => QuestionVersion::STATUS_PUBLISHED,
+                'published_at' => now(),
+            ]);
+            $question->options()->update(['question_version_id' => $questionVersion->id]);
+            QuizVersionQuestion::create([
+                'quiz_version_id' => $version->id,
+                'question_id' => $question->id,
+                'question_version_id' => $questionVersion->id,
+                'sort_order' => $index,
+            ]);
+        }
+
+        $quiz->update(['current_published_version_id' => $version->id]);
+
+        return $version;
     }
 }
