@@ -504,7 +504,7 @@
                                                                     <button type="button" @click="openPreview(@js($doc->isUrlSource() ? $doc->document_url : route('admin.instructors.applications.certificates.view', $doc)), @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'), '{{ $doc->isUrlSource() ? 'url' : ($isVideoFile ? 'file-video' : 'file') }}')" class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200">
                                                                         {{ $doc->isUrlSource() || $isVideoFile ? 'Xem video' : 'Xem tệp' }}
                                                                     </button>
-                                                                    @if($doc->status !== 'approved')
+                                                                    @if($doc->status === 'pending')
                                                                         <form method="POST" action="{{ route('admin.instructors.applications.documents.review', [$application, $doc]) }}">
                                                                             @csrf
                                                                             <input type="hidden" name="status" value="approved">
@@ -558,7 +558,7 @@
                                                 <button type="button" @click="openPreview(@js($doc->isUrlSource() ? $doc->document_url : route('admin.instructors.applications.certificates.view', $doc)), @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'), '{{ $doc->isUrlSource() ? 'url' : ($isVideoFile ? 'file-video' : 'file') }}')" class="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">
                                                     {{ $doc->isUrlSource() || $isVideoFile ? 'Xem video' : 'Xem tệp' }}
                                                 </button>
-                                                @if($doc->status !== 'approved')
+                                                @if($doc->status === 'pending')
                                                     <form method="POST" action="{{ route('admin.instructors.applications.documents.review', [$application, $doc]) }}">
                                                         @csrf
                                                         <input type="hidden" name="status" value="approved">

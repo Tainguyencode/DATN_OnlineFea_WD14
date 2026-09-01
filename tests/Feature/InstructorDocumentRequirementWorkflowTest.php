@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorDocumentRequirement;
+use App\Models\InstructorApplication;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use App\Services\InstructorRequirementService;
@@ -214,9 +215,175 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'user_id' => $this->instructor->id,
             'requirement_id' => $this->reqDegree->id,
             'document_type' => 'degree',
+            'status' => 'draft',
+        ]);
+    }
+
+    public function test_unverified_instructor_cannot_upload_documents(): void
+    {
+        $instructor = $this->createUnverifiedInstructor();
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.documents.upload'), [
+                'requirement_id' => $this->reqDegree->id,
+                'files' => [UploadedFile::fake()->create('degree.pdf', 100, 'application/pdf')],
+            ])
+            ->assertRedirect(route('verification.notice'));
+
+        $this->assertDatabaseMissing('instructor_certificates', ['user_id' => $instructor->id]);
+    }
+
+    public function test_unverified_instructor_cannot_submit_review(): void
+    {
+        $instructor = $this->createUnverifiedInstructor();
+        $this->createDocumentForUser($instructor, $this->reqDegree);
+        $this->createDocumentForUser($instructor, $this->reqCert);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.submit-review'))
+            ->assertRedirect(route('verification.notice'));
+
+        $instructor->refresh();
+        $this->assertNull($instructor->submitted_for_review_at);
+    }
+
+    public function test_unverified_rejected_instructor_cannot_resubmit(): void
+    {
+        $instructor = $this->createUnverifiedInstructor(['instructor_status' => 'rejected']);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.resubmit'), [
+                'phone' => $instructor->phone,
+                'specialty' => 'Laravel & Vue.js',
+                'experience' => '5 năm kinh nghiệm',
+                'bio' => 'Senior Web Developer',
+                'agree_information' => true,
+                'agree_terms' => true,
+            ])
+            ->assertRedirect(route('verification.notice'));
+
+        $instructor->refresh();
+        $this->assertSame('rejected', $instructor->instructor_status);
+        $this->assertNull($instructor->submitted_for_review_at);
+    }
+
+    public function test_missing_required_documents_disable_submit_and_direct_post_cannot_bypass_guard(): void
+    {
+        $this->actingAs($this->instructor)
+            ->get(route('instructor.profile'))
+            ->assertOk()
+            ->assertSee('Còn thiếu 2 tài liệu bắt buộc')
+            ->assertSee('disabled', false);
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.profile.submit-review'))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->instructor->refresh();
+        $this->assertNull($this->instructor->submitted_for_review_at);
+        $this->assertFalse($this->instructor->needs_admin_review);
+    }
+
+    public function test_all_required_pending_documents_enable_submit_and_set_review_state(): void
+    {
+        $this->createDocument($this->reqDegree);
+        $this->createDocument($this->reqCert);
+
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($this->instructor);
+        $this->assertTrue($eligibility['can_submit']);
+        $this->assertSame(2, $eligibility['required_count']);
+        $this->assertSame(2, $eligibility['submitted_count']);
+        $this->assertSame(0, $eligibility['missing_count']);
+
+        $this->actingAs($this->instructor)
+            ->get(route('instructor.profile'))
+            ->assertOk()
+            ->assertSee('Đã đủ hồ sơ để gửi xét duyệt')
+            ->assertSee('bg-amber-600 text-white hover:bg-amber-700', false)
+            ->assertDontSee('cursor-not-allowed bg-slate-300', false);
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.profile.submit-review'))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->instructor->refresh();
+        $this->assertNotNull($this->instructor->submitted_for_review_at);
+        $this->assertTrue($this->instructor->needs_admin_review);
+    }
+
+    public function test_rejected_document_requires_pending_replacement_and_optional_document_does_not_block(): void
+    {
+        $this->createDocument($this->reqDegree, 'approved');
+        $this->createDocument($this->reqCert, 'rejected');
+        InstructorDocumentRequirement::create([
+            'category_id' => $this->categoryWeb->id,
+            'document_type' => 'portfolio',
+            'document_title' => 'Portfolio tùy chọn',
+            'is_required' => false,
+            'is_active' => true,
+        ]);
+
+        $service = app(InstructorRequirementService::class);
+        $this->assertFalse($service->getSubmitEligibility($this->instructor)['can_submit']);
+
+        $this->createDocument($this->reqCert, 'pending');
+
+        $eligibility = $service->getSubmitEligibility($this->instructor->fresh());
+        $this->assertTrue($eligibility['can_submit']);
+    }
+
+    public function test_resubmit_cannot_bypass_requirement_guard(): void
+    {
+        $this->instructor->update(['instructor_status' => 'rejected']);
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.resubmit'), [
+                'phone' => $this->instructor->phone,
+                'specialty' => 'Laravel & Vue.js',
+                'experience' => '5 năm kinh nghiệm',
+                'bio' => 'Senior Web Developer',
+                'agree_information' => true,
+                'agree_terms' => true,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->instructor->refresh();
+        $this->assertSame('rejected', $this->instructor->instructor_status);
+        $this->assertNull($this->instructor->submitted_for_review_at);
+    }
+
+    public function test_instructor_without_teaching_field_cannot_submit(): void
+    {
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'email_verified_at' => now(),
+        ]);
+        InstructorProfile::create(['user_id' => $instructor->id]);
+
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($instructor);
+
+        $this->assertFalse($eligibility['can_submit']);
+        $this->assertSame(['Ngành / Lĩnh vực giảng dạy'], $eligibility['missing_titles']);
+    }
+
+    public function test_admin_can_still_view_legacy_certificate_path_when_no_certificate_records_exist(): void
+    {
+        $legacyPath = 'legacy/instructor-certificate.pdf';
+        Storage::disk('local')->put($legacyPath, 'legacy certificate');
+        InstructorApplication::create([
+            'user_id' => $this->instructor->id,
+            'certificate_path' => $legacyPath,
             'status' => 'pending',
             'source_type' => 'file',
         ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.instructors.applications.certificate', $this->instructor))
+            ->assertOk();
     }
 
     public function test_instructor_can_submit_https_url_for_a_requirement(): void
@@ -446,7 +613,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
     /**
      * 10. Khi giảng viên thay đổi ngành giảng dạy: Tính toán lại yêu cầu và gỡ requirement_id không tương thích.
      */
-    public function test_changing_teaching_field_recalculates_requirements_and_unassigns_incompatible_certificates(): void
+    public function test_changing_teaching_field_keeps_submitted_certificate_requirement_history(): void
     {
         // Gán cert cho requirement của ngành Web
         $cert = InstructorCertificate::create([
@@ -473,8 +640,8 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
         $response->assertRedirect();
 
         $cert->refresh();
-        // Requirement cũ của ngành Web không thuộc ngành Marketing nên requirement_id bị đặt về null
-        $this->assertNull($cert->requirement_id);
+        // Pending là lịch sử đã gửi, không được mất liên kết requirement cũ.
+        $this->assertSame($this->reqDegree->id, $cert->requirement_id);
 
         $this->instructor->refresh();
         $this->assertEquals($this->categoryMarketing->id, $this->instructor->getTeachingCategoryId());
@@ -569,5 +736,99 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('33%')
             ->assertSee('1/3');
+    }
+
+    public function test_submit_promotes_only_current_requirement_drafts(): void
+    {
+        $degree = $this->createDocument($this->reqDegree, 'draft');
+        $certificate = $this->createDocument($this->reqCert, 'draft');
+        $unassigned = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'file_path' => 'test/unassigned.pdf', 'original_name' => 'unassigned.pdf', 'document_type' => 'degree',
+            'status' => 'draft', 'uploaded_at' => now(),
+        ]);
+        $outside = InstructorDocumentRequirement::create([
+            'category_id' => $this->categoryMarketing->id, 'document_type' => 'degree', 'document_title' => 'Marketing degree',
+            'is_required' => true, 'is_active' => true,
+        ]);
+        $outsideDraft = $this->createDocument($outside, 'draft');
+
+        $this->actingAs($this->instructor)->post(route('instructor.profile.submit-review'))->assertRedirect();
+
+        $this->assertSame('pending', $degree->fresh()->status);
+        $this->assertSame('pending', $certificate->fresh()->status);
+        $this->assertSame('draft', $unassigned->fresh()->status);
+        $this->assertSame('draft', $outsideDraft->fresh()->status);
+    }
+
+    public function test_draft_document_can_be_replaced_and_deleted_while_pending_cannot(): void
+    {
+        $draft = $this->createDocument($this->reqDegree, 'draft');
+        Storage::disk('local')->put($draft->file_path, 'old');
+        $this->actingAs($this->instructor)->patch(route('instructor.profile.documents.replace', $draft), [
+            'file' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'), 'title' => 'Replacement',
+        ])->assertRedirect();
+        $this->assertSame('Replacement', $draft->fresh()->title);
+        $this->actingAs($this->instructor)->delete(route('instructor.profile.documents.delete', $draft))->assertRedirect();
+        $this->assertDatabaseMissing('instructor_certificates', ['id' => $draft->id]);
+
+        $pending = $this->createDocument($this->reqCert, 'pending');
+        $this->actingAs($this->instructor)->delete(route('instructor.profile.documents.delete', $pending))->assertRedirect();
+        $this->assertSame('pending', $pending->fresh()->status);
+    }
+
+    public function test_rejected_history_is_kept_and_admin_can_only_review_pending_documents(): void
+    {
+        $rejected = $this->createDocument($this->reqDegree, 'rejected');
+        $this->actingAs($this->instructor)->post(route('instructor.profile.documents.upload'), [
+            'requirement_id' => $this->reqDegree->id,
+            'file' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'),
+        ])->assertRedirect();
+        $this->assertSame('rejected', $rejected->fresh()->status);
+        $this->assertSame(1, $this->instructor->instructorCertificates()->where('requirement_id', $this->reqDegree->id)->where('status', 'draft')->count());
+
+        $draft = $this->instructor->instructorCertificates()->where('status', 'draft')->firstOrFail();
+        $pending = $this->createDocument($this->reqCert, 'pending');
+        $this->actingAs($this->admin)->post(route('admin.instructors.applications.documents.review', [$this->instructor, $draft]), ['status' => 'approved'])->assertStatus(422);
+        $this->actingAs($this->admin)->post(route('admin.instructors.applications.documents.review', [$this->instructor, $pending]), ['status' => 'approved'])->assertRedirect();
+        $this->assertSame('approved', $pending->fresh()->status);
+    }
+
+    private function createDocument(InstructorDocumentRequirement $requirement, string $status = 'pending'): InstructorCertificate
+    {
+        return $this->createDocumentForUser($this->instructor, $requirement, $status);
+    }
+
+    private function createDocumentForUser(User $user, InstructorDocumentRequirement $requirement, string $status = 'pending'): InstructorCertificate
+    {
+        return InstructorCertificate::create([
+            'user_id' => $user->id,
+            'requirement_id' => $requirement->id,
+            'file_path' => 'test/'.$requirement->id.'-'.$status.'-'.Str::uuid().'.pdf',
+            'original_name' => 'document.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => 1024,
+            'title' => $requirement->document_title,
+            'document_type' => $requirement->document_type,
+            'status' => $status,
+            'uploaded_at' => now(),
+        ]);
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function createUnverifiedInstructor(array $attributes = []): User
+    {
+        $instructor = User::factory()->create(array_merge([
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'email_verified_at' => null,
+        ], $attributes));
+        InstructorProfile::create([
+            'user_id' => $instructor->id,
+            'category_id' => $this->categoryWeb->id,
+            'teaching_field' => $this->categoryWeb->name,
+        ]);
+
+        return $instructor;
     }
 }

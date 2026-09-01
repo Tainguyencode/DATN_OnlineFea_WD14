@@ -16,6 +16,7 @@ class CourseReviewService
     public function submitForReview(Course $course, User $instructor): CourseReview
     {
         abort_unless($course->isOwnedBy($instructor), 403);
+        abort_unless(app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 403, 'Giảng viên chưa được duyệt ngành của khóa học này.');
         abort_unless($course->canBeSubmittedForReview(), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
         $hasAgreement = $course->copyright_agreed || request()->boolean('copyright_agreed');
@@ -123,6 +124,8 @@ class CourseReviewService
     {
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
+        $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+        abort_unless($instructor && app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 422, 'Ngành của giảng viên chưa được duyệt.');
 
         $this->assertChecklistComplete($checklist);
 
@@ -327,6 +330,8 @@ class CourseReviewService
     {
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::Approved->value, CourseStatus::Suspended->value], true), 422);
+        $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+        abort_unless($instructor && app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 422, 'Ngành của giảng viên chưa được duyệt.');
 
         DB::transaction(function () use ($course, $admin): void {
             app(QuizVersioningService::class)->publishInitialCourseDrafts($course);

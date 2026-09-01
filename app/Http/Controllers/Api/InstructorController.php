@@ -16,6 +16,7 @@ use App\Services\ActivityLogService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CurriculumLessonService;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -40,6 +41,7 @@ class InstructorController extends Controller
     public function storeCourse(Request $request): JsonResponse
     {
         $validated = $this->validateCoursePayload($request);
+        abort_unless(app(InstructorCourseCategoryAccess::class)->canTeachCategory($request->user(), (int) $validated['category_id']), 403, 'Giảng viên chưa được duyệt ngành của khóa học này.');
 
         $course = Course::create([
             ...$validated,
@@ -228,6 +230,10 @@ class InstructorController extends Controller
         if ($course->instructor_id !== $request->user()->id && ! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized');
         }
+
+        if (! $request->user()->isAdmin()) {
+            abort_unless(app(InstructorCourseCategoryAccess::class)->canManageCourse($request->user(), $course), 403, 'Giảng viên chưa được duyệt ngành của khóa học này.');
+        }
     }
 
     /** @return array<string, mixed> */
@@ -248,7 +254,17 @@ class InstructorController extends Controller
 
         $validator->after(function ($validator) use ($course, $request): void {
             if ($request->filled('category_id')) {
-                $category = Category::with('parent:id,status')->find($request->integer('category_id'));
+                $categoryId = $request->integer('category_id');
+                $category = Category::with('parent:id,status')->find($categoryId);
+                $access = app(InstructorCourseCategoryAccess::class);
+                $isKeepingExistingCategory = $course
+                    && (int) $course->category_id === $categoryId
+                    && $access->canManageCourse($request->user(), $course);
+
+                if (! $isKeepingExistingCategory && ! $access->canTeachCategory($request->user(), $categoryId)) {
+                    $validator->errors()->add('category_id', 'Bạn không có quyền tạo hoặc chuyển khóa học sang ngành này.');
+                }
+
                 if ($category && (! $category->status || ($category->parent_id && ! $category->parent?->status))) {
                     $validator->errors()->add('category_id', 'Danh mục được chọn hoặc danh mục cha đang bị tắt.');
                 }

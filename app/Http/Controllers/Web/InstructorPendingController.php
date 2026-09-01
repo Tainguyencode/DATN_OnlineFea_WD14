@@ -14,6 +14,7 @@ use App\Services\InstructorRequirementService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -178,7 +179,7 @@ class InstructorPendingController extends Controller
                 'file_size' => $fileSize,
                 'title' => $customTitle ?: pathinfo($originalName, PATHINFO_FILENAME),
                 'document_type' => $documentType,
-                'status' => 'pending',
+                'status' => 'draft',
                 'uploaded_at' => now(),
             ]);
 
@@ -268,9 +269,9 @@ class InstructorPendingController extends Controller
                 ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ. Tài khoản đã chuyển về Học viên.');
         }
 
-        $completeness = app(InstructorRequirementService::class)->checkCanApproveInstructor($user);
-        if (! $completeness['can_approve']) {
-            $missingList = implode(', ', $completeness['missing_titles']);
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
+        if (! $eligibility['can_submit']) {
+            $missingList = implode(', ', $eligibility['missing_titles']);
 
             return back()->with('error', "Hồ sơ của bạn còn thiếu tài liệu bắt buộc: {$missingList}. Vui lòng bổ sung đầy đủ trước khi nộp xét duyệt.");
         }
@@ -280,18 +281,23 @@ class InstructorPendingController extends Controller
             return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ/tài liệu trước khi gửi hồ sơ xét duyệt.');
         }
 
-        $user->update([
-            'submitted_for_review_at' => now(),
-            'instructor_status' => 'pending',
-            'rejected_reason' => null,
-        ]);
-
-        if ($user->instructorApplication) {
-            $user->instructorApplication->update([
-                'status' => 'pending',
-                'admin_notes' => null,
+        DB::transaction(function () use ($user) {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            app(InstructorRequirementService::class)->promoteDraftCertificatesForReview($lockedUser);
+            $lockedUser->update([
+                'submitted_for_review_at' => now(),
+                'instructor_status' => 'pending',
+                'needs_admin_review' => true,
+                'rejected_reason' => null,
             ]);
-        }
+
+            if ($lockedUser->instructorApplication) {
+                $lockedUser->instructorApplication->update([
+                    'status' => 'pending',
+                    'admin_notes' => null,
+                ]);
+            }
+        });
 
         ActivityLogService::log($user->id, 'submit_instructor_application', User::class, $user->id, [
             'certificates_count' => $certsCount,
@@ -355,25 +361,35 @@ class InstructorPendingController extends Controller
                     'mime_type' => $file->getClientMimeType(),
                     'file_size' => $file->getSize(),
                     'title' => pathinfo($originalName, PATHINFO_FILENAME),
-                    'status' => 'pending',
+                    'status' => 'draft',
                     'uploaded_at' => now(),
                 ]);
             }
         }
 
-        $certsCount = $user->instructorCertificates()->count();
-        if ($certsCount === 0) {
-            return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ trước khi gửi lại hồ sơ.');
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
+        if (! $eligibility['can_submit']) {
+            $message = $eligibility['missing_count'] > 0
+                ? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt. Còn thiếu '.$eligibility['missing_count'].' tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']).'.'
+                : ($eligibility['reason'] ?? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt.');
+
+            return back()->with('error', $message);
         }
 
-        $user->update([
-            'phone' => $validated['phone'],
-            'bio' => $validated['bio'],
-            'instructor_status' => 'pending',
-            'needs_admin_review' => true,
-            'submitted_for_review_at' => now(),
-            'rejected_reason' => null,
-        ]);
+        $certsCount = $user->instructorCertificates()->count();
+
+        DB::transaction(function () use ($user, $validated) {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            app(InstructorRequirementService::class)->promoteDraftCertificatesForReview($lockedUser);
+            $lockedUser->update([
+                'phone' => $validated['phone'],
+                'bio' => $validated['bio'],
+                'instructor_status' => 'pending',
+                'needs_admin_review' => true,
+                'submitted_for_review_at' => now(),
+                'rejected_reason' => null,
+            ]);
+        });
 
         $profile->fill([
             'phone' => $validated['phone'],

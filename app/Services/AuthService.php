@@ -5,11 +5,11 @@ namespace App\Services;
 use App\Models\ActiveSession;
 use App\Models\Category;
 use App\Models\InstructorApplication;
-use App\Models\InstructorCertificate;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Throwable;
 
 class AuthService
 {
@@ -85,101 +86,98 @@ class AuthService
      */
     public function register(array $validated, Request $request): User
     {
-        $user = User::create([
-            'name' => $validated['name'],
-            'username' => self::generateUniqueUsername($validated['name']),
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
-            'password' => $validated['password'],
-            'role' => $validated['role'],
-            'avatar' => null,
-            'bio' => $validated['bio'] ?? null,
-            'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
-            'needs_admin_review' => $validated['role'] === 'instructor',
-            'is_active' => true,
-            'password_changed_at' => now(),
-        ]);
+        /** @var array<int, array{disk: string, path: string}> $storedFiles */
+        $storedFiles = [];
 
-        if ($validated['role'] === 'instructor') {
-            $cvPath = null;
-            if ($request->hasFile('cv')) {
-                $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
-            }
-
-            $certificatePath = null;
-            if ($request->hasFile('certificate')) {
-                $file = $request->file('certificate');
-                $extension = $file->getClientOriginalExtension() ?: 'pdf';
-                $storedPath = $file->storeAs(
-                    "instructor-certificates/{$user->id}",
-                    Str::uuid().'.'.$extension,
-                    'local'
-                );
-                $certificatePath = $storedPath;
-
-                InstructorCertificate::create([
-                    'user_id' => $user->id,
-                    'file_path' => $storedPath,
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getClientMimeType(),
-                    'file_size' => $file->getSize(),
-                    'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
-                    'status' => 'pending',
-                    'uploaded_at' => now(),
+        try {
+            $user = DB::transaction(function () use ($validated, $request, &$storedFiles): User {
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'username' => self::generateUniqueUsername($validated['name']),
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'],
+                    'password' => $validated['password'],
+                    'role' => $validated['role'],
+                    'avatar' => null,
+                    'bio' => $validated['bio'] ?? null,
+                    'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
+                    'needs_admin_review' => false,
+                    'is_active' => true,
+                    'password_changed_at' => now(),
                 ]);
-            }
 
-            $categoryId = ! empty($validated['category_id']) ? (int) $validated['category_id'] : null;
-            $teachingField = $validated['teaching_field'] ?? null;
-            if ($categoryId && ! $teachingField) {
-                $teachingField = Category::find($categoryId)?->name;
-            }
+                if ($validated['role'] !== 'instructor') {
+                    return $user;
+                }
 
-            $profile = InstructorProfile::create([
-                'user_id' => $user->id,
-                'category_id' => $categoryId,
-                'teaching_field' => $teachingField,
-                'phone' => $validated['phone'],
-                'specialty' => $validated['specialty'],
-                'experience' => $validated['experience'],
-                'bio' => $validated['bio'],
-                'linkedin_url' => $validated['linkedin_url'] ?? null,
-                'github_url' => $validated['github_url'] ?? null,
-                'website_url' => $validated['website_url'] ?? null,
-                'cv' => $cvPath,
-                'agree_information' => true,
-                'agree_terms' => true,
-            ]);
+                $cvPath = null;
+                if ($request->hasFile('cv')) {
+                    $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
+                    if (! is_string($cvPath)) {
+                        throw new RuntimeException('Không thể lưu CV giảng viên.');
+                    }
+                    $storedFiles[] = ['disk' => 'public', 'path' => $cvPath];
+                }
 
-            if ($categoryId) {
-                $profile->syncTeachingFields([[
+                $categoryId = ! empty($validated['category_id']) ? (int) $validated['category_id'] : null;
+                $teachingField = $validated['teaching_field'] ?? null;
+                if ($categoryId && ! $teachingField) {
+                    $teachingField = Category::find($categoryId)?->name;
+                }
+
+                $profile = InstructorProfile::create([
+                    'user_id' => $user->id,
                     'category_id' => $categoryId,
-                    'specialty' => $validated['specialty'] ?? null,
-                    'experience' => $validated['experience'] ?? null,
-                    'is_primary' => true,
-                ]]);
+                    'teaching_field' => $teachingField,
+                    'phone' => $validated['phone'],
+                    'specialty' => $validated['specialty'],
+                    'experience' => $validated['experience'],
+                    'bio' => $validated['bio'],
+                    'linkedin_url' => $validated['linkedin_url'] ?? null,
+                    'github_url' => $validated['github_url'] ?? null,
+                    'website_url' => $validated['website_url'] ?? null,
+                    'cv' => $cvPath,
+                    'agree_information' => true,
+                    'agree_terms' => true,
+                ]);
+
+                if ($categoryId) {
+                    $profile->syncTeachingFields([[
+                        'category_id' => $categoryId,
+                        'specialty' => $validated['specialty'] ?? null,
+                        'experience' => $validated['experience'] ?? null,
+                        'is_primary' => true,
+                    ]]);
+                }
+
+                InstructorApplication::create([
+                    'user_id' => $user->id,
+                    'expertise' => $validated['specialty'],
+                    'experience' => $validated['experience'],
+                    'introduction' => $validated['bio'],
+                    'cv_path' => $cvPath,
+                    // Legacy field remains for existing applications only. New registrations
+                    // submit their evidence through requirement-based profile documents.
+                    'certificate_path' => null,
+                    'status' => 'pending',
+                ]);
+
+                return $user;
+            });
+        } catch (Throwable $exception) {
+            foreach (array_reverse($storedFiles) as $storedFile) {
+                try {
+                    Storage::disk($storedFile['disk'])->delete($storedFile['path']);
+                } catch (Throwable $cleanupException) {
+                    Log::warning('Không thể dọn tệp đăng ký giảng viên không hoàn tất.', [
+                        'disk' => $storedFile['disk'],
+                        'path' => $storedFile['path'],
+                        'error' => $cleanupException->getMessage(),
+                    ]);
+                }
             }
 
-            InstructorApplication::create([
-                'user_id' => $user->id,
-                'expertise' => $validated['specialty'],
-                'experience' => $validated['experience'],
-                'introduction' => $validated['bio'],
-                'cv_path' => $cvPath,
-                'certificate_path' => $certificatePath,
-                'status' => 'pending',
-            ]);
-
-            try {
-                app(NotificationService::class)->notifyAdmins(
-                    'Đăng ký Giảng viên mới',
-                    "Giảng viên {$user->name} ({$user->email}) vừa đăng ký tài khoản và đang chờ xét duyệt.",
-                    'instructor_registered',
-                    route('admin.instructors.applications.show', $user)
-                );
-            } catch (\Throwable $e) {
-                Log::error('Gửi thông báo đăng ký giảng viên cho admin thất bại: '.$e->getMessage());
-            }
+            throw $exception;
         }
 
         ActivityLogService::log($user->id, 'register', User::class, $user->id, [

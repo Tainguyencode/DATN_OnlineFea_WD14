@@ -237,21 +237,6 @@
                         @enderror
                     </div>
 
-                    <div>
-                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                            Upload Chứng chỉ / Bằng cấp (Tùy chọn - PDF, JPG, PNG tối đa 5MB)
-                        </label>
-                        <input
-                            type="file"
-                            name="certificate"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            class="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-violet-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 @error('certificate') border-red-500 @enderror"
-                        >
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Bạn có thể tải lên chứng chỉ sau tại trang hoàn thiện hồ sơ.</p>
-                        @error('certificate')
-                            <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">{{ $message }}</p>
-                        @enderror
-                    </div>
                 </div>
             @endunless
 

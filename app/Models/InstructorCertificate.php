@@ -15,6 +15,7 @@ class InstructorCertificate extends Model
         'user_id',
         'requirement_id',
         'source_type',
+        'instructor_teaching_field_id',
         'file_path',
         'document_url',
         'original_name',
@@ -83,6 +84,11 @@ class InstructorCertificate extends Model
         return $this->belongsTo(InstructorDocumentRequirement::class, 'requirement_id');
     }
 
+    public function teachingField(): BelongsTo
+    {
+        return $this->belongsTo(InstructorTeachingField::class, 'instructor_teaching_field_id');
+    }
+
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
@@ -91,6 +97,11 @@ class InstructorCertificate extends Model
     public function isPending(): bool
     {
         return $this->status === 'pending';
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
     }
 
     public function isApproved(): bool

@@ -61,7 +61,13 @@ class StoreCourseRequest extends FormRequest
                     return;
                 }
 
-                if (! app(InstructorCourseCategoryAccess::class)->canTeachCategory($this->user(), $categoryId)) {
+                $access = app(InstructorCourseCategoryAccess::class);
+                $course = $this->route('course');
+                $isKeepingExistingCategory = $course
+                    && (int) $course->category_id === $categoryId
+                    && $access->canManageCourse($this->user(), $course);
+
+                if (! $isKeepingExistingCategory && ! $access->canTeachCategory($this->user(), $categoryId)) {
                     $validator->errors()->add('category_id', 'Bạn không có quyền tạo khóa học thuộc ngành này.');
                 }
 

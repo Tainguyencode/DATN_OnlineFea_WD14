@@ -579,9 +579,11 @@ class User extends Authenticatable implements MustVerifyEmail
             return new Collection;
         }
 
-        $categories = $profile->relationLoaded('teachingCategories')
-            ? $profile->teachingCategories
-            : $profile->teachingCategories()->get();
+        $categories = $this->instructor_status === 'approved'
+            ? $profile->approvedTeachingCategories()->get()
+            : ($profile->relationLoaded('teachingCategories')
+                ? $profile->teachingCategories
+                : $profile->teachingCategories()->get());
         if ($categories->isNotEmpty()) {
             return $categories;
         }
@@ -590,6 +592,29 @@ class User extends Authenticatable implements MustVerifyEmail
         $singleCat = $this->getTeachingCategory();
         if ($singleCat) {
             return new Collection([$singleCat]);
+        }
+
+        return new Collection;
+    }
+
+    /** Categories that grant an approved instructor course-authoring rights. */
+    public function getApprovedTeachingCategories(): Collection
+    {
+        $profile = $this->relationLoaded('instructorProfile') ? $this->instructorProfile : $this->instructorProfile()->first();
+        if (! $profile) {
+            return new Collection;
+        }
+
+        $approved = $profile->approvedTeachingCategories()->get();
+        if ($approved->isNotEmpty()) {
+            return $approved;
+        }
+
+        // Legacy profiles without a pivot continue to use their legacy primary category.
+        if (! $profile->teachingCategories()->exists()) {
+            $legacy = $this->getTeachingCategory();
+
+            return $legacy ? new Collection([$legacy]) : new Collection;
         }
 
         return new Collection;
