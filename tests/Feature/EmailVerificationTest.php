@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\EmailVerificationCode;
+use App\Models\TwoFactorCode;
 use App\Models\User;
 use App\Notifications\VerifyEmailCodeNotification;
 use App\Services\CaptchaService;
@@ -11,6 +12,7 @@ use App\Services\TwoFactorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -38,6 +40,11 @@ class EmailVerificationTest extends TestCase
             'user_id' => $user->id,
         ]);
         $this->assertNull($user->email_verified_at);
+    }
+
+    public function test_email_verification_is_enabled_by_default(): void
+    {
+        $this->assertTrue((bool) config('auth.email_verification_enabled'));
     }
 
     public function test_registration_skips_email_verification_when_disabled(): void
@@ -305,6 +312,46 @@ class EmailVerificationTest extends TestCase
             ->assertRedirect(route('verification.notice'));
     }
 
+    public function test_unverified_user_cannot_access_two_factor_challenge_before_email_verification(): void
+    {
+        $student = User::factory()->unverified()->create(['role' => 'student']);
+
+        $this->actingAs($student)
+            ->get(route('two-factor.challenge'))
+            ->assertRedirect(route('verification.notice'));
+    }
+
+    public function test_email_verification_hands_off_to_two_factor_with_a_fresh_code(): void
+    {
+        $student = User::factory()->unverified()->create([
+            'role' => 'student',
+            'two_factor_enabled' => true,
+        ]);
+        $code = '482912';
+        $this->createActiveCode($student, $code);
+        $previousTwoFactorCode = TwoFactorCode::create([
+            'user_id' => $student->id,
+            'code' => '135790',
+            'expires_at' => now()->addMinutes(10),
+        ]);
+        Mail::shouldReceive('raw')->once();
+
+        $this->actingAs($student)
+            ->post(route('verification.code.verify'), ['code' => $code])
+            ->assertRedirect(route('two-factor.challenge'));
+
+        $this->assertTrue($student->fresh()->hasVerifiedEmail());
+        $this->assertTrue($previousTwoFactorCode->fresh()->is_used);
+        $this->assertSame(1, TwoFactorCode::query()
+            ->where('user_id', $student->id)
+            ->where('is_used', false)
+            ->count());
+        $this->assertDatabaseHas('two_factor_codes', [
+            'user_id' => $student->id,
+            'is_used' => false,
+        ]);
+    }
+
     public function test_unverified_student_can_access_dashboard_when_email_verification_is_disabled(): void
     {
         config(['auth.email_verification_enabled' => false]);
@@ -321,7 +368,11 @@ class EmailVerificationTest extends TestCase
     {
         config(['auth.email_verification_enabled' => false]);
 
-        $instructor = User::factory()->unverified()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true]);
+        $instructor = User::factory()->unverified()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'is_active' => true,
+        ]);
 
         $this->actingAs($instructor)
             ->withSession(['two_factor_passed_at' => now()->timestamp])

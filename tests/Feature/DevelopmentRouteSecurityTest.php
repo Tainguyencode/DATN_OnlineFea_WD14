@@ -15,5 +15,6 @@ class DevelopmentRouteSecurityTest extends TestCase
         $this->get('/test-frame')->assertNotFound();
         $this->get('/test-gemini')->assertNotFound();
         $this->post('/quick-login/admin')->assertNotFound();
+        $this->post('/email/verify/instant')->assertNotFound();
     }
 }

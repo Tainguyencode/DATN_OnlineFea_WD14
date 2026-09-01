@@ -279,12 +279,9 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->postLogin('login-email@example.com', 'password')
-            ->assertRedirect(route('student.dashboard'));
+            ->assertRedirect(route('verification.notice'));
 
         $this->assertAuthenticatedAs($user);
-
-        $this->get(route('student.dashboard'))
-            ->assertRedirect(route('verification.notice'));
     }
 
     public function test_login_with_username_succeeds(): void
@@ -297,9 +294,26 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->postLogin('loginuser', 'password')
-            ->assertRedirect(route('student.dashboard'));
+            ->assertRedirect(route('verification.notice'));
 
         $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_email_verification_is_required_before_two_factor_challenge(): void
+    {
+        $user = User::factory()->unverified()->create([
+            'email' => 'unverified-2fa@example.com',
+            'password' => Hash::make('password'),
+            'role' => 'student',
+            'two_factor_enabled' => true,
+        ]);
+
+        $this->postLogin($user->email, 'password')
+            ->assertRedirect(route('verification.notice'));
+
+        $this->assertDatabaseMissing('two_factor_codes', [
+            'user_id' => $user->id,
+        ]);
     }
 
     public function test_login_with_wrong_password_is_rejected(): void

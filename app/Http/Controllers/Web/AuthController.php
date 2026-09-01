@@ -64,11 +64,16 @@ class AuthController extends Controller
         );
 
         if ($user->two_factor_enabled) {
-            $twoFactorService->sendCode($user);
             $request->session()->forget('two_factor_passed_at');
+        }
 
-            return redirect()->route('two-factor.challenge')
-                ->with('success', 'Mã 2FA đã được gửi tới email của bạn.');
+        if (config('auth.email_verification_enabled', true) && ! $user->hasVerifiedEmail()) {
+            return redirect()->route('verification.notice')
+                ->with('success', 'Vui lòng xác thực email để tiếp tục.');
+        }
+
+        if ($twoFactorRedirect = $this->twoFactorChallengeRedirect($user, $request, $twoFactorService)) {
+            return $twoFactorRedirect;
         }
 
         return $this->redirectAfterAuthentication($user, $request)->with('success', 'Đăng nhập thành công!');
@@ -290,8 +295,11 @@ class AuthController extends Controller
         ]);
     }
 
-    public function verifyEmailCode(VerifyEmailCodeRequest $request, EmailVerificationService $emailVerificationService): RedirectResponse
-    {
+    public function verifyEmailCode(
+        VerifyEmailCodeRequest $request,
+        EmailVerificationService $emailVerificationService,
+        TwoFactorService $twoFactorService
+    ): RedirectResponse {
         $user = $request->user();
 
         if (! config('auth.email_verification_enabled', true) || $user->hasVerifiedEmail()) {
@@ -308,18 +316,33 @@ class AuthController extends Controller
         $request->session()->regenerate();
         app(AuthService::class)->registerActiveSession($user, $request);
 
+        if ($twoFactorRedirect = $this->twoFactorChallengeRedirect($user, $request, $twoFactorService, $result['message'])) {
+            return $twoFactorRedirect;
+        }
+
         return $this->redirectAfterNewInstructorRegistration($user, $request)
             ->with('success', $result['message']);
     }
 
-    public function verifyEmail(EmailVerificationRequest $request): RedirectResponse
-    {
+    public function verifyEmail(
+        EmailVerificationRequest $request,
+        TwoFactorService $twoFactorService
+    ): RedirectResponse {
         if (! config('auth.email_verification_enabled', true) || $request->user()->hasVerifiedEmail()) {
             return $this->redirectAfterAuthentication($request->user(), $request);
         }
 
         if ($request->user()->markEmailAsVerified()) {
             event(new Verified($request->user()));
+        }
+
+        if ($twoFactorRedirect = $this->twoFactorChallengeRedirect(
+            $request->user(),
+            $request,
+            $twoFactorService,
+            'Email đã được xác thực.'
+        )) {
+            return $twoFactorRedirect;
         }
 
         return $this->redirectAfterNewInstructorRegistration($request->user(), $request)
@@ -355,9 +378,9 @@ class AuthController extends Controller
             ->with('resend_after', EmailVerificationCode::RESEND_COOLDOWN_SECONDS);
     }
 
-    public function instantVerify(Request $request): RedirectResponse
+    public function instantVerify(Request $request, TwoFactorService $twoFactorService): RedirectResponse
     {
-        abort_if(app()->environment('production'), Response::HTTP_NOT_FOUND);
+        abort_unless(app()->environment('local'), Response::HTTP_NOT_FOUND);
 
         $user = $request->user();
 
@@ -365,6 +388,15 @@ class AuthController extends Controller
             if ($user->markEmailAsVerified()) {
                 event(new Verified($user));
             }
+        }
+
+        if ($twoFactorRedirect = $this->twoFactorChallengeRedirect(
+            $user,
+            $request,
+            $twoFactorService,
+            'Email đã được xác thực.'
+        )) {
+            return $twoFactorRedirect;
         }
 
         return $this->redirectAfterNewInstructorRegistration($user, $request)
@@ -417,6 +449,26 @@ class AuthController extends Controller
         return redirect($user->dashboardUrl())->with('success', 'Đăng nhập nhanh thành công.');
     }
 
+    private function twoFactorChallengeRedirect(
+        User $user,
+        Request $request,
+        TwoFactorService $twoFactorService,
+        ?string $successPrefix = null
+    ): ?RedirectResponse {
+        if (! $user->two_factor_enabled || $request->session()->has('two_factor_passed_at')) {
+            return null;
+        }
+
+        $twoFactorService->sendCode($user);
+
+        $message = 'Mã 2FA mới đã được gửi tới email của bạn.';
+        if ($successPrefix !== null && $successPrefix !== '') {
+            $message = $successPrefix.' '.$message;
+        }
+
+        return redirect()->route('two-factor.challenge')->with('success', $message);
+    }
+
     private function redirectAfterAuthentication(User $user, Request $request): RedirectResponse
     {
         if (! $user->isStudent()) {
@@ -455,5 +507,4 @@ class AuthController extends Controller
 
         return Str::startsWith($redirect, url('/'));
     }
-
 }
