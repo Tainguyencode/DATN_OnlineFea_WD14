@@ -269,30 +269,63 @@ class InstructorRequirementService
      */
     public function checkCanApproveInstructor(User $instructor): array
     {
-        $data = $this->getRequirementsForInstructor($instructor);
-        $summary = $data['summary'];
+        $eligibility = $this->getSubmitEligibility($instructor);
+
+        return [
+            'can_approve' => $eligibility['can_submit'],
+            'reason' => $eligibility['reason'],
+            'missing_titles' => $eligibility['missing_titles'],
+        ];
+    }
+
+    /**
+     * Canonical eligibility for an instructor to submit their profile for review.
+     * Pending and approved evidence fulfil a required document; rejected-only
+     * evidence does not. Optional requirements never block submission.
+     *
+     * @return array{
+     *     required_count: int,
+     *     submitted_count: int,
+     *     missing_count: int,
+     *     missing_titles: array<int, string>,
+     *     can_submit: bool,
+     *     reason: ?string
+     * }
+     */
+    public function getSubmitEligibility(User $instructor): array
+    {
+        $summary = $this->getRequirementsForInstructor($instructor)['summary'];
+        $missingCount = $summary['required_missing_count'] + $summary['required_rejected_count'];
 
         if (! $summary['has_category']) {
             return [
-                'can_approve' => false,
-                'reason' => 'Giảng viên chưa đăng ký Ngành / Lĩnh vực giảng dạy.',
+                'required_count' => 0,
+                'submitted_count' => 0,
+                'missing_count' => 0,
                 'missing_titles' => ['Ngành / Lĩnh vực giảng dạy'],
+                'can_submit' => false,
+                'reason' => 'Vui lòng chọn ít nhất một Ngành / Lĩnh vực giảng dạy trước khi gửi xét duyệt.',
             ];
         }
 
-        // Nếu có tài liệu bắt buộc nhưng giảng viên còn thiếu
         if ($summary['required_count'] > 0 && ! $summary['has_all_required_submitted']) {
             return [
-                'can_approve' => false,
-                'reason' => 'Giảng viên còn thiếu tài liệu bắt buộc của các ngành đăng ký.',
+                'required_count' => $summary['required_count'],
+                'submitted_count' => $summary['required_submitted_count'],
+                'missing_count' => $missingCount,
                 'missing_titles' => $summary['missing_titles'],
+                'can_submit' => false,
+                'reason' => 'Giảng viên còn thiếu tài liệu bắt buộc của các ngành đăng ký.',
             ];
         }
 
         return [
-            'can_approve' => true,
-            'reason' => null,
+            'required_count' => $summary['required_count'],
+            'submitted_count' => $summary['required_submitted_count'],
+            'missing_count' => 0,
             'missing_titles' => [],
+            'can_submit' => true,
+            'reason' => null,
         ];
     }
 

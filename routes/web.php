@@ -333,21 +333,21 @@ Route::redirect('/cart', '/student/cart')->name('cart');
 // ─── GIẢNG VIÊN ───
 Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
     // Trang hồ sơ & quản lý chứng chỉ / tài liệu minh chứng (luôn truy cập được kể cả khi locked)
-    Route::get('/profile', [InstructorProfileController::class, 'show'])->name('profile');
-    Route::put('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
-    Route::post('/profile/documents', [InstructorProfileController::class, 'uploadDocument'])->name('profile.documents.upload');
-    Route::delete('/profile/documents/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('profile.documents.delete');
-    Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('profile.documents.view');
-    Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('profile.submit-review');
+    Route::get('/profile', [InstructorProfileController::class, 'show'])->middleware('verified')->name('profile');
+    Route::put('/profile', [InstructorProfileController::class, 'update'])->middleware('verified')->name('profile.update');
+    Route::post('/profile/documents', [InstructorProfileController::class, 'uploadDocument'])->middleware('verified')->name('profile.documents.upload');
+    Route::delete('/profile/documents/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->middleware('verified')->name('profile.documents.delete');
+    Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->middleware('verified')->name('profile.documents.view');
+    Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware(['verified', 'throttle:5,1'])->name('profile.submit-review');
     Route::post('/profile/request-reactivation', [InstructorProfileController::class, 'requestReactivation'])->middleware('throttle:5,1')->name('profile.request-reactivation');
 
     // Backward compatibility aliases for certificate upload/view/delete
     Route::get('/pending', [InstructorPendingController::class, 'show'])->name('pending');
-    Route::post('/certificates/upload', [InstructorProfileController::class, 'uploadDocument'])->name('certificates.upload');
-    Route::delete('/certificates/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('certificates.delete');
-    Route::get('/certificates/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('certificates.view');
-    Route::post('/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('submit-review');
-    Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware('throttle:5,1')->name('resubmit');
+    Route::post('/certificates/upload', [InstructorProfileController::class, 'uploadDocument'])->middleware('verified')->name('certificates.upload');
+    Route::delete('/certificates/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->middleware('verified')->name('certificates.delete');
+    Route::get('/certificates/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->middleware('verified')->name('certificates.view');
+    Route::post('/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware(['verified', 'throttle:5,1'])->name('submit-review');
+    Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware(['verified', 'throttle:5,1'])->name('resubmit');
 
     Route::middleware('approved.instructor')->group(function () {
         Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');

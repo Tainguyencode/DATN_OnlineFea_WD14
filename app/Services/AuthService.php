@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\ActiveSession;
 use App\Models\Category;
 use App\Models\InstructorApplication;
-use App\Models\InstructorCertificate;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -102,7 +101,7 @@ class AuthService
                     'avatar' => null,
                     'bio' => $validated['bio'] ?? null,
                     'instructor_status' => $validated['role'] === 'instructor' ? 'pending' : null,
-                    'needs_admin_review' => $validated['role'] === 'instructor',
+                    'needs_admin_review' => false,
                     'is_active' => true,
                     'password_changed_at' => now(),
                 ]);
@@ -118,37 +117,6 @@ class AuthService
                         throw new RuntimeException('Không thể lưu CV giảng viên.');
                     }
                     $storedFiles[] = ['disk' => 'public', 'path' => $cvPath];
-                }
-
-                $certificatePath = null;
-                foreach ((array) $request->file('certificates', []) as $file) {
-                    if (! $file || ! $file->isValid()) {
-                        throw new RuntimeException('Tệp chứng chỉ không hợp lệ.');
-                    }
-
-                    $extension = $file->getClientOriginalExtension() ?: 'pdf';
-                    $storedPath = $file->storeAs(
-                        "instructor-certificates/{$user->id}",
-                        Str::uuid().'.'.$extension,
-                        'local'
-                    );
-                    if (! is_string($storedPath)) {
-                        throw new RuntimeException('Không thể lưu chứng chỉ giảng viên.');
-                    }
-                    $storedFiles[] = ['disk' => 'local', 'path' => $storedPath];
-                    $certificatePath ??= $storedPath;
-
-                    InstructorCertificate::create([
-                        'user_id' => $user->id,
-                        'file_path' => $storedPath,
-                        'original_name' => $file->getClientOriginalName(),
-                        'mime_type' => $file->getClientMimeType(),
-                        'file_size' => $file->getSize(),
-                        'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
-                        'document_type' => 'certificate',
-                        'status' => 'pending',
-                        'uploaded_at' => now(),
-                    ]);
                 }
 
                 $categoryId = ! empty($validated['category_id']) ? (int) $validated['category_id'] : null;
@@ -188,7 +156,9 @@ class AuthService
                     'experience' => $validated['experience'],
                     'introduction' => $validated['bio'],
                     'cv_path' => $cvPath,
-                    'certificate_path' => $certificatePath,
+                    // Legacy field remains for existing applications only. New registrations
+                    // submit their evidence through requirement-based profile documents.
+                    'certificate_path' => null,
                     'status' => 'pending',
                 ]);
 
@@ -208,19 +178,6 @@ class AuthService
             }
 
             throw $exception;
-        }
-
-        if ($user->isInstructor()) {
-            try {
-                app(NotificationService::class)->notifyAdmins(
-                    'Đăng ký Giảng viên mới',
-                    "Giảng viên {$user->name} ({$user->email}) vừa đăng ký tài khoản và đang chờ xét duyệt.",
-                    'instructor_registered',
-                    route('admin.instructors.applications.show', $user)
-                );
-            } catch (Throwable $e) {
-                Log::error('Gửi thông báo đăng ký giảng viên cho admin thất bại: '.$e->getMessage());
-            }
         }
 
         ActivityLogService::log($user->id, 'register', User::class, $user->id, [

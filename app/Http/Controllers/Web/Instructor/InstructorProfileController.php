@@ -51,7 +51,9 @@ class InstructorProfileController extends Controller
         $cooldownDaysRemaining = $user->reactivationCooldownDaysRemaining();
         $canRequestReactivation = $user->canRequestReactivation();
 
-        $requirementData = app(InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $requirementService = app(InstructorRequirementService::class);
+        $requirementData = $requirementService->getRequirementsForInstructor($user);
+        $submitEligibility = $requirementService->getSubmitEligibility($user);
         $categories = Category::query()
             ->whereNull('parent_id')
             ->with(['children' => fn ($q) => $q->orderBy('name')])
@@ -101,6 +103,7 @@ class InstructorProfileController extends Controller
             'cooldownDaysRemaining' => $cooldownDaysRemaining,
             'canRequestReactivation' => $canRequestReactivation,
             'requirementData' => $requirementData,
+            'submitEligibility' => $submitEligibility,
             'categories' => $categories,
             'selectedCategoryIds' => $selectedCategoryIds,
             'teachingFields' => $teachingFields,
@@ -420,10 +423,14 @@ class InstructorProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $certsCount = $user->instructorCertificates()->count();
-        if ($certsCount === 0) {
-            return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ/tài liệu trước khi gửi xét duyệt hồ sơ.');
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
+        if (! $eligibility['can_submit']) {
+            return back()
+                ->with('active_tab', 'documents')
+                ->with('error', $this->submitEligibilityError($eligibility));
         }
+
+        $certsCount = $user->instructorCertificates()->count();
 
         $user->update([
             'submitted_for_review_at' => now(),
@@ -455,6 +462,18 @@ class InstructorProfileController extends Controller
         }
 
         return back()->with('active_tab', 'documents')->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
+    }
+
+    /** @param array{missing_count: int, missing_titles: array<int, string>, reason: ?string} $eligibility */
+    private function submitEligibilityError(array $eligibility): string
+    {
+        if ($eligibility['missing_count'] > 0) {
+            $titles = implode(', ', $eligibility['missing_titles']);
+
+            return "Hồ sơ chưa đủ điều kiện gửi xét duyệt. Còn thiếu {$eligibility['missing_count']} tài liệu bắt buộc: {$titles}.";
+        }
+
+        return $eligibility['reason'] ?? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt.';
     }
 
     public function requestReactivation(Request $request): RedirectResponse

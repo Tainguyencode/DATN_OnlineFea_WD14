@@ -361,10 +361,16 @@ class InstructorPendingController extends Controller
             }
         }
 
-        $certsCount = $user->instructorCertificates()->count();
-        if ($certsCount === 0) {
-            return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ trước khi gửi lại hồ sơ.');
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
+        if (! $eligibility['can_submit']) {
+            $message = $eligibility['missing_count'] > 0
+                ? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt. Còn thiếu '.$eligibility['missing_count'].' tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']).'.'
+                : ($eligibility['reason'] ?? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt.');
+
+            return back()->with('error', $message);
         }
+
+        $certsCount = $user->instructorCertificates()->count();
 
         $user->update([
             'phone' => $validated['phone'],

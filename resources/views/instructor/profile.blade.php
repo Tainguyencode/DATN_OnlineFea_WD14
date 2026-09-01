@@ -86,15 +86,22 @@
                             </p>
                         </div>
                     </div>
-                    @if($certificatesCount > 0)
-                        <form method="POST" action="{{ route('instructor.profile.submit-review') }}" class="shrink-0">
+                    <div class="shrink-0 text-right">
+                        @if($submitEligibility['can_submit'])
+                            <p class="mb-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">Đã đủ hồ sơ để gửi xét duyệt</p>
+                        @elseif($submitEligibility['missing_count'] > 0)
+                            <p class="mb-2 text-xs font-bold text-amber-800 dark:text-amber-300">Còn thiếu {{ $submitEligibility['missing_count'] }} tài liệu bắt buộc</p>
+                        @else
+                            <p class="mb-2 text-xs font-bold text-amber-800 dark:text-amber-300">{{ $submitEligibility['reason'] }}</p>
+                        @endif
+                        <form method="POST" action="{{ route('instructor.profile.submit-review') }}">
                             @csrf
-                            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-amber-700">
+                            <button type="{{ $submitEligibility['can_submit'] ? 'submit' : 'button' }}" @disabled(! $submitEligibility['can_submit']) class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md transition {{ $submitEligibility['can_submit'] ? 'bg-amber-600 text-white hover:bg-amber-700' : 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-70 dark:bg-slate-700 dark:text-slate-400' }}">
                                 <span>Gửi hồ sơ xét duyệt ngay</span>
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
                         </form>
-                    @endif
+                    </div>
                 </div>
             </div>
         @endif
@@ -105,13 +112,22 @@
                     <h3 class="font-bold text-rose-800 dark:text-rose-300">Hồ sơ giảng viên cần bổ sung / chỉnh sửa</h3>
                     <p class="mt-1 text-xs text-rose-700 dark:text-rose-400"><span class="font-bold">Ghi chú từ Admin:</span> {{ $user->rejected_reason ?: 'Vui lòng bổ sung đầy đủ văn bằng chứng chỉ hợp lệ.' }}</p>
                 </div>
-                <form method="POST" action="{{ route('instructor.profile.submit-review') }}" class="shrink-0">
-                    @csrf
-                    <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-rose-700">
-                        <span>Gửi lại hồ sơ xét duyệt</span>
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    </button>
-                </form>
+                <div class="shrink-0 text-right">
+                    @if($submitEligibility['can_submit'])
+                        <p class="mb-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">Đã đủ hồ sơ để gửi xét duyệt</p>
+                    @elseif($submitEligibility['missing_count'] > 0)
+                        <p class="mb-2 text-xs font-bold text-rose-700 dark:text-rose-300">Còn thiếu {{ $submitEligibility['missing_count'] }} tài liệu bắt buộc</p>
+                    @else
+                        <p class="mb-2 text-xs font-bold text-rose-700 dark:text-rose-300">{{ $submitEligibility['reason'] }}</p>
+                    @endif
+                    <form method="POST" action="{{ route('instructor.profile.submit-review') }}">
+                        @csrf
+                        <button type="{{ $submitEligibility['can_submit'] ? 'submit' : 'button' }}" @disabled(! $submitEligibility['can_submit']) class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md transition {{ $submitEligibility['can_submit'] ? 'bg-rose-600 text-white hover:bg-rose-700' : 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-70 dark:bg-slate-700 dark:text-slate-400' }}">
+                            <span>Gửi lại hồ sơ xét duyệt</span>
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     @elseif($user->instructor_status === 'approved')
