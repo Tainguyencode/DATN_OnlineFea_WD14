@@ -4,11 +4,12 @@ namespace App\Services;
 
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Resolves an instructor's course permissions based on their registered teaching fields,
+ * Resolves an instructor's course permissions based on their approved teaching fields,
  * with hierarchical support (parent -> child categories) and fallback for legacy profiles.
  */
 class InstructorCourseCategoryAccess
@@ -103,7 +104,34 @@ class InstructorCourseCategoryAccess
             return true;
         }
 
-        return $this->canTeachCategory($instructor, (int) $course->category_id);
+        return $this->canTeachCategory($instructor, (int) $course->category_id)
+            || $this->hasSupersededFieldForCategory($instructor, (int) $course->category_id);
+    }
+
+    /**
+     * A superseded field cannot create a new course, but it deliberately keeps
+     * the instructor's access to courses they already own in that field.
+     */
+    private function hasSupersededFieldForCategory(User $instructor, int $categoryId): bool
+    {
+        $profile = $instructor->relationLoaded('instructorProfile')
+            ? $instructor->instructorProfile
+            : $instructor->instructorProfile()->first();
+
+        if (! $profile || $categoryId <= 0) {
+            return false;
+        }
+
+        $category = Category::find($categoryId);
+        $fieldCategoryIds = [$categoryId];
+        if ($category?->parent_id) {
+            $fieldCategoryIds[] = (int) $category->parent_id;
+        }
+
+        return $profile->teachingFields()
+            ->where('approval_status', InstructorTeachingField::STATUS_SUPERSEDED)
+            ->whereIn('category_id', $fieldCategoryIds)
+            ->exists();
     }
 
     /**
@@ -121,24 +149,25 @@ class InstructorCourseCategoryAccess
             return new Collection;
         }
 
-        $teachingCategories = $profile->relationLoaded('teachingCategories')
-            ? $profile->teachingCategories
-            : $profile->teachingCategories()->with('parent:id,name,status')->get();
+        $teachingCategories = $profile->approvedTeachingCategories()
+            ->with('parent:id,name,status')
+            ->get();
 
         if ($teachingCategories->isNotEmpty()) {
             return $teachingCategories;
         }
 
         // Fallback: nếu pivot table chưa có bản ghi, lấy từ category_id / teaching_field
+        if ($profile->teachingCategories()->exists()) {
+            return new Collection;
+        }
+
         $fallbackCategories = $instructor->getTeachingCategories();
         if ($fallbackCategories->isNotEmpty()) {
             // Tự động đồng bộ vào pivot để các lần query tiếp theo chuẩn xác
-            $profile->syncTeachingCategories($fallbackCategories->pluck('id')->all());
-
             return $fallbackCategories->loadMissing('parent:id,name,status');
         }
 
         return new Collection;
     }
 }
-

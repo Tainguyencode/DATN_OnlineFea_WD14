@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\InstructorCertificate;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use App\Notifications\InstructorApprovedNotification;
 use App\Notifications\InstructorRejectedNotification;
@@ -273,6 +274,7 @@ class InstructorApplicationController extends Controller
         }
 
         $adminId = $request->user()->id;
+        $wasAlreadyApproved = $user->instructor_status === 'approved';
 
         $user->update([
             'instructor_status' => 'approved',
@@ -282,6 +284,24 @@ class InstructorApplicationController extends Controller
             'approved_by' => $adminId,
             'rejected_reason' => null,
         ]);
+
+        // This is the initial, whole-profile approval path. It promotes the
+        // instructor's existing initial fields only; later field requests are
+        // reviewed by InstructorTeachingFieldReviewController individually.
+        if (! $wasAlreadyApproved && $user->instructorProfile) {
+            $user->instructorProfile->teachingFields()
+                ->whereIn('approval_status', [
+                    InstructorTeachingField::STATUS_DRAFT,
+                    InstructorTeachingField::STATUS_PENDING,
+                    InstructorTeachingField::STATUS_REJECTED,
+                ])
+                ->update([
+                    'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+                    'reviewed_at' => now(),
+                    'reviewed_by' => $adminId,
+                    'rejection_reason' => null,
+                ]);
+        }
 
         $requirementIds = app(InstructorRequirementService::class)->getCurrentRequirementIds($user);
         $user->instructorCertificates()

@@ -340,6 +340,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::patch('/profile/documents/{certificate}', [InstructorProfileController::class, 'replaceDocument'])->middleware('verified')->name('profile.documents.replace');
     Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->middleware('verified')->name('profile.documents.view');
     Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware(['verified', 'throttle:5,1'])->name('profile.submit-review');
+    Route::post('/profile/teaching-fields/{teachingField}/submit-review', [InstructorProfileController::class, 'submitTeachingFieldForReview'])->middleware(['verified', 'throttle:5,1'])->name('profile.teaching-fields.submit-review');
     Route::post('/profile/request-reactivation', [InstructorProfileController::class, 'requestReactivation'])->middleware('throttle:5,1')->name('profile.request-reactivation');
 
     // Backward compatibility aliases for certificate upload/view/delete
@@ -480,6 +481,12 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::post('/{user}/reactivation/reject', [InstructorApplicationController::class, 'rejectReactivation'])->name('reactivation.reject');
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
+    });
+
+    Route::prefix('instructors/teaching-fields')->name('instructors.teaching-fields.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController::class, 'index'])->name('index');
+        Route::post('/{teachingField}/approve', [App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController::class, 'approve'])->name('approve');
+        Route::post('/{teachingField}/reject', [App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController::class, 'reject'])->name('reject');
     });
 
     // Quản lý cấu hình yêu cầu hồ sơ theo ngành

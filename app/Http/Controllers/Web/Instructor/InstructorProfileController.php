@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\AuthService;
@@ -28,7 +29,7 @@ class InstructorProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $user->load(['instructorProfile.category', 'instructorApplication', 'instructorCertificates.requirement']);
+        $user->load(['instructorProfile.category', 'instructorApplication', 'instructorCertificates.requirement', 'instructorCertificates.teachingField']);
 
         $profile = $user->instructorProfile ?? new InstructorProfile(['user_id' => $user->id]);
         $certificates = $user->instructorCertificates;
@@ -59,19 +60,24 @@ class InstructorProfileController extends Controller
             ->with(['children' => fn ($q) => $q->orderBy('name')])
             ->orderBy('name')
             ->get();
-        $teachingFields = $user->instructorProfile
-            ? $user->instructorProfile->teachingCategories()->get()->map(function ($cat) {
+        $teachingFieldRecords = $user->instructorProfile
+            ? $user->instructorProfile->teachingFields()->with('category.parent')->orderBy('id')->get()
+            : collect();
+        $teachingFields = $teachingFieldRecords->map(function (InstructorTeachingField $field) {
                 return [
-                    'category_id' => (int) $cat->id,
-                    'category_name' => $cat->name,
-                    'organization' => $cat->pivot->organization ?? '',
-                    'position' => $cat->pivot->position ?? '',
-                    'specialty' => $cat->pivot->specialty ?? '',
-                    'experience' => $cat->pivot->experience ?? '',
-                    'is_primary' => (bool) $cat->pivot->is_primary,
+                    'teaching_field_id' => $field->id,
+                    'category_id' => (int) $field->category_id,
+                    'category_name' => $field->category?->name ?? '',
+                    'organization' => $field->organization ?? '',
+                    'position' => $field->position ?? '',
+                    'specialty' => $field->specialty ?? '',
+                    'experience' => $field->experience ?? '',
+                    'is_primary' => (bool) $field->is_primary,
+                    'approval_status' => $field->approval_status,
+                    'rejection_reason' => $field->rejection_reason,
+                    'replace_of_teaching_field_id' => $field->replace_of_teaching_field_id,
                 ];
-            })->values()->all()
-            : [];
+            })->values()->all();
 
         if (empty($teachingFields) && $profile) {
             $catId = $profile->category_id ?: ($categories->first()?->children->first()?->id ?? $categories->first()?->id);
@@ -89,6 +95,8 @@ class InstructorProfileController extends Controller
         }
 
         $selectedCategoryIds = array_column($teachingFields, 'category_id');
+        $teachingFieldRequirementData = $teachingFieldRecords
+            ->mapWithKeys(fn (InstructorTeachingField $field) => [$field->id => $requirementService->getTeachingFieldRequirementData($field)]);
 
         return view('instructor.profile', [
             'user' => $user,
@@ -107,6 +115,8 @@ class InstructorProfileController extends Controller
             'categories' => $categories,
             'selectedCategoryIds' => $selectedCategoryIds,
             'teachingFields' => $teachingFields,
+            'teachingFieldRecords' => $teachingFieldRecords,
+            'teachingFieldRequirementData' => $teachingFieldRequirementData,
         ]);
     }
 
@@ -125,6 +135,8 @@ class InstructorProfileController extends Controller
                 if ($cId && ! in_array($cId, $seenCats, true)) {
                     $seenCats[] = $cId;
                     $cleanFields[] = [
+                        'teaching_field_id' => isset($field['teaching_field_id']) ? (int) $field['teaching_field_id'] : null,
+                        'replace_of_teaching_field_id' => isset($field['replace_of_teaching_field_id']) ? (int) $field['replace_of_teaching_field_id'] : null,
                         'category_id' => $cId,
                         'organization' => $field['organization'] ?? null,
                         'position' => $field['position'] ?? null,
@@ -170,6 +182,8 @@ class InstructorProfileController extends Controller
             'category_ids.*' => ['integer', 'distinct', 'exists:categories,id'],
             'teaching_fields' => ['required', 'array', 'min:1'],
             'teaching_fields.*.category_id' => ['required', 'integer', 'exists:categories,id'],
+            'teaching_fields.*.teaching_field_id' => ['nullable', 'integer'],
+            'teaching_fields.*.replace_of_teaching_field_id' => ['nullable', 'integer'],
             'teaching_fields.*.organization' => ['nullable', 'string', 'max:255'],
             'teaching_fields.*.position' => ['nullable', 'string', 'max:255'],
             'teaching_fields.*.specialty' => ['nullable', 'string', 'max:255'],
@@ -213,9 +227,6 @@ class InstructorProfileController extends Controller
 
         $user->update($userUpdates);
 
-        $categoryIds = array_map('intval', $validated['category_ids']);
-        app(InstructorRequirementService::class)->handleCategoriesSync($user, $categoryIds);
-
         $profile = InstructorProfile::where('user_id', $user->id)->first() ?? new InstructorProfile(['user_id' => $user->id]);
         $profile->fill([
             'phone' => $validated['phone'] ?? $profile->phone ?? '',
@@ -223,7 +234,7 @@ class InstructorProfileController extends Controller
         ])->save();
 
         // Đồng bộ các khối ngành giảng dạy chi tiết
-        $profile->syncTeachingFields($validated['teaching_fields']);
+        $profile->saveTeachingFieldRequests($validated['teaching_fields']);
 
         ActivityLogService::log($user->id, 'update_instructor_profile', User::class, $user->id, null, $request);
 
@@ -237,6 +248,7 @@ class InstructorProfileController extends Controller
 
         $request->validate([
             'requirement_id' => ['nullable', 'integer'],
+            'instructor_teaching_field_id' => ['nullable', 'integer'],
             'document_type' => ['nullable', 'string', 'in:certificate,degree,employment_contract,transcript,employment_confirmation,other'],
             'title' => ['nullable', 'string', 'max:255'],
             'files' => ['nullable', 'array', 'max:10'],
@@ -260,12 +272,21 @@ class InstructorProfileController extends Controller
             return back()->with('error', 'Vui lòng chọn ít nhất một tệp để tải lên.');
         }
 
+        $teachingField = null;
+        if ($request->filled('instructor_teaching_field_id')) {
+            $teachingField = InstructorTeachingField::query()
+                ->with(['profile', 'category.parent'])
+                ->findOrFail($request->integer('instructor_teaching_field_id'));
+            abort_unless((int) $teachingField->profile?->user_id === (int) $user->id && $teachingField->isEditable(), 403);
+        }
+
         $requirementId = $request->input('requirement_id');
         $requirement = null;
 
         if ($requirementId) {
-            $requirement = app(InstructorRequirementService::class)
-                ->validateRequirementForInstructor($user, (int) $requirementId);
+            $requirement = $teachingField
+                ? app(InstructorRequirementService::class)->validateRequirementForTeachingField($user, $teachingField, (int) $requirementId)
+                : app(InstructorRequirementService::class)->validateRequirementForInstructor($user, (int) $requirementId);
             $documentType = $requirement->document_type;
             $defaultTitle = $requirement->document_title;
         } else {
@@ -295,6 +316,7 @@ class InstructorProfileController extends Controller
             InstructorCertificate::create([
                 'user_id' => $user->id,
                 'requirement_id' => $requirement?->id,
+                'instructor_teaching_field_id' => $teachingField?->id,
                 'file_path' => $storedPath,
                 'original_name' => $originalName,
                 'mime_type' => $mimeType,
@@ -311,6 +333,7 @@ class InstructorProfileController extends Controller
         ActivityLogService::log($user->id, 'upload_instructor_document', User::class, $user->id, [
             'document_type' => $documentType,
             'requirement_id' => $requirement?->id,
+            'instructor_teaching_field_id' => $teachingField?->id,
             'uploaded_count' => $uploadedCount,
         ], $request);
 
@@ -445,6 +468,10 @@ class InstructorProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        if ($user->instructor_status === 'approved') {
+            return back()->with('active_tab', 'documents')->with('error', 'Hãy gửi xét duyệt riêng cho ngành chưa được duyệt.');
+        }
+
         $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
         if (! $eligibility['can_submit']) {
             return back()
@@ -487,6 +514,49 @@ class InstructorProfileController extends Controller
         }
 
         return back()->with('active_tab', 'documents')->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
+    }
+
+    public function submitTeachingFieldForReview(Request $request, InstructorTeachingField $teachingField): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $teachingField->loadMissing(['profile', 'category']);
+        abort_unless((int) $teachingField->profile?->user_id === (int) $user->id, 403);
+        if (! $teachingField->isEditable()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Ngành này không ở trạng thái có thể gửi xét duyệt.');
+        }
+
+        $requirements = app(InstructorRequirementService::class);
+        $eligibility = $requirements->getTeachingFieldSubmitEligibility($teachingField);
+        if (! $eligibility['can_submit']) {
+            return back()->with('active_tab', 'documents')->with('error', 'Ngành này còn thiếu tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']));
+        }
+
+        DB::transaction(function () use ($teachingField, $requirements): void {
+            $locked = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
+            abort_unless($locked->isEditable(), 409, 'Ngành không còn ở trạng thái có thể gửi.');
+            $requirements->promoteDraftCertificatesForTeachingField($locked);
+            $locked->update([
+                'approval_status' => InstructorTeachingField::STATUS_PENDING,
+                'submitted_at' => now(),
+                'reviewed_at' => null,
+                'reviewed_by' => null,
+                'rejection_reason' => null,
+            ]);
+        });
+
+        try {
+            app(NotificationService::class)->notifyAdmins(
+                'Yêu cầu duyệt ngành giảng dạy',
+                "Giảng viên {$user->name} vừa gửi ngành {$teachingField->category?->name} để xét duyệt.",
+                'instructor_teaching_field_submitted',
+                route('admin.instructors.teaching-fields.index')
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Không thể gửi thông báo duyệt ngành: '.$e->getMessage());
+        }
+
+        return back()->with('active_tab', 'documents')->with('success', 'Đã gửi xét duyệt ngành này. Quyền tạo khóa học chỉ được cấp sau khi Admin phê duyệt.');
     }
 
     /** @param array{missing_count: int, missing_titles: array<int, string>, reason: ?string} $eligibility */

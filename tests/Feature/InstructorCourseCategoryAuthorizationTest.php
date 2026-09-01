@@ -6,13 +6,17 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Enums\CourseStatus;
+use App\Services\CourseReviewService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class InstructorCourseCategoryAuthorizationTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_create_form_only_lists_registered_categories_and_auto_selects_the_only_one(): void
     {
@@ -82,6 +86,94 @@ class InstructorCourseCategoryAuthorizationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_draft_pending_and_rejected_fields_do_not_grant_course_creation_but_approved_field_does(): void
+    {
+        [$instructor, $allowed] = $this->instructorWithTeachingFields(1);
+        $field = InstructorTeachingField::query()
+            ->where('instructor_profile_id', $instructor->instructorProfile->id)
+            ->where('category_id', $allowed->id)
+            ->firstOrFail();
+
+        foreach ([
+            InstructorTeachingField::STATUS_DRAFT,
+            InstructorTeachingField::STATUS_PENDING,
+            InstructorTeachingField::STATUS_REJECTED,
+        ] as $status) {
+            $field->update(['approval_status' => $status]);
+
+            $this->actingAs($instructor)
+                ->post(route('instructor.courses.store'), $this->coursePayload($allowed, 'Blocked '.$status))
+                ->assertSessionHasErrors('category_id');
+        }
+
+        $field->update(['approval_status' => InstructorTeachingField::STATUS_APPROVED]);
+        $this->actingAs($instructor)
+            ->post(route('instructor.courses.store'), $this->coursePayload($allowed, 'Approved field course'))
+            ->assertRedirect();
+    }
+
+    public function test_replacement_blocks_new_a_courses_after_b_approval_but_keeps_existing_a_course_manageable(): void
+    {
+        [$instructor, $categoryA, $categoryB] = $this->instructorWithTeachingFields(1);
+        $courseA = $this->course($instructor, $categoryA);
+        $fieldA = InstructorTeachingField::query()
+            ->where('instructor_profile_id', $instructor->instructorProfile->id)
+            ->where('category_id', $categoryA->id)
+            ->firstOrFail();
+        InstructorTeachingField::create([
+            'instructor_profile_id' => $fieldA->instructor_profile_id,
+            'category_id' => $categoryB->id,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            'replace_of_teaching_field_id' => $fieldA->id,
+        ]);
+        $fieldA->update(['approval_status' => InstructorTeachingField::STATUS_SUPERSEDED]);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.courses.store'), $this->coursePayload($categoryA, 'New A must be blocked'))
+            ->assertSessionHasErrors('category_id');
+        $this->actingAs($instructor)
+            ->get(route('instructor.courses.edit', $courseA))
+            ->assertOk();
+        $this->actingAs($instructor)
+            ->put(route('instructor.courses.update', $courseA), $this->coursePayload($categoryA, 'Updated legacy A course'))
+            ->assertRedirect();
+        $this->actingAs($instructor)
+            ->post(route('instructor.courses.store'), $this->coursePayload($categoryB, 'New B is allowed'))
+            ->assertRedirect();
+    }
+
+    public function test_course_submit_and_admin_publish_do_not_bypass_an_unapproved_field(): void
+    {
+        [$instructor, $allowed, $outside] = $this->instructorWithTeachingFields(1);
+        $course = $this->course($instructor, $outside);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.courses.submit', $course), ['copyright_agreed' => true])
+            ->assertForbidden();
+
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $course->update(['status' => Course::STATUS_APPROVED]);
+        $this->actingAs($admin)
+            ->post(route('admin.courses.publish', $course))
+            ->assertStatus(422);
+        $this->assertDatabaseHas('courses', ['id' => $course->id, 'status' => Course::STATUS_APPROVED]);
+    }
+
+    public function test_admin_review_does_not_bypass_an_unapproved_field(): void
+    {
+        [$instructor, $allowed, $outside] = $this->instructorWithTeachingFields(1);
+        $course = $this->course($instructor, $outside);
+        $course->update(['status' => CourseStatus::PendingReview->value]);
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+        try {
+            app(CourseReviewService::class)->approve($course, $admin, [], true);
+            $this->fail('Admin review must not approve a course in an unapproved teaching field.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+        }
+    }
+
     /** @return array{0: User, 1: Category, 2: Category} */
     private function instructorWithTeachingFields(int $fieldCount): array
     {
@@ -90,10 +182,16 @@ class InstructorCourseCategoryAuthorizationTest extends TestCase
         $allowed = Category::create(['name' => 'Phát triển Web', 'slug' => 'phat-trien-web', 'parent_id' => $parent->id, 'status' => true]);
         $outside = Category::create(['name' => 'Marketing', 'slug' => 'marketing', 'parent_id' => $parent->id, 'status' => true]);
         $profile = InstructorProfile::create(['user_id' => $instructor->id]);
-        $profile->teachingCategories()->attach($allowed->id, ['is_primary' => true]);
+        $profile->teachingCategories()->attach($allowed->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
 
         if ($fieldCount > 1) {
-            $profile->teachingCategories()->attach($outside->id, ['is_primary' => false]);
+            $profile->teachingCategories()->attach($outside->id, [
+                'is_primary' => false,
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ]);
         }
 
         return [$instructor, $allowed, $outside];

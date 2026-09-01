@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorDocumentRequirement;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
@@ -266,6 +267,111 @@ class InstructorRequirementService
         }
 
         return $requirement;
+    }
+
+    public function validateRequirementForTeachingField(User $instructor, InstructorTeachingField $field, int $requirementId): InstructorDocumentRequirement
+    {
+        if ((int) $field->profile?->user_id !== (int) $instructor->id || ! $field->isEditable()) {
+            throw ValidationException::withMessages([
+                'instructor_teaching_field_id' => 'Ngành này không ở trạng thái cho phép bổ sung tài liệu.',
+            ]);
+        }
+
+        $requirement = InstructorDocumentRequirement::query()
+            ->whereKey($requirementId)
+            ->where('is_active', true)
+            ->first();
+        if (! $requirement) {
+            throw ValidationException::withMessages(['requirement_id' => 'Yêu cầu tài liệu không tồn tại hoặc đã bị vô hiệu hóa.']);
+        }
+
+        $allowedCategoryIds = [(int) $field->category_id];
+        if ($field->category?->parent_id) {
+            $allowedCategoryIds[] = (int) $field->category->parent_id;
+        }
+        if (! in_array((int) $requirement->category_id, $allowedCategoryIds, true)) {
+            throw ValidationException::withMessages(['requirement_id' => 'Tài liệu không thuộc requirement của ngành đang yêu cầu duyệt.']);
+        }
+
+        return $requirement;
+    }
+
+    /** @return Collection<int, InstructorDocumentRequirement> */
+    public function getRequirementsForTeachingField(InstructorTeachingField $field): Collection
+    {
+        $requirements = $this->activeRequirementsForCategory((int) $field->category_id);
+
+        if ($requirements->isEmpty() && $field->category?->parent_id) {
+            $requirements = $this->activeRequirementsForCategory((int) $field->category->parent_id);
+        }
+
+        return $requirements;
+    }
+
+    /** @return array{requirements: array<int, array<string, mixed>>, summary: array<string, mixed>} */
+    public function getTeachingFieldRequirementData(InstructorTeachingField $field): array
+    {
+        $field->loadMissing(['category.parent', 'certificates.requirement']);
+        $requirements = $this->getRequirementsForTeachingField($field);
+        $certificates = $field->certificates;
+        $items = [];
+        $requiredCount = 0;
+        $missingTitles = [];
+
+        foreach ($requirements as $requirement) {
+            $documents = $certificates->where('requirement_id', $requirement->id)->values();
+            $status = $documents->contains(fn (InstructorCertificate $certificate) => in_array($certificate->status, ['draft', 'pending', 'approved'], true))
+                ? ($documents->contains('status', 'approved') ? 'approved' : ($documents->contains('status', 'pending') ? 'pending' : 'draft'))
+                : ($documents->contains('status', 'rejected') ? 'rejected' : 'missing');
+            if ($requirement->is_required) {
+                $requiredCount++;
+                if (! in_array($status, ['draft', 'pending', 'approved'], true)) {
+                    $missingTitles[] = $requirement->document_title;
+                }
+            }
+            $items[] = compact('requirement', 'documents', 'status');
+        }
+
+        return [
+            'requirements' => $items,
+            'summary' => [
+                'required_count' => $requiredCount,
+                'missing_count' => count($missingTitles),
+                'missing_titles' => $missingTitles,
+                'can_submit' => $missingTitles === [],
+            ],
+        ];
+    }
+
+    /** @return array{required_count: int, submitted_count: int, missing_count: int, missing_titles: array<int, string>, can_submit: bool, reason: ?string} */
+    public function getTeachingFieldSubmitEligibility(InstructorTeachingField $field): array
+    {
+        $data = $this->getTeachingFieldRequirementData($field);
+        $summary = $data['summary'];
+
+        return [
+            'required_count' => $summary['required_count'],
+            'submitted_count' => $summary['required_count'] - $summary['missing_count'],
+            'missing_count' => $summary['missing_count'],
+            'missing_titles' => $summary['missing_titles'],
+            'can_submit' => $summary['can_submit'],
+            'reason' => $summary['can_submit'] ? null : 'Ngành này còn thiếu tài liệu bắt buộc.',
+        ];
+    }
+
+    public function promoteDraftCertificatesForTeachingField(InstructorTeachingField $field): int
+    {
+        $requirementIds = $this->getRequirementsForTeachingField($field)->pluck('id')->all();
+        if ($requirementIds === []) {
+            return 0;
+        }
+
+        return InstructorCertificate::query()
+            ->where('user_id', $field->profile->user_id)
+            ->where('instructor_teaching_field_id', $field->id)
+            ->where('status', 'draft')
+            ->whereIn('requirement_id', $requirementIds)
+            ->update(['status' => 'pending']);
     }
 
     /**

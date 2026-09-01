@@ -321,7 +321,8 @@ class Course extends Model
             return false;
         }
 
-        $isInstructorApproved = $instructor->instructor_status === 'approved';
+        $isInstructorApproved = $instructor->instructor_status === 'approved'
+            && app(\App\Services\InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $this);
         $isInstructorActive = (bool) $instructor->is_active && ! $instructor->isLocked();
 
         return $isInstructorApproved && $isInstructorActive;

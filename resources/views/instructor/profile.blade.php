@@ -293,6 +293,7 @@
                     'specialty' => $profile->specialty ?? '',
                     'experience' => $profile->experience ?? '',
                 ]])),
+                pendingReplacementId: null,
                 categories: @js($categories->map(function($c) {
                     return [
                         'id' => $c->id,
@@ -332,14 +333,20 @@
                     const available = all.find(c => !selectedIds.includes(c.id));
                     this.fields.push({
                         category_id: available ? available.id : (all[0]?.id || ''),
+                        replace_of_teaching_field_id: this.pendingReplacementId,
                         organization: '',
                         position: '',
                         specialty: '',
                         experience: ''
                     });
+                    this.pendingReplacementId = null;
                 },
                 removeField(index) {
                     if (this.fields.length > 1) {
+                        const removed = this.fields[index];
+                        if (removed?.approval_status === 'approved' && removed?.teaching_field_id) {
+                            this.pendingReplacementId = removed.teaching_field_id;
+                        }
                         this.fields.splice(index, 1);
                     }
                 }
@@ -369,7 +376,7 @@
 
                 {{-- DANH SÁCH KHỐI THÔNG TIN TỪNG NGÀNH --}}
                 <div class="space-y-6">
-                    <template x-for="(field, index) in fields" :key="index">
+                    <template x-for="(field, index) in fields" :key="field.teaching_field_id || index">
                         <div class="relative rounded-2xl border-2 border-slate-200/80 bg-slate-50/60 p-5 sm:p-6 transition hover:border-blue-300 dark:border-slate-800 dark:bg-slate-800/40 space-y-5">
 
                             {{-- Header của từng Khối Ngành --}}
@@ -377,6 +384,11 @@
                                 <div class="flex items-center gap-2.5">
                                     <span class="flex h-7 w-7 items-center justify-center rounded-xl bg-[#0056D2] text-xs font-black text-white shadow-sm" x-text="index + 1"></span>
                                     <span class="text-sm font-black text-slate-900 dark:text-white" x-text="getCategoryName(field.category_id)"></span>
+                                    <template x-if="field.approval_status === 'approved'"><span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✅ Đã duyệt</span></template>
+                                    <template x-if="!field.approval_status || field.approval_status === 'draft'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">📝 Chưa gửi</span></template>
+                                    <template x-if="field.approval_status === 'pending'"><span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span></template>
+                                    <template x-if="field.approval_status === 'rejected'"><span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">❌ Bị từ chối</span></template>
+                                    <template x-if="field.approval_status === 'superseded'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">↪ Đã được thay thế</span></template>
                                 </div>
 
                                 <template x-if="fields.length > 1">
@@ -391,6 +403,8 @@
                             {{-- Hàng 1: Ngành + Đơn vị + Chức vụ --}}
                             <div class="grid gap-4 sm:grid-cols-3">
                                 <div>
+                                    <input type="hidden" :name="'teaching_fields[' + index + '][teaching_field_id]'" x-model="field.teaching_field_id">
+                                    <input type="hidden" :name="'teaching_fields[' + index + '][replace_of_teaching_field_id]'" x-model="field.replace_of_teaching_field_id">
                                     <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                                         Ngành / Lĩnh vực giảng dạy *
                                     </label>
@@ -509,7 +523,48 @@
     {{-- ========================================================================= --}}
     {{-- TAB 2: HỒ SƠ MINH CHỨNG & CHỨNG CHỈ THEO NGÀNH                           --}}
     {{-- ========================================================================= --}}
-    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{ uploadModal: false, activeRequirementId: null, activeRequirementTitle: '', activeDocType: 'certificate' }">
+    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{ uploadModal: false, activeRequirementId: null, activeTeachingFieldId: null, activeRequirementTitle: '', activeDocType: 'certificate' }">
+
+        @if($user->instructor_status === 'approved' && $teachingFieldRecords->isNotEmpty())
+            <section class="space-y-4">
+                <h3 class="text-base font-black text-slate-900 dark:text-white">Yêu cầu duyệt ngành giảng dạy</h3>
+                @foreach($teachingFieldRecords as $field)
+                    @php($fieldData = $teachingFieldRequirementData[$field->id])
+                    <article class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h4 class="font-black text-slate-900 dark:text-white">{{ $field->category?->full_name ?? $field->category?->name }}</h4>
+                                @if($field->approval_status === 'approved') <span class="text-xs font-bold text-emerald-700">✅ Đã duyệt — có thể tạo và quản lý khóa học</span>
+                                @elseif($field->approval_status === 'pending') <span class="text-xs font-bold text-amber-700">⏳ Chờ admin duyệt</span>
+                                @elseif($field->approval_status === 'rejected') <span class="text-xs font-bold text-rose-700">❌ Bị từ chối: {{ $field->rejection_reason }}</span>
+                                @elseif($field->approval_status === 'superseded') <span class="text-xs font-bold text-slate-600">↪ Đã được thay thế — vẫn giữ lịch sử và quản lý khóa học cũ</span>
+                                @else <span class="text-xs font-bold text-slate-600">📝 Chưa gửi xét duyệt</span> @endif
+                            </div>
+                            @if($field->isEditable())
+                                <form method="POST" action="{{ route('instructor.profile.teaching-fields.submit-review', $field) }}">@csrf
+                                    <button {{ $fieldData['summary']['can_submit'] ? '' : 'disabled' }} class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Gửi xét duyệt ngành này</button>
+                                </form>
+                            @endif
+                        </div>
+                        <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                            @forelse($fieldData['requirements'] as $item)
+                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+                                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-800 dark:text-white">{{ $item['requirement']->document_title }}</span><span class="text-[10px] font-bold">{{ strtoupper($item['status']) }}</span></div>
+                                    @if($field->isEditable())
+                                        <button type="button" @click="activeTeachingFieldId = {{ $field->id }}; activeRequirementId = {{ $item['requirement']->id }}; activeRequirementTitle = @js($item['requirement']->document_title.' ('.$field->category?->name.')'); uploadModal = true" class="mt-2 text-xs font-bold text-blue-600">Tải lên / bổ sung</button>
+                                    @endif
+                                    @foreach($item['documents'] as $doc)
+                                        <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500"><a target="_blank" href="{{ route('instructor.profile.documents.view', $doc) }}" class="underline">{{ $doc->original_name }}</a><span>{{ $doc->status }}</span></div>
+                                    @endforeach
+                                </div>
+                            @empty
+                                <p class="text-xs text-slate-500">Ngành này chưa có requirement bắt buộc.</p>
+                            @endforelse
+                        </div>
+                    </article>
+                @endforeach
+            </section>
+        @endif
 
         {{-- BANNER TÓM TẮT TIẾN ĐỘ HỒ SƠ THEO NGÀNH --}}
         <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -834,6 +889,7 @@
                 <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-5 space-y-4">
                     @csrf
                     <input type="hidden" name="requirement_id" :value="activeRequirementId">
+                    <input type="hidden" name="instructor_teaching_field_id" :value="activeTeachingFieldId">
 
                     {{-- Chọn loại tài liệu khi upload tự do --}}
                     <div x-show="!activeRequirementId">

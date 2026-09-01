@@ -13,6 +13,7 @@ class InstructorCertificate extends Model
     protected $fillable = [
         'user_id',
         'requirement_id',
+        'instructor_teaching_field_id',
         'file_path',
         'original_name',
         'mime_type',
@@ -78,6 +79,11 @@ class InstructorCertificate extends Model
     public function requirement(): BelongsTo
     {
         return $this->belongsTo(InstructorDocumentRequirement::class, 'requirement_id');
+    }
+
+    public function teachingField(): BelongsTo
+    {
+        return $this->belongsTo(InstructorTeachingField::class, 'instructor_teaching_field_id');
     }
 
     public function reviewer(): BelongsTo

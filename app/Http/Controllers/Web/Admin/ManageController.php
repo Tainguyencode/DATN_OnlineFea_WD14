@@ -608,6 +608,13 @@ class ManageController extends Controller
             return back()->with('error', 'Chỉ khóa học đã duyệt mới có thể xuất bản.');
         }
 
+        $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+        abort_unless(
+            $instructor && app(\App\Services\InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course),
+            422,
+            'Ngành của giảng viên chưa được duyệt.'
+        );
+
         $course->update([
             'status' => Course::STATUS_PUBLISHED,
             'is_published' => true,
