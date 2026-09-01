@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Chapter;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\CourseReviewService;
@@ -187,9 +188,17 @@ class CourseReviewWorkflowTest extends TestCase
 
     private function makeDraftCourse(User $instructor): Course
     {
+        $category = Category::create([
+            'name' => 'Test',
+            'slug' => 'test-'.uniqid(),
+            'status' => true,
+        ]);
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+
         return Course::create([
             'instructor_id' => $instructor->id,
-            'category_id' => Category::create(['name' => 'Test', 'slug' => 'test-'.uniqid()])->id,
+            'category_id' => $category->id,
             'title' => 'Draft Course',
             'slug' => 'draft-course-'.uniqid(),
             'short_description' => 'Short',

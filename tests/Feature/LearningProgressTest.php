@@ -18,6 +18,7 @@ use App\Services\LearningProgressService;
 use App\Services\QuizContentService;
 use App\Services\QuizVersioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class LearningProgressTest extends TestCase
@@ -244,6 +245,7 @@ class LearningProgressTest extends TestCase
             'status' => 'published',
         ]);
         $this->enroll($student, $course);
+        Cache::put('reading-start:'.$student->id.':'.$lesson->id, now()->subSeconds(30)->timestamp, now()->addMinute());
 
         $this->actingAs($student)
             ->postJson(route('courses.lessons.progress', [$course, $lesson]), [

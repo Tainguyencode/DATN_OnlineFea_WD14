@@ -1,4 +1,4 @@
-<x-instructor-layout :title="'Bài làm Quiz - ' . $student->name" page-title="Chi tiết bài làm Quiz" :breadcrumb="$course->title" :back-url="route('instructor.courses.student.detail', [$course, $student])">
+<x-instructor-layout :title="'Bài làm Quiz - ' . $student->name" page-title="Chi tiết bài làm Quiz" :breadcrumb="$course->title" :back-url="route('instructor.courses.students.detail', [$course, $student])">
 @php
     $questions = $review['questions'] ?? [];
     $allAttempts = $review['all_attempts'] ?? [];

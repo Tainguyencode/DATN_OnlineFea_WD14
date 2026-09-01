@@ -775,7 +775,6 @@ class DemoCourseSeeder
                     [
                         'question_version_id' => $questionVersion->id,
                         'is_correct' => $opt['is_correct'],
-                        'explanation' => $opt['is_correct'] ? 'Chính xác!' : 'Sai rồi.',
                     ]
                 );
             }

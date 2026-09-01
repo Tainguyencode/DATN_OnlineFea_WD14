@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\QuestionVersion;
 use App\Models\Quiz;
@@ -34,6 +35,10 @@ class ContentUpdateDiffServiceTest extends TestCase
         $section = CourseSection::create(['course_id' => $course->id, 'title' => 'Chương 1', 'description' => 'Mô tả chương', 'sort_order' => 1]);
         $lesson = Lesson::create(['course_id' => $course->id, 'section_id' => $section->id, 'title' => 'Bài cũ', 'type' => Lesson::TYPE_ASSIGNMENT, 'content' => 'Yêu cầu cũ', 'duration' => 600, 'sort_order' => 1, 'status' => Lesson::STATUS_PUBLISHED]);
         Assignment::create(['course_id' => $course->id, 'lesson_id' => $lesson->id, 'title' => $lesson->title, 'description' => 'Yêu cầu cũ', 'instructions' => 'Yêu cầu cũ', 'due_days' => 7, 'max_score' => 100, 'passing_score' => 70]);
+
+        $category->update(['status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
 
         return [$instructor, $course, $section, $lesson];
     }
