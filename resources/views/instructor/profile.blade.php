@@ -638,9 +638,13 @@
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                                                                 ✔ Đã duyệt ({{ $item['approved_count'] }})
                                                             </span>
-                                                        @elseif($status === 'pending')
-                                                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                                                 Đã nộp - Chờ duyệt ({{ $item['pending_count'] }})
+                                                         @elseif($status === 'pending')
+                                                             <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                                                  Đã nộp - Chờ duyệt ({{ $item['pending_count'] }})
+                                                             </span>
+                                                        @elseif($status === 'draft')
+                                                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                                Chưa gửi ({{ $item['draft_count'] }})
                                                             </span>
                                                         @elseif($status === 'rejected')
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
@@ -681,9 +685,11 @@
                                                                 <div class="min-w-0">
                                                                     <div class="flex flex-wrap items-center gap-2">
                                                                         <h6 class="text-xs font-bold text-slate-800 dark:text-white truncate">{{ $doc->title ?: $doc->original_name }}</h6>
-                                                                        @if($doc->isApproved())
-                                                                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
-                                                                        @elseif($doc->isRejected())
+                                                                         @if($doc->isApproved())
+                                                                             <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                                                         @elseif($doc->isDraft())
+                                                                            <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
+                                                                         @elseif($doc->isRejected())
                                                                             <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
                                                                         @else
                                                                             <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
@@ -700,7 +706,14 @@
                                                                 <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">
                                                                     Xem tệp
                                                                 </a>
-                                                                @unless($doc->isApproved())
+                                                                @if($doc->isDraft())
+                                                                    <form method="POST" action="{{ route('instructor.profile.documents.replace', $doc) }}" enctype="multipart/form-data" class="flex items-center gap-1">
+                                                                        @csrf
+                                                                        @method('PATCH')
+                                                                        <input type="file" name="file" class="max-w-28 text-[10px]">
+                                                                        <input type="text" name="title" value="{{ $doc->title }}" class="max-w-28 rounded border border-slate-200 px-1.5 py-1 text-[10px]" aria-label="Tiêu đề tài liệu">
+                                                                        <button type="submit" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] hover:bg-blue-100">Cập nhật</button>
+                                                                    </form>
                                                                     <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
                                                                         @csrf
                                                                         @method('DELETE')
@@ -708,7 +721,9 @@
                                                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                                                         </button>
                                                                     </form>
-                                                                @endunless
+                                                                @elseif($doc->isRejected())
+                                                                    <button type="button" @click="activeRequirementId = {{ $doc->requirement_id }}; activeRequirementTitle = '{{ addslashes($req->document_title) }}'; activeDocType = '{{ $doc->document_type }}'; uploadModal = true" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] hover:bg-blue-100">Tải file thay thế</button>
+                                                                @endif
                                                             </div>
                                                         </div>
                                                     @endforeach
@@ -757,9 +772,11 @@
                                         <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
                                             {{ $doc->documentTypeLabel() }}
                                         </span>
-                                        @if($doc->isApproved())
-                                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
-                                        @elseif($doc->isRejected())
+                                         @if($doc->isApproved())
+                                             <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                         @elseif($doc->isDraft())
+                                            <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
+                                         @elseif($doc->isRejected())
                                             <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
                                         @else
                                             <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
@@ -776,7 +793,14 @@
                                 <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">
                                     Xem tệp
                                 </a>
-                                @unless($doc->isApproved())
+                                @if($doc->isDraft())
+                                    <form method="POST" action="{{ route('instructor.profile.documents.replace', $doc) }}" enctype="multipart/form-data" class="flex items-center gap-1">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="file" name="file" class="max-w-28 text-[10px]">
+                                        <input type="text" name="title" value="{{ $doc->title }}" class="max-w-28 rounded border border-slate-200 px-1.5 py-1 text-[10px]" aria-label="Tiêu đề tài liệu">
+                                        <button type="submit" class="rounded-xl bg-blue-50 px-2 py-1.5 text-xs font-bold text-[#0056D2] hover:bg-blue-100">Cập nhật</button>
+                                    </form>
                                     <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
                                         @csrf
                                         @method('DELETE')
@@ -784,7 +808,7 @@
                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         </button>
                                     </form>
-                                @endunless
+                                @endif
                             </div>
                         </div>
                     @endforeach

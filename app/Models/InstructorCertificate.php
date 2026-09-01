@@ -90,6 +90,11 @@ class InstructorCertificate extends Model
         return $this->status === 'pending';
     }
 
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
+    }
+
     public function isApproved(): bool
     {
         return $this->status === 'approved';

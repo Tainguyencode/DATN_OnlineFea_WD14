@@ -283,8 +283,11 @@ class InstructorApplicationController extends Controller
             'rejected_reason' => null,
         ]);
 
-        // Mark all pending certificates as approved
-        $user->instructorCertificates()->where('status', 'pending')->update([
+        $requirementIds = app(InstructorRequirementService::class)->getCurrentRequirementIds($user);
+        $user->instructorCertificates()
+            ->where('status', 'pending')
+            ->whereIn('requirement_id', $requirementIds)
+            ->update([
             'status' => 'approved',
             'reviewed_at' => now(),
             'reviewed_by' => $adminId,
@@ -384,6 +387,9 @@ class InstructorApplicationController extends Controller
     {
         if ($certificate->user_id !== $user->id) {
             abort(404, 'Tài liệu không thuộc về giảng viên này.');
+        }
+        if (! $certificate->isPending()) {
+            abort(422, 'Chỉ có thể xét duyệt tài liệu đã gửi.');
         }
 
         $request->validate([

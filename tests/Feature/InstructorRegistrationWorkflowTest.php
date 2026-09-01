@@ -508,9 +508,9 @@ class InstructorRegistrationWorkflowTest extends TestCase
     }
 
     /**
-     * CASE 18: Instructor updates profile / uploads document -> sets needs_admin_review = true, Admin views -> sets to false
+     * CASE 18: Upload document only creates a draft; it does not notify or queue admin review before submission.
      */
-    public function test_case_18_instructor_update_marks_needs_admin_review_and_admin_view_clears_it(): void
+    public function test_case_18_upload_document_keeps_admin_review_queue_clean_until_submission(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
         $instructor = User::factory()->create([
@@ -529,16 +529,8 @@ class InstructorRegistrationWorkflowTest extends TestCase
             ])
             ->assertRedirect();
 
-        $this->assertTrue($instructor->fresh()->needs_admin_review);
-
-        // Admin views the detail page
-        $this->actingAs($admin)
-            ->get(route('admin.instructors.applications.show', $instructor))
-            ->assertOk()
-            ->assertSee('Cập nhật mới');
-
         $this->assertFalse($instructor->fresh()->needs_admin_review);
-        $this->assertNotNull($instructor->fresh()->admin_last_reviewed_at);
+        $this->assertSame('draft', $instructor->instructorCertificates()->firstOrFail()->status);
     }
 
     /**

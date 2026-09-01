@@ -215,7 +215,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'user_id' => $this->instructor->id,
             'requirement_id' => $this->reqDegree->id,
             'document_type' => 'degree',
-            'status' => 'pending',
+            'status' => 'draft',
         ]);
     }
 
@@ -526,7 +526,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
     /**
      * 10. Khi giảng viên thay đổi ngành giảng dạy: Tính toán lại yêu cầu và gỡ requirement_id không tương thích.
      */
-    public function test_changing_teaching_field_recalculates_requirements_and_unassigns_incompatible_certificates(): void
+    public function test_changing_teaching_field_keeps_submitted_certificate_requirement_history(): void
     {
         // Gán cert cho requirement của ngành Web
         $cert = InstructorCertificate::create([
@@ -553,8 +553,8 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
         $response->assertRedirect();
 
         $cert->refresh();
-        // Requirement cũ của ngành Web không thuộc ngành Marketing nên requirement_id bị đặt về null
-        $this->assertNull($cert->requirement_id);
+        // Pending là lịch sử đã gửi, không được mất liên kết requirement cũ.
+        $this->assertSame($this->reqDegree->id, $cert->requirement_id);
 
         $this->instructor->refresh();
         $this->assertEquals($this->categoryMarketing->id, $this->instructor->getTeachingCategoryId());
@@ -649,6 +649,62 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('33%')
             ->assertSee('1/3');
+    }
+
+    public function test_submit_promotes_only_current_requirement_drafts(): void
+    {
+        $degree = $this->createDocument($this->reqDegree, 'draft');
+        $certificate = $this->createDocument($this->reqCert, 'draft');
+        $unassigned = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'file_path' => 'test/unassigned.pdf', 'original_name' => 'unassigned.pdf', 'document_type' => 'degree',
+            'status' => 'draft', 'uploaded_at' => now(),
+        ]);
+        $outside = InstructorDocumentRequirement::create([
+            'category_id' => $this->categoryMarketing->id, 'document_type' => 'degree', 'document_title' => 'Marketing degree',
+            'is_required' => true, 'is_active' => true,
+        ]);
+        $outsideDraft = $this->createDocument($outside, 'draft');
+
+        $this->actingAs($this->instructor)->post(route('instructor.profile.submit-review'))->assertRedirect();
+
+        $this->assertSame('pending', $degree->fresh()->status);
+        $this->assertSame('pending', $certificate->fresh()->status);
+        $this->assertSame('draft', $unassigned->fresh()->status);
+        $this->assertSame('draft', $outsideDraft->fresh()->status);
+    }
+
+    public function test_draft_document_can_be_replaced_and_deleted_while_pending_cannot(): void
+    {
+        $draft = $this->createDocument($this->reqDegree, 'draft');
+        Storage::disk('local')->put($draft->file_path, 'old');
+        $this->actingAs($this->instructor)->patch(route('instructor.profile.documents.replace', $draft), [
+            'file' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'), 'title' => 'Replacement',
+        ])->assertRedirect();
+        $this->assertSame('Replacement', $draft->fresh()->title);
+        $this->actingAs($this->instructor)->delete(route('instructor.profile.documents.delete', $draft))->assertRedirect();
+        $this->assertDatabaseMissing('instructor_certificates', ['id' => $draft->id]);
+
+        $pending = $this->createDocument($this->reqCert, 'pending');
+        $this->actingAs($this->instructor)->delete(route('instructor.profile.documents.delete', $pending))->assertRedirect();
+        $this->assertSame('pending', $pending->fresh()->status);
+    }
+
+    public function test_rejected_history_is_kept_and_admin_can_only_review_pending_documents(): void
+    {
+        $rejected = $this->createDocument($this->reqDegree, 'rejected');
+        $this->actingAs($this->instructor)->post(route('instructor.profile.documents.upload'), [
+            'requirement_id' => $this->reqDegree->id,
+            'file' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'),
+        ])->assertRedirect();
+        $this->assertSame('rejected', $rejected->fresh()->status);
+        $this->assertSame(1, $this->instructor->instructorCertificates()->where('requirement_id', $this->reqDegree->id)->where('status', 'draft')->count());
+
+        $draft = $this->instructor->instructorCertificates()->where('status', 'draft')->firstOrFail();
+        $pending = $this->createDocument($this->reqCert, 'pending');
+        $this->actingAs($this->admin)->post(route('admin.instructors.applications.documents.review', [$this->instructor, $draft]), ['status' => 'approved'])->assertStatus(422);
+        $this->actingAs($this->admin)->post(route('admin.instructors.applications.documents.review', [$this->instructor, $pending]), ['status' => 'approved'])->assertRedirect();
+        $this->assertSame('approved', $pending->fresh()->status);
     }
 
     private function createDocument(InstructorDocumentRequirement $requirement, string $status = 'pending'): InstructorCertificate

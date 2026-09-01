@@ -426,7 +426,7 @@
                                                                     <a href="{{ route('admin.instructors.applications.certificates.view', $doc) }}" target="_blank" class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200">
                                                                         Xem tệp
                                                                     </a>
-                                                                    @if($doc->status !== 'approved')
+                                                                    @if($doc->status === 'pending')
                                                                         <form method="POST" action="{{ route('admin.instructors.applications.documents.review', [$application, $doc]) }}">
                                                                             @csrf
                                                                             <input type="hidden" name="status" value="approved">
@@ -479,7 +479,7 @@
                                                 <a href="{{ route('admin.instructors.applications.certificates.view', $doc) }}" target="_blank" class="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">
                                                     Xem tệp
                                                 </a>
-                                                @if($doc->status !== 'approved')
+                                            @if($doc->status === 'pending')
                                                     <form method="POST" action="{{ route('admin.instructors.applications.documents.review', [$application, $doc]) }}">
                                                         @csrf
                                                         <input type="hidden" name="status" value="approved">

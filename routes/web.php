@@ -337,6 +337,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::put('/profile', [InstructorProfileController::class, 'update'])->middleware('verified')->name('profile.update');
     Route::post('/profile/documents', [InstructorProfileController::class, 'uploadDocument'])->middleware('verified')->name('profile.documents.upload');
     Route::delete('/profile/documents/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->middleware('verified')->name('profile.documents.delete');
+    Route::patch('/profile/documents/{certificate}', [InstructorProfileController::class, 'replaceDocument'])->middleware('verified')->name('profile.documents.replace');
     Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->middleware('verified')->name('profile.documents.view');
     Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware(['verified', 'throttle:5,1'])->name('profile.submit-review');
     Route::post('/profile/request-reactivation', [InstructorProfileController::class, 'requestReactivation'])->middleware('throttle:5,1')->name('profile.request-reactivation');
@@ -345,6 +346,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
     Route::get('/pending', [InstructorPendingController::class, 'show'])->name('pending');
     Route::post('/certificates/upload', [InstructorProfileController::class, 'uploadDocument'])->middleware('verified')->name('certificates.upload');
     Route::delete('/certificates/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->middleware('verified')->name('certificates.delete');
+    Route::patch('/certificates/{certificate}', [InstructorProfileController::class, 'replaceDocument'])->middleware('verified')->name('certificates.replace');
     Route::get('/certificates/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->middleware('verified')->name('certificates.view');
     Route::post('/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware(['verified', 'throttle:5,1'])->name('submit-review');
     Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware(['verified', 'throttle:5,1'])->name('resubmit');

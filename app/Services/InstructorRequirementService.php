@@ -86,7 +86,7 @@ class InstructorRequirementService
                     }
 
                     // Tương thích ngược với tài liệu cũ chưa gán requirement_id
-                    if ($cert->requirement_id === null && $cert->document_type === $req->document_type) {
+                    if ($cert->requirement_id === null && $cert->status !== 'draft' && $cert->document_type === $req->document_type) {
                         return true;
                     }
 
@@ -95,6 +95,7 @@ class InstructorRequirementService
 
                 $approvedDocs = $reqCerts->where('status', 'approved');
                 $pendingDocs = $reqCerts->where('status', 'pending');
+                $draftDocs = $reqCerts->where('status', 'draft');
                 $rejectedDocs = $reqCerts->where('status', 'rejected');
 
                 $status = 'missing'; // 'missing', 'pending', 'approved', 'rejected'
@@ -102,6 +103,8 @@ class InstructorRequirementService
                     $status = 'approved';
                 } elseif ($pendingDocs->isNotEmpty()) {
                     $status = 'pending';
+                } elseif ($draftDocs->isNotEmpty()) {
+                    $status = 'draft';
                 } elseif ($rejectedDocs->isNotEmpty()) {
                     $status = 'rejected';
                 }
@@ -134,6 +137,7 @@ class InstructorRequirementService
                     'documents' => $reqCerts->values(),
                     'approved_count' => $approvedDocs->count(),
                     'pending_count' => $pendingDocs->count(),
+                    'draft_count' => $draftDocs->count(),
                     'rejected_count' => $rejectedDocs->count(),
                     'total_documents_count' => $reqCerts->count(),
                 ];
@@ -269,7 +273,7 @@ class InstructorRequirementService
      */
     public function checkCanApproveInstructor(User $instructor): array
     {
-        $eligibility = $this->getSubmitEligibility($instructor);
+        $eligibility = $this->getAdminApprovalEligibility($instructor);
 
         return [
             'can_approve' => $eligibility['can_submit'],
@@ -294,8 +298,46 @@ class InstructorRequirementService
      */
     public function getSubmitEligibility(User $instructor): array
     {
-        $summary = $this->getRequirementsForInstructor($instructor)['summary'];
-        $missingCount = $summary['required_missing_count'] + $summary['required_rejected_count'];
+        return $this->getEligibilityForStatuses($instructor, ['draft', 'pending', 'approved']);
+    }
+
+    /** Draft evidence must be submitted before it can satisfy an admin approval. */
+    public function getAdminApprovalEligibility(User $instructor): array
+    {
+        return $this->getEligibilityForStatuses($instructor, ['pending', 'approved']);
+    }
+
+    /** @return array<int, int> */
+    public function getCurrentRequirementIds(User $instructor): array
+    {
+        return collect($this->getRequirementsForInstructor($instructor)['requirements'])
+            ->map(fn (array $item) => (int) $item['requirement']->id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function promoteDraftCertificatesForReview(User $instructor): int
+    {
+        $requirementIds = $this->getCurrentRequirementIds($instructor);
+
+        if ($requirementIds === []) {
+            return 0;
+        }
+
+        return InstructorCertificate::query()
+            ->where('user_id', $instructor->id)
+            ->where('status', 'draft')
+            ->whereNotNull('requirement_id')
+            ->whereIn('requirement_id', $requirementIds)
+            ->update(['status' => 'pending']);
+    }
+
+    /** @param array<int, string> $fulfillingStatuses */
+    private function getEligibilityForStatuses(User $instructor, array $fulfillingStatuses): array
+    {
+        $requirements = $this->getRequirementsForInstructor($instructor);
+        $summary = $requirements['summary'];
 
         if (! $summary['has_category']) {
             return [
@@ -308,12 +350,31 @@ class InstructorRequirementService
             ];
         }
 
-        if ($summary['required_count'] > 0 && ! $summary['has_all_required_submitted']) {
+        $submittedCount = 0;
+        $missingTitles = [];
+        foreach ($requirements['requirements'] as $item) {
+            if (! $item['requirement']->is_required) {
+                continue;
+            }
+
+            $hasEligibleDocument = $item['documents']->contains(
+                fn (InstructorCertificate $certificate) => in_array($certificate->status, $fulfillingStatuses, true)
+            );
+            if ($hasEligibleDocument) {
+                $submittedCount++;
+                continue;
+            }
+
+            $missingTitles[] = "[{$item['category']->name}] {$item['requirement']->document_title}";
+        }
+
+        $missingCount = count($missingTitles);
+        if ($missingCount > 0) {
             return [
                 'required_count' => $summary['required_count'],
-                'submitted_count' => $summary['required_submitted_count'],
+                'submitted_count' => $submittedCount,
                 'missing_count' => $missingCount,
-                'missing_titles' => $summary['missing_titles'],
+                'missing_titles' => $missingTitles,
                 'can_submit' => false,
                 'reason' => 'Giảng viên còn thiếu tài liệu bắt buộc của các ngành đăng ký.',
             ];
@@ -321,7 +382,7 @@ class InstructorRequirementService
 
         return [
             'required_count' => $summary['required_count'],
-            'submitted_count' => $summary['required_submitted_count'],
+            'submitted_count' => $submittedCount,
             'missing_count' => 0,
             'missing_titles' => [],
             'can_submit' => true,
@@ -364,10 +425,12 @@ class InstructorRequirementService
         // Gỡ requirement_id của các chứng chỉ không còn thuộc bất kỳ ngành nào đang chọn
         if (empty($validReqIds)) {
             InstructorCertificate::where('user_id', $instructor->id)
+                ->where('status', 'draft')
                 ->whereNotNull('requirement_id')
                 ->update(['requirement_id' => null]);
         } else {
             InstructorCertificate::where('user_id', $instructor->id)
+                ->where('status', 'draft')
                 ->whereNotNull('requirement_id')
                 ->whereNotIn('requirement_id', $validReqIds)
                 ->update(['requirement_id' => null]);

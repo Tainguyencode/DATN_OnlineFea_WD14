@@ -209,13 +209,7 @@ class InstructorProfileController extends Controller
             'bank_name' => $validated['bank_name'] ?? null,
             'bank_account_number' => $validated['bank_account_number'] ?? null,
             'bank_account_name' => $validated['bank_account_name'] ?? null,
-            'needs_admin_review' => true,
         ];
-
-        if ($user->instructor_status === 'rejected') {
-            $userUpdates['instructor_status'] = 'pending';
-            $userUpdates['rejected_reason'] = null;
-        }
 
         $user->update($userUpdates);
 
@@ -232,17 +226,6 @@ class InstructorProfileController extends Controller
         $profile->syncTeachingFields($validated['teaching_fields']);
 
         ActivityLogService::log($user->id, 'update_instructor_profile', User::class, $user->id, null, $request);
-
-        try {
-            app(NotificationService::class)->notifyAdmins(
-                'Giảng viên cập nhật hồ sơ',
-                "Giảng viên {$user->name} ({$user->email}) vừa cập nhật thông tin hồ sơ và đang chờ xét duyệt.",
-                'instructor_profile_updated',
-                route('admin.instructors.applications.show', $user)
-            );
-        } catch (\Throwable $e) {
-            Log::error('Gửi thông báo cập nhật hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
-        }
 
         return back()->with('success', 'Cập nhật thông tin hồ sơ thành công.');
     }
@@ -318,19 +301,12 @@ class InstructorProfileController extends Controller
                 'file_size' => $fileSize,
                 'title' => $customTitle ?: pathinfo($originalName, PATHINFO_FILENAME),
                 'document_type' => $documentType,
-                'status' => 'pending',
+                'status' => 'draft',
                 'uploaded_at' => now(),
             ]);
 
             $uploadedCount++;
         }
-
-        $userUpdates = ['needs_admin_review' => true];
-        if ($user->instructor_status === 'rejected') {
-            $userUpdates['instructor_status'] = 'pending';
-            $userUpdates['rejected_reason'] = null;
-        }
-        $user->update($userUpdates);
 
         ActivityLogService::log($user->id, 'upload_instructor_document', User::class, $user->id, [
             'document_type' => $documentType,
@@ -338,18 +314,66 @@ class InstructorProfileController extends Controller
             'uploaded_count' => $uploadedCount,
         ], $request);
 
-        try {
-            app(NotificationService::class)->notifyAdmins(
-                'Giảng viên nộp tài liệu minh chứng',
-                "Giảng viên {$user->name} ({$user->email}) vừa tải lên {$uploadedCount} tài liệu minh chứng mới.",
-                'instructor_documents_uploaded',
-                route('admin.instructors.applications.show', $user)
-            );
-        } catch (\Throwable $e) {
-            Log::error('Gửi thông báo nộp tài liệu giảng viên cho admin thất bại: '.$e->getMessage());
+        return back()->with('active_tab', 'documents')->with('success', "Đã tải lên {$uploadedCount} tài liệu minh chứng - Chưa gửi xét duyệt.");
+    }
+
+    public function replaceDocument(Request $request, InstructorCertificate $certificate): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        if ($certificate->user_id !== $user->id) {
+            abort(403, 'Bạn không có quyền thay thế tài liệu này.');
+        }
+        if (! $certificate->isDraft()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Chỉ có thể thay thế tài liệu chưa gửi xét duyệt.');
         }
 
-        return back()->with('active_tab', 'documents')->with('success', "Đã tải lên {$uploadedCount} tài liệu minh chứng thành công. Hồ sơ đang chờ Ban quản trị kiểm duyệt.");
+        $request->validate([
+            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+            'title' => ['nullable', 'string', 'max:255'],
+        ]);
+        if (! $request->hasFile('file') && ! $request->has('title')) {
+            return back()->with('active_tab', 'documents')->with('error', 'Vui lòng chọn tệp mới hoặc cập nhật tiêu đề.');
+        }
+
+        $newPath = null;
+        $oldPath = $certificate->file_path;
+        try {
+            $updates = [];
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $extension = $file->getClientOriginalExtension() ?: 'pdf';
+                $newPath = $file->storeAs("instructor-certificates/{$user->id}", Str::uuid().'.'.$extension, 'local');
+                $updates = [
+                    'file_path' => $newPath,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                ];
+            }
+            if ($request->has('title')) {
+                $updates['title'] = $request->input('title') ?: ($updates['original_name'] ?? $certificate->original_name);
+            }
+
+            DB::transaction(function () use ($certificate, $updates) {
+                $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+                if (! $locked->isDraft()) {
+                    abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
+                }
+                $locked->update($updates);
+            });
+        } catch (\Throwable $e) {
+            if ($newPath) {
+                Storage::disk('local')->delete($newPath);
+            }
+            throw $e;
+        }
+
+        if ($newPath && $oldPath && Storage::disk('local')->exists($oldPath)) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        return back()->with('active_tab', 'documents')->with('success', 'Đã cập nhật tài liệu chưa gửi.');
     }
 
     public function deleteDocument(Request $request, InstructorCertificate $certificate): RedirectResponse
@@ -361,8 +385,8 @@ class InstructorProfileController extends Controller
             abort(403, 'Bạn không có quyền xóa tài liệu này.');
         }
 
-        if ($certificate->status === 'approved') {
-            return back()->with('active_tab', 'documents')->with('error', 'Tài liệu đã được phê duyệt, không thể xóa.');
+        if (! $certificate->isDraft()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Chỉ có thể xóa tài liệu chưa gửi xét duyệt.');
         }
 
         if (Storage::disk('local')->exists($certificate->file_path)) {
@@ -370,8 +394,6 @@ class InstructorProfileController extends Controller
         }
 
         $certificate->delete();
-
-        $user->update(['needs_admin_review' => true]);
 
         ActivityLogService::log($user->id, 'delete_instructor_document', InstructorCertificate::class, $certificate->id, [
             'file_name' => $certificate->original_name,
@@ -431,20 +453,23 @@ class InstructorProfileController extends Controller
         }
 
         $certsCount = $user->instructorCertificates()->count();
-
-        $user->update([
-            'submitted_for_review_at' => now(),
-            'instructor_status' => 'pending',
-            'needs_admin_review' => true,
-            'rejected_reason' => null,
-        ]);
-
-        if ($user->instructorApplication) {
-            $user->instructorApplication->update([
-                'status' => 'pending',
-                'admin_notes' => null,
+        DB::transaction(function () use ($user) {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            app(InstructorRequirementService::class)->promoteDraftCertificatesForReview($lockedUser);
+            $lockedUser->update([
+                'submitted_for_review_at' => now(),
+                'instructor_status' => 'pending',
+                'needs_admin_review' => true,
+                'rejected_reason' => null,
             ]);
-        }
+
+            if ($lockedUser->instructorApplication) {
+                $lockedUser->instructorApplication->update([
+                    'status' => 'pending',
+                    'admin_notes' => null,
+                ]);
+            }
+        });
 
         ActivityLogService::log($user->id, 'submit_instructor_application', User::class, $user->id, [
             'certificates_count' => $certsCount,
