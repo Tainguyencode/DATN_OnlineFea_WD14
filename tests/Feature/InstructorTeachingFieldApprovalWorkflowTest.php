@@ -20,8 +20,9 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
     {
         [$instructor, , $fieldA, $fieldB, $categoryA, $categoryB] = $this->fixture();
         $fieldB->delete();
+        $profile = $fieldA->profile;
 
-        $this->actingAs($instructor)->put(route('instructor.profile.update'), [
+        $response = $this->actingAs($instructor)->put(route('instructor.profile.update'), [
             'name' => $instructor->name,
             'username' => 'instructor-'.$instructor->id,
             'phone' => $instructor->phone,
@@ -33,11 +34,21 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
                 ['teaching_field_id' => $fieldA->id, 'category_id' => $categoryA->id, 'organization' => 'A'],
                 ['category_id' => $categoryB->id, 'organization' => 'B'],
             ],
-        ])->assertRedirect()->assertSessionHasNoErrors();
+        ]);
+
+        $response->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Đã lưu yêu cầu thay đổi ngành giảng dạy. Vui lòng hoàn thiện hồ sơ và gửi Admin xét duyệt.');
 
         $this->assertDatabaseHas('instructor_profile_teaching_fields', ['id' => $fieldA->id, 'approval_status' => 'approved']);
         $this->assertDatabaseHas('instructor_profile_teaching_fields', ['category_id' => $categoryB->id, 'approval_status' => 'draft']);
+        $this->assertSame($categoryA->id, $profile->fresh()->category_id);
+        $this->assertSame([$categoryA->id], $profile->approvedTeachingCategories()->pluck('categories.id')->map(fn ($id) => (int) $id)->all());
+        $this->assertSame([$categoryA->id], $instructor->fresh()->getTeachingCategories()->pluck('id')->map(fn ($id) => (int) $id)->all());
+        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
         $this->assertCourseDenied($instructor, $categoryB);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
     }
 
     public function test_legacy_approved_profile_without_a_pivot_still_has_course_access(): void
@@ -119,6 +130,94 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $this->assertCourseDenied($instructor, $categoryA);
         $this->assertCourseAllowed($instructor, $categoryB);
         $this->assertCourseAllowed($instructor, $categoryA, $courseA);
+    }
+
+    public function test_profile_change_from_approved_a_to_b_keeps_a_effective_until_admin_approves_b(): void
+    {
+        [$instructor, $admin, $fieldA, $fieldB, $categoryA, $categoryB, $requirementB] = $this->fixture();
+        $fieldB->delete();
+        $profile = $fieldA->profile;
+
+        $this->actingAs($instructor)->put(route('instructor.profile.update'), [
+            'name' => $instructor->name,
+            'username' => 'replacement-'.$instructor->id,
+            'phone' => $instructor->phone,
+            'bio' => $instructor->bio,
+            'bank_name' => $instructor->bank_name,
+            'bank_account_number' => $instructor->bank_account_number,
+            'bank_account_name' => $instructor->bank_account_name,
+            'teaching_fields' => [
+                ['teaching_field_id' => $fieldA->id, 'category_id' => $categoryB->id, 'organization' => 'B'],
+            ],
+        ])->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Đã lưu yêu cầu thay đổi ngành giảng dạy. Vui lòng hoàn thiện hồ sơ và gửi Admin xét duyệt.');
+
+        $replacement = InstructorTeachingField::query()
+            ->where('instructor_profile_id', $profile->id)
+            ->where('category_id', $categoryB->id)
+            ->firstOrFail();
+
+        $this->assertNotSame($fieldA->id, $replacement->id);
+        $this->assertSame(InstructorTeachingField::STATUS_DRAFT, $replacement->approval_status);
+        $this->assertSame($fieldA->id, $replacement->replace_of_teaching_field_id);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+        $this->assertSame($categoryA->id, $profile->fresh()->category_id);
+        $this->assertSame([$categoryA->id], $profile->approvedTeachingCategories()->pluck('categories.id')->map(fn ($id) => (int) $id)->all());
+        $this->assertSame([$categoryA->id], $instructor->fresh()->getTeachingCategories()->pluck('id')->map(fn ($id) => (int) $id)->all());
+        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
+
+        $this->certificate($instructor, $replacement, $requirementB, 'draft');
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.teaching-fields.submit-review', $replacement))
+            ->assertRedirect();
+
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+        $this->assertSame(InstructorTeachingField::STATUS_PENDING, $replacement->fresh()->approval_status);
+        $this->assertSame($categoryA->id, $profile->fresh()->category_id);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.teaching-fields.approve', $replacement))
+            ->assertRedirect();
+
+        $this->assertSame(InstructorTeachingField::STATUS_SUPERSEDED, $fieldA->fresh()->approval_status);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $replacement->fresh()->approval_status);
+        $this->assertSame($categoryB->id, $profile->fresh()->category_id);
+        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
+    }
+
+    public function test_profile_displays_all_teaching_field_approval_statuses(): void
+    {
+        [$instructor, , $fieldA, $fieldB] = $this->fixture();
+        $profile = $fieldA->profile;
+
+        $fieldB->update(['approval_status' => InstructorTeachingField::STATUS_DRAFT]);
+        foreach ([
+            InstructorTeachingField::STATUS_PENDING => 'Pending field',
+            InstructorTeachingField::STATUS_REJECTED => 'Rejected field',
+            InstructorTeachingField::STATUS_SUPERSEDED => 'Superseded field',
+        ] as $status => $name) {
+            $category = Category::create(['name' => $name, 'slug' => str($name)->slug()->value(), 'status' => true]);
+            InstructorTeachingField::create([
+                'instructor_profile_id' => $profile->id,
+                'category_id' => $category->id,
+                'approval_status' => $status,
+                'rejection_reason' => $status === InstructorTeachingField::STATUS_REJECTED ? 'Hồ sơ chưa đạt yêu cầu.' : null,
+            ]);
+        }
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.profile'))
+            ->assertOk()
+            ->assertSee('✅ Đã duyệt')
+            ->assertSee('📝 Chưa gửi')
+            ->assertSee('⏳ Chờ duyệt')
+            ->assertSee('❌ Bị từ chối')
+            ->assertSee('⛔ Đã thay thế');
     }
 
     private function fixture(): array

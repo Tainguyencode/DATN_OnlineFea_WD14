@@ -388,7 +388,7 @@
                                     <template x-if="!field.approval_status || field.approval_status === 'draft'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">📝 Chưa gửi</span></template>
                                     <template x-if="field.approval_status === 'pending'"><span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span></template>
                                     <template x-if="field.approval_status === 'rejected'"><span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">❌ Bị từ chối</span></template>
-                                    <template x-if="field.approval_status === 'superseded'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">↪ Đã được thay thế</span></template>
+                                    <template x-if="field.approval_status === 'superseded'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">⛔ Đã thay thế</span></template>
                                 </div>
 
                                 <template x-if="fields.length > 1">
@@ -525,56 +525,15 @@
     {{-- ========================================================================= --}}
     <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{ uploadModal: false, activeRequirementId: null, activeTeachingFieldId: null, activeRequirementTitle: '', activeDocType: 'certificate' }">
 
-        @if($user->instructor_status === 'approved' && $teachingFieldRecords->isNotEmpty())
-            <section class="space-y-4">
-                <h3 class="text-base font-black text-slate-900 dark:text-white">Yêu cầu duyệt ngành giảng dạy</h3>
-                @foreach($teachingFieldRecords as $field)
-                    @php($fieldData = $teachingFieldRequirementData[$field->id])
-                    <article class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                        <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                                <h4 class="font-black text-slate-900 dark:text-white">{{ $field->category?->full_name ?? $field->category?->name }}</h4>
-                                @if($field->approval_status === 'approved') <span class="text-xs font-bold text-emerald-700">✅ Đã duyệt — có thể tạo và quản lý khóa học</span>
-                                @elseif($field->approval_status === 'pending') <span class="text-xs font-bold text-amber-700">⏳ Chờ admin duyệt</span>
-                                @elseif($field->approval_status === 'rejected') <span class="text-xs font-bold text-rose-700">❌ Bị từ chối: {{ $field->rejection_reason }}</span>
-                                @elseif($field->approval_status === 'superseded') <span class="text-xs font-bold text-slate-600">↪ Đã được thay thế — vẫn giữ lịch sử và quản lý khóa học cũ</span>
-                                @else <span class="text-xs font-bold text-slate-600">📝 Chưa gửi xét duyệt</span> @endif
-                            </div>
-                            @if($field->isEditable())
-                                <form method="POST" action="{{ route('instructor.profile.teaching-fields.submit-review', $field) }}">@csrf
-                                    <button {{ $fieldData['summary']['can_submit'] ? '' : 'disabled' }} class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Gửi xét duyệt ngành này</button>
-                                </form>
-                            @endif
-                        </div>
-                        <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                            @forelse($fieldData['requirements'] as $item)
-                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
-                                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-800 dark:text-white">{{ $item['requirement']->document_title }}</span><span class="text-[10px] font-bold">{{ strtoupper($item['status']) }}</span></div>
-                                    @if($field->isEditable())
-                                        <button type="button" @click="activeTeachingFieldId = {{ $field->id }}; activeRequirementId = {{ $item['requirement']->id }}; activeRequirementTitle = @js($item['requirement']->document_title.' ('.$field->category?->name.')'); uploadModal = true" class="mt-2 text-xs font-bold text-blue-600">Tải lên / bổ sung</button>
-                                    @endif
-                                    @foreach($item['documents'] as $doc)
-                                        <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500"><a target="_blank" href="{{ route('instructor.profile.documents.view', $doc) }}" class="underline">{{ $doc->original_name }}</a><span>{{ $doc->status }}</span></div>
-                                    @endforeach
-                                </div>
-                            @empty
-                                <p class="text-xs text-slate-500">Ngành này chưa có requirement bắt buộc.</p>
-                            @endforelse
-                        </div>
-                    </article>
-                @endforeach
-            </section>
-        @endif
-
         {{-- BANNER TÓM TẮT TIẾN ĐỘ HỒ SƠ THEO NGÀNH --}}
         <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-5 dark:border-slate-800">
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
-                        @if(!empty($requirementData['categories']) && $requirementData['categories']->isNotEmpty())
-                            @foreach($requirementData['categories'] as $cat)
+                        @if($teachingFieldRecords->isNotEmpty())
+                            @foreach($teachingFieldRecords as $teachingField)
                                 <span class="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-[#0056D2] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                                     {{ $cat->name }}
+                                     {{ $teachingField->category->name }}
                                 </span>
                             @endforeach
                         @else
@@ -583,23 +542,6 @@
                             </span>
                         @endif
 
-                        @if($requirementData['summary']['total_requirements'] === 0)
-                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                ℹ Chưa có cấu hình yêu cầu hồ sơ
-                            </span>
-                        @elseif($requirementData['summary']['required_count'] === 0)
-                            <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                                ℹ Không có hồ sơ bắt buộc
-                            </span>
-                        @elseif($requirementData['summary']['can_approve'])
-                            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                ✔ Đã đủ hồ sơ bắt buộc
-                            </span>
-                        @else
-                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                 Còn thiếu {{ $requirementData['summary']['required_missing_count'] + $requirementData['summary']['required_rejected_count'] }} tài liệu bắt buộc
-                            </span>
-                        @endif
                     </div>
                     <h3 class="text-xl font-black text-slate-900 dark:text-white mt-2">Hồ sơ minh chứng theo ngành giảng dạy</h3>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -609,18 +551,21 @@
             </div>
 
             {{-- Checklist các yêu cầu theo từng ngành --}}
-            @if(empty($requirementData['categories_requirements']))
+            @if($teachingFieldRecords->isEmpty())
                 <div class="my-8 rounded-2xl bg-amber-50 p-6 text-center text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                     <p class="text-sm font-bold">Chưa có danh sách yêu cầu tài liệu cụ thể hoặc bạn chưa chọn ngành giảng dạy.</p>
                     <p class="mt-1 text-xs">Vui lòng chọn ngành ở Tab "Thông tin cá nhân & nghề nghiệp" để hệ thống tải bộ yêu cầu tương ứng.</p>
                 </div>
             @else
                 <div class="mt-6 space-y-8">
-                    @foreach($requirementData['categories_requirements'] as $catGroup)
+                    @foreach($teachingFieldRecords as $teachingField)
                         @php
-                            $groupCat = $catGroup['category'];
-                            $groupReqs = $catGroup['requirements'];
-                            $groupSummary = $catGroup['summary'];
+                            $fieldData = $teachingFieldRequirementData[$teachingField->id];
+                            $groupReqs = $fieldData['requirements'];
+                            $groupSummary = $fieldData['summary'];
+                            $groupOptionalCount = collect($groupReqs)
+                                ->reject(fn ($item) => $item['requirement']->is_required)
+                                ->count();
                         @endphp
                         <div class="rounded-3xl border border-slate-200 bg-slate-50/50 p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/50 space-y-4">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3 dark:border-slate-800">
@@ -630,16 +575,16 @@
                                     </span>
                                     <div>
                                         <h4 class="text-base font-black text-slate-900 dark:text-white">
-                                            Ngành: {{ $groupCat->name }}
+                                            Ngành: {{ $teachingField->category->name }}
                                         </h4>
                                         <p class="text-xs text-slate-500">
-                                            {{ $groupSummary['required_count'] }} yêu cầu bắt buộc · {{ $groupSummary['optional_count'] }} tùy chọn
+                                            {{ $groupSummary['required_count'] }} yêu cầu bắt buộc · {{ $groupOptionalCount }} tùy chọn
                                         </p>
                                     </div>
                                 </div>
 
-                                <div>
-                                    @if($groupSummary['total_requirements'] === 0)
+                                <div class="flex flex-col items-start gap-2 sm:items-end">
+                                    @if(empty($groupReqs))
                                         <span class="rounded-full bg-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                             ℹ Chưa cấu hình hồ sơ
                                         </span>
@@ -647,14 +592,31 @@
                                         <span class="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
                                             ℹ Không có hồ sơ bắt buộc
                                         </span>
-                                    @elseif($groupSummary['has_all_required_submitted'])
+                                    @elseif($groupSummary['can_submit'])
                                         <span class="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                                             ✔ Đủ hồ sơ ngành này
                                         </span>
                                     @else
                                         <span class="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                             Thiếu {{ $groupSummary['required_missing_count'] + $groupSummary['required_rejected_count'] }} tài liệu bắt buộc
+                                             Thiếu {{ $groupSummary['missing_count'] }} tài liệu bắt buộc
                                         </span>
+                                    @endif
+                                    @if($teachingField->approval_status === 'approved')
+                                        <span class="text-xs font-bold text-emerald-700">✅ Đã duyệt — có thể tạo và quản lý khóa học</span>
+                                    @elseif($teachingField->approval_status === 'pending')
+                                        <span class="text-xs font-bold text-amber-700">⏳ Chờ admin duyệt</span>
+                                    @elseif($teachingField->approval_status === 'rejected')
+                                        <span class="text-xs font-bold text-rose-700">❌ Bị từ chối: {{ $teachingField->rejection_reason }}</span>
+                                    @elseif($teachingField->approval_status === 'superseded')
+                                        <span class="text-xs font-bold text-slate-600">⛔ Đã thay thế — vẫn giữ lịch sử và quản lý khóa học cũ</span>
+                                    @else
+                                        <span class="text-xs font-bold text-slate-600">📝 Chưa gửi xét duyệt</span>
+                                    @endif
+                                    @if($teachingField->isEditable())
+                                        <form method="POST" action="{{ route('instructor.profile.teaching-fields.submit-review', $teachingField) }}">
+                                            @csrf
+                                            <button {{ $groupSummary['can_submit'] ? '' : 'disabled' }} class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Gửi xét duyệt ngành này</button>
+                                        </form>
                                     @endif
                                 </div>
                             </div>
@@ -671,7 +633,7 @@
                                             $docs = $item['documents'];
                                             $status = $item['status'];
                                         @endphp
-                                        <div class="rounded-2xl border {{ $req->is_required ? ($item['is_fulfilled'] ? 'border-emerald-200 bg-white dark:bg-slate-800/90' : 'border-amber-200 bg-white dark:bg-slate-800/90') : 'border-slate-200 bg-white dark:bg-slate-800/90' }} p-4.5 transition">
+                                        <div class="rounded-2xl border {{ $req->is_required ? (in_array($status, ['draft', 'pending', 'approved'], true) ? 'border-emerald-200 bg-white dark:bg-slate-800/90' : 'border-amber-200 bg-white dark:bg-slate-800/90') : 'border-slate-200 bg-white dark:bg-slate-800/90' }} p-4.5 transition">
                                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                 <div class="space-y-1 min-w-0">
                                                     <div class="flex flex-wrap items-center gap-2">
@@ -691,15 +653,15 @@
                                                         {{-- Badge trạng thái --}}
                                                         @if($status === 'approved')
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                                                ✔ Đã duyệt ({{ $item['approved_count'] }})
+                                                                ✔ Đã duyệt ({{ $docs->where('status', 'approved')->count() }})
                                                             </span>
                                                          @elseif($status === 'pending')
                                                              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                                                  Đã nộp - Chờ duyệt ({{ $item['pending_count'] }})
+                                                                  Đã nộp - Chờ duyệt ({{ $docs->where('status', 'pending')->count() }})
                                                              </span>
                                                         @elseif($status === 'draft')
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                                                Chưa gửi ({{ $item['draft_count'] }})
+                                                                Chưa gửi ({{ $docs->where('status', 'draft')->count() }})
                                                             </span>
                                                         @elseif($status === 'rejected')
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
@@ -719,12 +681,14 @@
                                                     @endif
                                                 </div>
 
-                                                <button type="button"
-                                                        @click="activeRequirementId = {{ $req->id }}; activeRequirementTitle = '{{ addslashes($req->document_title) }} ({{ addslashes($groupCat->name) }})'; activeDocType = '{{ $req->document_type }}'; uploadModal = true"
-                                                        class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#0056D2] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0046B8]">
-                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                                                    <span>Tải lên</span>
-                                                </button>
+                                                @if($teachingField->isEditable())
+                                                    <button type="button"
+                                                            @click="activeTeachingFieldId = {{ $teachingField->id }}; activeRequirementId = {{ $req->id }}; activeRequirementTitle = @js($req->document_title.' ('.$teachingField->category->name.')'); activeDocType = '{{ $req->document_type }}'; uploadModal = true"
+                                                            class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#0056D2] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0046B8]">
+                                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                                        <span>Tải lên</span>
+                                                    </button>
+                                                @endif
                                             </div>
 
                                             {{-- Danh sách file đã nộp cho requirement này --}}
@@ -776,8 +740,8 @@
                                                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                                                         </button>
                                                                     </form>
-                                                                @elseif($doc->isRejected())
-                                                                    <button type="button" @click="activeRequirementId = {{ $doc->requirement_id }}; activeRequirementTitle = '{{ addslashes($req->document_title) }}'; activeDocType = '{{ $doc->document_type }}'; uploadModal = true" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] hover:bg-blue-100">Tải file thay thế</button>
+                                                                @elseif($doc->isRejected() && $teachingField->isEditable())
+                                                                    <button type="button" @click="activeTeachingFieldId = {{ $teachingField->id }}; activeRequirementId = {{ $doc->requirement_id }}; activeRequirementTitle = @js($req->document_title.' ('.$teachingField->category->name.')'); activeDocType = '{{ $doc->document_type }}'; uploadModal = true" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] hover:bg-blue-100">Tải file thay thế</button>
                                                                 @endif
                                                             </div>
                                                         </div>

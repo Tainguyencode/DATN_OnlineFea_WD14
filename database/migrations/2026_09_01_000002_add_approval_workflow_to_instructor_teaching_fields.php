@@ -31,8 +31,11 @@ return new class extends Migration
                 $table->text('rejection_reason')->nullable()->after('reviewed_by');
             }
             if (! Schema::hasColumn('instructor_profile_teaching_fields', 'replace_of_teaching_field_id')) {
-                $table->foreignId('replace_of_teaching_field_id')->nullable()->after('rejection_reason')
-                    ->constrained('instructor_profile_teaching_fields')->nullOnDelete();
+                $table->foreignId('replace_of_teaching_field_id')->nullable()->after('rejection_reason');
+                $table->foreign('replace_of_teaching_field_id', 'itf_replace_of_field_fk')
+                    ->references('id')
+                    ->on('instructor_profile_teaching_fields')
+                    ->nullOnDelete();
             }
         });
 
@@ -63,7 +66,8 @@ return new class extends Migration
 
         Schema::table('instructor_profile_teaching_fields', function (Blueprint $table) {
             if (Schema::hasColumn('instructor_profile_teaching_fields', 'replace_of_teaching_field_id')) {
-                $table->dropConstrainedForeignId('replace_of_teaching_field_id');
+                $table->dropForeign('itf_replace_of_field_fk');
+                $table->dropColumn('replace_of_teaching_field_id');
             }
             if (Schema::hasColumn('instructor_profile_teaching_fields', 'reviewed_by')) {
                 $table->dropConstrainedForeignId('reviewed_by');

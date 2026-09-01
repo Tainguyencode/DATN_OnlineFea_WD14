@@ -233,12 +233,41 @@ class InstructorProfileController extends Controller
             'bio' => $validated['bio'] ?? $profile->bio ?? '',
         ])->save();
 
+        $teachingFieldStateBefore = $profile->teachingFields()
+            ->orderBy('id')
+            ->get(['id', 'category_id', 'approval_status'])
+            ->map(fn (InstructorTeachingField $field) => [
+                'id' => (int) $field->id,
+                'category_id' => (int) $field->category_id,
+                'approval_status' => $field->approval_status,
+            ])
+            ->all();
+
         // Đồng bộ các khối ngành giảng dạy chi tiết
         $profile->saveTeachingFieldRequests($validated['teaching_fields']);
 
+        $teachingFieldStateAfter = $profile->teachingFields()
+            ->orderBy('id')
+            ->get(['id', 'category_id', 'approval_status'])
+            ->map(fn (InstructorTeachingField $field) => [
+                'id' => (int) $field->id,
+                'category_id' => (int) $field->category_id,
+                'approval_status' => $field->approval_status,
+            ])
+            ->all();
+        $hasTeachingFieldRequestChanges = $user->instructor_status === 'approved'
+            && $teachingFieldStateBefore !== $teachingFieldStateAfter
+            && collect($teachingFieldStateAfter)->contains(
+                fn (array $field) => $field['approval_status'] === InstructorTeachingField::STATUS_DRAFT
+            );
+
         ActivityLogService::log($user->id, 'update_instructor_profile', User::class, $user->id, null, $request);
 
-        return back()->with('success', 'Cập nhật thông tin hồ sơ thành công.');
+        $successMessage = $hasTeachingFieldRequestChanges
+            ? 'Đã lưu yêu cầu thay đổi ngành giảng dạy. Vui lòng hoàn thiện hồ sơ và gửi Admin xét duyệt.'
+            : 'Cập nhật thông tin hồ sơ thành công.';
+
+        return back()->with('success', $successMessage);
     }
 
     public function uploadDocument(Request $request): RedirectResponse
