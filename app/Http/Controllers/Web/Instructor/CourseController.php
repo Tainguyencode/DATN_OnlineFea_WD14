@@ -717,13 +717,14 @@ class CourseController extends Controller
         );
         abort_unless($belongsToCourse, 404, 'Bài quiz không thuộc khóa học này.');
 
-        $review = $quizService->buildAttemptReview($attempt);
+        $policy = app(\App\Services\QuizAttemptService::class)->reviewPolicy($attempt, auth()->user());
+        $review = $quizService->buildAttemptReview($attempt, $policy);
 
         return view('instructor.courses.student_quiz_review', [
             'course' => $course,
             'student' => $student,
             'quiz' => $quiz,
-            'attempt' => $attempt,
+            'attempt' => $review['attempt'],
             'review' => $review,
         ]);
     }

@@ -32,22 +32,29 @@ class QuizAttemptResultService
         abort_unless($attempt->isFinalized(), 404);
         abort_unless($attempt->quiz && (int) $attempt->quiz->lesson_id === (int) $lesson->id, 404);
         abort_unless($attempt->quizVersion && (int) $attempt->quizVersion->quiz_id === (int) $attempt->quiz_id, 404);
+        $policy = app(QuizAttemptService::class)->reviewPolicy($attempt, $user);
+        $questions = $this->questions($attempt, $attempt->quizVersion, $policy['review_mode']);
+        $attemptForView = clone $attempt;
+        $attemptForView->setRelations([]);
+        $versionForView = clone $attempt->quizVersion;
+        $versionForView->setRelations([]);
 
         return [
-            'attempt' => $attempt,
+            'attempt' => $attemptForView,
             'quiz' => $attempt->quiz,
-            'version' => $attempt->quizVersion,
-            'questions' => $this->questions($attempt, $attempt->quizVersion),
+            'version' => $versionForView,
+            'questions' => $questions,
             'regrade' => $attempt->regrades->sortByDesc('id')->first(),
+            ...$policy,
         ];
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function questions(QuizAttempt $attempt, QuizVersion $version): array
+    private function questions(QuizAttempt $attempt, QuizVersion $version, string $reviewMode): array
     {
         $answersByQuestionVersion = $attempt->attemptAnswers->groupBy('question_version_id');
 
-        return app(QuizAttemptPresentationService::class)->orderedQuestionData($attempt)->map(function (array $data, int $index) use ($answersByQuestionVersion, $attempt): array {
+        return app(QuizAttemptPresentationService::class)->orderedQuestionData($attempt)->map(function (array $data, int $index) use ($answersByQuestionVersion, $attempt, $reviewMode): array {
             $mapping = $data['mapping'];
             $questionVersion = $data['questionVersion'];
             $options = $data['options'];
@@ -73,7 +80,7 @@ class QuizAttemptResultService
             $missingSelection = count(array_diff($persistedAnswerIds, $selectedIds)) > 0
                 || count(array_diff($storedAnswerIds, $persistedAnswerIds)) > 0;
 
-            return [
+            $questionReview = [
                 'number' => $index + 1,
                 'question_id' => (int) $mapping->question_id,
                 'question_version_id' => (int) $questionVersion->id,
@@ -81,19 +88,35 @@ class QuizAttemptResultService
                 'image_url' => $questionVersion->image_path ? asset('storage/'.$questionVersion->image_path) : null,
                 'type' => $questionVersion->type,
                 'points' => (int) $questionVersion->points,
-                'explanation' => $questionVersion->explanation,
                 'is_correct' => $rows->contains(fn ($answer): bool => (bool) $answer->is_correct),
                 'is_excluded' => $mapping->invalidations
                     ->contains('status', QuizVersionQuestionInvalidation::STATUS_ACTIVE),
                 'is_unanswered' => $selectedIds === [] && ! $missingSelection,
                 'has_missing_selection' => $missingSelection,
-                'options' => $options->map(fn ($option): array => [
-                    'id' => (int) $option->id,
-                    'text' => $option->option_text,
-                    'is_selected' => in_array((int) $option->id, $selectedIds, true),
-                    'is_correct' => (bool) $option->is_correct,
-                ])->values()->all(),
+                'options' => $options->map(function ($option) use ($selectedIds, $reviewMode): array {
+                    $optionId = (int) $option->id;
+                    $isSelected = in_array($optionId, $selectedIds, true);
+                    $review = [
+                        'id' => $optionId,
+                        'text' => $option->option_text,
+                        'is_selected' => $isSelected,
+                    ];
+
+                    if ($reviewMode === QuizAttemptService::REVIEW_MODE_FULL) {
+                        $review['is_correct'] = (bool) $option->is_correct;
+                    } elseif ($isSelected) {
+                        $review['selected_correct'] = (bool) $option->is_correct;
+                    }
+
+                    return $review;
+                })->values()->all(),
             ];
+
+            if ($reviewMode === QuizAttemptService::REVIEW_MODE_FULL) {
+                $questionReview['explanation'] = $questionVersion->explanation;
+            }
+
+            return $questionReview;
         })->all();
     }
 

@@ -35,10 +35,11 @@ class QuizController extends Controller
 
         $attempt = null;
         $attemptService = app(QuizAttemptService::class);
+        $availability = null;
         if (auth()->user()?->isStudent() && $isEnrolled) {
             $attempt = $attemptService->findInProgress($course, $lesson, auth()->user());
-            $completedAttempts = $attemptService->completedAttemptsCount($quiz, auth()->user());
-            if (! $attempt && ($quiz->max_attempts === null || $completedAttempts < $quiz->max_attempts)) {
+            $availability = $attemptService->attemptAvailability($quiz, auth()->user());
+            if (! $attempt && $availability['has_remaining_attempts']) {
                 $attempt = $attemptService->startOrResume($course, $lesson, auth()->user());
             }
             if ($attempt) {
@@ -46,10 +47,13 @@ class QuizController extends Controller
             }
         }
 
-        $attemptsCount = auth()->user()?->isStudent() ? $attemptService->completedAttemptsCount($quiz, auth()->user()) : 0;
-        $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
+        $availability ??= auth()->user()?->isStudent()
+            ? $attemptService->attemptAvailability($lesson->quiz, auth()->user())
+            : null;
+        $attemptsCount = $availability['attempts_used'] ?? 0;
+        $attemptLimitReached = $availability ? ! $availability['has_remaining_attempts'] : false;
         $canSubmit = $attempt !== null;
-        $canStart = auth()->user()?->isStudent() && $isEnrolled && (! $attemptLimitReached || $attempt !== null);
+        $canStart = auth()->user()?->isStudent() && $isEnrolled && ($availability['has_remaining_attempts'] ?? false);
 
         $player = app(LearningPlayerService::class)->buildPlayerContext($course, $lesson, auth()->user(), $canBypass);
         $quizContext = $player['quizContext'];
@@ -135,7 +139,7 @@ class QuizController extends Controller
 
         $attempt = $termination['attempt'];
         $quiz = $attemptService->projectQuiz($attempt);
-        $completedAttempts = $attemptService->completedAttemptsCount($quiz, $request->user());
+        $policy = $attemptService->reviewPolicy($attempt, $request->user());
 
         if ($termination['completed_now']) {
             $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService);
@@ -155,8 +159,9 @@ class QuizController extends Controller
                 'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]),
                 'result_url' => route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]),
             ],
-            'attempts_count' => $completedAttempts,
-            'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
+            'review_mode' => $policy['review_mode'],
+            'attempts_count' => $policy['attempts_used'],
+            'remaining_attempts' => $policy['remaining_attempts'],
         ]);
     }
 
@@ -177,10 +182,9 @@ class QuizController extends Controller
         }
 
         if ($request->expectsJson()) {
-            $gradedPayload = $graded;
-            if (isset($gradedPayload['questions'])) {
-                $gradedPayload['questions'] = array_values($gradedPayload['questions']);
-            }
+            $attemptService = app(QuizAttemptService::class);
+            $policy = $attemptService->reviewPolicy($attempt, $request->user());
+            $gradedPayload = app(QuizService::class)->submissionFeedback($graded, $policy['review_mode']);
 
             return response()->json([
                 'success' => true,
@@ -194,6 +198,8 @@ class QuizController extends Controller
                     'quiz_version_id' => $attempt->quiz_version_id,
                 ],
                 'graded' => $gradedPayload,
+                'review_mode' => $policy['review_mode'],
+                'remaining_attempts' => $policy['remaining_attempts'],
                 'quiz' => [
                     'id' => $quiz->id,
                     'version' => $quiz->version,
@@ -227,7 +233,8 @@ class QuizController extends Controller
             ? $this->recordAttemptProgress($request, $course, $lesson, $quiz, $attempt, $progressService)
             : [];
         $attemptService = app(QuizAttemptService::class);
-        $completedAttempts = $attemptService->completedAttemptsCount($quiz, $request->user());
+        $policy = $attemptService->reviewPolicy($attempt, $request->user());
+        $gradedPayload = app(QuizService::class)->submissionFeedback($graded, $policy['review_mode']);
 
         return response()->json([
             'success' => true,
@@ -247,21 +254,16 @@ class QuizController extends Controller
                 'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $attempt]),
                 'result_url' => route('learn.lessons.quiz.result', [$course->slug, $lesson, $attempt]),
             ],
-            'graded' => ['questions' => collect($graded['questions'])->map(fn ($result, $questionId) => [
-                'question_id' => (int) $questionId,
-                'selected_ids' => $result['selected_ids'],
-                'correct_ids' => $result['correct_ids'],
-                'is_correct' => $result['is_correct'],
-                'is_excluded' => $result['is_excluded'] ?? false,
-            ])->values()],
+            'graded' => $gradedPayload,
+            'review_mode' => $policy['review_mode'],
             'course_progress' => $progress['course_progress'] ?? null,
             'lesson_completed' => $progress['lesson_completed'] ?? (bool) LessonProgress::query()
                 ->where('user_id', $request->user()->id)
                 ->where('lesson_id', $lesson->id)
                 ->value('is_completed'),
             'next_lesson_url' => $this->nextLessonUrl($course, $lesson),
-            'attempts_count' => $completedAttempts,
-            'remaining_attempts' => $quiz->max_attempts === null ? null : max(0, $quiz->max_attempts - $completedAttempts),
+            'attempts_count' => $policy['attempts_used'],
+            'remaining_attempts' => $policy['remaining_attempts'],
         ]);
     }
 
@@ -299,14 +301,15 @@ class QuizController extends Controller
 
         abort_unless($canAccess, 403, 'Bạn không có quyền xem lại bài làm này.');
 
-        $review = $quizService->buildAttemptReview($attempt);
+        $policy = app(QuizAttemptService::class)->reviewPolicy($attempt, $user);
+        $review = $quizService->buildAttemptReview($attempt, $policy);
         $quiz = $review['quiz'];
 
         return view('courses.quiz-result', [
             'course' => $course,
             'lesson' => $lesson,
             'quiz' => $quiz,
-            'attempt' => $attempt,
+            'attempt' => $review['attempt'],
             'review' => $review,
         ]);
     }
