@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class InstructorProfile extends Model
 {
@@ -174,6 +175,7 @@ class InstructorProfile extends Model
     {
         $submittedFieldIds = collect($fieldsData)->pluck('teaching_field_id')->filter()->map(fn ($id) => (int) $id)->all();
         $submittedCategoryIds = collect($fieldsData)->pluck('category_id')->filter()->map(fn ($id) => (int) $id)->all();
+        $keptFieldIds = [];
         $omittedApprovedIds = $this->teachingFields()
             ->approved()
             ->whereNotIn('id', $submittedFieldIds ?: [0])
@@ -207,10 +209,31 @@ class InstructorProfile extends Model
                 'experience' => $fieldData['experience'] ?? null,
             ];
 
+            if ($existing?->approval_status === InstructorTeachingField::STATUS_PENDING) {
+                $changed = (int) $existing->category_id !== $categoryId
+                    || collect($attributes)->contains(fn ($value, $key) => (string) ($existing->{$key} ?? '') !== (string) ($value ?? ''));
+                if ($changed) {
+                    throw ValidationException::withMessages([
+                        'teaching_fields' => 'Ngành đang được xét duyệt nên không thể chỉnh sửa. Vui lòng chờ Admin phản hồi.',
+                    ]);
+                }
+
+                $keptFieldIds[] = (int) $existing->id;
+
+                continue;
+            }
+
+            if ($existing?->isSuperseded()) {
+                $keptFieldIds[] = (int) $existing->id;
+
+                continue;
+            }
+
             if ($existing?->isApproved() && (int) $existing->category_id === $categoryId) {
                 // Professional metadata is safe to keep current for an already
                 // approved teaching field; its authorization remains unchanged.
                 $existing->update($attributes);
+                $keptFieldIds[] = (int) $existing->id;
 
                 continue;
             }
@@ -223,6 +246,7 @@ class InstructorProfile extends Model
                     'reviewed_by' => null,
                     'rejection_reason' => null,
                 ]));
+                $keptFieldIds[] = (int) $existing->id;
 
                 continue;
             }
@@ -230,11 +254,29 @@ class InstructorProfile extends Model
             // Superseded records are immutable history. They deliberately stay
             // visible in the profile but must never be turned into a new draft
             // merely because the profile form is saved again.
-            if ($existing && in_array($existing->approval_status, [
-                InstructorTeachingField::STATUS_PENDING,
-                InstructorTeachingField::STATUS_SUPERSEDED,
-            ], true)) {
-                continue;
+            $explicitReplacementId = (int) ($fieldData['replace_of_teaching_field_id'] ?? 0);
+            if (! $existing && $explicitReplacementId) {
+                $replacement = $this->teachingFields()->find($explicitReplacementId);
+                if ($replacement?->approval_status === InstructorTeachingField::STATUS_PENDING) {
+                    throw ValidationException::withMessages([
+                        'teaching_fields' => 'Ngành đang được xét duyệt nên không thể thay thế.',
+                    ]);
+                }
+
+                if ($replacement?->isEditable() && $this->user?->instructor_status !== 'approved') {
+                    $replacement->update(array_merge($attributes, [
+                        'category_id' => $categoryId,
+                        'approval_status' => InstructorTeachingField::STATUS_DRAFT,
+                        'submitted_at' => null,
+                        'reviewed_at' => null,
+                        'reviewed_by' => null,
+                        'rejection_reason' => null,
+                        'replace_of_teaching_field_id' => null,
+                    ]));
+                    $keptFieldIds[] = (int) $replacement->id;
+
+                    continue;
+                }
             }
 
             $candidate = $this->teachingFields()
@@ -243,7 +285,9 @@ class InstructorProfile extends Model
                 ->first();
 
             if ($candidate && $candidate->approval_status === InstructorTeachingField::STATUS_PENDING) {
-                continue;
+                throw ValidationException::withMessages([
+                    'teaching_fields' => 'Ngành này đã có yêu cầu đang chờ xét duyệt.',
+                ]);
             }
 
             $replacementId = $existing?->isApproved() ? $existing->id : null;
@@ -276,8 +320,41 @@ class InstructorProfile extends Model
 
             if ($candidate) {
                 $candidate->update($payload);
+                $keptFieldIds[] = (int) $candidate->id;
             } else {
-                $this->teachingFields()->create($payload);
+                $created = $this->teachingFields()->create($payload);
+                $keptFieldIds[] = (int) $created->id;
+            }
+        }
+
+        $omittedDrafts = $this->teachingFields()
+            ->where('approval_status', InstructorTeachingField::STATUS_DRAFT)
+            ->when($keptFieldIds !== [], fn ($query) => $query->whereNotIn('id', $keptFieldIds))
+            ->get();
+        if ($omittedDrafts->contains(fn (InstructorTeachingField $field) => $field->certificates()->exists())) {
+            throw ValidationException::withMessages([
+                'teaching_fields' => 'Vui lòng xóa tài liệu nháp của ngành trước khi xóa ngành khỏi hồ sơ.',
+            ]);
+        }
+        $this->teachingFields()->whereKey($omittedDrafts->pluck('id'))->delete();
+
+        if ($this->user?->instructor_status !== 'approved') {
+            $primary = $this->teachingFields()
+                ->whereNotIn('approval_status', [InstructorTeachingField::STATUS_SUPERSEDED])
+                ->orderBy('id')
+                ->first();
+            if ($primary) {
+                $this->teachingFields()->update(['is_primary' => false]);
+                $primary->update(['is_primary' => true]);
+                $category = Category::find($primary->category_id);
+                $this->update([
+                    'category_id' => $primary->category_id,
+                    'teaching_field' => $category?->name ?? $this->teaching_field,
+                    'organization' => $primary->organization,
+                    'position' => $primary->position,
+                    'specialty' => $primary->specialty,
+                    'experience' => $primary->experience,
+                ]);
             }
         }
     }

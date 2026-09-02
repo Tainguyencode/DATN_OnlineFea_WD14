@@ -96,6 +96,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'email_verified_at' => now(),
         ]);
 
+        Storage::disk('public')->put('instructor_cvs/workflow.pdf', 'pdf');
         InstructorProfile::create([
             'user_id' => $this->instructor->id,
             'category_id' => $this->categoryWeb->id,
@@ -106,6 +107,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'phone' => '0987654321',
             'agree_information' => true,
             'agree_terms' => true,
+            'cv' => 'instructor_cvs/workflow.pdf',
         ]);
     }
 
@@ -420,7 +422,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'instructor_status' => 'pending',
             'email_verified_at' => now(),
         ]);
-        InstructorProfile::create(['user_id' => $instructor->id]);
+        InstructorProfile::create(['user_id' => $instructor->id, 'cv' => 'instructor_cvs/workflow.pdf']);
 
         $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($instructor);
 
@@ -668,6 +670,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
      */
     public function test_admin_cannot_approve_instructor_when_required_documents_are_missing(): void
     {
+        $this->queueGlobalReview();
         // Giảng viên mới chỉ nộp 1 trong 2 tài liệu bắt buộc (Bằng tốt nghiệp)
         InstructorCertificate::create([
             'user_id' => $this->instructor->id,
@@ -697,6 +700,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
      */
     public function test_admin_cannot_approve_instructor_when_required_document_is_rejected(): void
     {
+        $this->queueGlobalReview();
         // Nộp bằng (approved)
         InstructorCertificate::create([
             'user_id' => $this->instructor->id,
@@ -740,6 +744,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
      */
     public function test_admin_can_approve_instructor_when_all_required_documents_are_submitted(): void
     {
+        $this->queueGlobalReview();
         InstructorCertificate::create([
             'user_id' => $this->instructor->id,
             'requirement_id' => $this->reqDegree->id,
@@ -979,6 +984,18 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
     private function createDocument(InstructorDocumentRequirement $requirement, string $status = 'pending'): InstructorCertificate
     {
         return $this->createDocumentForUser($this->instructor, $requirement, $status);
+    }
+
+    private function queueGlobalReview(): void
+    {
+        $this->instructor->update([
+            'submitted_for_review_at' => now(),
+            'needs_admin_review' => true,
+        ]);
+        InstructorApplication::query()->updateOrCreate(
+            ['user_id' => $this->instructor->id],
+            ['status' => 'pending', 'cv_path' => $this->instructor->instructorProfile?->cv],
+        );
     }
 
     private function createDocumentForUser(User $user, InstructorDocumentRequirement $requirement, string $status = 'pending'): InstructorCertificate

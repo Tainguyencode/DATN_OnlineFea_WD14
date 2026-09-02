@@ -34,6 +34,11 @@ class EnsureApprovedInstructor
                 ->with('error', 'Tài khoản giảng viên của bạn đang bị tạm khóa. Vui lòng kiểm tra mục Hồ sơ & Chứng chỉ.');
         }
 
+        if (! $user->isApprovedInstructor()) {
+            return redirect()->route('instructor.profile')
+                ->with('error', 'Tài khoản giảng viên của bạn chưa được phê duyệt. Vui lòng hoàn thiện hồ sơ và chờ Admin xét duyệt.');
+        }
+
         return $next($request);
     }
 }

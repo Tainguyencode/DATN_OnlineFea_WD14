@@ -407,9 +407,13 @@
                                         <span class="inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 dark:bg-rose-900/40 dark:text-rose-300">
                                              Từ chối
                                         </span>
-                                    @else
+                                    @elseif($app->isGlobalReviewPending())
                                         <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                                              Chờ duyệt
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                             Chưa gửi xét duyệt
                                         </span>
                                     @endif
                                 </td>
@@ -442,7 +446,7 @@
                                         </div>
 
                                         {{-- Duyệt --}}
-                                        @if($app->instructor_status !== 'approved')
+                                        @if($app->isGlobalReviewPending() && $app->instructorApplication?->isPending())
                                             <div class="relative group">
                                                 <form method="POST" action="{{ route('admin.instructors.applications.approve', $app) }}" class="inline">
                                                     @csrf
@@ -460,7 +464,7 @@
                                         @endif
 
                                         {{-- Từ chối --}}
-                                        @if($app->instructor_status !== 'rejected')
+                                        @if($app->isGlobalReviewPending() && $app->instructorApplication?->isPending())
                                             <div class="relative group">
                                                 <button type="button"
                                                         @click="rejectModal = true; rejectUrl = '{{ route('admin.instructors.applications.reject', $app) }}'; rejectName = '{{ $app->name }}'"

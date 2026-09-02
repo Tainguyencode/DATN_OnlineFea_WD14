@@ -5,7 +5,16 @@
 ])
 
 @php
-    $pendingInstructorsCount = \App\Models\User::where('role', 'instructor')->where('instructor_status', 'pending')->count();
+    $pendingInstructorsCount = \App\Models\User::query()->pendingInstructorReview()->count();
+    $pendingTeachingFieldsCount = \App\Models\InstructorTeachingField::query()
+        ->where('approval_status', \App\Models\InstructorTeachingField::STATUS_PENDING)
+        ->whereHas('profile.user', fn ($query) => $query->where('instructor_status', 'approved'))
+        ->count();
+    $pendingSupplementsCount = \App\Models\InstructorCertificate::query()
+        ->where('status', 'pending')
+        ->whereHas('user', fn ($query) => $query->where('instructor_status', 'approved'))
+        ->whereHas('teachingField', fn ($query) => $query->where('approval_status', \App\Models\InstructorTeachingField::STATUS_APPROVED))
+        ->count();
     $pendingCoursesCount = \App\Models\Course::whereIn('status', [
         \App\Enums\CourseStatus::PendingReview->value,
         \App\Enums\CourseStatus::PendingUpdate->value,
@@ -37,6 +46,22 @@
                     'badge' => $pendingInstructorsCount > 0 ? (string) $pendingInstructorsCount : null,
                     'badge_color' => 'bg-amber-500',
                     'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0l-3 3m3-3l3 3M9 7h6"/></svg>',
+                ],
+                [
+                    'route' => 'admin.instructors.teaching-fields.index',
+                    'active' => ['admin.instructors.teaching-fields.*'],
+                    'label' => 'Duyệt ngành giảng dạy',
+                    'badge' => $pendingTeachingFieldsCount > 0 ? (string) $pendingTeachingFieldsCount : null,
+                    'badge_color' => 'bg-amber-500',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                ],
+                [
+                    'route' => 'admin.instructors.supplements.index',
+                    'active' => ['admin.instructors.supplements.*'],
+                    'label' => 'Tài liệu bổ sung',
+                    'badge' => $pendingSupplementsCount > 0 ? (string) $pendingSupplementsCount : null,
+                    'badge_color' => 'bg-rose-500',
+                    'icon' => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>',
                 ],
                 [
                     'route' => 'admin.instructors.statistics',

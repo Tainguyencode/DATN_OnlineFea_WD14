@@ -9,6 +9,7 @@ use App\Models\InstructorProfile;
 use App\Models\InstructorTeachingField;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class InstructorRequirementService
@@ -478,9 +479,65 @@ class InstructorRequirementService
             ->update(['status' => 'pending']);
     }
 
+    public function categoryHasPendingReview(int $categoryId): bool
+    {
+        $categoryIds = Category::query()
+            ->whereKey($categoryId)
+            ->orWhere('parent_id', $categoryId)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($categoryIds === []) {
+            return false;
+        }
+
+        if (InstructorTeachingField::query()
+            ->whereIn('category_id', $categoryIds)
+            ->where('approval_status', InstructorTeachingField::STATUS_PENDING)
+            ->exists()) {
+            return true;
+        }
+
+        if (User::query()->pendingInstructorReview()
+            ->whereHas('instructorProfile.teachingFields', fn ($query) => $query->whereIn('category_id', $categoryIds))
+            ->exists()) {
+            return true;
+        }
+
+        return InstructorCertificate::query()
+            ->where('status', 'pending')
+            ->whereHas('teachingField', fn ($query) => $query->whereIn('category_id', $categoryIds))
+            ->exists();
+    }
+
     /** @param array<int, string> $fulfillingStatuses */
     private function getEligibilityForStatuses(User $instructor, array $fulfillingStatuses): array
     {
+        $profile = $instructor->relationLoaded('instructorProfile')
+            ? $instructor->instructorProfile
+            : $instructor->instructorProfile()->first();
+        $missingProfileItems = [];
+
+        if (! $instructor->hasVerifiedEmail()) {
+            $missingProfileItems[] = 'Email chưa được xác minh';
+        }
+
+        if (! $profile?->cv || ! Storage::disk('public')->exists($profile->cv)) {
+            $missingProfileItems[] = 'CV';
+        }
+
+        if ($missingProfileItems !== []) {
+            return [
+                'required_count' => count($missingProfileItems),
+                'submitted_count' => 0,
+                'missing_count' => count($missingProfileItems),
+                'missing_titles' => $missingProfileItems,
+                'can_submit' => false,
+                'reason' => 'Vui lòng xác minh email và tải lên CV hợp lệ trước khi gửi xét duyệt.',
+            ];
+        }
+
         $requirements = $this->getRequirementsForInstructor($instructor);
         $summary = $requirements['summary'];
 

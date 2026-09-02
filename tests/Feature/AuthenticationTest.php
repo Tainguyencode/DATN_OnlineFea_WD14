@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\VerifyEmailCodeNotification;
@@ -127,10 +128,12 @@ class AuthenticationTest extends TestCase
     public function test_instructor_registration_succeeds(): void
     {
         Notification::fake();
+        $category = Category::create(['name' => 'Registration category', 'slug' => 'registration-category', 'status' => true]);
 
         $response = $this->postRegister('instructor', [
             'email' => 'new-instructor@example.com',
             'name' => 'Giảng viên Mới',
+            'category_id' => $category->id,
         ]);
 
         $response->assertRedirect(route('verification.notice'));
@@ -138,6 +141,11 @@ class AuthenticationTest extends TestCase
 
         $user = User::query()->where('email', 'new-instructor@example.com')->firstOrFail();
         $this->assertSame('instructor', $user->role);
+        $this->assertSame('pending', $user->instructor_status);
+        $this->assertNull($user->submitted_for_review_at);
+        $this->assertFalse($user->needs_admin_review);
+        $this->assertNull($user->instructorApplication);
+        $this->assertSame('draft', $user->instructorProfile?->teachingFields()->first()?->approval_status);
         $this->assertTrue($this->userHasPrimaryRolePivot($user, 'instructor'));
     }
 
@@ -152,6 +160,7 @@ class AuthenticationTest extends TestCase
         $user = User::query()->where('email', 'instructor-no-certificates@example.com')->firstOrFail();
 
         $this->assertSame(0, $user->instructorCertificates()->count());
+        $this->assertNull($user->instructorApplication);
         $this->assertNull($user->instructorApplication?->certificate_path);
     }
 

@@ -45,7 +45,7 @@ class CourseReviewWorkflowTest extends TestCase
 
     public function test_incomplete_course_can_be_submitted(): void
     {
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'title' => 'Incomplete',
@@ -77,7 +77,7 @@ class CourseReviewWorkflowTest extends TestCase
 
     public function test_course_with_enough_content_can_be_submitted(): void
     {
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = $this->makeSubmittableCourse($instructor);
 
         $review = app(CourseReviewService::class)->submitForReview($course, $instructor);
@@ -107,7 +107,7 @@ class CourseReviewWorkflowTest extends TestCase
     public function test_admin_reject_requires_minimum_comment_length(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = $this->makeSubmittableCourse($instructor);
         app(CourseReviewService::class)->submitForReview($course, $instructor);
 
@@ -118,7 +118,7 @@ class CourseReviewWorkflowTest extends TestCase
     public function test_reject_creates_history_and_instructor_can_see_reason(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = $this->makeSubmittableCourse($instructor);
         app(CourseReviewService::class)->submitForReview($course, $instructor);
 
@@ -133,7 +133,7 @@ class CourseReviewWorkflowTest extends TestCase
     public function test_admin_reject_assigns_reviewer_only_when_reviewed(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = $this->makeSubmittableCourse($instructor);
         $pendingReview = app(CourseReviewService::class)->submitForReview($course, $instructor);
 
@@ -174,7 +174,7 @@ class CourseReviewWorkflowTest extends TestCase
     public function test_review_history_is_not_overwritten_on_resubmit(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = $this->makeSubmittableCourse($instructor);
 
         app(CourseReviewService::class)->submitForReview($course, $instructor);
@@ -194,7 +194,10 @@ class CourseReviewWorkflowTest extends TestCase
             'status' => true,
         ]);
         $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
-        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => 'approved',
+        ]);
 
         return Course::create([
             'instructor_id' => $instructor->id,
@@ -255,7 +258,7 @@ class CourseReviewWorkflowTest extends TestCase
 
     public function test_cannot_submit_course_for_review_without_copyright_agreement(): void
     {
-        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $course = $this->makeSubmittableCourse($instructor);
         $course->update(['copyright_agreed' => false]);
 

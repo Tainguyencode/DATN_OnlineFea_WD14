@@ -180,7 +180,9 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $parent = Category::create(['name' => 'Công nghệ', 'slug' => 'cong-nghe', 'status' => true]);
         $categoryA = Category::create(['name' => 'Web', 'slug' => 'web', 'parent_id' => $parent->id, 'status' => true]);
         $categoryB = Category::create(['name' => 'Mobile', 'slug' => 'mobile', 'parent_id' => $parent->id, 'status' => true]);
-        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $categoryA->id]);
+        Storage::fake('public');
+        Storage::disk('public')->put('instructor_cvs/scoped-fields.pdf', 'pdf');
+        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $categoryA->id, 'cv' => 'instructor_cvs/scoped-fields.pdf']);
         $fieldA = InstructorTeachingField::create(['instructor_profile_id' => $profile->id, 'category_id' => $categoryA->id, 'is_primary' => true, 'approval_status' => 'draft']);
         $fieldB = InstructorTeachingField::create(['instructor_profile_id' => $profile->id, 'category_id' => $categoryB->id, 'approval_status' => 'draft']);
         $requirement = InstructorDocumentRequirement::create([
