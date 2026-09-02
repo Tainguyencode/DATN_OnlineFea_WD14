@@ -27,7 +27,7 @@ class InstructorTeachingFieldReviewController extends Controller
             ->withQueryString();
 
         $requirements = app(InstructorRequirementService::class);
-        $fields->getCollection()->each(fn (InstructorTeachingField $field) => $field->setAttribute('requirement_data', $requirements->getTeachingFieldRequirementData($field)));
+        $fields->getCollection()->each(fn (InstructorTeachingField $field) => $field->setAttribute('requirement_data', $requirements->getTeachingFieldAdminReviewData($field)));
 
         return view('admin.instructors.teaching-fields.index', compact('fields', 'status'));
     }
@@ -51,7 +51,9 @@ class InstructorTeachingFieldReviewController extends Controller
             $lockedCertificates = $owner->instructorCertificates()->orderBy('id')->lockForUpdate()->get()
                 ->where('instructor_teaching_field_id', $field->id)->values();
             $field->setRelation('certificates', $lockedCertificates);
-            $eligibility = app(InstructorRequirementService::class)->getTeachingFieldAdminApprovalEligibility($field);
+            $requirements = app(InstructorRequirementService::class);
+            $currentRequirementIds = $requirements->getRequirementsForTeachingField($field)->pluck('id');
+            $eligibility = $requirements->getTeachingFieldAdminApprovalEligibility($field);
             abort_unless(
                 $eligibility['can_submit'],
                 422,
@@ -77,6 +79,7 @@ class InstructorTeachingFieldReviewController extends Controller
 
             $field->certificates()
                 ->where('status', 'pending')
+                ->whereIn('requirement_id', $currentRequirementIds)
                 ->update([
                     'status' => 'approved',
                     'reviewed_at' => now(),

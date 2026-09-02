@@ -354,6 +354,60 @@ class InstructorRequirementService
         ];
     }
 
+    /**
+     * Build the current package shown to Admin for an individual teaching-field review.
+     *
+     * Only submitted evidence can belong to this package. The certificates relation
+     * already scopes documents to the teaching field; requirement_id then scopes each
+     * document to the current requirement resolved for that field.
+     *
+     * @return array{requirements: array<int, array<string, mixed>>, summary: array<string, mixed>}
+     */
+    public function getTeachingFieldAdminReviewData(InstructorTeachingField $field): array
+    {
+        $field->loadMissing(['category.parent', 'certificates.requirement']);
+        $requirements = $this->getRequirementsForTeachingField($field);
+        $reviewableCertificates = $field->certificates
+            ->whereIn('status', ['pending', 'approved']);
+        $items = [];
+        $requiredCount = 0;
+        $fulfilledCount = 0;
+        $missingTitles = [];
+
+        foreach ($requirements as $requirement) {
+            $documents = $reviewableCertificates
+                ->where('requirement_id', $requirement->id)
+                ->values();
+            $status = $documents->contains('status', 'approved')
+                ? 'approved'
+                : ($documents->contains('status', 'pending') ? 'pending' : 'missing');
+
+            if ($requirement->is_required) {
+                $requiredCount++;
+                if ($documents->isNotEmpty()) {
+                    $fulfilledCount++;
+                } else {
+                    $missingTitles[] = $requirement->document_title;
+                }
+            }
+
+            $items[] = compact('requirement', 'documents', 'status');
+        }
+
+        return [
+            'requirements' => $items,
+            'summary' => [
+                'required_count' => $requiredCount,
+                'fulfilled_count' => $fulfilledCount,
+                'submitted_count' => $fulfilledCount,
+                'missing_count' => count($missingTitles),
+                'missing_titles' => $missingTitles,
+                'can_approve' => $missingTitles === [],
+                'can_submit' => $missingTitles === [],
+            ],
+        ];
+    }
+
     /** @return array{required_count: int, submitted_count: int, missing_count: int, missing_titles: array<int, string>, can_submit: bool, reason: ?string} */
     public function getTeachingFieldSubmitEligibility(InstructorTeachingField $field): array
     {
@@ -373,29 +427,15 @@ class InstructorRequirementService
     /** @return array{required_count: int, submitted_count: int, missing_count: int, missing_titles: array<int, string>, can_submit: bool, reason: ?string} */
     public function getTeachingFieldAdminApprovalEligibility(InstructorTeachingField $field): array
     {
-        $field->loadMissing(['category.parent', 'certificates']);
-        $required = $this->getRequirementsForTeachingField($field)->where('is_required', true);
-        $missingTitles = [];
-
-        foreach ($required as $requirement) {
-            $hasReviewableDocument = $field->certificates->contains(
-                fn (InstructorCertificate $certificate) => (int) $certificate->requirement_id === (int) $requirement->id
-                    && in_array($certificate->status, ['pending', 'approved'], true)
-            );
-            if (! $hasReviewableDocument) {
-                $missingTitles[] = $requirement->document_title;
-            }
-        }
-
-        $missingCount = count($missingTitles);
+        $summary = $this->getTeachingFieldAdminReviewData($field)['summary'];
 
         return [
-            'required_count' => $required->count(),
-            'submitted_count' => $required->count() - $missingCount,
-            'missing_count' => $missingCount,
-            'missing_titles' => $missingTitles,
-            'can_submit' => $missingCount === 0,
-            'reason' => $missingCount === 0 ? null : 'Ngành còn thiếu tài liệu đã gửi để Admin xét duyệt.',
+            'required_count' => $summary['required_count'],
+            'submitted_count' => $summary['fulfilled_count'],
+            'missing_count' => $summary['missing_count'],
+            'missing_titles' => $summary['missing_titles'],
+            'can_submit' => $summary['can_approve'],
+            'reason' => $summary['can_approve'] ? null : 'Ngành còn thiếu tài liệu đã gửi để Admin xét duyệt.',
         ];
     }
 

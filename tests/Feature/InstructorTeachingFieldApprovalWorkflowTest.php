@@ -520,6 +520,226 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
     }
 
+    public function test_admin_field_review_shows_only_the_current_add_field_package_with_all_active_requirements(): void
+    {
+        Storage::fake('local');
+        [$instructor, $admin, $fieldA, $fieldB, $categoryA, $categoryB, $requirementB] = $this->fixture();
+        $requirementB->update([
+            'description' => 'Bản scan bằng cấp thể hiện chuyên môn phù hợp.',
+            'sort_order' => 1,
+        ]);
+        $optionalMedia = InstructorDocumentRequirement::create([
+            'category_id' => $categoryB->id,
+            'document_type' => 'portfolio',
+            'document_title' => 'Video hoặc hồ sơ năng lực B',
+            'description' => 'Minh chứng bổ sung, không bắt buộc.',
+            'is_required' => false,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+        $optionalMissing = InstructorDocumentRequirement::create([
+            'category_id' => $categoryB->id,
+            'document_type' => 'other',
+            'document_title' => 'Tài liệu tham khảo B',
+            'is_required' => false,
+            'is_active' => true,
+            'sort_order' => 3,
+        ]);
+        InstructorDocumentRequirement::create([
+            'category_id' => $categoryB->id,
+            'document_type' => 'other',
+            'document_title' => 'Requirement B đã tắt',
+            'is_required' => true,
+            'is_active' => false,
+        ]);
+
+        $fileDocument = $this->certificate($instructor, $fieldB, $requirementB, 'pending');
+        $fileDocument->update([
+            'file_path' => 'testing/admin-b-proof.pdf',
+            'original_name' => 'bang-chuyen-mon-b.pdf',
+            'title' => 'Bằng chuyên môn đã nộp',
+            'mime_type' => 'application/pdf',
+            'source_type' => 'file',
+        ]);
+        Storage::disk('local')->put('testing/admin-b-proof.pdf', 'proof');
+
+        $urlDocument = $this->certificate($instructor, $fieldB, $optionalMedia, 'pending');
+        $urlDocument->update([
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/portfolio-b',
+            'file_path' => null,
+            'original_name' => null,
+            'title' => 'Portfolio trực tuyến B',
+        ]);
+        $videoDocument = $this->certificate($instructor, $fieldB, $optionalMedia, 'approved');
+        $videoDocument->update([
+            'source_type' => 'file',
+            'original_name' => 'gioi-thieu-b.mp4',
+            'title' => 'Video giới thiệu B',
+            'mime_type' => 'video/mp4',
+        ]);
+
+        $requirementA = $this->requirement($categoryA, 'Requirement riêng A');
+        $documentA = $this->certificate($instructor, $fieldA, $requirementA, 'pending');
+        $documentA->update(['original_name' => 'certificate-a-must-not-appear.pdf', 'title' => 'Certificate A hidden']);
+        $draftHistory = $this->certificate($instructor, $fieldB, $requirementB, 'draft');
+        $draftHistory->update(['original_name' => 'draft-history-b.pdf', 'title' => 'Draft history B hidden']);
+        $rejectedHistory = $this->certificate($instructor, $fieldB, $requirementB, 'rejected');
+        $rejectedHistory->update(['original_name' => 'rejected-history-b.pdf', 'title' => 'Rejected history B hidden']);
+        InstructorCertificate::create([
+            'user_id' => $instructor->id,
+            'instructor_teaching_field_id' => null,
+            'requirement_id' => $requirementB->id,
+            'file_path' => 'testing/legacy-unscoped.pdf',
+            'original_name' => 'legacy-unscoped.pdf',
+            'title' => 'Legacy unscoped hidden',
+            'document_type' => 'degree',
+            'status' => 'pending',
+            'uploaded_at' => now(),
+        ]);
+        $fieldB->update(['approval_status' => 'pending', 'submitted_at' => now()]);
+
+        $response = $this->actingAs($admin)->get(route('admin.instructors.teaching-fields.index'));
+
+        $response->assertOk()
+            ->assertSee('Đăng ký thêm ngành')
+            ->assertSee($requirementB->document_title)
+            ->assertSee('Bản scan bằng cấp thể hiện chuyên môn phù hợp.')
+            ->assertSee($optionalMedia->document_title)
+            ->assertSee($optionalMissing->document_title)
+            ->assertSee('Bắt buộc')
+            ->assertSee('Không bắt buộc')
+            ->assertSee('Chưa nộp')
+            ->assertSee('1/1 tài liệu bắt buộc hợp lệ')
+            ->assertSee('bang-chuyen-mon-b.pdf')
+            ->assertSee('Đã tải lên:')
+            ->assertSee(route('admin.instructors.applications.certificates.view', $fileDocument), false)
+            ->assertSee('Xem tài liệu')
+            ->assertSee('Xem video')
+            ->assertSee('Xem tệp')
+            ->assertDontSee('Requirement B đã tắt')
+            ->assertDontSee('certificate-a-must-not-appear.pdf')
+            ->assertDontSee('draft-history-b.pdf')
+            ->assertDontSee('rejected-history-b.pdf')
+            ->assertDontSee('legacy-unscoped.pdf');
+
+        $this->actingAs($admin)
+            ->get(route('admin.instructors.applications.certificates.view', $fileDocument))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    public function test_admin_field_review_shows_replacement_b_package_without_a_documents(): void
+    {
+        [$instructor, $admin, $fieldA, $fieldB, , , $requirementB] = $this->fixture();
+        $fieldB->update([
+            'approval_status' => 'pending',
+            'submitted_at' => now(),
+            'replace_of_teaching_field_id' => $fieldA->id,
+        ]);
+        $documentB = $this->certificate($instructor, $fieldB, $requirementB, 'pending');
+        $documentB->update(['original_name' => 'replacement-b.pdf', 'title' => 'Replacement B proof']);
+        InstructorCertificate::create([
+            'user_id' => $instructor->id,
+            'instructor_teaching_field_id' => $fieldA->id,
+            'requirement_id' => $requirementB->id,
+            'file_path' => 'testing/replacement-a.pdf',
+            'original_name' => 'replacement-a-must-not-appear.pdf',
+            'title' => 'Replacement A hidden',
+            'document_type' => 'degree',
+            'status' => 'approved',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.instructors.teaching-fields.index'))
+            ->assertOk()
+            ->assertSee("Thay thế ngành {$fieldA->category->name} bằng {$fieldB->category->name}")
+            ->assertSee('replacement-b.pdf')
+            ->assertDontSee('replacement-a-must-not-appear.pdf');
+    }
+
+    public function test_admin_approval_only_promotes_pending_documents_for_current_requirements_and_optional_missing_does_not_block(): void
+    {
+        [$instructor, $admin, , $fieldB, , $categoryB, $requirementB] = $this->fixture();
+        InstructorDocumentRequirement::create([
+            'category_id' => $categoryB->id,
+            'document_type' => 'portfolio',
+            'document_title' => 'Optional B không nộp',
+            'is_required' => false,
+            'is_active' => true,
+        ]);
+        $requiredDocument = $this->certificate($instructor, $fieldB, $requirementB, 'pending');
+        $otherCategory = Category::create(['name' => 'Ngành ngoài package', 'slug' => 'nganh-ngoai-package', 'status' => true]);
+        $otherRequirement = $this->requirement($otherCategory, 'Requirement ngoài package');
+        $unrelatedPending = $this->certificate($instructor, $fieldB, $otherRequirement, 'pending');
+        $fieldB->update(['approval_status' => 'pending', 'submitted_at' => now()]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.teaching-fields.approve', $fieldB))
+            ->assertRedirect();
+
+        $this->assertSame('approved', $fieldB->fresh()->approval_status);
+        $this->assertSame('approved', $requiredDocument->fresh()->status);
+        $this->assertSame('pending', $unrelatedPending->fresh()->status);
+    }
+
+    public function test_admin_review_keeps_child_parent_fallback_without_merging_parent_and_child_requirements(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $parent = Category::create(['name' => 'Công nghệ cha', 'slug' => 'cong-nghe-cha', 'status' => true]);
+        $child = Category::create(['name' => 'An ninh mạng con', 'slug' => 'an-ninh-mang-con', 'parent_id' => $parent->id, 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $child->id]);
+        $field = InstructorTeachingField::create([
+            'instructor_profile_id' => $profile->id,
+            'category_id' => $child->id,
+            'approval_status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+        $parentRequirement = $this->requirement($parent, 'Requirement fallback từ cha');
+        $this->certificate($instructor, $field, $parentRequirement, 'pending');
+
+        $this->actingAs($admin)
+            ->get(route('admin.instructors.teaching-fields.index'))
+            ->assertOk()
+            ->assertSee('Requirement fallback từ cha');
+
+        $childRequirement = $this->requirement($child, 'Requirement riêng của con');
+        $this->certificate($instructor, $field, $childRequirement, 'pending');
+
+        $this->actingAs($admin)
+            ->get(route('admin.instructors.teaching-fields.index'))
+            ->assertOk()
+            ->assertSee('Requirement riêng của con')
+            ->assertDontSee('Requirement fallback từ cha');
+    }
+
+    public function test_admin_summary_excludes_draft_and_rejected_history_and_direct_approval_still_fails(): void
+    {
+        [$instructor, $admin, , $fieldB, , , $requirementB] = $this->fixture();
+        $draft = $this->certificate($instructor, $fieldB, $requirementB, 'draft');
+        $draft->update(['original_name' => 'draft-only-history.pdf']);
+        $rejected = $this->certificate($instructor, $fieldB, $requirementB, 'rejected');
+        $rejected->update(['original_name' => 'rejected-only-history.pdf']);
+        $fieldB->update(['approval_status' => 'pending', 'submitted_at' => now()]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.instructors.teaching-fields.index'))
+            ->assertOk()
+            ->assertSee('0/1 tài liệu bắt buộc hợp lệ')
+            ->assertSee('Chưa nộp')
+            ->assertSee('disabled', false)
+            ->assertDontSee('draft-only-history.pdf')
+            ->assertDontSee('rejected-only-history.pdf');
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.teaching-fields.approve', $fieldB))
+            ->assertStatus(422);
+
+        $this->assertSame('pending', $fieldB->fresh()->approval_status);
+    }
+
     private function fixture(): array
     {
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
