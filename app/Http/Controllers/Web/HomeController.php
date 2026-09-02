@@ -27,7 +27,7 @@ class HomeController extends Controller
             ->orderByDesc('rating_avg')
             ->orderByDesc('enrollment_count')
             ->orderByDesc('published_at')
-            ->limit(4)
+            ->limit(8)
             ->get();
 
         $featuredCourses = $this->homepageCourseQuery()

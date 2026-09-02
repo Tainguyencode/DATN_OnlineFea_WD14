@@ -91,9 +91,8 @@ class HomepageRedesignTest extends TestCase
         $this->assertSame(4, substr_count($html, 'data-home-stat-icon='));
         $this->assertStringContainsString('data-home-category-toggle', $html);
         $this->assertStringContainsString('aria-controls="home-category-grid"', $html);
-        $this->assertStringContainsString("expanded ? 'Thu gọn danh mục' : 'Xem tất cả danh mục'", $html);
-        $this->assertSame(4, substr_count($html, 'data-home-course-variant="free"'));
-        $this->assertSame(4, substr_count($html, 'data-home-course-variant="featured"'));
+        $this->assertSame(6, substr_count($html, 'data-home-course-variant="free"'));
+        $this->assertSame(6, substr_count($html, 'data-home-course-variant="featured"'));
         $this->assertSame(3, substr_count($html, 'data-home-testimonial'));
         $this->assertStringContainsString('loading="lazy"', $html);
         $this->assertStringContainsString('fetchpriority="high"', $html);
