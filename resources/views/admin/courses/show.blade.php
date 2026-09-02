@@ -6,6 +6,7 @@
     $levelLabels = ['beginner' => 'Cơ bản', 'intermediate' => 'Trung cấp', 'advanced' => 'Nâng cao'];
     $typeLabels = ['video' => 'Video', 'text' => 'Bài đọc', 'document' => 'Tài liệu', 'quiz' => 'Quiz', 'assignment' => 'Bài tập'];
     $statusClass = $statusBadgeClasses[$course->status] ?? 'bg-slate-50 text-slate-700 ring-1 ring-slate-200';
+    $previewIsYoutube = str_contains((string) $course->preview_video, 'youtube.com') || str_contains((string) $course->preview_video, 'youtu.be');
 @endphp
 
 <div class="space-y-6">
@@ -39,6 +40,7 @@
             <div class="flex flex-col gap-2">
                 <a href="{{ route('admin.courses.index') }}" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">Quay lại danh sách</a>
                 <a href="{{ route('admin.courses.students', $course) }}" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 cursor-pointer">Xem học viên</a>
+                <a href="{{ route('admin.courses.versions.index', $course) }}" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">Lịch sử phiên bản</a>
 
                 @if($course->status === \App\Models\Course::STATUS_PENDING)
                     <form method="POST" action="{{ route('admin.courses.approve', $course) }}" onsubmit="return confirm('Duyệt khóa học này?')">
@@ -168,7 +170,6 @@
         </div>
 
         @if($previewVideoUrl)
-            @php($previewIsYoutube = str_contains((string) $course->preview_video, 'youtube.com') || str_contains((string) $course->preview_video, 'youtu.be'))
             <div class="mt-4 aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
                 @if($previewIsYoutube)
                     <iframe src="{{ $previewVideoUrl }}" title="Video giới thiệu khóa học" class="h-full w-full border-0" allowfullscreen></iframe>

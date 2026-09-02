@@ -20,7 +20,7 @@ class LessonVersion extends Model
 
     public function lesson(): BelongsTo
     {
-        return $this->belongsTo(Lesson::class);
+        return $this->belongsTo(Lesson::class)->withoutGlobalScope('not_archived');
     }
 
     public function section(): BelongsTo

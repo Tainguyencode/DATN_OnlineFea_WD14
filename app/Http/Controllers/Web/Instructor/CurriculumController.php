@@ -785,6 +785,9 @@ class CurriculumController extends Controller
 
     private function deleteLessonDocument(Lesson $lesson): void
     {
+        if ($lesson->versions()->whereIn('status', ['published', 'superseded'])->exists()) {
+            return; // Historical release assets must remain available.
+        }
         if ($lesson->document_file) {
             Storage::disk('public')->delete($lesson->document_file);
         }
@@ -904,6 +907,9 @@ class CurriculumController extends Controller
 
     private function deleteLessonVideo(Lesson $lesson): void
     {
+        if ($lesson->versions()->whereIn('status', ['published', 'superseded'])->exists()) {
+            return; // Historical release assets must remain available.
+        }
         if ($lesson->video_path) {
             Storage::disk('local')->delete($lesson->video_path);
         }

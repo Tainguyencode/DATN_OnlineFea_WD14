@@ -10,6 +10,7 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\ContentVersionService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -50,6 +51,9 @@ class CartCheckoutTest extends TestCase
             'slug' => 'cong-nghe-thong-tin',
         ]);
 
+        $profile = $this->instructor->instructorProfile()->create([]);
+        $profile->teachingFields()->create(['category_id' => $this->category->id, 'approval_status' => 'approved']);
+
         // Tạo khóa học mẫu đã xuất bản
         $this->course = Course::create([
             'instructor_id' => $this->instructor->id,
@@ -62,6 +66,7 @@ class CartCheckoutTest extends TestCase
             'status' => Course::STATUS_PUBLISHED,
             'is_published' => true,
         ]);
+        app(ContentVersionService::class)->createInitialCourseVersion($this->course, $this->instructor);
     }
 
     /**

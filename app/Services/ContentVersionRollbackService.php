@@ -25,7 +25,7 @@ class ContentVersionRollbackService
         Validator::make(['reason' => $reason], ['reason' => ['required', 'string', 'min:5', 'max:1000']])->validate();
 
         return DB::transaction(function () use ($course, $type, $sourceVersionId, $actor, $reason): ContentUpdate {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
             abort_if($course->status === Course::STATUS_ARCHIVED, 422, 'Không thể tạo yêu cầu khôi phục cho khóa học đã lưu trữ.');
 
             [$identity, $source, $foreignKey] = $this->resolveEligibleSource($course, $type, $sourceVersionId);

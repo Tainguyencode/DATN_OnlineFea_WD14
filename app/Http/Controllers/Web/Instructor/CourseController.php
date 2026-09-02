@@ -10,8 +10,8 @@ use App\Http\Requests\Instructor\StoreCourseRequest;
 use App\Http\Requests\Instructor\StoreLessonRequest;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
-use App\Models\Certificate;
 use App\Models\Category;
+use App\Models\Certificate;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
 use App\Models\Course;
@@ -33,6 +33,7 @@ use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
 use App\Services\InstructorCourseCategoryAccess;
 use App\Services\NotificationService;
+use App\Services\QuizAttemptService;
 use App\Services\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -717,7 +718,7 @@ class CourseController extends Controller
         );
         abort_unless($belongsToCourse, 404, 'Bài quiz không thuộc khóa học này.');
 
-        $policy = app(\App\Services\QuizAttemptService::class)->reviewPolicy($attempt, auth()->user());
+        $policy = app(QuizAttemptService::class)->reviewPolicy($attempt, auth()->user());
         $review = $quizService->buildAttemptReview($attempt, $policy);
 
         return view('instructor.courses.student_quiz_review', [
@@ -1046,6 +1047,9 @@ class CourseController extends Controller
 
     private function deleteThumbnail(Course $course): void
     {
+        if ($course->versions()->whereIn('status', ['published', 'superseded'])->where('thumbnail', $course->thumbnail)->exists()) {
+            return;
+        }
         if ($course->thumbnail) {
             Storage::disk('public')->delete($course->thumbnail);
         }
@@ -1078,5 +1082,4 @@ class CourseController extends Controller
     {
         return Course::STATUS_LABELS;
     }
-
 }

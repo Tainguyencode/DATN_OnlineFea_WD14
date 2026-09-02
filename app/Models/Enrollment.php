@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Validation\ValidationException;
 
 class Enrollment extends Model
 {
@@ -11,8 +12,25 @@ class Enrollment extends Model
 
     public const STATUS_COMPLETED = 'completed';
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $enrollment): void {
+            $stored = self::findOrFail($enrollment->id);
+            if ($stored->course_version_id !== null
+                && (($enrollment->isDirty('course_version_id') && (int) $stored->course_version_id !== (int) $enrollment->course_version_id)
+                    || $enrollment->isDirty('course_id'))) {
+                throw ValidationException::withMessages(['course_version' => 'Enrollment release pin cannot be changed.']);
+            }
+        });
+    }
+
+    public function courseVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseVersion::class);
+    }
+
     protected $fillable = [
-        'user_id', 'course_id', 'order_id', 'status', 'progress_percent',
+        'user_id', 'course_id', 'course_version_id', 'order_id', 'status', 'progress_percent',
         'completed_lessons', 'total_lessons',
         'enrolled_at', 'completed_at', 'last_accessed_at',
     ];

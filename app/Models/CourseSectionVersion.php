@@ -20,7 +20,7 @@ class CourseSectionVersion extends Model
 
     public function section(): BelongsTo
     {
-        return $this->belongsTo(CourseSection::class, 'course_section_id');
+        return $this->belongsTo(CourseSection::class, 'course_section_id')->withoutGlobalScope('not_archived');
     }
 
     public function creator(): BelongsTo

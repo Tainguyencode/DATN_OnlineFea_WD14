@@ -18,10 +18,13 @@ use App\Models\ReviewHelpful;
 use App\Models\Submission;
 use App\Models\User;
 use App\Services\CourseRecommendationService;
+use App\Services\CourseReleaseLock;
 use App\Services\DiscussionChatService;
 use App\Services\EngagementService;
+use App\Services\EnrollmentVersionService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
+use App\Services\LessonVideoSourceService;
 use App\Services\RecentlyViewedCourseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -229,9 +232,11 @@ class CourseController extends Controller
         $user = auth()->user();
         $player = $playerService->buildPlayerContext($course, $lesson, $user, $canBypassCourseVisibility);
 
+        $videoLesson = $lesson;
         $videoSource = null;
         if ($player['canAccessLesson'] && $lesson->type === 'video') {
-            if ($lesson->video_path && Str::endsWith($lesson->video_path, '.mp4')) {
+            $videoLesson = app(LessonVideoSourceService::class)->forViewer($lesson, $user?->id);
+            if (! $videoLesson->relationLoaded('playbackVersion') && $videoLesson->video_path && Str::endsWith($videoLesson->video_path, '.mp4')) {
                 // Sử dụng Cache để tránh gọi Job nhiều lần vì status DB không hỗ trợ 'processing'
                 $cacheKey = 'video_processing_'.$lesson->id;
                 if (! Cache::has($cacheKey)) {
@@ -239,9 +244,9 @@ class CourseController extends Controller
                     ConvertVideoToHLS::dispatch($lesson);
                 }
             } else {
-                $videoSource = $lesson->video_path
-                    ? Storage::disk('public')->url($lesson->video_path)
-                    : $lesson->video_url;
+                $videoSource = $videoLesson->video_url ?: ($videoLesson->video_path
+                    ? Storage::disk('public')->url($videoLesson->video_path)
+                    : null);
             }
         }
 
@@ -250,7 +255,7 @@ class CourseController extends Controller
             : null;
 
         if ($progressUrl && $lesson->type === 'document') {
-            \Illuminate\Support\Facades\Cache::add(
+            Cache::add(
                 'reading-start:'.$user->id.':'.$lesson->id, now()->timestamp, now()->addHour()
             );
         }
@@ -394,6 +399,7 @@ class CourseController extends Controller
             'lessonNotesIndexUrl' => $lessonNotesIndexUrl,
             'lessonNotesStoreUrl' => $lessonNotesStoreUrl,
             'videoSource' => $videoSource,
+            'videoLesson' => $videoLesson,
             'progressUrl' => $progressUrl,
             'sectionTitle' => $sectionTitle,
             'courseProgress' => $player['courseProgress'],
@@ -432,10 +438,7 @@ class CourseController extends Controller
             ->first();
 
         if (! $enrollment && $canBypass) {
-            $enrollment = Enrollment::firstOrCreate([
-                'user_id' => $user->id,
-                'course_id' => $course->id,
-            ], [
+            $enrollment = app(EnrollmentVersionService::class)->firstOrCreate($course, $user->id, [
                 'status' => Enrollment::STATUS_ACTIVE,
                 'progress_percent' => 0,
                 'enrolled_at' => now(),
@@ -504,6 +507,7 @@ class CourseController extends Controller
         $reEnrolled = false;
 
         DB::transaction(function () use ($course, $user, &$created, &$reEnrolled) {
+            $course = app(CourseReleaseLock::class)->course($course->id);
             $enrollment = Enrollment::where('user_id', $user->id)
                 ->where('course_id', $course->id)
                 ->first();
@@ -524,9 +528,7 @@ class CourseController extends Controller
                     $reEnrolled = true;
                 }
             } else {
-                Enrollment::create([
-                    'user_id' => $user->id,
-                    'course_id' => $course->id,
+                app(EnrollmentVersionService::class)->firstOrCreate($course, $user->id, [
                     'status' => Enrollment::STATUS_ACTIVE,
                     'progress_percent' => 0,
                     'enrolled_at' => now(),

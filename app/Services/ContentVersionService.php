@@ -25,11 +25,15 @@ class ContentVersionService
     public function createInitialCourseVersion(Course $course, ?User $actor = null): CourseVersion
     {
         return DB::transaction(function () use ($course, $actor): CourseVersion {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
             if ($course->published_version_id) {
                 return CourseVersion::query()->findOrFail($course->published_version_id);
             }
-            $version = $course->versions()->create([...$this->courseSnapshot($course), 'version_number' => $this->nextNumber($course->versions()), 'status' => CourseVersion::STATUS_PUBLISHED, 'created_by' => $actor?->id ?? $course->instructor_id, 'published_by' => $actor?->id, 'published_at' => $course->published_at ?? now()]);
+            $releases = app(CourseReleaseService::class);
+            $state = $releases->capture($course, $actor);
+            $version = $course->versions()->create([...$this->courseSnapshot($course), 'version_number' => $this->nextNumber($course->versions()), 'status' => CourseVersion::STATUS_DRAFT, 'created_by' => $actor?->id ?? $course->instructor_id]);
+            $releases->seal($version, $state);
+            $version->forceFill(['status' => CourseVersion::STATUS_PUBLISHED, 'published_by' => $actor?->id, 'published_at' => now()])->save();
             $course->forceFill(['published_version_id' => $version->id])->save();
 
             return $version->fresh();
@@ -39,6 +43,7 @@ class ContentVersionService
     public function createInitialSectionVersion(CourseSection $section, ?User $actor = null): CourseSectionVersion
     {
         return DB::transaction(function () use ($section, $actor): CourseSectionVersion {
+            app(CourseReleaseLock::class)->course($section->course_id);
             $section = CourseSection::query()->lockForUpdate()->findOrFail($section->id);
             if ($section->published_version_id) {
                 return CourseSectionVersion::query()->findOrFail($section->published_version_id);
@@ -53,6 +58,7 @@ class ContentVersionService
     public function createInitialLessonVersion(Lesson $lesson, ?User $actor = null): LessonVersion
     {
         return DB::transaction(function () use ($lesson, $actor): LessonVersion {
+            app(CourseReleaseLock::class)->course($lesson->course_id);
             $lesson = Lesson::query()->lockForUpdate()->findOrFail($lesson->id);
             if ($lesson->published_version_id) {
                 return LessonVersion::query()->findOrFail($lesson->published_version_id);
@@ -67,6 +73,7 @@ class ContentVersionService
     public function createInitialAssignmentVersion(Assignment $assignment, ?User $actor = null): AssignmentVersion
     {
         return DB::transaction(function () use ($assignment, $actor): AssignmentVersion {
+            app(CourseReleaseLock::class)->course($assignment->course_id);
             $assignment = Assignment::query()->lockForUpdate()->findOrFail($assignment->id);
             if ($assignment->published_version_id) {
                 return AssignmentVersion::query()->findOrFail($assignment->published_version_id);
@@ -104,11 +111,17 @@ class ContentVersionService
      */
     public function materializeCandidate(ContentUpdate $update, User $actor): void
     {
+        if ($update->action === ContentUpdate::ACTION_CREATE) {
+            $this->freezeCreatedLessonQuiz($update);
+
+            return;
+        }
         if (! in_array($update->action, [ContentUpdate::ACTION_UPDATE, ContentUpdate::ACTION_REORDER], true)) {
             return;
         }
 
         DB::transaction(function () use ($update, $actor): void {
+            app(CourseReleaseLock::class)->course($update->course_id);
             $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             if (! $update->isPending()) {
                 throw ValidationException::withMessages(['version' => 'Chỉ thay đổi đang chờ duyệt mới có thể đóng băng phiên bản đề xuất.']);
@@ -137,11 +150,17 @@ class ContentVersionService
      */
     public function prepareDraftCandidate(ContentUpdate $update, User $actor): ?Model
     {
+        if ($update->action === ContentUpdate::ACTION_CREATE) {
+            $this->freezeCreatedLessonQuiz($update);
+
+            return null;
+        }
         if (! in_array($update->action, [ContentUpdate::ACTION_UPDATE, ContentUpdate::ACTION_REORDER], true)) {
             return null;
         }
 
         return DB::transaction(function () use ($update, $actor): ?Model {
+            app(CourseReleaseLock::class)->course($update->course_id);
             $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             if (! $update->isDraft()) {
                 throw ValidationException::withMessages(['version' => 'Chỉ bản cập nhật nháp mới có thể chuẩn bị ứng viên phiên bản.']);
@@ -176,6 +195,7 @@ class ContentVersionService
     public function discardDraftCandidates(ContentUpdate $update): void
     {
         DB::transaction(function () use ($update): void {
+            app(CourseReleaseLock::class)->course($update->course_id);
             $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             if (! $update->isDraft()) {
                 throw ValidationException::withMessages(['version' => 'Chỉ ứng viên của bản cập nhật nháp mới có thể bị xóa.']);
@@ -247,6 +267,7 @@ class ContentVersionService
     public function rejectCandidates(ContentUpdate $update): void
     {
         DB::transaction(function () use ($update): void {
+            app(CourseReleaseLock::class)->course($update->course_id);
             foreach ([
                 [CourseVersion::class, Course::class, 'course_id'],
                 [CourseSectionVersion::class, CourseSection::class, 'course_section_id'],
@@ -271,7 +292,8 @@ class ContentVersionService
     public function publishInitialCourseTree(Course $course, User $actor): void
     {
         DB::transaction(function () use ($course, $actor): void {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
+            app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             $this->createInitialCourseVersion($course, $actor);
             $course->load(['courseSections.lessons.assignment']);
             foreach ($course->courseSections as $section) {
@@ -289,7 +311,7 @@ class ContentVersionService
     public function publishCourseVersion(CourseVersion $candidate, User $admin): CourseVersion
     {
         return $this->publishVersion($candidate, Course::class, 'course_id', 'published_version_id', 'draft_version_id', $admin,
-            fn (CourseVersion $version): array => $this->only($version, ['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags']));
+            fn (CourseVersion $version): array => $this->only($version, ['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags', ...CourseReleaseService::RULES]));
     }
 
     public function publishSectionVersion(CourseSectionVersion $candidate, User $admin): CourseSectionVersion
@@ -333,7 +355,28 @@ class ContentVersionService
     /** @return array<string, mixed> */
     public function courseSnapshot(Course $course): array
     {
-        return $this->only($course, ['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags']);
+        return array_merge($this->only($course, ['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags']), app(CourseReleaseService::class)->ruleSnapshot($course));
+    }
+
+    private function freezeCreatedLessonQuiz(ContentUpdate $update): void
+    {
+        if ($update->type !== ContentUpdate::TYPE_LESSON || ($update->payload['type'] ?? null) !== Lesson::TYPE_QUIZ) {
+            return;
+        }
+        DB::transaction(function () use ($update): void {
+            app(CourseReleaseLock::class)->course($update->course_id);
+            $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
+            if (! in_array($update->status, ['draft', 'pending'], true)) {
+                throw ValidationException::withMessages(['quiz' => 'Only an authoring proposal can freeze a quiz.']);
+            }
+            if ($update->isPending() && isset($update->payload['quiz_version_id'])) {
+                return;
+            }
+            $lesson = Lesson::where('course_id', $update->course_id)->findOrFail($update->entity_id);
+            $quiz = $lesson->quiz()->lockForUpdate()->firstOrFail();
+            $candidate = app(QuizVersioningService::class)->currentDraft($quiz);
+            $update->forceFill(['payload' => [...$update->payload, 'quiz_version_id' => $candidate->id]])->save();
+        });
     }
 
     /** @return array<string, mixed> */
@@ -359,11 +402,11 @@ class ContentVersionService
     }
 
     /** @param array<int, string> $except @return array<string, mixed> */
-    private function withoutIdentity(Model $version, array $except): array
+    public function withoutIdentity(Model $version, array $except): array
     {
-        $data = $version->getAttributes();
+        $data = $version->attributesToArray();
         unset($data['id'], $data['version_number'], $data['status'], $data['content_update_id'], $data['source_version_id'], $data['created_by'], $data['published_by'], $data['published_at'], $data['superseded_at'], $data['rejected_at'], $data['created_at'], $data['updated_at']);
-        foreach ($except as $key) {
+        foreach ([...$except, 'manifest_built_at'] as $key) {
             unset($data[$key]);
         }
 
@@ -374,6 +417,7 @@ class ContentVersionService
     private function cloneVersion(Model $identity, string $versionClass, string $publishedPointer, string $draftPointer, ?User $actor, callable $snapshot): Model
     {
         return DB::transaction(function () use ($identity, $versionClass, $publishedPointer, $draftPointer, $actor, $snapshot): Model {
+            app(CourseReleaseLock::class)->course($identity instanceof Course ? $identity->id : $identity->course_id);
             $identity = $identity::query()->lockForUpdate()->findOrFail($identity->id);
             if ($identity->{$draftPointer}) {
                 $draft = $versionClass::query()->lockForUpdate()->findOrFail($identity->{$draftPointer});
@@ -405,12 +449,12 @@ class ContentVersionService
     /** @param array<string, mixed> $payload */
     private function materializeCourseCandidate(ContentUpdate $update, array $payload, User $actor): void
     {
-        $course = Course::query()->lockForUpdate()->findOrFail($update->course_id);
+        $course = app(CourseReleaseLock::class)->course($update->course_id);
         $this->createInitialCourseVersion($course, $actor);
         $course->refresh();
         $source = $this->rollbackSource($update, CourseVersion::class, 'course_id', $course->id);
         $candidate = $this->candidateFor($course, CourseVersion::class, 'course_id', $update, $actor, fn (CourseVersion $version) => $this->withoutIdentity($version, ['course_id']), $source);
-        $candidate->fill(array_intersect_key($payload, array_flip(['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags'])))->save();
+        $candidate->fill(array_intersect_key($payload, array_flip(['title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags', ...CourseReleaseService::RULES])))->save();
     }
 
     /** @param array<string, mixed> $payload */
@@ -619,8 +663,10 @@ class ContentVersionService
     private function publishVersion(Model $candidate, string $identityClass, string $foreignKey, string $publishedPointer, string $draftPointer, User $admin, callable $projection): Model
     {
         return DB::transaction(function () use ($candidate, $identityClass, $foreignKey, $publishedPointer, $draftPointer, $admin, $projection): Model {
+            $identity = $identityClass::query()->findOrFail($candidate->{$foreignKey});
+            app(CourseReleaseLock::class)->course($identity instanceof Course ? $identity->id : $identity->course_id);
+            $identity = $identityClass::query()->lockForUpdate()->findOrFail($identity->id);
             $candidate = $candidate::query()->lockForUpdate()->findOrFail($candidate->id);
-            $identity = $identityClass::query()->lockForUpdate()->findOrFail($candidate->{$foreignKey});
             if (! $candidate->isDraft() || (int) $identity->{$draftPointer} !== (int) $candidate->id) {
                 throw ValidationException::withMessages(['version' => 'Ứng viên phiên bản không còn hợp lệ để xuất bản.']);
             }
@@ -629,6 +675,15 @@ class ContentVersionService
                 : null;
             if ($previous && ! $previous->isPublished()) {
                 throw ValidationException::withMessages(['version' => 'Con trỏ phiên bản xuất bản hiện tại không hợp lệ.']);
+            }
+            if ($candidate instanceof CourseVersion && ! $candidate->manifest_built_at) {
+                $releases = app(CourseReleaseService::class);
+                foreach ($releases->ruleSnapshot($identity) as $field => $value) {
+                    if ($candidate->{$field} === null) {
+                        $candidate->{$field} = $value;
+                    }
+                }
+                $releases->seal($candidate, $releases->capture($identity, $admin));
             }
             $previous?->forceFill(['status' => $candidate::STATUS_SUPERSEDED, 'superseded_at' => now()])->save();
             $candidate->forceFill(['status' => $candidate::STATUS_PUBLISHED, 'published_by' => $admin->id, 'published_at' => now(), 'rejected_at' => null])->save();
@@ -645,6 +700,6 @@ class ContentVersionService
     /** @param array<int, string> $keys @return array<string, mixed> */
     private function only(Model $model, array $keys): array
     {
-        return array_intersect_key($model->getAttributes(), array_flip($keys));
+        return array_intersect_key($model->attributesToArray(), array_flip($keys));
     }
 }

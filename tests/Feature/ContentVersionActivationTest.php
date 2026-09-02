@@ -27,6 +27,8 @@ class ContentVersionActivationTest extends TestCase
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $admin = User::factory()->create(['role' => 'admin']);
         $category = Category::create(['name' => 'Version activation', 'slug' => 'version-activation']);
+        $profile = $instructor->instructorProfile()->create([]);
+        $profile->teachingFields()->create(['category_id' => $category->id, 'approval_status' => 'approved']);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

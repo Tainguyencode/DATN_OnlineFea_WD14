@@ -51,7 +51,7 @@
             @elseif($lesson->type === 'video')
                 <x-learning.video-player
                     :video-source="$videoSource"
-                    :lesson="$lesson"
+                    :lesson="$videoLesson ?? $lesson"
                     :progress-url="$progressUrl"
                     :lesson-progress="$lessonProgress"
                     :required-video-percent="$requiredVideoPercent"

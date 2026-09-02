@@ -174,7 +174,7 @@ class ContentUpdateService
     public function saveCourseMetadataDraft(Course $course, array $changes, User $actor): array
     {
         $result = DB::transaction(function () use ($course, $changes, $actor): array {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
 
             $active = ContentUpdate::query()
                 ->where('course_id', $course->id)
@@ -279,7 +279,7 @@ class ContentUpdateService
     public function ensureLessonUpdateDraft(Course $course, Lesson $lesson, User $actor): ContentUpdate
     {
         $draft = DB::transaction(function () use ($course, $lesson, $actor): ContentUpdate {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
             $lesson = Lesson::query()->lockForUpdate()->findOrFail($lesson->id);
 
             if ((int) $lesson->course_id !== (int) $course->id || ! $course->isPublished()) {
@@ -358,7 +358,7 @@ class ContentUpdateService
         }
 
         return DB::transaction(function () use ($type, $action, $courseId, $entityId, $payload, $user, $status): ContentUpdate {
-            Course::query()->lockForUpdate()->findOrFail($courseId);
+            app(CourseReleaseLock::class)->course($courseId);
 
             // Editing the same canonical entity repeatedly should replace its current
             // draft candidate. Creating another active draft leaves stale HLS failures
@@ -412,6 +412,7 @@ class ContentUpdateService
     public function updateDraft(ContentUpdate $update, array $changes): ContentUpdate
     {
         return DB::transaction(function () use ($update, $changes): ContentUpdate {
+            app(CourseReleaseLock::class)->course($update->course_id);
             $locked = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $this->assertDraft($locked, 'Thay đổi đã được gửi duyệt và không thể chỉnh sửa.');
             if ($locked->isRollback()) {
@@ -437,6 +438,7 @@ class ContentUpdateService
     public function deleteDraft(ContentUpdate $update): array
     {
         return DB::transaction(function () use ($update): array {
+            app(CourseReleaseLock::class)->course($update->course_id);
             $locked = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $this->assertDraft($locked, 'Thay đổi đã được gửi duyệt và không thể xóa.');
             $payload = $locked->payload ?? [];
@@ -454,6 +456,7 @@ class ContentUpdateService
     public function createRevisionFromRejected(ContentUpdate $rejected, User $actor): ContentUpdate
     {
         $revision = DB::transaction(function () use ($rejected, $actor): ContentUpdate {
+            app(CourseReleaseLock::class)->course($rejected->course_id);
             $rejected = ContentUpdate::query()->lockForUpdate()->findOrFail($rejected->id);
             if (! $rejected->isRejected() || (int) $rejected->created_by !== (int) $actor->id) {
                 throw ValidationException::withMessages([
@@ -552,8 +555,10 @@ class ContentUpdateService
     public function applyApprovedUpdate(ContentUpdate $update, User $admin): void
     {
         DB::transaction(function () use ($update, $admin) {
+            $course = app(CourseReleaseLock::class)->course($update->course_id);
             $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             $payload = $update->payload ?? [];
+            $alreadyApproved = $update->isApproved();
 
             // A second approval is only idempotent for an already activated
             // quiz candidate. Every other terminal state must be immutable.
@@ -562,6 +567,10 @@ class ContentUpdateService
                     'content_update' => 'Chỉ thay đổi đang chờ duyệt mới có thể được phê duyệt.',
                 ]);
             }
+
+            $releases = app(CourseReleaseService::class);
+            $releaseState = ! $alreadyApproved && $update->type !== ContentUpdate::TYPE_COURSE
+                ? $releases->capture($course, $admin) : null;
 
             if ($update->type === ContentUpdate::TYPE_QUIZ) {
                 $this->approveQuizCandidate($update, $payload, $admin);
@@ -594,6 +603,10 @@ class ContentUpdateService
                 ]);
             }
 
+            if ($releaseState !== null) {
+                $releases->publishCurriculumChange($course, $update, $admin, $releases->applyApprovedChange($releaseState, $update, $admin));
+            }
+
             // Kiểm tra xem khóa học còn bản cập nhật pending nào khác không, nếu không thì đưa trạng thái về published
             $remainingPending = ContentUpdate::where('course_id', $update->course_id)
                 ->where('status', ContentUpdate::STATUS_PENDING)
@@ -614,6 +627,7 @@ class ContentUpdateService
     public function rejectUpdate(ContentUpdate $update, User $admin, string $reason): void
     {
         DB::transaction(function () use ($update, $admin, $reason) {
+            app(CourseReleaseLock::class)->course($update->course_id);
             $update = ContentUpdate::query()->lockForUpdate()->findOrFail($update->id);
             if (! $update->isPending()) {
                 throw ValidationException::withMessages([
@@ -846,7 +860,6 @@ class ContentUpdateService
             }
 
             if ($section) {
-                app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($section);
                 $section->lessons()->update(['archived_at' => now(), 'status' => Lesson::STATUS_DRAFT]);
                 $section->forceFill(['archived_at' => now()])->save();
             }
@@ -949,6 +962,13 @@ class ContentUpdateService
 
             app(CurriculumLessonService::class)->syncAssignment($lesson, $payload);
 
+            if ($lesson->type === Lesson::TYPE_QUIZ) {
+                $quiz = $lesson->quiz()->firstOrFail();
+                $quizCandidate = QuizVersion::find($payload['quiz_version_id'] ?? null);
+                abort_unless($quizCandidate, 422, 'Quiz mới chưa có ứng viên được đóng băng khi gửi duyệt.');
+                app(QuizVersioningService::class)->publishDraft($quiz, $quizCandidate);
+            }
+
             $oldHlsDir = 'lesson-hls/update_'.$update->id;
             $newHlsDir = 'lesson-hls/'.$lesson->id;
             if (Storage::disk('local')->exists($oldHlsDir)) {
@@ -1041,7 +1061,6 @@ class ContentUpdateService
                 ->where('course_id', $update->course_id)
                 ->find($update->entity_id);
             if ($lesson) {
-                app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($lesson);
                 $lesson->forceFill(['archived_at' => now(), 'status' => Lesson::STATUS_DRAFT])->save();
             }
         } elseif ($update->action === ContentUpdate::ACTION_REORDER) {
@@ -1164,6 +1183,7 @@ class ContentUpdateService
                     $persistedLesson->draft_update = $lUpdate;
                     $persistedLesson->update_status = $lUpdate->status;
                     $persistedLesson->is_draft_create = true;
+
                     continue;
                 }
 

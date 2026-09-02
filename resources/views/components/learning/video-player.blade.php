@@ -16,7 +16,7 @@
     $durationSeconds = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
 
     // Kiểm tra video đã được convert sang HLS chưa qua Model Helper (không block network S3)
-    $hasHls = $lesson->isHlsReady();
+    $hasHls = app(\App\Services\LessonVideoSourceService::class)->hasHls($lesson);
     $isProcessing = $lesson->isProcessing();
     $hasFailed = $lesson->hasFailedProcessing();
 
@@ -342,4 +342,3 @@
         </div>
     @endif
 </div>
-

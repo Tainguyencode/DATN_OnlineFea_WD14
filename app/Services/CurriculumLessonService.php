@@ -69,6 +69,7 @@ class CurriculumLessonService
 
         try {
             $lesson = DB::transaction(function () use ($course, $lessonData, $data): Lesson {
+                app(CourseReleaseLock::class)->course($course->id);
                 $lesson = Lesson::create([
                     ...$lessonData,
                     'course_id' => $course->id,
@@ -151,6 +152,7 @@ class CurriculumLessonService
 
         try {
             $contentUpdate = DB::transaction(function () use ($course, $sectionId, $lessonData, $payload, $data, $actor): ContentUpdate {
+                app(CourseReleaseLock::class)->course($course->id);
                 // A published course still uses ContentUpdate for approval, but its
                 // new lesson needs a real identity before an async video upload starts.
                 $lesson = Lesson::create([

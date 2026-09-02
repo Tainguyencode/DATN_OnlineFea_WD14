@@ -9,6 +9,7 @@ use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Services\EnrollmentVersionService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
 use App\Services\PointService;
@@ -173,6 +174,7 @@ class QuizController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['success' => false, 'message' => 'Enrollment is required to submit this quiz.'], 403);
             }
+
             return redirect()->route('learn.lessons.quiz.show', [$course->slug, $lesson])->with('error', 'Enrollment is required to submit this quiz.');
         }
 
@@ -378,10 +380,7 @@ class QuizController extends Controller
             return false;
         }
         if ($user->isAdmin() || ($user->isInstructor() && $course->isOwnedBy($user))) {
-            Enrollment::firstOrCreate([
-                'user_id' => $user->id,
-                'course_id' => $course->id,
-            ], [
+            app(EnrollmentVersionService::class)->firstOrCreate($course, $user->id, [
                 'status' => Enrollment::STATUS_ACTIVE,
                 'progress_percent' => 0,
                 'enrolled_at' => now(),

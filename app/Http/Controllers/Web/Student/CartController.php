@@ -10,10 +10,13 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\User;
 use App\Models\Wishlist;
+use App\Services\CourseReleaseLock;
+use App\Services\EnrollmentVersionService;
+use App\Services\MomoService;
 use App\Services\NotificationService;
 use App\Services\PaymentGatewayService;
-use App\Services\MomoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,13 +71,10 @@ class CartController extends Controller
             $courses->loadMissing('instructor');
         }
 
-        $existingEnrollments = $shouldEnroll
-            ? Enrollment::query()
-                ->where('user_id', auth()->id())
-                ->whereIn('course_id', $courses->pluck('id'))
-                ->get()
-                ->keyBy('course_id')
-            : collect();
+        $courses = $courses->sortBy('id');
+        if ($shouldEnroll) {
+            app(CourseReleaseLock::class)->courses($courses->pluck('id')->all());
+        }
 
         $orderItemRows = [];
         $timestamp = now();
@@ -99,9 +99,8 @@ class CartController extends Controller
             ];
 
             if ($shouldEnroll) {
-                $enrollment = $existingEnrollments->get($course->id)
-                    ?? new Enrollment(['user_id' => auth()->id(), 'course_id' => $course->id]);
-                $shouldActivate = ! $enrollment->exists || $enrollment->status === 'cancelled';
+                $enrollment = app(EnrollmentVersionService::class)->firstOrCreate($course, auth()->id(), ['order_id' => $order->id]);
+                $shouldActivate = $enrollment->wasRecentlyCreated || $enrollment->status === 'cancelled';
 
                 if ($shouldActivate) {
                     $enrollment->fill([
@@ -310,6 +309,8 @@ class CartController extends Controller
         // Nếu tổng tiền là 0 (Ví dụ coupon giảm 100%), thực hiện hoàn tất thanh toán ngay lập tức
         if ($total <= 0) {
             $completed = DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds, $eligibleSubtotal): bool {
+                // Match payment finance locks before taking coupon/course locks.
+                User::whereIn('id', $cart->courses->pluck('instructor_id'))->orderBy('id')->lockForUpdate()->get();
                 $lockedCoupon = null;
                 if ($coupon) {
                     $lockedCoupon = Coupon::query()->lockForUpdate()->find($coupon->id);

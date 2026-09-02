@@ -26,7 +26,7 @@ class CourseReviewService
             // Serialize submission against concurrent approval/rejection and
             // only transition drafts. Existing pending/terminal records are
             // never silently rewritten.
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
             $hasPendingBatch = ContentUpdate::query()
                 ->where('course_id', $course->id)
                 ->where('status', ContentUpdate::STATUS_PENDING)
@@ -130,7 +130,7 @@ class CourseReviewService
         $this->assertChecklistComplete($checklist);
 
         return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately) {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
             abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
             $wasAlreadyPublished = (bool) $course->is_published || in_array($course->status, [
                 Course::STATUS_PUBLISHED,
@@ -269,7 +269,7 @@ class CourseReviewService
         abort_if(strlen($comment) < config('course.reject_reason_min_length', 10), 422, 'Lý do từ chối phải có ít nhất 10 ký tự.');
 
         return DB::transaction(function () use ($course, $admin, $comment, $checklist) {
-            $course = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $course = app(CourseReleaseLock::class)->course($course->id);
             abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
             $wasPublished = (bool) $course->is_published || $course->status === CourseStatus::PendingUpdate->value;
             $review = $this->latestPendingReview($course);
@@ -334,6 +334,7 @@ class CourseReviewService
         abort_unless($instructor && app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 422, 'Ngành của giảng viên chưa được duyệt.');
 
         DB::transaction(function () use ($course, $admin): void {
+            $course = app(CourseReleaseLock::class)->course($course->id);
             app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
             $course->update([

@@ -11,11 +11,26 @@ class CourseVersion extends Model
 {
     use HasImmutableVersionState;
 
-    protected $fillable = ['course_id', 'version_number', 'status', 'content_update_id', 'source_version_id', 'title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags', 'created_by', 'published_by', 'published_at', 'superseded_at', 'rejected_at'];
+    public function sectionMappings(): HasMany
+    {
+        return $this->hasMany(CourseVersionSection::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function lessonMappings(): HasMany
+    {
+        return $this->hasMany(CourseVersionLesson::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(Enrollment::class);
+    }
+
+    protected $fillable = ['manifest_built_at', 'required_video_percent', 'required_lesson_percent', 'minimum_quiz_score', 'require_all_quizzes', 'require_all_assignments', 'certificate_enabled', 'course_id', 'version_number', 'status', 'content_update_id', 'source_version_id', 'title', 'slug', 'short_description', 'description', 'objectives', 'requirements', 'target_audience', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video', 'tags', 'created_by', 'published_by', 'published_at', 'superseded_at', 'rejected_at'];
 
     protected function casts(): array
     {
-        return ['version_number' => 'integer', 'source_version_id' => 'integer', 'price' => 'decimal:2', 'discount_price' => 'decimal:2', 'sale_price' => 'decimal:2', 'tags' => 'array', 'published_at' => 'datetime', 'superseded_at' => 'datetime', 'rejected_at' => 'datetime'];
+        return ['manifest_built_at' => 'datetime', 'required_video_percent' => 'integer', 'required_lesson_percent' => 'integer', 'minimum_quiz_score' => 'integer', 'require_all_quizzes' => 'boolean', 'require_all_assignments' => 'boolean', 'certificate_enabled' => 'boolean', 'version_number' => 'integer', 'source_version_id' => 'integer', 'price' => 'decimal:2', 'discount_price' => 'decimal:2', 'sale_price' => 'decimal:2', 'tags' => 'array', 'published_at' => 'datetime', 'superseded_at' => 'datetime', 'rejected_at' => 'datetime'];
     }
 
     public function course(): BelongsTo

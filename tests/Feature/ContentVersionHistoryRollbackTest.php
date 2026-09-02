@@ -378,6 +378,8 @@ class ContentVersionHistoryRollbackTest extends TestCase
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
         $category = Category::create(['name' => 'Version History '.$suffix, 'slug' => 'version-history-'.($suffix ?: uniqid())]);
+        $profile = $instructor->instructorProfile()->create([]);
+        $profile->teachingFields()->create(['category_id' => $category->id, 'approval_status' => 'approved']);
         $course = Course::create([
             'instructor_id' => $instructor->id, 'category_id' => $category->id,
             'title' => 'Course A immutable', 'slug' => 'course-history-'.($suffix ?: uniqid()),

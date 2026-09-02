@@ -191,6 +191,8 @@ class MultiGenerationContentVersioningTest extends TestCase
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'is_active' => true, 'email_verified_at' => now()]);
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
         $category = Category::query()->create(['name' => 'Version '.$suffix, 'slug' => 'version-'.$suffix]);
+        $profile = $instructor->instructorProfile()->create([]);
+        $profile->teachingFields()->create(['category_id' => $category->id, 'approval_status' => 'approved']);
         $course = Course::query()->create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

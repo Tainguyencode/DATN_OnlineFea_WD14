@@ -461,6 +461,8 @@ class QuizVersionedAuthoringTest extends TestCase
             'slug' => 'quiz-category-'.uniqid(),
             'status' => true,
         ]);
+        $profile = $instructor->instructorProfile()->create([]);
+        $profile->teachingFields()->create(['category_id' => $category->id, 'approval_status' => 'approved']);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

@@ -1,0 +1,165 @@
+DB::transaction(function () {
+    $userId = 3; $courseId = 15; $enrollmentId = 2;
+    if (app()->environment() !== 'local') throw new RuntimeException('STOP: APP_ENV must be local.');
+
+    $user = App\Models\User::query()->whereKey($userId)->lockForUpdate()->first();
+    if (!$user || (int)$user->id !== 3 || $user->name !== 'Nguyễn Bảo Anh' || $user->username !== 'nguyen_bao_anh' || $user->email !== 'dienmayxnah2@gmail.com' || $user->role !== 'student') {
+        throw new RuntimeException('STOP: User identity mismatch.');
+    }
+
+    $course = App\Models\Course::query()->whereKey($courseId)->lockForUpdate()->first();
+    if (!$course || (int)$course->id !== 15 || $course->title !== 'C' || !$course->isPublished() || !$course->certificate_enabled) {
+        throw new RuntimeException('STOP: Course mismatch/unpublished/certificate disabled.');
+    }
+
+    $enrollment = App\Models\Enrollment::query()->whereKey($enrollmentId)->where('user_id',$userId)->where('course_id',$courseId)->withLearningAccess()->lockForUpdate()->first();
+    if (!$enrollment || (int)$enrollment->order_id !== 9) throw new RuntimeException('STOP: Enrollment mismatch.');
+
+    $progressService = app(App\Services\LearningProgressService::class);
+    $allLessonIds = $progressService->courseLessonIds($course);
+    $requiredLessonIds = $progressService->requiredLessonIds($course);
+    if ($allLessonIds->count() !== 48 || $requiredLessonIds->count() !== 48 || $allLessonIds->diff($requiredLessonIds)->isNotEmpty() || $requiredLessonIds->diff($allLessonIds)->isNotEmpty()) {
+        throw new RuntimeException('STOP: Curriculum changed; expected 48 required lessons.');
+    }
+
+    $requiredLessons = App\Models\Lesson::query()->with([
+        'quiz.currentPublishedVersion.questionMappings.questionVersion.options',
+        'assignment.publishedVersion',
+    ])->whereIn('id',$requiredLessonIds)->orderBy('id')->get();
+
+    $expectedCounts = [
+        App\Models\Lesson::TYPE_VIDEO => 20,
+        App\Models\Lesson::TYPE_DOCUMENT => 16,
+        App\Models\Lesson::TYPE_QUIZ => 6,
+        App\Models\Lesson::TYPE_ASSIGNMENT => 6,
+    ];
+    foreach ($expectedCounts as $type => $count) {
+        if ($requiredLessons->where('type',$type)->count() !== $count) throw new RuntimeException("STOP: Unexpected count for {$type}.");
+    }
+    if ($requiredLessons->whereNotIn('type',array_keys($expectedCounts))->isNotEmpty()) throw new RuntimeException('STOP: Unsupported lesson type.');
+
+    $quizAttemptService = app(App\Services\QuizAttemptService::class);
+    foreach ($requiredLessons->where('type',App\Models\Lesson::TYPE_QUIZ) as $lesson) {
+        $quiz = $lesson->quiz;
+        if (!$quiz || !$quiz->is_active || !$quiz->currentPublishedVersion || (int)$quiz->currentPublishedVersion->pass_score !== 70) {
+            throw new RuntimeException("STOP: Invalid quiz for lesson {$lesson->id}.");
+        }
+        if ($quiz->hasPassedAttemptFor($userId)) continue;
+
+        $attempt = $quizAttemptService->startOrResume($course,$lesson,$user);
+        $attempt->load(['quizVersion.questionMappings.questionVersion.options','quizVersion.questionMappings.invalidations']);
+        if (!$attempt->quizVersion || $attempt->quizVersion->questionMappings->isEmpty()) throw new RuntimeException("STOP: Quiz {$quiz->id} has no usable questions.");
+
+        $correctAnswers = [];
+        foreach ($attempt->quizVersion->questionMappings as $mapping) {
+            $questionVersion = $mapping->questionVersion;
+            if (!$questionVersion || (int)$questionVersion->question_id !== (int)$mapping->question_id) throw new RuntimeException("STOP: Invalid question version in quiz {$quiz->id}.");
+            $correctIds = $questionVersion->options->where('is_correct',true)->pluck('id')->map(fn($id)=>(int)$id)->values()->all();
+            if ($correctIds === []) throw new RuntimeException("STOP: No correct answer for question {$mapping->question_id}.");
+            $correctAnswers[(int)$mapping->question_id] = $questionVersion->type === App\Models\QuizQuestion::TYPE_MULTIPLE ? $correctIds : $correctIds[0];
+        }
+
+        $submitted = $quizAttemptService->submit($course,$lesson,$user,(int)$attempt->id,$correctAnswers);
+        $passedAttempt = $submitted['attempt']->fresh();
+        if ($passedAttempt->status !== App\Models\QuizAttempt::STATUS_COMPLETED || !$passedAttempt->passed || (float)$passedAttempt->percent < 70) {
+            throw new RuntimeException("STOP: Could not pass quiz {$quiz->id}.");
+        }
+    }
+
+    foreach ($requiredLessons->where('type',App\Models\Lesson::TYPE_ASSIGNMENT) as $lesson) {
+        $assignment = $lesson->assignment;
+        if (!$assignment || (int)$assignment->course_id !== $courseId || !$assignment->published_version_id) throw new RuntimeException("STOP: Invalid assignment for lesson {$lesson->id}.");
+
+        $alreadyPassed = App\Models\Submission::query()->where('user_id',$userId)->where('assignment_id',$assignment->id)->where('result','pass')->lockForUpdate()->first();
+        if ($alreadyPassed) continue;
+
+        $submission = App\Models\Submission::query()->where('user_id',$userId)->where('assignment_id',$assignment->id)->orderByDesc('attempt_number')->lockForUpdate()->first();
+        $gradedAt = now(); $startedAt = $gradedAt->copy()->subMinutes(2);
+        if ($enrollment->enrolled_at && $startedAt->lt($enrollment->enrolled_at)) $startedAt = $enrollment->enrolled_at->copy();
+        $submittedAt = $startedAt->copy()->addMinute();
+        if ($submittedAt->gt($gradedAt)) $submittedAt = $gradedAt->copy();
+
+        $data = [
+            'assignment_version_id'=>$submission?->assignment_version_id ?: $assignment->published_version_id,
+            'allowed_attempts'=>max(2,(int)($submission?->allowed_attempts ?? 2)),
+            'started_at'=>$startedAt,
+            'score'=>(int)$assignment->max_score,
+            'result'=>'pass',
+            'status'=>'graded',
+            'submitted_at'=>$submittedAt,
+            'graded_at'=>$gradedAt,
+            'graded_by'=>null,
+            'feedback'=>'[LOCAL TEST] Marked PASS for certificate completion test.',
+        ];
+        if ($submission) $submission->update($data);
+        else App\Models\Submission::create(array_merge($data,[
+            'assignment_id'=>$assignment->id,
+            'user_id'=>$userId,
+            'attempt_number'=>1,
+            'content'=>'[LOCAL TEST] Synthetic submission for certificate completion test.',
+        ]));
+    }
+
+    $progressAt = now();
+    foreach ($requiredLessons as $lesson) {
+        $progress = App\Models\LessonProgress::query()->where('user_id',$userId)->where('lesson_id',$lesson->id)->lockForUpdate()->first();
+        if ($progress && $progress->is_completed && $progress->completed_at) continue;
+
+        $duration = match ($lesson->type) {
+            App\Models\Lesson::TYPE_VIDEO, App\Models\Lesson::TYPE_QUIZ => $lesson->effectiveDurationSeconds(),
+            default => 0,
+        };
+        if ($lesson->type === App\Models\Lesson::TYPE_VIDEO && $duration <= 0) throw new RuntimeException("STOP: Video {$lesson->id} has invalid duration.");
+        $watched = $lesson->type === App\Models\Lesson::TYPE_VIDEO ? $duration : 0;
+        $data = [
+            'course_id'=>$courseId,
+            'watched_seconds'=>$watched,
+            'duration_seconds'=>$duration,
+            'last_position_seconds'=>$watched,
+            'furthest_position_seconds'=>$watched,
+            'progress_percent'=>100,
+            'is_completed'=>true,
+            'last_watched_at'=>$progressAt,
+            'completed_at'=>$progressAt,
+            'last_viewed_content_version'=>max(1,(int)$lesson->content_version),
+        ];
+        if ($lesson->type === App\Models\Lesson::TYPE_VIDEO) $data['last_client_updated_at'] = $progressAt;
+        if ($progress) $progress->update($data);
+        else App\Models\LessonProgress::create(array_merge($data,['user_id'=>$userId,'lesson_id'=>$lesson->id]));
+    }
+
+    $completedRequired = App\Models\LessonProgress::query()->where('user_id',$userId)->whereIn('lesson_id',$requiredLessonIds)->where('is_completed',true)->count();
+    $missingQuizzes = $requiredLessons->where('type',App\Models\Lesson::TYPE_QUIZ)->filter(fn($lesson)=>!$lesson->quiz->hasPassedAttemptFor($userId))->count();
+    $missingAssignments = $requiredLessons->where('type',App\Models\Lesson::TYPE_ASSIGNMENT)->filter(fn($lesson)=>!App\Models\Submission::query()->where('user_id',$userId)->where('assignment_id',$lesson->assignment->id)->where('result','pass')->exists())->count();
+    if ($completedRequired !== 48 || $missingQuizzes !== 0 || $missingAssignments !== 0) throw new RuntimeException('STOP: Prerequisites remain incomplete.');
+
+    $enrollment->update(['progress_percent'=>100,'completed_lessons'=>48,'total_lessons'=>48,'last_accessed_at'=>$progressAt]);
+    if ((int)$enrollment->fresh()->order_id !== 9) throw new RuntimeException('STOP: order_id changed unexpectedly.');
+
+    $completion = app(App\Services\CourseCompletionService::class)->check($enrollment->fresh(),$userId);
+    $enrollment = $enrollment->fresh();
+    $certificates = App\Models\Certificate::query()->where('user_id',$userId)->where('course_id',$courseId)->get();
+    $certificate = $certificates->first();
+    $courseXpCount = App\Models\UserPoint::query()->where('user_id',$userId)->where('source','course_completed')->where(function($query)use($courseId){$query->where('reference_id',$courseId)->orWhere('course_id',$courseId);})->count();
+
+    if (!($completion['eligible']??false) || (float)$enrollment->progress_percent !== 100.0 || $enrollment->status !== App\Models\Enrollment::STATUS_COMPLETED || !$enrollment->completed_at || (int)$enrollment->completed_lessons !== 48 || (int)$enrollment->total_lessons !== 48 || $certificates->count() !== 1 || !$certificate || !$certificate->certificate_code || !$certificate->issued_at || !$certificate->file_path || !Illuminate\Support\Facades\Storage::disk('local')->exists($certificate->file_path) || $courseXpCount !== 1) {
+        throw new RuntimeException('STOP: Final invariant failed; rolling back DB transaction.');
+    }
+
+    return [
+        'success'=>true,
+        'enrollment_id'=>$enrollment->id,
+        'status'=>$enrollment->status,
+        'progress_percent'=>(float)$enrollment->progress_percent,
+        'completed_lessons'=>(int)$enrollment->completed_lessons,
+        'total_lessons'=>(int)$enrollment->total_lessons,
+        'remaining_lessons'=>0,
+        'completed_at'=>$enrollment->completed_at->toIso8601String(),
+        'certificate_id'=>$certificate->id,
+        'certificate_code'=>$certificate->certificate_code,
+        'certificate_file'=>$certificate->file_path,
+        'certificate_count'=>$certificates->count(),
+        'course_completion_xp_records'=>$courseXpCount,
+    ];
+});
+exit

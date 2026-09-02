@@ -346,6 +346,7 @@ class PaymentGatewayService
             }
             if (($data['status'] ?? '') === 'PAID') {
                 $this->checkAndUpdatePayOSStatus($order);
+
                 return;
             }
             if (($data['status'] ?? '') !== 'CANCELLED' || (float) ($data['amountPaid'] ?? -1) !== 0.0) {
@@ -543,17 +544,13 @@ class PaymentGatewayService
     protected function enrollStudent(Order $order): void
     {
         $student = $order->user;
-        $items = $order->items()->with(['course.instructor'])->get();
-        $existingEnrollments = Enrollment::query()
-            ->where('user_id', $order->user_id)
-            ->whereIn('course_id', $items->pluck('course_id'))
-            ->lockForUpdate()->get()
-            ->keyBy('course_id');
+        $items = $order->items()->with(['course.instructor'])->orderBy('course_id')->get();
+        // Lock courses in stable order before looking at enrollment rows.
+        app(CourseReleaseLock::class)->courses($items->pluck('course_id')->all());
 
         foreach ($items as $item) {
-            $enrollment = $existingEnrollments->get($item->course_id)
-                ?? new Enrollment(['user_id' => $order->user_id, 'course_id' => $item->course_id]);
-            $isNewOrCancelled = ! $enrollment->exists || $enrollment->status === 'cancelled';
+            $enrollment = app(EnrollmentVersionService::class)->firstOrCreate($item->course, $order->user_id, ['order_id' => $order->id]);
+            $isNewOrCancelled = $enrollment->wasRecentlyCreated || $enrollment->status === 'cancelled';
 
             if ($isNewOrCancelled) {
                 $enrollment->fill([
@@ -649,6 +646,7 @@ class PaymentGatewayService
             $order->update(['status' => 'refunded']);
 
             $items = $order->items()->with('course')->get();
+            app(CourseReleaseLock::class)->courses($items->pluck('course_id')->all());
             $enrollments = Enrollment::where('user_id', $order->user_id)
                 ->whereIn('course_id', $items->pluck('course_id'))
                 ->withLearningAccess()->lockForUpdate()->get();
@@ -664,6 +662,7 @@ class PaymentGatewayService
                     if ((int) $enrollment->order_id === (int) $order->id) {
                         $enrollment->update(['order_id' => $remainingOrder->id]);
                     }
+
                     continue;
                 }
                 $enrollment->update(['status' => 'cancelled']);

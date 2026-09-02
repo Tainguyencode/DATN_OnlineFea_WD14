@@ -427,6 +427,12 @@ class QuizVersioningService
     public function assertDraftEditable(Quiz $quiz, QuizVersion $draft): void
     {
         $this->assertMutableQuizVersion($draft);
+        $pendingCreation = ContentUpdate::where('type', ContentUpdate::TYPE_LESSON)
+            ->where('action', ContentUpdate::ACTION_CREATE)->where('entity_id', $quiz->lesson_id)
+            ->where('status', ContentUpdate::STATUS_PENDING)->exists();
+        if ($pendingCreation) {
+            throw ValidationException::withMessages(['quiz' => 'Bài quiz mới đang chờ duyệt và không thể chỉnh sửa.']);
+        }
         $update = $this->contentUpdateForVersion($quiz, $draft);
 
         if ($update?->isPending()) {

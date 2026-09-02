@@ -752,10 +752,124 @@ html.dark body.admin-shell main {
     background-color: var(--admin-page-bg) !important;
 }
 
-html.dark body.admin-shell aside {
-    background-color: var(--admin-sidebar-bg) !important;
-    border-color: rgb(148 163 184 / 0.12) !important;
-    box-shadow: 12px 0 32px rgb(2 6 23 / 0.24) !important;
+/* ==========================================================================
+   ADMIN SIDEBAR DARK THEME (Light & Dark modes)
+   Strictly scoped to body.admin-shell aside to ensure Instructor sidebar
+   remains 100% untouched.
+   ========================================================================== */
+
+body.admin-shell aside {
+    background-color: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #e2e8f0 !important;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.admin-shell aside > div:first-child {
+    border-bottom-color: #1e293b !important;
+}
+
+body.admin-shell aside > div:first-child .text-slate-950 {
+    color: #ffffff !important;
+}
+
+body.admin-shell aside > div:first-child .text-slate-400 {
+    color: #94a3b8 !important;
+}
+
+/* Nav Menu Default */
+body.admin-shell aside nav button[type="button"],
+body.admin-shell aside nav a {
+    color: #cbd5e1 !important;
+}
+
+body.admin-shell aside nav button[type="button"] span:first-child,
+body.admin-shell aside nav a span:first-child,
+body.admin-shell aside nav button[type="button"] svg,
+body.admin-shell aside nav a svg {
+    color: #94a3b8 !important;
+}
+
+body.admin-shell aside nav button[type="button"] > svg:last-child {
+    color: #64748b !important;
+}
+
+/* Nav Menu Hover */
+body.admin-shell aside nav button[type="button"]:hover,
+body.admin-shell aside nav a:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+body.admin-shell aside nav button[type="button"]:hover span:first-child,
+body.admin-shell aside nav a:hover span:first-child,
+body.admin-shell aside nav button[type="button"]:hover svg,
+body.admin-shell aside nav a:hover svg {
+    color: #ffffff !important;
+}
+
+/* Parent Group Active */
+body.admin-shell aside nav button[type="button"].bg-blue-50,
+body.admin-shell aside nav button[type="button"][class*="bg-blue-50"] {
+    background-color: rgba(37, 99, 235, 0.15) !important;
+    color: #93c5fd !important;
+}
+
+body.admin-shell aside nav button[type="button"].bg-blue-50 span:first-child,
+body.admin-shell aside nav button[type="button"].bg-blue-50 svg,
+body.admin-shell aside nav button[type="button"][class*="bg-blue-50"] span:first-child,
+body.admin-shell aside nav button[type="button"][class*="bg-blue-50"] svg {
+    color: #60a5fa !important;
+}
+
+/* Active Leaf Menu Item */
+body.admin-shell aside nav a.bg-blue-600,
+body.admin-shell aside nav a[class*="bg-blue-600"] {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+}
+
+body.admin-shell aside nav a.bg-blue-600 span:first-child,
+body.admin-shell aside nav a.bg-blue-600 svg,
+body.admin-shell aside nav a[class*="bg-blue-600"] span:first-child,
+body.admin-shell aside nav a[class*="bg-blue-600"] svg {
+    color: #ffffff !important;
+}
+
+/* User Footer Area */
+body.admin-shell aside > div:last-child {
+    border-top-color: #1e293b !important;
+}
+
+body.admin-shell aside > div:last-child > div:first-child {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body.admin-shell aside > div:last-child .text-slate-800 {
+    color: #ffffff !important;
+}
+
+body.admin-shell aside > div:last-child .text-slate-400 {
+    color: #94a3b8 !important;
+}
+
+body.admin-shell aside > div:last-child button[type="submit"] {
+    color: #cbd5e1 !important;
+}
+
+body.admin-shell aside > div:last-child button[type="submit"] svg {
+    color: #94a3b8 !important;
+}
+
+body.admin-shell aside > div:last-child button[type="submit"]:hover {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+}
+
+body.admin-shell aside > div:last-child button[type="submit"]:hover svg {
+    color: #ef4444 !important;
 }
 
 html.dark body.admin-shell header,
