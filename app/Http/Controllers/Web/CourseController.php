@@ -18,6 +18,7 @@ use App\Models\ReviewHelpful;
 use App\Models\Submission;
 use App\Models\User;
 use App\Services\CourseRecommendationService;
+use App\Services\DiscussionChatService;
 use App\Services\EngagementService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
@@ -217,7 +218,8 @@ class CourseController extends Controller
         Course $course,
         Lesson $lesson,
         LearningPlayerService $playerService,
-        RecentlyViewedCourseService $recentlyViewedCourseService
+        RecentlyViewedCourseService $recentlyViewedCourseService,
+        DiscussionChatService $discussionChat,
     ): View {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
 
@@ -301,13 +303,6 @@ class CourseController extends Controller
             if ($user->isStudent()) {
                 $courseDiscussion = Discussion::where('course_id', $course->id)
                     ->where('user_id', $user->id)
-                    ->with([
-                        'user',
-                        'lesson',
-                        'replies' => function ($q) {
-                            $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
-                        },
-                    ])
                     ->first();
 
                 if ($courseDiscussion) {
@@ -318,37 +313,15 @@ class CourseController extends Controller
                 if ($discussionId > 0) {
                     $courseDiscussion = Discussion::where('id', $discussionId)
                         ->where('course_id', $course->id)
-                        ->with([
-                            'user',
-                            'lesson',
-                            'replies' => function ($q) {
-                                $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
-                            },
-                        ])
                         ->first();
                 }
-                $discussions = Discussion::where('course_id', $course->id)
-                    ->with(['user', 'replies.user'])
-                    ->latest()
-                    ->get();
             } elseif ($user->isAdmin()) {
                 $discussionId = request()->integer('discussion_id');
                 if ($discussionId > 0) {
                     $courseDiscussion = Discussion::where('id', $discussionId)
                         ->where('course_id', $course->id)
-                        ->with([
-                            'user',
-                            'lesson',
-                            'replies' => function ($q) {
-                                $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
-                            },
-                        ])
                         ->first();
                 }
-                $discussions = Discussion::where('course_id', $course->id)
-                    ->with(['user', 'replies.user'])
-                    ->latest()
-                    ->get();
             }
         }
 
@@ -435,6 +408,9 @@ class CourseController extends Controller
             'discussions' => $discussions,
             'activeDiscussion' => $activeDiscussion,
             'courseDiscussion' => $courseDiscussion,
+            'chatContext' => $courseDiscussion && $user
+                ? $discussionChat->context($courseDiscussion, $user)
+                : null,
             'lessonComments' => $lessonComments,
         ]);
     }

@@ -24,6 +24,7 @@ use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalContro
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\DiscussionController;
+use App\Http\Controllers\Web\MessengerController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\ContentVersionHistoryController as InstructorContentVersionHistoryController;
 use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponController;
@@ -157,8 +158,12 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 });
 
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
+    Route::get('/messenger/conversations', [MessengerController::class, 'index'])->name('messenger.conversations.index');
     Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
     Route::get('/discussions/{discussion}/messages', [DiscussionController::class, 'messages'])->name('discussions.messages');
+    Route::get('/discussions/{discussion}/messages/{messageKey}', [DiscussionController::class, 'message'])->name('discussions.message');
+    Route::post('/discussions/{discussion}/read', [DiscussionController::class, 'markRead'])->name('discussions.read');
+    Route::get('/discussion-messages/{kind}/{message}/attachment', [DiscussionController::class, 'attachment'])->name('discussion-messages.attachment');
     Route::post('/discussions/{discussion}/recall', [DiscussionController::class, 'recallDiscussion'])->name('discussions.recall');
     Route::delete('/discussions/{discussion}', [DiscussionController::class, 'destroyDiscussion'])->name('discussions.destroy');
     Route::post('/discussions/{discussion}/replies', [DiscussionController::class, 'storeReply'])->name('discussions.replies.store');

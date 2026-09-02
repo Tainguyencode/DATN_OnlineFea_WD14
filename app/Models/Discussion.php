@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
 class Discussion extends Model
@@ -17,6 +18,8 @@ class Discussion extends Model
         'content',
         'is_resolved',
         'is_recalled',
+        'last_message_at',
+        'last_message_user_id',
         'attachment_path',
         'attachment_name',
         'attachment_type',
@@ -27,6 +30,7 @@ class Discussion extends Model
         return [
             'is_resolved' => 'boolean',
             'is_recalled' => 'boolean',
+            'last_message_at' => 'datetime',
         ];
     }
 
@@ -48,6 +52,21 @@ class Discussion extends Model
     public function replies(): HasMany
     {
         return $this->hasMany(DiscussionReply::class);
+    }
+
+    public function participants(): HasMany
+    {
+        return $this->hasMany(DiscussionParticipant::class);
+    }
+
+    public function lastReply(): HasOne
+    {
+        return $this->hasOne(DiscussionReply::class)->latestOfMany('created_at');
+    }
+
+    public function lastMessageUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'last_message_user_id');
     }
 
     public function attachmentUrl(): ?string

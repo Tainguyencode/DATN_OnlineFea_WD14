@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Events\CourseDiscussionConversationUpdated;
 use App\Events\CourseDiscussionMessageBroadcasted;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Learning\StoreDiscussionReplyRequest;
@@ -11,36 +12,67 @@ use App\Models\Discussion;
 use App\Models\DiscussionReply;
 use App\Models\Lesson;
 use App\Models\UserPoint;
+use App\Services\DiscussionChatService;
 use App\Services\LessonNoteAccessService;
 use App\Services\NotificationService;
 use App\Services\PointService;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DiscussionController extends Controller
 {
     public function __construct(
         protected NotificationService $notificationService,
-        protected LessonNoteAccessService $lessonAccess
+        protected LessonNoteAccessService $lessonAccess,
+        protected DiscussionChatService $chat,
     ) {}
 
     public function messages(Discussion $discussion): JsonResponse
     {
         Gate::authorize('view', $discussion);
-        $discussion->load(['user', 'lesson', 'replies.user', 'replies.lesson', 'replies.replyTo.user']);
+        $result = $this->chat->messages($discussion, request()->user(), request()->query('after'));
 
-        $messages = [[
-            'kind' => 'discussion',
-            ...$this->chatMessagePayload($discussion),
-        ]];
-        foreach ($discussion->replies as $reply) {
-            $messages[] = ['kind' => 'reply', ...$this->chatMessagePayload($reply)];
-        }
+        return response()->json(['success' => true, ...$result]);
+    }
 
-        return response()->json(['success' => true, 'data' => $messages]);
+    public function message(Discussion $discussion, string $messageKey): JsonResponse
+    {
+        Gate::authorize('view', $discussion);
+        $message = $this->chat->message($discussion, $messageKey, request()->user());
+        abort_unless($message, 404);
+
+        return response()->json(['success' => true, 'data' => $message]);
+    }
+
+    public function markRead(Discussion $discussion): JsonResponse
+    {
+        Gate::authorize('view', $discussion);
+        $this->chat->markRead($discussion, request()->user());
+        $this->broadcastConversation($discussion, 'read');
+
+        return response()->json(['success' => true, 'conversation_id' => $discussion->id]);
+    }
+
+    public function attachment(string $kind, int $message): StreamedResponse
+    {
+        abort_unless(in_array($kind, ['discussion', 'reply'], true), 404);
+        $model = $kind === 'discussion' ? Discussion::findOrFail($message) : DiscussionReply::findOrFail($message);
+        $discussion = $model instanceof Discussion ? $model : $model->discussion;
+        Gate::authorize('view', $discussion);
+        abort_unless($model->attachment_path, 404);
+        $disk = Storage::disk('local')->exists($model->attachment_path) ? 'local' : 'public';
+        abort_unless(Storage::disk($disk)->exists($model->attachment_path), 404);
+        $downloadName = preg_replace('/[\x00-\x1F\x7F"\\\\\/]+/u', '-', basename((string) $model->attachment_name)) ?: 'attachment';
+
+        return Storage::disk($disk)->response(
+            $model->attachment_path,
+            $downloadName,
+            ['Content-Disposition' => 'inline; filename="'.$downloadName.'"']
+        );
     }
 
     /**
@@ -57,7 +89,7 @@ class DiscussionController extends Controller
 
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $attachmentPath = $file->store('discussions/attachments', 'public');
+            $attachmentPath = $file->store('discussions/attachments', 'local');
             $attachmentName = $file->getClientOriginalName();
             $mime = $file->getMimeType();
 
@@ -74,17 +106,28 @@ class DiscussionController extends Controller
         $discussionTitle = $request->validated('title')
             ?: ($content ? Str::limit(strip_tags((string) $content), 80) : ($attachmentName ? "Đính kèm: {$attachmentName}" : 'Tệp đính kèm'));
 
-        // Tìm conversation Course-level đã có giữa Học viên và Giảng viên
-        $discussion = Discussion::where('course_id', $course->id)
-            ->where('user_id', auth()->id())
-            ->first();
+        // Unique(course_id, user_id) + firstOrCreate keeps concurrent first messages in one conversation.
+        $discussion = Discussion::firstOrCreate([
+            'course_id' => $course->id,
+            'user_id' => auth()->id(),
+        ], [
+            'lesson_id' => $lesson->id,
+            'title' => $discussionTitle,
+            'content' => $content,
+            'attachment_path' => $attachmentPath,
+            'attachment_name' => $attachmentName,
+            'attachment_type' => $attachmentType,
+            'is_resolved' => false,
+            'last_message_at' => now(),
+            'last_message_user_id' => auth()->id(),
+        ]);
 
-        if ($discussion) {
+        if (! $discussion->wasRecentlyCreated) {
             // Đã có conversation của Course -> Gửi dưới dạng DiscussionReply kèm context lesson_id
             $reply = DiscussionReply::create([
                 'discussion_id' => $discussion->id,
-                'messages_url' => route('discussions.messages', $discussion),
                 'reply_to_message_id' => null,
+                'reply_to_discussion_id' => null,
                 'lesson_id' => $lesson->id,
                 'user_id' => auth()->id(),
                 'content' => $content,
@@ -94,19 +137,6 @@ class DiscussionController extends Controller
                 'attachment_type' => $attachmentType,
             ]);
         } else {
-            // Chưa có conversation -> Tạo Discussion mới với scope course_id
-            $discussion = Discussion::create([
-                'course_id' => $course->id,
-                'lesson_id' => $lesson->id,
-                'user_id' => auth()->id(),
-                'title' => $discussionTitle,
-                'content' => $content,
-                'attachment_path' => $attachmentPath,
-                'attachment_name' => $attachmentName,
-                'attachment_type' => $attachmentType,
-                'is_resolved' => false,
-            ]);
-
             // Cộng +2 XP cho học viên tạo thảo luận (tối đa 10 XP/ngày)
             app(PointService::class)->awardDiscussionPoints(
                 auth()->id(),
@@ -132,8 +162,10 @@ class DiscussionController extends Controller
             );
         }
 
-        $message = isset($reply) ? $reply->load(['user', 'lesson', 'replyTo.user']) : $discussion->load(['user', 'lesson']);
-        $this->broadcastChat($discussion->id, 'created', $this->chatMessagePayload($message));
+        $message = isset($reply) ? $reply->load(['user', 'lesson', 'replyTo.user', 'replyToDiscussion.user']) : $discussion->load(['user', 'lesson']);
+        $this->chat->recordMessage($discussion, $request->user(), $message);
+        $canonical = $this->chat->presentMessage($discussion, $message, $request->user());
+        $this->broadcastChat($discussion, 'created', $canonical['key']);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -141,8 +173,10 @@ class DiscussionController extends Controller
                 'kind' => isset($reply) ? 'reply' : 'discussion',
                 'discussion_id' => $discussion->id,
                 'messages_url' => route('discussions.messages', $discussion),
-                'data' => $this->chatMessagePayload($message),
+                'data' => $canonical,
                 'reply_url' => route('discussions.replies.store', $discussion),
+                'read_url' => route('discussions.read', $discussion),
+                'message_url_template' => route('discussions.message', [$discussion, '__MESSAGE_KEY__']),
             ], 201);
         }
 
@@ -166,7 +200,7 @@ class DiscussionController extends Controller
 
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $attachmentPath = $file->store('discussions/attachments', 'public');
+            $attachmentPath = $file->store('discussions/attachments', 'local');
             $attachmentName = $file->getClientOriginalName();
             $mime = $file->getMimeType();
 
@@ -180,6 +214,18 @@ class DiscussionController extends Controller
         }
 
         $replyToMessageId = $request->validated('reply_to_message_id');
+        $replyToDiscussionId = null;
+        $replyToKey = $request->validated('reply_to_key');
+        if ($replyToKey && str_starts_with($replyToKey, 'discussion:')) {
+            $candidateId = (int) Str::after($replyToKey, 'discussion:');
+            if ($candidateId !== (int) $discussion->id) {
+                return $this->invalidReplyTarget();
+            }
+            $replyToDiscussionId = $discussion->id;
+            $replyToMessageId = null;
+        } elseif ($replyToKey && str_starts_with($replyToKey, 'reply:')) {
+            $replyToMessageId = (int) Str::after($replyToKey, 'reply:');
+        }
         $replyToReply = null;
         if ($replyToMessageId) {
             $replyToReply = DiscussionReply::where('id', $replyToMessageId)
@@ -187,7 +233,7 @@ class DiscussionController extends Controller
                 ->first();
 
             if (! $replyToReply) {
-                return back()->withErrors(['reply_to_message_id' => 'Tin nhắn được chọn không thuộc cuộc trao đổi này.']);
+                return $this->invalidReplyTarget();
             }
         }
 
@@ -202,6 +248,7 @@ class DiscussionController extends Controller
         $reply = DiscussionReply::create([
             'discussion_id' => $discussion->id,
             'reply_to_message_id' => $replyToReply?->id,
+            'reply_to_discussion_id' => $replyToDiscussionId,
             'lesson_id' => $lessonId,
             'user_id' => auth()->id(),
             'content' => $request->validated('content'),
@@ -255,15 +302,17 @@ class DiscussionController extends Controller
             );
         }
 
-        $reply->load(['user', 'lesson', 'replyTo.user']);
-        $this->broadcastChat($discussion->id, 'created', $this->chatMessagePayload($reply));
+        $reply->load(['user', 'lesson', 'replyTo.user', 'replyToDiscussion.user']);
+        $this->chat->recordMessage($discussion, $request->user(), $reply);
+        $canonical = $this->chat->presentMessage($discussion, $reply, $request->user());
+        $this->broadcastChat($discussion, 'created', $canonical['key']);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'kind' => 'reply',
                 'discussion_id' => $discussion->id,
-                'data' => $this->chatMessagePayload($reply->load(['user', 'lesson', 'replyTo.user'])),
+                'data' => $canonical,
             ], 201);
         }
 
@@ -273,16 +322,21 @@ class DiscussionController extends Controller
     /**
      * Đánh dấu hoặc hủy đánh dấu câu trả lời hữu ích.
      */
-    public function toggleHelpful(DiscussionReply $reply): RedirectResponse
+    public function toggleHelpful(DiscussionReply $reply): RedirectResponse|JsonResponse
     {
         $discussion = $reply->discussion;
         $user = auth()->user();
 
         $course = $discussion->course ?: $discussion->lesson?->course;
-        $isOwner = (int) $discussion->user_id === (int) $user->id;
-        $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && $course && (int) $course->instructor_id === (int) $user->id);
+        $canMarkHelpful = $user->role === 'admin' || (
+            $user->isStudent()
+            && (int) $discussion->user_id === (int) $user->id
+            && (int) $reply->user_id !== (int) $user->id
+            && $reply->is_instructor_answer
+            && ! $reply->is_recalled
+        );
 
-        abort_unless($isOwner || $isInstructor, 403);
+        abort_unless($canMarkHelpful, 403);
 
         $reply->is_helpful = ! $reply->is_helpful;
         $reply->save();
@@ -307,6 +361,15 @@ class DiscussionController extends Controller
                 ->delete();
         }
 
+        $this->broadcastChat($discussion, 'updated', 'reply:'.$reply->id);
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'data' => $this->chat->presentMessage($discussion, $reply->load(['user', 'lesson', 'replyTo.user', 'replyToDiscussion.user']), $user),
+            ]);
+        }
+
         return redirect()->back()->with('success', 'Cập nhật trạng thái câu trả lời thành công.');
     }
 
@@ -329,9 +392,7 @@ class DiscussionController extends Controller
             return back()->withErrors(['recall' => 'Tin nhắn đã quá 24 giờ và không thể thu hồi.']);
         }
 
-        if ($reply->attachment_path && Storage::disk('public')->exists($reply->attachment_path)) {
-            Storage::disk('public')->delete($reply->attachment_path);
-        }
+        $this->deleteAttachment($reply->attachment_path);
 
         $reply->update([
             'is_recalled' => true,
@@ -340,7 +401,7 @@ class DiscussionController extends Controller
             'attachment_name' => null,
             'attachment_type' => null,
         ]);
-        $this->broadcastChat($reply->discussion_id, 'recalled', ['id' => $reply->id, 'kind' => 'reply']);
+        $this->broadcastChat($reply->discussion, 'recalled', 'reply:'.$reply->id);
 
         if (request()->expectsJson()) {
             return response()->json(['success' => true, 'kind' => 'reply', 'id' => $reply->id]);
@@ -352,7 +413,7 @@ class DiscussionController extends Controller
     /**
      * Xóa tin nhắn phản hồi.
      */
-    public function destroyReply(DiscussionReply $reply): RedirectResponse
+    public function destroyReply(DiscussionReply $reply): RedirectResponse|JsonResponse
     {
         $user = auth()->user();
         $course = $reply->discussion->course ?: $reply->discussion->lesson?->course;
@@ -360,11 +421,17 @@ class DiscussionController extends Controller
         $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && $course && (int) $course->instructor_id === (int) $user->id);
         abort_unless($isOwner || $isInstructor, 403, 'Bạn không có quyền xóa tin nhắn này.');
 
-        if ($reply->attachment_path && Storage::disk('public')->exists($reply->attachment_path)) {
-            Storage::disk('public')->delete($reply->attachment_path);
-        }
+        $this->deleteAttachment($reply->attachment_path);
 
+        $discussion = $reply->discussion;
+        $messageKey = 'reply:'.$reply->id;
         $reply->delete();
+        $this->chat->refreshLastMessage($discussion);
+        $this->broadcastChat($discussion, 'deleted', $messageKey);
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'key' => $messageKey]);
+        }
 
         return back()->with('success', 'Đã xóa tin nhắn thành công.');
     }
@@ -388,9 +455,7 @@ class DiscussionController extends Controller
             return back()->withErrors(['recall' => 'Tin nhắn đã quá 24 giờ và không thể thu hồi.']);
         }
 
-        if ($discussion->attachment_path && Storage::disk('public')->exists($discussion->attachment_path)) {
-            Storage::disk('public')->delete($discussion->attachment_path);
-        }
+        $this->deleteAttachment($discussion->attachment_path);
 
         $discussion->update([
             'is_recalled' => true,
@@ -399,7 +464,7 @@ class DiscussionController extends Controller
             'attachment_name' => null,
             'attachment_type' => null,
         ]);
-        $this->broadcastChat($discussion->id, 'recalled', ['id' => $discussion->id, 'kind' => 'discussion']);
+        $this->broadcastChat($discussion, 'recalled', 'discussion:'.$discussion->id);
 
         if (request()->expectsJson()) {
             return response()->json(['success' => true, 'kind' => 'discussion', 'id' => $discussion->id]);
@@ -408,48 +473,56 @@ class DiscussionController extends Controller
         return back()->with('success', 'Đã thu hồi tin nhắn thành công.');
     }
 
-    private function chatMessagePayload(Discussion|DiscussionReply $message): array
-    {
-        return [
-            'kind' => $message instanceof Discussion ? 'discussion' : 'reply',
-            'id' => $message->id,
-            'user_id' => $message->user_id,
-            'content' => $message->content,
-            'is_recalled' => (bool) $message->is_recalled,
-            'created_at' => $message->created_at?->toISOString(),
-            'user' => $message->user ? [
-                'id' => $message->user->id,
-                'name' => $message->user->name,
-                'avatar_url' => $message->user->avatarUrl(),
-            ] : null,
-            'lesson' => $message->lesson ? [
-                'id' => $message->lesson->id,
-                'title' => $message->lesson->title,
-            ] : null,
-            'reply_to' => $message instanceof DiscussionReply && $message->replyTo ? [
-                'id' => $message->replyTo->id,
-                'content' => $message->replyTo->content,
-                'user' => $message->replyTo->user ? ['name' => $message->replyTo->user->name] : null,
-            ] : null,
-            'attachment_url' => $message->attachmentUrl(),
-            'attachment_name' => $message->attachment_name,
-            'attachment_type' => $message->attachment_type,
-        ];
-    }
-
-    private function broadcastChat(int $discussionId, string $action, array $message): void
+    private function broadcastChat(Discussion $discussion, string $action, string $messageKey): void
     {
         try {
-            broadcast(new CourseDiscussionMessageBroadcasted($discussionId, $action, $message))->toOthers();
+            broadcast(new CourseDiscussionMessageBroadcasted($discussion->id, $action, $messageKey))->toOthers();
+            $this->broadcastConversation($discussion, $action, $messageKey);
         } catch (\Throwable $exception) {
             report($exception);
+        }
+    }
+
+    private function broadcastConversation(Discussion $discussion, string $action, ?string $messageKey = null): void
+    {
+        try {
+            broadcast(new CourseDiscussionConversationUpdated(
+                $this->chat->participantIds($discussion),
+                $discussion->id,
+                $action,
+                $messageKey,
+            ))->toOthers();
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    private function invalidReplyTarget(): RedirectResponse|JsonResponse
+    {
+        $message = 'Tin nhắn được chọn không thuộc cuộc trao đổi này.';
+
+        return request()->expectsJson()
+            ? response()->json(['message' => $message, 'errors' => ['reply_to_key' => [$message]]], 422)
+            : back()->withErrors(['reply_to_key' => $message]);
+    }
+
+    private function deleteAttachment(?string $path): void
+    {
+        if (! $path) {
+            return;
+        }
+
+        foreach (['local', 'public'] as $disk) {
+            if (Storage::disk($disk)->exists($path)) {
+                Storage::disk($disk)->delete($path);
+            }
         }
     }
 
     /**
      * Xóa toàn bộ cuộc trao đổi.
      */
-    public function destroyDiscussion(Discussion $discussion): RedirectResponse
+    public function destroyDiscussion(Discussion $discussion): RedirectResponse|JsonResponse
     {
         $user = auth()->user();
         $course = $discussion->course ?: $discussion->lesson?->course;
@@ -457,18 +530,20 @@ class DiscussionController extends Controller
         $isInstructor = $user->role === 'admin' || ($user->role === 'instructor' && $course && (int) $course->instructor_id === (int) $user->id);
         abort_unless($isOwner || $isInstructor, 403, 'Bạn không có quyền xóa cuộc trao đổi này.');
 
-        if ($discussion->attachment_path && Storage::disk('public')->exists($discussion->attachment_path)) {
-            Storage::disk('public')->delete($discussion->attachment_path);
-        }
+        $this->deleteAttachment($discussion->attachment_path);
 
         foreach ($discussion->replies as $r) {
-            if ($r->attachment_path && Storage::disk('public')->exists($r->attachment_path)) {
-                Storage::disk('public')->delete($r->attachment_path);
-            }
+            $this->deleteAttachment($r->attachment_path);
         }
 
         $lesson = $discussion->lesson;
+        $messageKey = 'discussion:'.$discussion->id;
+        $this->broadcastChat($discussion, 'deleted', $messageKey);
         $discussion->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'key' => $messageKey, 'conversation_deleted' => true]);
+        }
 
         if ($user->role === 'instructor' || $user->role === 'admin') {
             return redirect()->route('instructor.discussions.index')->with('success', 'Đã xóa cuộc trao đổi thành công.');

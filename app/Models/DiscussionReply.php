@@ -11,6 +11,7 @@ class DiscussionReply extends Model
     protected $fillable = [
         'discussion_id',
         'reply_to_message_id',
+        'reply_to_discussion_id',
         'lesson_id',
         'user_id',
         'content',
@@ -49,6 +50,11 @@ class DiscussionReply extends Model
     public function replyTo(): BelongsTo
     {
         return $this->belongsTo(DiscussionReply::class, 'reply_to_message_id');
+    }
+
+    public function replyToDiscussion(): BelongsTo
+    {
+        return $this->belongsTo(Discussion::class, 'reply_to_discussion_id');
     }
 
     public function childReplies()

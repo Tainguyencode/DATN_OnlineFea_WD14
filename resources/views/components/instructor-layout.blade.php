@@ -10,17 +10,8 @@
     $currentUser = auth()->user();
     $instructorDiscussionsPendingCount = 0;
     if ($currentUser && $currentUser->isInstructor()) {
-        $instructorCourseIds = \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
-        if ($instructorCourseIds->isNotEmpty()) {
-            $discussions = \App\Models\Discussion::where(function ($q) use ($instructorCourseIds) {
-                $q->whereIn('course_id', $instructorCourseIds)
-                  ->orWhereHas('lesson', function ($lq) use ($instructorCourseIds) {
-                      $lq->whereIn('course_id', $instructorCourseIds);
-                  });
-            })->with('replies')->get();
-
-            $instructorDiscussionsPendingCount = $discussions->filter(fn ($d) => $d->needsReply())->count();
-        }
+        $instructorDiscussionsPendingCount = app(\App\Services\DiscussionChatService::class)
+            ->pendingInstructorCount($currentUser);
     }
 
     $menu = [
@@ -232,4 +223,6 @@
     @endif
 
     {{ $slot }}
+
+    <x-messenger.floating />
 </x-layouts.dashboard>

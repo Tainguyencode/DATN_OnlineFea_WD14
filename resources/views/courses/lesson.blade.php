@@ -522,6 +522,7 @@
             :lesson="$lesson"
             :is-enrolled="$isEnrolled"
             :course-discussion="$courseDiscussion ?? $activeDiscussion"
+            :chat-context="$chatContext"
         />
     </div>
 </div>

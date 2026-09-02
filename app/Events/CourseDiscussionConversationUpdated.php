@@ -7,23 +7,25 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
-class CourseDiscussionMessageBroadcasted implements ShouldBroadcastNow
+class CourseDiscussionConversationUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets;
 
+    /** @param array<int, int> $userIds */
     public function __construct(
-        public int $discussionId,
+        private array $userIds,
+        public int $conversationId,
         public string $action,
-        public string $messageKey,
+        public ?string $messageKey = null,
     ) {}
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel("course-discussion.{$this->discussionId}")];
+        return array_map(fn (int $id) => new PrivateChannel("App.Models.User.{$id}"), $this->userIds);
     }
 
     public function broadcastAs(): string
     {
-        return "course-discussion.message.{$this->action}";
+        return 'course-conversation.updated';
     }
 }
