@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\InstructorApplication;
 use App\Models\User;
 use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,7 +53,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
     /**
      * CASE 1: Instructor đăng ký -> verify email -> vào Dashboard được ngay.
      */
-    public function test_case_1_verified_instructor_can_access_dashboard_immediately(): void
+    public function test_case_1_verified_pending_instructor_is_redirected_to_profile(): void
     {
         $user = User::factory()->create([
             'role' => 'instructor',
@@ -63,14 +64,13 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('instructor.dashboard'))
-            ->assertOk()
-            ->assertSee('Dashboard Giảng viên');
+            ->assertRedirect(route('instructor.profile'));
     }
 
     /**
      * CASE 2: Instructor chưa approved (pending) -> tạo khóa học được.
      */
-    public function test_case_2_pending_instructor_can_create_course(): void
+    public function test_case_2_pending_instructor_cannot_create_course(): void
     {
         $user = User::factory()->create([
             'role' => 'instructor',
@@ -100,7 +100,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $this->assertDatabaseHas('courses', [
+        $this->assertDatabaseMissing('courses', [
             'instructor_id' => $user->id,
             'title' => 'Khóa học Laravel 12 Pro',
         ]);
@@ -109,7 +109,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
     /**
      * CASE 3: Instructor chưa approved -> truy cập curriculum / quản lý bài học được.
      */
-    public function test_case_3_pending_instructor_can_manage_curriculum(): void
+    public function test_case_3_pending_instructor_cannot_manage_curriculum(): void
     {
         $user = User::factory()->create([
             'role' => 'instructor',
@@ -129,8 +129,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('instructor.courses.curriculum', $course))
-            ->assertOk()
-            ->assertSee('Khóa học Node.js Master');
+            ->assertRedirect(route('instructor.profile'));
     }
 
     /**
@@ -257,6 +256,10 @@ class InstructorRegistrationWorkflowTest extends TestCase
         $category = Category::create(['name' => 'Lập trình', 'slug' => 'lap-trinh-c8', 'status' => true]);
         $profile = $instructor->instructorProfile()->create(['category_id' => $category->id]);
         $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        Storage::disk('public')->put('instructor_cvs/case-8.pdf', 'pdf');
+        $profile->update(['cv' => 'instructor_cvs/case-8.pdf']);
+        $instructor->update(['submitted_for_review_at' => now(), 'needs_admin_review' => true]);
+        InstructorApplication::create(['user_id' => $instructor->id, 'status' => 'pending', 'cv_path' => $profile->cv]);
 
         $this->actingAs($admin)
             ->post(route('admin.instructors.applications.approve', $instructor))
@@ -272,7 +275,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
     /**
      * CASE 9: Dashboard hiển thị cảnh báo cần cập nhật hồ sơ sau 7 ngày khi pending.
      */
-    public function test_case_9_dashboard_shows_pending_warning_banner(): void
+    public function test_case_9_pending_instructor_uses_profile_status_page_instead_of_dashboard(): void
     {
         $instructor = User::factory()->create([
             'role' => 'instructor',
@@ -283,8 +286,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
         $this->actingAs($instructor)
             ->get(route('instructor.dashboard'))
-            ->assertOk()
-            ->assertSee('Hồ sơ giảng viên đang chờ xét duyệt.');
+            ->assertRedirect(route('instructor.profile'));
     }
 
     /**
@@ -490,6 +492,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
             'role' => 'instructor',
             'instructor_status' => 'pending',
             'needs_admin_review' => true,
+            'submitted_for_review_at' => now(),
             'email_verified_at' => now(),
         ]);
 
@@ -547,6 +550,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
             'name' => 'Pending Instructor',
             'role' => 'instructor',
             'instructor_status' => 'pending',
+            'submitted_for_review_at' => now(),
             'created_at' => '2026-01-10 10:00:00',
             'email_verified_at' => now(),
         ]);

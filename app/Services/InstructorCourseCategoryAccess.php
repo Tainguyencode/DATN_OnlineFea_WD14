@@ -65,7 +65,7 @@ class InstructorCourseCategoryAccess
 
     public function canTeachCategory(User $instructor, int $categoryId): bool
     {
-        if ($categoryId <= 0) {
+        if (! $instructor->isApprovedInstructor() || $categoryId <= 0) {
             return false;
         }
 
@@ -96,7 +96,7 @@ class InstructorCourseCategoryAccess
 
     public function canManageCourse(User $instructor, Course $course): bool
     {
-        if (! $course->isOwnedBy($instructor)) {
+        if (! $instructor->isApprovedInstructor() || ! $course->isOwnedBy($instructor)) {
             return false;
         }
 
@@ -141,6 +141,10 @@ class InstructorCourseCategoryAccess
      */
     public function getRegisteredCategories(User $instructor): Collection
     {
+        if (! $instructor->isApprovedInstructor()) {
+            return new Collection;
+        }
+
         $profile = $instructor->relationLoaded('instructorProfile')
             ? $instructor->instructorProfile
             : $instructor->instructorProfile()->first();

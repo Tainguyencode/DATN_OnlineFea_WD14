@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\ActiveSession;
 use App\Models\Category;
-use App\Models\InstructorApplication;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -150,18 +149,6 @@ class AuthService
                     ]]);
                 }
 
-                InstructorApplication::create([
-                    'user_id' => $user->id,
-                    'expertise' => $validated['specialty'],
-                    'experience' => $validated['experience'],
-                    'introduction' => $validated['bio'],
-                    'cv_path' => $cvPath,
-                    // Legacy field remains for existing applications only. New registrations
-                    // submit their evidence through requirement-based profile documents.
-                    'certificate_path' => null,
-                    'status' => 'pending',
-                ]);
-
                 return $user;
             });
         } catch (Throwable $exception) {
@@ -276,7 +263,7 @@ class AuthService
                     'last_activity' => now(),
                 ]
             );
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::error('[AuthService] registerActiveSession error: '.$e->getMessage());
         }
     }

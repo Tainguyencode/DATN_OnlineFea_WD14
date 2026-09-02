@@ -13,6 +13,10 @@ class StoreCourseRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        if (! $this->user()?->isApprovedInstructor()) {
+            return false;
+        }
+
         // Khi tạo mới → luôn cho phép (middleware auth đã bảo vệ)
         // Khi cập nhật → kiểm tra quyền sở hữu
         if ($this->route('course')) {

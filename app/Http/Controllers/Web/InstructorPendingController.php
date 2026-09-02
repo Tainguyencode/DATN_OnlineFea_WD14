@@ -3,19 +3,14 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\ResubmitInstructorApplicationRequest;
 use App\Models\Category;
-use App\Models\InstructorApplication;
 use App\Models\InstructorCertificate;
-use App\Models\InstructorProfile;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\InstructorRequirementService;
-use App\Services\NotificationService;
+use App\Services\InstructorReviewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -70,7 +65,7 @@ class InstructorPendingController extends Controller
             $state = 5;
         } elseif ($user->instructor_status === 'rejected') {
             $state = 4;
-        } elseif ($user->submitted_for_review_at !== null && $user->instructor_status === 'pending') {
+        } elseif ($user->isGlobalReviewPending()) {
             $state = 3;
         } elseif ($certificatesCount > 0) {
             $state = 2;
@@ -258,7 +253,7 @@ class InstructorPendingController extends Controller
         abort(404, 'Tệp chứng chỉ không tồn tại trên hệ thống.');
     }
 
-    public function submitForReview(Request $request): RedirectResponse
+    public function submitForReview(Request $request, InstructorReviewService $reviewService): RedirectResponse
     {
         $user = $request->user();
 
@@ -269,167 +264,30 @@ class InstructorPendingController extends Controller
                 ->with('error', 'Đã quá thời hạn 7 ngày hoàn thiện hồ sơ. Tài khoản đã chuyển về Học viên.');
         }
 
-        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
-        if (! $eligibility['can_submit']) {
-            $missingList = implode(', ', $eligibility['missing_titles']);
-
-            return back()->with('error', "Hồ sơ của bạn còn thiếu tài liệu bắt buộc: {$missingList}. Vui lòng bổ sung đầy đủ trước khi nộp xét duyệt.");
+        $result = $reviewService->submitGlobal($user);
+        if (! $result['submitted']) {
+            return back()->with('error', $result['error']);
         }
-
-        $certsCount = $user->instructorCertificates()->count();
-        if ($certsCount === 0) {
-            return back()->with('error', 'Vui lòng bổ sung ít nhất một chứng chỉ/tài liệu trước khi gửi hồ sơ xét duyệt.');
-        }
-
-        DB::transaction(function () use ($user) {
-            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-            app(InstructorRequirementService::class)->promoteDraftCertificatesForReview($lockedUser);
-            $lockedUser->update([
-                'submitted_for_review_at' => now(),
-                'instructor_status' => 'pending',
-                'needs_admin_review' => true,
-                'rejected_reason' => null,
-            ]);
-
-            if ($lockedUser->instructorApplication) {
-                $lockedUser->instructorApplication->update([
-                    'status' => 'pending',
-                    'admin_notes' => null,
-                ]);
-            }
-        });
 
         ActivityLogService::log($user->id, 'submit_instructor_application', User::class, $user->id, [
-            'certificates_count' => $certsCount,
+            'certificates_count' => $result['certificates_count'],
         ], $request);
-
-        // Notify Admins
-        try {
-            $admins = User::where('role', 'admin')->get();
-            app(NotificationService::class)->sendToMany(
-                $admins,
-                'Hồ sơ Giảng viên mới cần duyệt',
-                "Giảng viên {$user->name} ({$user->email}) vừa gửi hồ sơ xét duyệt với {$certsCount} chứng chỉ.",
-                'instructor_application_submitted',
-                route('admin.instructors.applications.show', $user)
-            );
-        } catch (\Throwable $e) {
-            Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
-        }
 
         return redirect()->route('instructor.pending')
             ->with('success', 'Hồ sơ xét duyệt giảng viên của bạn đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
     }
 
-    public function resubmit(ResubmitInstructorApplicationRequest $request): RedirectResponse
+    public function resubmit(Request $request, InstructorReviewService $reviewService): RedirectResponse
     {
         $user = $request->user();
-        $profile = $user->instructorProfile ?? new InstructorProfile(['user_id' => $user->id]);
-
-        $validated = $request->validated();
-
-        $cvPath = $profile->cv;
-        if ($request->hasFile('cv')) {
-            if ($cvPath && Storage::disk('public')->exists($cvPath)) {
-                Storage::disk('public')->delete($cvPath);
-            }
-            $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
+        $result = $reviewService->submitGlobal($user);
+        if (! $result['submitted']) {
+            return back()->with('error', $result['error']);
         }
 
-        // Upload single or multiple certificates if provided
-        $uploadedFiles = [];
-        if ($request->hasFile('certificates')) {
-            $uploadedFiles = $request->file('certificates');
-        } elseif ($request->hasFile('certificate')) {
-            $uploadedFiles = [$request->file('certificate')];
-        }
-
-        foreach ($uploadedFiles as $file) {
-            if ($file && $file->isValid()) {
-                $originalName = $file->getClientOriginalName();
-                $extension = $file->getClientOriginalExtension() ?: 'pdf';
-                $storedPath = $file->storeAs(
-                    "instructor-certificates/{$user->id}",
-                    Str::uuid().'.'.$extension,
-                    'local'
-                );
-
-                InstructorCertificate::create([
-                    'user_id' => $user->id,
-                    'file_path' => $storedPath,
-                    'original_name' => $originalName,
-                    'mime_type' => $file->getClientMimeType(),
-                    'file_size' => $file->getSize(),
-                    'title' => pathinfo($originalName, PATHINFO_FILENAME),
-                    'status' => 'draft',
-                    'uploaded_at' => now(),
-                ]);
-            }
-        }
-
-        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
-        if (! $eligibility['can_submit']) {
-            $message = $eligibility['missing_count'] > 0
-                ? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt. Còn thiếu '.$eligibility['missing_count'].' tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']).'.'
-                : ($eligibility['reason'] ?? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt.');
-
-            return back()->with('error', $message);
-        }
-
-        $certsCount = $user->instructorCertificates()->count();
-
-        DB::transaction(function () use ($user, $validated) {
-            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-            app(InstructorRequirementService::class)->promoteDraftCertificatesForReview($lockedUser);
-            $lockedUser->update([
-                'phone' => $validated['phone'],
-                'bio' => $validated['bio'],
-                'instructor_status' => 'pending',
-                'needs_admin_review' => true,
-                'submitted_for_review_at' => now(),
-                'rejected_reason' => null,
-            ]);
-        });
-
-        $profile->fill([
-            'phone' => $validated['phone'],
-            'specialty' => $validated['specialty'],
-            'experience' => $validated['experience'],
-            'bio' => $validated['bio'],
-            'linkedin_url' => $validated['linkedin_url'] ?? null,
-            'github_url' => $validated['github_url'] ?? null,
-            'website_url' => $validated['website_url'] ?? null,
-            'cv' => $cvPath,
-            'agree_information' => true,
-            'agree_terms' => true,
-        ])->save();
-
-        $application = $user->instructorApplication ?? new InstructorApplication(['user_id' => $user->id]);
-        $application->fill([
-            'user_id' => $user->id,
-            'expertise' => $validated['specialty'],
-            'experience' => $validated['experience'],
-            'introduction' => $validated['bio'],
-            'cv_path' => $cvPath,
-            'status' => 'pending',
-            'admin_notes' => null,
-        ])->save();
-
-        ActivityLogService::log($user->id, 'resubmit_instructor_application', User::class, $user->id, [], $request);
-
-        // Notify Admins
-        try {
-            $admins = User::where('role', 'admin')->get();
-            app(NotificationService::class)->sendToMany(
-                $admins,
-                'Hồ sơ Giảng viên nộp lại sau khi chỉnh sửa',
-                "Giảng viên {$user->name} ({$user->email}) vừa gửi lại hồ sơ xét duyệt.",
-                'instructor_application_resubmitted',
-                route('admin.instructors.applications.show', $user)
-            );
-        } catch (\Throwable $e) {
-            Log::error('Gửi thông báo gửi lại hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
-        }
+        ActivityLogService::log($user->id, 'resubmit_instructor_application', User::class, $user->id, [
+            'certificates_count' => $result['certificates_count'],
+        ], $request);
 
         return redirect()->route('instructor.pending')
             ->with('success', 'Hồ sơ của bạn đã được cập nhật và gửi lại cho Ban quản trị xét duyệt.');

@@ -64,7 +64,7 @@
                         </div>
                         <div>
                             <h3 class="font-bold">Hồ sơ đang chờ Ban quản trị xét duyệt</h3>
-                            <p class="text-xs text-blue-700 dark:text-blue-300">Hồ sơ đã nộp lúc {{ $user->submitted_for_review_at->format('d/m/Y H:i') }}. Bạn vẫn có thể tạo khóa học, chỉnh sửa nội dung và tải video bình thường.</p>
+                            <p class="text-xs text-blue-700 dark:text-blue-300">Hồ sơ đã nộp lúc {{ $user->submitted_for_review_at->format('d/m/Y H:i') }}. Hồ sơ, CV, ngành và tài liệu đang được khóa để bảo toàn gói xét duyệt. Bạn chưa thể tạo hoặc quản lý khóa học cho đến khi được phê duyệt.</p>
                         </div>
                     </div>
                 </div>
@@ -217,7 +217,7 @@
     <div x-show="activeTab === 'general'" x-cloak class="space-y-6">
         @php
             $profileValidationFailed = collect($errors->keys())->contains(fn ($key) => in_array($key, [
-                'name', 'username', 'phone', 'avatar', 'bio', 'bank_name', 'bank_account_number', 'bank_account_name',
+                'name', 'username', 'phone', 'avatar', 'cv', 'bio', 'bank_name', 'bank_account_number', 'bank_account_name',
                 'category_ids', 'teaching_fields',
             ], true) || str_starts_with($key, 'category_ids.') || str_starts_with($key, 'teaching_fields.'));
         @endphp
@@ -243,6 +243,14 @@
             @profile-form-fields-changed="checkDirty()">
             @csrf
             @method('PUT')
+
+            @if($user->isGlobalReviewPending())
+                <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+                    Hồ sơ đang được xét duyệt. Mọi thay đổi đối với thông tin hồ sơ, CV, ngành và tài liệu sẽ được mở lại sau khi Admin phản hồi.
+                </div>
+            @endif
+
+            <fieldset @disabled($user->isGlobalReviewPending()) class="space-y-6 disabled:opacity-70">
 
             {{-- SECTION A: THÔNG TIN CÁ NHÂN --}}
             <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -274,6 +282,18 @@
                         <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp"
                             class="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         @error('avatar') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">CV xét duyệt (PDF) *</label>
+                        <input type="file" name="cv" accept="application/pdf"
+                            class="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        @if($profile->cv)
+                            <p class="mt-1 text-xs text-slate-500">Đã có CV: {{ basename($profile->cv) }}. Chọn tệp mới để thay thế.</p>
+                        @else
+                            <p class="mt-1 text-xs font-semibold text-amber-700">Bạn cần tải lên CV trước khi gửi hồ sơ.</p>
+                        @endif
+                        @error('cv') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>
                 </div>
 
@@ -344,7 +364,7 @@
                 removeField(index) {
                     if (this.fields.length > 1) {
                         const removed = this.fields[index];
-                        if (removed?.approval_status === 'approved' && removed?.teaching_field_id) {
+                        if (removed?.teaching_field_id && ['approved', 'draft', 'rejected'].includes(removed?.approval_status || 'draft')) {
                             this.pendingReplacementId = removed.teaching_field_id;
                         }
                         this.fields.splice(index, 1);
@@ -392,7 +412,7 @@
                                 </div>
 
                                 <template x-if="fields.length > 1">
-                                    <button type="button" @click="removeField(index); $dispatch('profile-form-fields-changed')"
+                                    <button type="button" x-show="!['pending', 'superseded'].includes(field.approval_status)" @click="removeField(index); $dispatch('profile-form-fields-changed')"
                                             class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         <span>Xóa ngành này</span>
@@ -410,6 +430,7 @@
                                     </label>
                                     <select :name="'teaching_fields[' + index + '][category_id]'"
                                             x-model="field.category_id"
+                                            :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                             required
                                             class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                         <option value="" disabled>-- Chọn ngành giảng dạy --</option>
@@ -435,6 +456,7 @@
                                     <input type="text"
                                            :name="'teaching_fields[' + index + '][organization]'"
                                            x-model="field.organization"
+                                           :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                            placeholder="VD: Đại học Bách Khoa, FPT Software..."
                                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                 </div>
@@ -446,6 +468,7 @@
                                     <input type="text"
                                            :name="'teaching_fields[' + index + '][position]'"
                                            x-model="field.position"
+                                           :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                            placeholder="VD: Giảng viên chính, Senior Engineer..."
                                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                 </div>
@@ -459,6 +482,7 @@
                                 <input type="text"
                                        :name="'teaching_fields[' + index + '][specialty]'"
                                        x-model="field.specialty"
+                                       :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                        placeholder="VD: Fullstack Web, React, Laravel, Node.js, Cloud..."
                                        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                             </div>
@@ -470,6 +494,7 @@
                                 </label>
                                 <textarea :name="'teaching_fields[' + index + '][experience]'"
                                           x-model="field.experience"
+                                          :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                           rows="3"
                                           placeholder="Mô tả các dự án thực tế, số năm kinh nghiệm hoặc các cơ sở đào tạo đã từng tham gia..."
                                           class="w-full rounded-xl border border-slate-300 bg-white p-3.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white"></textarea>
@@ -517,6 +542,7 @@
                     <span>Lưu thay đổi hồ sơ</span>
                 </button>
             </div>
+            </fieldset>
         </form>
     </div>
 
@@ -545,6 +571,14 @@
             }
         }
     }">
+
+        @if($user->isGlobalReviewPending())
+            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+                Hồ sơ đang được xét duyệt. Bạn có thể xem tài liệu đã gửi nhưng không thể tải lên, thay thế, sửa liên kết hoặc xóa tài liệu lúc này.
+            </div>
+        @endif
+
+        <fieldset @disabled($user->isGlobalReviewPending()) class="contents">
 
         {{-- BANNER TÓM TẮT TIẾN ĐỘ HỒ SƠ THEO NGÀNH --}}
         <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -1051,6 +1085,7 @@
                 </form>
             </div>
         </div>
+        </fieldset>
     </div>
 
     {{-- ========================================================================= --}}

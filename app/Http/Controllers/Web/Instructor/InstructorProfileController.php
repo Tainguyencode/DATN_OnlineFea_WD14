@@ -12,7 +12,9 @@ use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\AuthService;
 use App\Services\InstructorRequirementService;
+use App\Services\InstructorReviewService;
 use App\Services\NotificationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -178,6 +180,7 @@ class InstructorProfileController extends Controller
             'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', 'unique:users,username,'.$user->id],
             'phone' => ['nullable', 'string', 'regex:/^[0-9+\-\s().]{8,20}$/', 'unique:users,phone,'.$user->id],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'cv' => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
             'bio' => ['nullable', 'string', 'max:2000'],
             'category_ids' => ['required', 'array', 'min:1'],
             'category_ids.*' => ['integer', 'distinct', 'exists:categories,id'],
@@ -200,6 +203,8 @@ class InstructorProfileController extends Controller
             'phone.unique' => 'Số điện thoại này đã được sử dụng.',
             'avatar.image' => 'Ảnh đại diện phải là tập tin hình ảnh.',
             'avatar.max' => 'Kích thước ảnh đại diện tối đa là 2MB.',
+            'cv.mimes' => 'CV phải là tệp PDF.',
+            'cv.max' => 'Kích thước CV tối đa là 5MB.',
             'category_ids.required' => 'Vui lòng chọn ít nhất một ngành / lĩnh vực giảng dạy.',
             'category_ids.min' => 'Vui lòng chọn ít nhất một ngành / lĩnh vực giảng dạy.',
             'category_ids.*.exists' => 'Ngành / lĩnh vực giảng dạy đã chọn không hợp lệ.',
@@ -207,60 +212,111 @@ class InstructorProfileController extends Controller
             'teaching_fields.min' => 'Vui lòng cấu hình ít nhất một khối ngành giảng dạy.',
         ]);
 
-        if ($request->hasFile('avatar')) {
-            $oldAvatar = $user->avatar;
-            $validated['avatar'] = $request->file('avatar')->store('avatars', 'public');
-            $authService->deleteAvatar($oldAvatar);
-        } else {
-            unset($validated['avatar']);
+        if (! $user->canEditGlobalReviewPackage()) {
+            return back()->with('error', 'Hồ sơ đang được xét duyệt. Bạn không thể chỉnh sửa thông tin, CV, ngành hoặc tài liệu cho đến khi Admin phản hồi.');
         }
 
-        $userUpdates = [
-            'name' => $validated['name'],
-            'username' => $validated['username'],
-            'phone' => $validated['phone'] ?? null,
-            'bio' => $validated['bio'] ?? null,
-            'avatar' => $validated['avatar'] ?? $user->avatar,
-            'bank_name' => $validated['bank_name'] ?? null,
-            'bank_account_number' => $validated['bank_account_number'] ?? null,
-            'bank_account_name' => $validated['bank_account_name'] ?? null,
-        ];
+        $newPaths = [];
+        $oldAvatar = null;
+        $oldCv = null;
 
-        $user->update($userUpdates);
+        try {
+            $hasTeachingFieldRequestChanges = DB::transaction(function () use ($request, $validated, $user, &$newPaths, &$oldAvatar, &$oldCv): bool {
+                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+                if (! $lockedUser->canEditGlobalReviewPackage()) {
+                    throw ValidationException::withMessages([
+                        'profile' => 'Hồ sơ đang được xét duyệt. Vui lòng chờ Admin phản hồi.',
+                    ]);
+                }
 
-        $profile = InstructorProfile::where('user_id', $user->id)->first() ?? new InstructorProfile(['user_id' => $user->id]);
-        $profile->fill([
-            'phone' => $validated['phone'] ?? $profile->phone ?? '',
-            'bio' => $validated['bio'] ?? $profile->bio ?? '',
-        ])->save();
+                $profile = InstructorProfile::query()->where('user_id', $lockedUser->id)->lockForUpdate()->first();
+                if (! $profile) {
+                    $profile = InstructorProfile::query()->create(['user_id' => $lockedUser->id]);
+                }
+                $lockedFields = $profile->teachingFields()->orderBy('id')->lockForUpdate()->get();
+                InstructorCertificate::query()->where('user_id', $lockedUser->id)->orderBy('id')->lockForUpdate()->get();
+                $lockedUser->instructorApplication()->lockForUpdate()->first();
 
-        $teachingFieldStateBefore = $profile->teachingFields()
-            ->orderBy('id')
-            ->get(['id', 'category_id', 'approval_status'])
-            ->map(fn (InstructorTeachingField $field) => [
-                'id' => (int) $field->id,
-                'category_id' => (int) $field->category_id,
-                'approval_status' => $field->approval_status,
-            ])
-            ->all();
+                $oldAvatar = $lockedUser->avatar;
+                $oldCv = $profile->cv;
+                $avatarPath = $oldAvatar;
+                $cvPath = $oldCv;
+                if ($request->hasFile('avatar')) {
+                    $avatarPath = $request->file('avatar')->store('avatars', 'public');
+                    $newPaths[] = $avatarPath;
+                }
+                if ($request->hasFile('cv')) {
+                    $cvPath = $request->file('cv')->store('instructor_cvs', 'public');
+                    $newPaths[] = $cvPath;
+                }
 
-        // Đồng bộ các khối ngành giảng dạy chi tiết
-        $profile->saveTeachingFieldRequests($validated['teaching_fields']);
+                $lockedUser->update([
+                    'name' => $validated['name'],
+                    'username' => $validated['username'],
+                    'phone' => $validated['phone'] ?? null,
+                    'bio' => $validated['bio'] ?? null,
+                    'avatar' => $avatarPath,
+                    'bank_name' => $validated['bank_name'] ?? null,
+                    'bank_account_number' => $validated['bank_account_number'] ?? null,
+                    'bank_account_name' => $validated['bank_account_name'] ?? null,
+                ]);
 
-        $teachingFieldStateAfter = $profile->teachingFields()
-            ->orderBy('id')
-            ->get(['id', 'category_id', 'approval_status'])
-            ->map(fn (InstructorTeachingField $field) => [
-                'id' => (int) $field->id,
-                'category_id' => (int) $field->category_id,
-                'approval_status' => $field->approval_status,
-            ])
-            ->all();
-        $hasTeachingFieldRequestChanges = $user->instructor_status === 'approved'
-            && $teachingFieldStateBefore !== $teachingFieldStateAfter
-            && collect($teachingFieldStateAfter)->contains(
-                fn (array $field) => $field['approval_status'] === InstructorTeachingField::STATUS_DRAFT
-            );
+                $profile->fill([
+                    'phone' => $validated['phone'] ?? $profile->phone ?? '',
+                    'bio' => $validated['bio'] ?? $profile->bio ?? '',
+                    'cv' => $cvPath,
+                ])->save();
+
+                $teachingFieldStateBefore = $lockedFields->map(fn (InstructorTeachingField $field) => [
+                    'id' => (int) $field->id,
+                    'category_id' => (int) $field->category_id,
+                    'approval_status' => $field->approval_status,
+                ])->all();
+
+                $profile->setRelation('user', $lockedUser);
+                $profile->saveTeachingFieldRequests($validated['teaching_fields']);
+
+                $teachingFieldStateAfter = $profile->teachingFields()
+                    ->orderBy('id')
+                    ->get(['id', 'category_id', 'approval_status'])
+                    ->map(fn (InstructorTeachingField $field) => [
+                        'id' => (int) $field->id,
+                        'category_id' => (int) $field->category_id,
+                        'approval_status' => $field->approval_status,
+                    ])->all();
+
+                return $lockedUser->isApprovedInstructor()
+                    && $teachingFieldStateBefore !== $teachingFieldStateAfter
+                    && collect($teachingFieldStateAfter)->contains(
+                        fn (array $field) => $field['approval_status'] === InstructorTeachingField::STATUS_DRAFT
+                    );
+            }, 3);
+        } catch (QueryException $exception) {
+            foreach ($newPaths as $path) {
+                Storage::disk('public')->delete($path);
+            }
+
+            if (in_array((string) $exception->getCode(), ['23000', '23505'], true)) {
+                throw ValidationException::withMessages([
+                    'teaching_fields' => 'Ngành này đã tồn tại trong hồ sơ hoặc đang có yêu cầu xét duyệt.',
+                ]);
+            }
+
+            throw $exception;
+        } catch (\Throwable $exception) {
+            foreach ($newPaths as $path) {
+                Storage::disk('public')->delete($path);
+            }
+
+            throw $exception;
+        }
+
+        if ($request->hasFile('avatar') && $oldAvatar) {
+            $authService->deleteAvatar($oldAvatar);
+        }
+        if ($request->hasFile('cv') && $oldCv) {
+            Storage::disk('public')->delete($oldCv);
+        }
 
         ActivityLogService::log($user->id, 'update_instructor_profile', User::class, $user->id, null, $request);
 
@@ -325,11 +381,21 @@ class InstructorProfileController extends Controller
         try {
             DB::transaction(function () use ($user, $sourceType, $files, $request, $requirementId, $teachingFieldId, &$requirement, &$teachingField, &$documentType, $customTitle, &$uploadedCount, &$storedPaths): void {
                 $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+                if ($lockedUser->isGlobalReviewPending()) {
+                    throw ValidationException::withMessages([
+                        'documents' => 'Hồ sơ đang được xét duyệt nên không thể thêm hoặc thay đổi tài liệu.',
+                    ]);
+                }
+
+                $profile = InstructorProfile::query()->where('user_id', $lockedUser->id)->lockForUpdate()->first();
+                $fields = $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get() ?? collect();
+                InstructorCertificate::query()->where('user_id', $lockedUser->id)->orderBy('id')->lockForUpdate()->get();
 
                 if ($teachingFieldId) {
-                    $teachingField = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingFieldId);
-                    $teachingField->loadMissing(['profile', 'category.parent']);
-                    abort_unless((int) $teachingField->profile?->user_id === (int) $lockedUser->id && $teachingField->acceptsDocumentUploads(), 403);
+                    $teachingField = $fields->firstWhere('id', $teachingFieldId);
+                    abort_unless($teachingField && $teachingField->acceptsDocumentUploads(), 403);
+                    $teachingField->setRelation('profile', $profile);
+                    $teachingField->loadMissing('category.parent');
 
                     if (! $requirementId) {
                         throw ValidationException::withMessages([
@@ -469,8 +535,15 @@ class InstructorProfileController extends Controller
             }
 
             DB::transaction(function () use ($user, $certificate, $updates, &$oldPath) {
-                User::query()->lockForUpdate()->findOrFail($user->id);
-                $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+                if ($lockedUser->isGlobalReviewPending()) {
+                    abort(409, 'Hồ sơ đang được xét duyệt nên không thể thay đổi tài liệu.');
+                }
+                $profile = InstructorProfile::query()->where('user_id', $user->id)->lockForUpdate()->first();
+                $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get();
+                $certificates = InstructorCertificate::query()->where('user_id', $user->id)->orderBy('id')->lockForUpdate()->get();
+                $locked = $certificates->firstWhere('id', $certificate->id);
+                abort_unless($locked, 403);
                 abort_unless((int) $locked->user_id === (int) $user->id, 403);
                 if (! $locked->isDraft() || $locked->isUrlSource()) {
                     abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
@@ -508,8 +581,15 @@ class InstructorProfileController extends Controller
         $filePath = null;
         $fileName = null;
         DB::transaction(function () use ($user, $certificate, &$filePath, &$fileName): void {
-            User::query()->lockForUpdate()->findOrFail($user->id);
-            $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            if ($lockedUser->isGlobalReviewPending()) {
+                abort(409, 'Hồ sơ đang được xét duyệt nên không thể xóa tài liệu.');
+            }
+            $profile = InstructorProfile::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get();
+            $certificates = InstructorCertificate::query()->where('user_id', $user->id)->orderBy('id')->lockForUpdate()->get();
+            $locked = $certificates->firstWhere('id', $certificate->id);
+            abort_unless($locked, 403);
             abort_unless((int) $locked->user_id === (int) $user->id, 403);
             if (! $locked->isDraft()) {
                 abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
@@ -549,8 +629,15 @@ class InstructorProfileController extends Controller
         ]);
 
         DB::transaction(function () use ($user, $certificate, $validated): void {
-            User::query()->lockForUpdate()->findOrFail($user->id);
-            $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            if ($lockedUser->isGlobalReviewPending()) {
+                abort(409, 'Hồ sơ đang được xét duyệt nên không thể thay đổi tài liệu.');
+            }
+            $profile = InstructorProfile::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get();
+            $certificates = InstructorCertificate::query()->where('user_id', $user->id)->orderBy('id')->lockForUpdate()->get();
+            $locked = $certificates->firstWhere('id', $certificate->id);
+            abort_unless($locked, 403);
             abort_unless((int) $locked->user_id === (int) $user->id && $locked->isUrlSource(), 403);
             if (! $locked->isDraft()) {
                 abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
@@ -607,188 +694,44 @@ class InstructorProfileController extends Controller
         abort(404, 'Tệp tài liệu không tồn tại trên hệ thống.');
     }
 
-    public function submitForReview(Request $request): RedirectResponse
+    public function submitForReview(Request $request, InstructorReviewService $reviewService): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
 
-        if ($user->instructor_status === 'approved') {
-            return back()->with('active_tab', 'documents')->with('error', 'Hãy gửi xét duyệt riêng cho ngành chưa được duyệt.');
-        }
-
-        $requirements = app(InstructorRequirementService::class);
-        $result = DB::transaction(function () use ($user, $requirements): array {
-            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-            if ($lockedUser->instructor_status === 'approved') {
-                return ['submitted' => false, 'error' => 'Hãy gửi xét duyệt riêng cho ngành chưa được duyệt.'];
-            }
-
-            $lockedCertificates = InstructorCertificate::query()
-                ->where('user_id', $lockedUser->id)
-                ->lockForUpdate()
-                ->get();
-            $lockedUser->setRelation('instructorCertificates', $lockedCertificates);
-            $eligibility = $requirements->getSubmitEligibility($lockedUser);
-            if (! $eligibility['can_submit']) {
-                return ['submitted' => false, 'error' => $this->submitEligibilityError($eligibility)];
-            }
-            if ($lockedUser->instructor_status === 'pending' && $lockedUser->submitted_for_review_at) {
-                return ['submitted' => false, 'error' => 'Hồ sơ đã được gửi xét duyệt trước đó.'];
-            }
-
-            $certsCount = $lockedCertificates->count();
-            $requirements->promoteDraftCertificatesForReview($lockedUser);
-            $lockedUser->update([
-                'submitted_for_review_at' => now(),
-                'instructor_status' => 'pending',
-                'needs_admin_review' => true,
-                'rejected_reason' => null,
-            ]);
-
-            if ($lockedUser->instructorApplication) {
-                $lockedUser->instructorApplication->update([
-                    'status' => 'pending',
-                    'admin_notes' => null,
-                ]);
-            }
-
-            return ['submitted' => true, 'certificates_count' => $certsCount];
-        });
+        $result = $reviewService->submitGlobal($user);
 
         if (! $result['submitted']) {
             return back()->with('active_tab', 'documents')->with('error', $result['error']);
         }
 
-        $certsCount = $result['certificates_count'];
-
-        ActivityLogService::log($user->id, 'submit_instructor_application', User::class, $user->id, [
-            'certificates_count' => $certsCount,
+        ActivityLogService::log($user->id, ($result['resubmission'] ?? false) ? 'resubmit_instructor_application' : 'submit_instructor_application', User::class, $user->id, [
+            'certificates_count' => $result['certificates_count'],
         ], $request);
-
-        try {
-            app(NotificationService::class)->notifyAdmins(
-                'Hồ sơ Giảng viên mới cần duyệt',
-                "Giảng viên {$user->name} ({$user->email}) vừa gửi hồ sơ xét duyệt với {$certsCount} tài liệu.",
-                'instructor_application_submitted',
-                route('admin.instructors.applications.show', $user)
-            );
-        } catch (\Throwable $e) {
-            Log::error('Gửi thông báo nộp hồ sơ giảng viên cho admin thất bại: '.$e->getMessage());
-        }
 
         return back()->with('active_tab', 'documents')->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
     }
 
-    public function submitTeachingFieldForReview(Request $request, InstructorTeachingField $teachingField): RedirectResponse
+    public function submitTeachingFieldForReview(Request $request, InstructorTeachingField $teachingField, InstructorReviewService $reviewService): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
-        $teachingField->loadMissing(['profile', 'category']);
-        abort_unless((int) $teachingField->profile?->user_id === (int) $user->id, 403);
-        if (! $teachingField->isEditable()) {
-            return back()->with('active_tab', 'documents')->with('error', 'Ngành này không ở trạng thái có thể gửi xét duyệt.');
-        }
 
-        $requirements = app(InstructorRequirementService::class);
-        $result = DB::transaction(function () use ($user, $teachingField, $requirements): array {
-            User::query()->lockForUpdate()->findOrFail($user->id);
-            $locked = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
-            $locked->loadMissing(['profile', 'category.parent']);
-            abort_unless((int) $locked->profile?->user_id === (int) $user->id, 403);
-            if (! $locked->isEditable()) {
-                return ['submitted' => false, 'error' => 'Ngành không còn ở trạng thái có thể gửi.'];
-            }
-
-            $lockedCertificates = InstructorCertificate::query()
-                ->where('user_id', $user->id)
-                ->where('instructor_teaching_field_id', $locked->id)
-                ->lockForUpdate()
-                ->get();
-            $locked->setRelation('certificates', $lockedCertificates);
-            $eligibility = $requirements->getTeachingFieldSubmitEligibility($locked);
-            if (! $eligibility['can_submit']) {
-                return [
-                    'submitted' => false,
-                    'error' => 'Ngành này còn thiếu tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']),
-                ];
-            }
-
-            $requirements->promoteDraftCertificatesForTeachingField($locked);
-            $locked->update([
-                'approval_status' => InstructorTeachingField::STATUS_PENDING,
-                'submitted_at' => now(),
-                'reviewed_at' => null,
-                'reviewed_by' => null,
-                'rejection_reason' => null,
-            ]);
-
-            return ['submitted' => true];
-        });
+        $result = $reviewService->submitTeachingField($user, $teachingField);
 
         if (! $result['submitted']) {
             return back()->with('active_tab', 'documents')->with('error', $result['error']);
-        }
-
-        try {
-            app(NotificationService::class)->notifyAdmins(
-                'Yêu cầu duyệt ngành giảng dạy',
-                "Giảng viên {$user->name} vừa gửi ngành {$teachingField->category?->name} để xét duyệt.",
-                'instructor_teaching_field_submitted',
-                route('admin.instructors.teaching-fields.index')
-            );
-        } catch (\Throwable $e) {
-            Log::warning('Không thể gửi thông báo duyệt ngành: '.$e->getMessage());
         }
 
         return back()->with('active_tab', 'documents')->with('success', 'Đã gửi xét duyệt ngành này. Quyền tạo khóa học chỉ được cấp sau khi Admin phê duyệt.');
     }
 
-    public function submitTeachingFieldSupplement(Request $request, InstructorTeachingField $teachingField): RedirectResponse
+    public function submitTeachingFieldSupplement(Request $request, InstructorTeachingField $teachingField, InstructorReviewService $reviewService): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
 
-        $requirements = app(InstructorRequirementService::class);
-        $result = DB::transaction(function () use ($teachingField, $requirements, $user): array {
-            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-            $locked = InstructorTeachingField::query()
-                ->with(['profile', 'category.parent'])
-                ->lockForUpdate()
-                ->findOrFail($teachingField->id);
-            abort_unless((int) $locked->profile?->user_id === (int) $lockedUser->id, 403);
-
-            if (! $locked->isApproved()) {
-                return ['submitted' => false, 'error' => 'Chỉ ngành đã được duyệt mới dùng luồng gửi bổ sung hồ sơ.'];
-            }
-
-            $allowedRequirementIds = $requirements->getRequirementsForTeachingField($locked)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-            $drafts = InstructorCertificate::query()
-                ->where('user_id', $lockedUser->id)
-                ->where('instructor_teaching_field_id', $locked->id)
-                ->where('status', 'draft')
-                ->lockForUpdate()
-                ->get();
-
-            if ($drafts->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'documents' => 'Ngành này chưa có tài liệu bổ sung ở trạng thái nháp để gửi.',
-                ]);
-            }
-
-            if ($drafts->contains(fn (InstructorCertificate $certificate) => ! in_array((int) $certificate->requirement_id, $allowedRequirementIds, true))) {
-                throw ValidationException::withMessages([
-                    'documents' => 'Có tài liệu nháp không còn thuộc yêu cầu hiện hành của ngành. Vui lòng kiểm tra lại trước khi gửi.',
-                ]);
-            }
-
-            return [
-                'submitted' => true,
-                'certificates_count' => $requirements->promoteDraftCertificatesForTeachingField($locked),
-            ];
-        });
+        $result = $reviewService->submitTeachingFieldSupplement($user, $teachingField);
 
         if (! $result['submitted']) {
             return back()->with('active_tab', 'documents')->with('error', $result['error']);
@@ -800,30 +743,7 @@ class InstructorProfileController extends Controller
             'certificates_count' => $submittedCount,
         ], $request);
 
-        try {
-            app(NotificationService::class)->notifyAdmins(
-                'Hồ sơ ngành đã duyệt cần xét duyệt bổ sung',
-                "Giảng viên {$user->name} vừa gửi {$submittedCount} tài liệu bổ sung cho ngành {$teachingField->category?->name}.",
-                'instructor_document_supplement_submitted',
-                route('admin.instructors.applications.show', $user)
-            );
-        } catch (\Throwable $e) {
-            Log::warning('Không thể gửi thông báo duyệt tài liệu bổ sung: '.$e->getMessage());
-        }
-
         return back()->with('active_tab', 'documents')->with('success', 'Đã gửi bổ sung hồ sơ ngành này. Các tài liệu đang chờ Admin duyệt.');
-    }
-
-    /** @param array{missing_count: int, missing_titles: array<int, string>, reason: ?string} $eligibility */
-    private function submitEligibilityError(array $eligibility): string
-    {
-        if ($eligibility['missing_count'] > 0) {
-            $titles = implode(', ', $eligibility['missing_titles']);
-
-            return "Hồ sơ chưa đủ điều kiện gửi xét duyệt. Còn thiếu {$eligibility['missing_count']} tài liệu bắt buộc: {$titles}.";
-        }
-
-        return $eligibility['reason'] ?? 'Hồ sơ chưa đủ điều kiện gửi xét duyệt.';
     }
 
     public function requestReactivation(Request $request): RedirectResponse

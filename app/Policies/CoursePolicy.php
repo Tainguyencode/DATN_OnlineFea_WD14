@@ -27,22 +27,22 @@ class CoursePolicy
 
     public function create(User $user): bool
     {
-        return $user->isInstructor();
+        return $user->isAdmin() || $user->isApprovedInstructor();
     }
 
     public function update(User $user, Course $course): bool
     {
-        return $course->isOwnedBy($user) && $course->isEditable();
+        return $user->isApprovedInstructor() && $course->isOwnedBy($user) && $course->isEditable();
     }
 
     public function delete(User $user, Course $course): bool
     {
-        return $course->isOwnedBy($user);
+        return $user->isApprovedInstructor() && $course->isOwnedBy($user);
     }
 
     public function submit(User $user, Course $course): bool
     {
-        return $course->isOwnedBy($user) && $course->isEditable();
+        return $user->isApprovedInstructor() && $course->isOwnedBy($user) && $course->isEditable();
     }
 
     public function review(User $user, Course $course): bool

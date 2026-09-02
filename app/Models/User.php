@@ -10,6 +10,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -287,6 +288,43 @@ class User extends Authenticatable implements MustVerifyEmail
         return $query->where('needs_admin_review', true);
     }
 
+    public function scopePendingInstructorReview(Builder $query): Builder
+    {
+        return $query
+            ->where('role', 'instructor')
+            ->where('instructor_status', 'pending')
+            ->whereNotNull('submitted_for_review_at');
+    }
+
+    public function isGlobalReviewPending(): bool
+    {
+        return $this->role === 'instructor'
+            && $this->instructor_status === 'pending'
+            && $this->submitted_for_review_at !== null;
+    }
+
+    public function canEditGlobalReviewPackage(): bool
+    {
+        return $this->role === 'instructor' && ! $this->isGlobalReviewPending();
+    }
+
+    public function canSubmitInitialInstructorReview(): bool
+    {
+        return $this->role === 'instructor'
+            && $this->instructor_status === 'pending'
+            && $this->submitted_for_review_at === null;
+    }
+
+    public function canResubmitInstructorReview(): bool
+    {
+        return $this->role === 'instructor' && $this->instructor_status === 'rejected';
+    }
+
+    public function isApprovedInstructor(): bool
+    {
+        return $this->role === 'instructor' && $this->instructor_status === 'approved';
+    }
+
     public function markNeedsAdminReview(): bool
     {
         return $this->update([
@@ -435,7 +473,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function dashboardUrl(): string
     {
         if ($this->role === 'instructor') {
-            if ($this->isLocked()) {
+            if ($this->isLocked() || ! $this->isApprovedInstructor()) {
                 return route('instructor.profile');
             }
 

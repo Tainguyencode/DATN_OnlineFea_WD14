@@ -84,7 +84,7 @@
             </a>
 
             <div class="flex items-center gap-3">
-                @if($application->instructor_status !== 'approved')
+                @if($application->isGlobalReviewPending() && $application->instructorApplication?->isPending())
                     @if($requirementData['summary']['can_approve'])
                         <form method="POST" action="{{ route('admin.instructors.applications.approve', $application) }}">
                             @csrf
@@ -107,7 +107,7 @@
                     @endif
                 @endif
 
-                @if($application->instructor_status !== 'rejected')
+                @if($application->isGlobalReviewPending() && $application->instructorApplication?->isPending())
                     <button type="button" @click="rejectModal = true" class="cursor-pointer rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-rose-700 active:scale-95">
                         ✖ Từ chối hồ sơ
                     </button>

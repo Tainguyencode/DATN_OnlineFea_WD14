@@ -19,6 +19,7 @@ class InstructorTeachingFieldReviewController extends Controller
         $status = $request->query('status', InstructorTeachingField::STATUS_PENDING);
         $fields = InstructorTeachingField::query()
             ->with(['profile.user:id,name,email,username', 'category.parent', 'replacedField.category', 'certificates.requirement'])
+            ->whereHas('profile.user', fn ($query) => $query->where('instructor_status', 'approved'))
             ->when(in_array($status, [InstructorTeachingField::STATUS_DRAFT, InstructorTeachingField::STATUS_PENDING, InstructorTeachingField::STATUS_APPROVED, InstructorTeachingField::STATUS_REJECTED, InstructorTeachingField::STATUS_SUPERSEDED], true), fn ($query) => $query->where('approval_status', $status))
             ->latest('submitted_at')
             ->latest('id')
@@ -26,7 +27,7 @@ class InstructorTeachingFieldReviewController extends Controller
             ->withQueryString();
 
         $requirements = app(InstructorRequirementService::class);
-        $fields->getCollection()->each(fn (InstructorTeachingField $field) => $field->setAttribute('requirement_data', $requirements->getTeachingFieldRequirementData($field)));
+        $fields->getCollection()->each(fn (InstructorTeachingField $field) => $field->setAttribute('requirement_data', $requirements->getTeachingFieldAdminReviewData($field)));
 
         return view('admin.instructors.teaching-fields.index', compact('fields', 'status'));
     }
@@ -37,14 +38,22 @@ class InstructorTeachingFieldReviewController extends Controller
         $ownerId = (int) $teachingField->profile?->user_id;
 
         DB::transaction(function () use ($request, $teachingField, $ownerId): void {
-            User::query()->lockForUpdate()->findOrFail($ownerId);
-            $field = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
+            $owner = User::query()->lockForUpdate()->findOrFail($ownerId);
+            abort_unless($owner->isApprovedInstructor(), 422, 'Chỉ xử lý ngành độc lập của giảng viên đã được phê duyệt.');
+            $profile = $owner->instructorProfile()->lockForUpdate()->firstOrFail();
+            $fields = $profile->teachingFields()->orderBy('id')->lockForUpdate()->get();
+            $field = $fields->firstWhere('id', $teachingField->id);
+            abort_unless($field, 404);
             abort_unless($field->approval_status === InstructorTeachingField::STATUS_PENDING, 422, 'Chỉ ngành đang chờ duyệt mới có thể phê duyệt.');
-            $field->loadMissing(['profile', 'category.parent']);
+            $field->setRelation('profile', $profile);
+            $field->loadMissing('category.parent');
 
-            $lockedCertificates = $field->certificates()->lockForUpdate()->get();
+            $lockedCertificates = $owner->instructorCertificates()->orderBy('id')->lockForUpdate()->get()
+                ->where('instructor_teaching_field_id', $field->id)->values();
             $field->setRelation('certificates', $lockedCertificates);
-            $eligibility = app(InstructorRequirementService::class)->getTeachingFieldAdminApprovalEligibility($field);
+            $requirements = app(InstructorRequirementService::class);
+            $currentRequirementIds = $requirements->getRequirementsForTeachingField($field)->pluck('id');
+            $eligibility = $requirements->getTeachingFieldAdminApprovalEligibility($field);
             abort_unless(
                 $eligibility['can_submit'],
                 422,
@@ -52,10 +61,7 @@ class InstructorTeachingFieldReviewController extends Controller
             );
 
             $replacedField = $field->replace_of_teaching_field_id
-                ? InstructorTeachingField::query()
-                    ->where('instructor_profile_id', $field->instructor_profile_id)
-                    ->lockForUpdate()
-                    ->find($field->replace_of_teaching_field_id)
+                ? $fields->firstWhere('id', $field->replace_of_teaching_field_id)
                 : null;
 
             abort_if(
@@ -73,6 +79,7 @@ class InstructorTeachingFieldReviewController extends Controller
 
             $field->certificates()
                 ->where('status', 'pending')
+                ->whereIn('requirement_id', $currentRequirementIds)
                 ->update([
                     'status' => 'approved',
                     'reviewed_at' => now(),
@@ -112,11 +119,24 @@ class InstructorTeachingFieldReviewController extends Controller
         $ownerId = (int) $teachingField->profile?->user_id;
 
         DB::transaction(function () use ($request, $teachingField, $validated, $ownerId): void {
-            User::query()->lockForUpdate()->findOrFail($ownerId);
-            $field = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
+            $owner = User::query()->lockForUpdate()->findOrFail($ownerId);
+            abort_unless($owner->isApprovedInstructor(), 422, 'Chỉ xử lý ngành độc lập của giảng viên đã được phê duyệt.');
+            $profile = $owner->instructorProfile()->lockForUpdate()->firstOrFail();
+            $fields = $profile->teachingFields()->orderBy('id')->lockForUpdate()->get();
+            $field = $fields->firstWhere('id', $teachingField->id);
+            abort_unless($field, 404);
             abort_unless($field->approval_status === InstructorTeachingField::STATUS_PENDING, 422, 'Chỉ ngành đang chờ duyệt mới có thể từ chối.');
+            $certificates = $owner->instructorCertificates()->orderBy('id')->lockForUpdate()->get()
+                ->where('instructor_teaching_field_id', $field->id)
+                ->where('status', 'pending');
             $field->update([
                 'approval_status' => InstructorTeachingField::STATUS_REJECTED,
+                'reviewed_at' => now(),
+                'reviewed_by' => $request->user()->id,
+                'rejection_reason' => $validated['rejection_reason'],
+            ]);
+            $field->certificates()->whereKey($certificates->pluck('id'))->update([
+                'status' => 'rejected',
                 'reviewed_at' => now(),
                 'reviewed_by' => $request->user()->id,
                 'rejection_reason' => $validated['rejection_reason'],

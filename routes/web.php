@@ -11,6 +11,7 @@ use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\InstructorApplicationController;
 use App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController;
+use App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController;
 use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
@@ -24,7 +25,6 @@ use App\Http\Controllers\Web\Admin\WithdrawalController as AdminWithdrawalContro
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\DiscussionController;
-use App\Http\Controllers\Web\MessengerController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\Instructor\ContentVersionHistoryController as InstructorContentVersionHistoryController;
 use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponController;
@@ -50,6 +50,7 @@ use App\Http\Controllers\Web\LearningPathAiController;
 use App\Http\Controllers\Web\LearningPathController;
 use App\Http\Controllers\Web\LegalDocumentController;
 use App\Http\Controllers\Web\LessonCommentController;
+use App\Http\Controllers\Web\MessengerController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\PageController;
 use App\Http\Controllers\Web\PaymentController;
@@ -480,6 +481,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
 
     // Quản lý duyệt Giảng viên
     Route::get('/instructors/statistics', [InstructorApplicationController::class, 'statistics'])->name('instructors.statistics');
+    Route::get('/instructors/supplements', [InstructorApplicationController::class, 'supplements'])->name('instructors.supplements.index');
     Route::prefix('instructors/applications')->name('instructors.applications.')->group(function () {
         Route::get('/', [InstructorApplicationController::class, 'index'])->name('index');
         Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');
@@ -493,9 +495,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     });
 
     Route::prefix('instructors/teaching-fields')->name('instructors.teaching-fields.')->group(function () {
-        Route::get('/', [App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController::class, 'index'])->name('index');
-        Route::post('/{teachingField}/approve', [App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController::class, 'approve'])->name('approve');
-        Route::post('/{teachingField}/reject', [App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController::class, 'reject'])->name('reject');
+        Route::get('/', [InstructorTeachingFieldReviewController::class, 'index'])->name('index');
+        Route::post('/{teachingField}/approve', [InstructorTeachingFieldReviewController::class, 'approve'])->name('approve');
+        Route::post('/{teachingField}/reject', [InstructorTeachingFieldReviewController::class, 'reject'])->name('reject');
     });
 
     // Quản lý cấu hình yêu cầu hồ sơ theo ngành
