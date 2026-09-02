@@ -42,13 +42,13 @@
 @endphp
 
 <article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white transition-all duration-300 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 dark:border-slate-800/80 dark:bg-[#161615] dark:hover:border-indigo-500/50 dark:hover:shadow-none">
-    <div class="relative aspect-video overflow-hidden bg-gradient-to-br {{ $gradient }}">
-        <a href="{{ route('courses.show', $course->slug) }}" class="block h-full" aria-label="Xem chi tiết {{ $course->title }}">
+    <div class="relative h-[150px] sm:h-[155px] w-full overflow-hidden bg-gradient-to-br {{ $gradient }}">
+        <a href="{{ route('courses.show', $course->slug) }}" class="block h-full w-full" aria-label="Xem chi tiết {{ $course->title }}">
             @if($course->thumbnail)
                 <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80'">
             @else
                 <div class="absolute inset-0 flex items-center justify-center">
-                    <svg class="h-14 w-14 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824 2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg>
+                    <svg class="h-10 w-10 text-white/40" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 0 6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824 2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg>
                 </div>
             @endif
         </a>
@@ -58,72 +58,72 @@
         @endunless
 
         @if($course->is_featured)
-            <span class="absolute left-2 top-2 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Best Seller</span>
+            <span class="absolute left-2 top-2 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Nổi bật</span>
         @endif
-        <span class="absolute bottom-2 right-2 rounded bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">
+        <span class="absolute bottom-2 right-2 rounded bg-white/95 px-2 py-0.5 text-[10px] font-semibold text-slate-700 shadow-xs dark:bg-slate-900/95 dark:text-slate-200">
             {{ $levelLabels[$course->level] ?? $course->level }}
         </span>
     </div>
 
-    <div class="flex flex-1 flex-col p-4">
+    <div class="flex flex-1 flex-col p-3.5 sm:p-4">
         @if($course->category)
-            <a href="{{ route('courses.category', $course->category->slug) }}" class="mb-1 text-xs font-semibold uppercase tracking-wide text-[#0056D2] transition hover:text-indigo-700 dark:text-blue-300 dark:hover:text-blue-200">
-                {{ $course->category->full_name }}
-            </a>
+            <div class="mb-1.5 flex items-center justify-between gap-2">
+                <a href="{{ route('courses.category', $course->category->slug) }}" class="truncate text-[11px] font-bold uppercase tracking-wider text-[#0056D2] transition hover:text-indigo-700 dark:text-blue-300 dark:hover:text-blue-200">
+                    {{ $course->category->full_name }}
+                </a>
+            </div>
         @endif
 
-        <h3 class="mb-1.5 line-clamp-2 min-h-10 text-base font-bold leading-snug text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">
-            <a href="{{ route('courses.show', $course->slug) }}">{{ $course->title }}</a>
+        <h3 class="line-clamp-2 h-[40px] text-[14px] font-bold leading-snug text-slate-900 transition duration-200 group-hover:text-[#0056D2] dark:text-white dark:group-hover:text-blue-300">
+            <a href="{{ route('courses.show', $course->slug) }}" title="{{ $course->title }}">{{ $course->title }}</a>
         </h3>
 
-        <p class="mb-3 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-            {{ $course->short_description ?: Str::limit($course->description, 110) }}
-        </p>
-
-        <p class="mb-1.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+        <p class="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
             {{ $course->instructor?->name ?? 'Giảng viên FEA' }}
         </p>
 
         @if($recommendationReason)
-            <p class="mb-2 line-clamp-1 rounded bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+            <p class="mt-1.5 line-clamp-1 rounded bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
                 {{ $recommendationReason }}
             </p>
         @endif
 
-        <div class="mb-1.5 flex items-center gap-1">
-            <span class="text-sm font-bold text-amber-600 dark:text-amber-400">{{ number_format((float) $course->rating_avg, 1) }}</span>
-            @for($i = 1; $i <= 5; $i++)
-                <svg class="h-3.5 w-3.5 {{ $i <= round($course->rating_avg) ? 'fill-amber-500 text-amber-500' : 'text-slate-300 dark:text-slate-700' }}" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                </svg>
-            @endfor
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">({{ $course->rating_count }})</span>
+        <div class="mt-1.5 flex items-center gap-1">
+            <span class="text-xs font-bold text-amber-600 dark:text-amber-400">{{ number_format((float) $course->rating_avg, 1) }}</span>
+            <div class="flex items-center">
+                @for($i = 1; $i <= 5; $i++)
+                    <svg class="h-3 w-3 {{ $i <= round($course->rating_avg) ? 'fill-amber-500 text-amber-500' : 'text-slate-200 dark:text-slate-700' }}" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                @endfor
+            </div>
+            <span class="text-[11px] text-slate-400 dark:text-slate-500">({{ $course->rating_count }})</span>
         </div>
 
-        <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">{{ $course->enrollment_count }} học viên • {{ $levelLabels[$course->level] ?? $course->level }}</p>
+        <div class="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <span>{{ $lessonCount }} bài học</span>
+            <span class="text-slate-300 dark:text-slate-700">•</span>
+            <span>{{ number_format((int) $course->enrollment_count) }} học viên</span>
+        </div>
 
-        <div class="mt-auto">
-            <div>
+        <div class="mt-auto pt-2.5">
+            <div class="flex items-baseline gap-1.5">
                 @if($isEnrolled)
-                    <span class="text-base font-bold text-indigo-600 dark:text-indigo-400">Đã thanh toán</span>
+                    <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400">Đã sở hữu</span>
                 @elseif($price == 0)
-                    <span class="text-base font-bold text-emerald-600 dark:text-emerald-400">Miễn phí</span>
+                    <span class="text-sm font-bold text-emerald-600 dark:text-emerald-400">Miễn phí</span>
                 @else
-                    <span class="text-base font-bold text-slate-900 dark:text-white">{{ number_format($price, 0, ',', '.') }}đ</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-white">{{ number_format($price, 0, ',', '.') }}đ</span>
                     @if($originalPrice)
-                        <span class="ml-1 text-sm text-slate-500 line-through dark:text-slate-400">{{ number_format($originalPrice, 0, ',', '.') }}đ</span>
+                        <span class="text-[11px] text-slate-400 line-through dark:text-slate-500">{{ number_format($originalPrice, 0, ',', '.') }}đ</span>
                     @endif
                 @endif
             </div>
-            <span class="flex items-center gap-1 text-xs font-medium text-slate-400 dark:text-slate-400">
-                <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 1 1 0 5.292M15 21H3v-1a6 6 0 0 1 12 0v1zm0 0h6v-1a6 6 0 0 0-9-5.197M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
-                {{ $lessonCount }} bài
-            </span>
-        </div>
 
-        <a href="{{ route('courses.show', $course->slug) }}" class="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200">
-            Xem chi tiết
-        </a>
+            <a href="{{ route('courses.show', $course->slug) }}" class="mt-2.5 inline-flex h-9 w-full items-center justify-center rounded-xl bg-slate-950 text-xs font-bold text-white shadow-2xs transition hover:bg-indigo-600 dark:bg-white dark:text-slate-950 dark:hover:bg-indigo-200">
+                Xem chi tiết
+            </a>
+        </div>
 
         @if($showActions)
             <div class="mt-3 grid gap-2 sm:grid-cols-2">

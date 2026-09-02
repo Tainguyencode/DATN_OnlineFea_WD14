@@ -30,6 +30,9 @@ class StoreCourseRequest extends FormRequest
      */
     public function rules(): array
     {
+        /** @var Course|null $course */
+        $course = $this->route('course');
+
         return [
             'title' => ['required', 'string', 'max:255'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
@@ -37,7 +40,33 @@ class StoreCourseRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:10000'],
             'objectives' => ['nullable', 'string', 'max:5000'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:2048'],
-            'preview_video' => ['nullable', 'url:http,https', 'max:2048'],
+            'preview_video' => [
+                'nullable',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail) use ($course): void {
+                    $previewVideo = trim((string) $value);
+                    if ($previewVideo === '') {
+                        return;
+                    }
+
+                    if ($course?->isCoursePreviewObjectKey($previewVideo)) {
+                        return;
+                    }
+
+                    // Existing external links can be retained or removed, but
+                    // the new form never accepts a new arbitrary external URL.
+                    $scheme = strtolower((string) parse_url($previewVideo, PHP_URL_SCHEME));
+                    $isLegacyCurrentValue = $course
+                        && hash_equals((string) $course->preview_video, $previewVideo)
+                        && in_array($scheme, ['http', 'https'], true)
+                        && filter_var($previewVideo, FILTER_VALIDATE_URL);
+
+                    if (! $isLegacyCurrentValue) {
+                        $fail('Video giới thiệu phải là video MP4 được tải lên cho đúng khóa học này.');
+                    }
+                },
+            ],
             'price' => ['required', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000'],
             'discount_price' => ['nullable', 'numeric', 'multiple_of:1000', 'min:0', 'max:100000000', 'lte:price'],
             'level' => ['nullable', Rule::in(['beginner', 'intermediate', 'advanced'])],
@@ -110,8 +139,7 @@ class StoreCourseRequest extends FormRequest
             'thumbnail.mimes' => 'Ảnh thumbnail chỉ chấp nhận định dạng JPG, JPEG, PNG, WebP hoặc GIF.',
             'thumbnail.max' => 'Ảnh thumbnail không được vượt quá 2MB.',
 
-            'preview_video.url' => 'Link video giới thiệu phải là địa chỉ HTTP hoặc HTTPS hợp lệ.',
-            'preview_video.max' => 'Link video giới thiệu không được vượt quá :max ký tự.',
+            'preview_video.max' => 'Video giới thiệu không được vượt quá :max ký tự.',
 
             'price.required' => 'Vui lòng nhập giá gốc khóa học.',
             'price.numeric' => 'Giá gốc phải là một số.',

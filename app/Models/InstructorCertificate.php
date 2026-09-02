@@ -140,12 +140,18 @@ class InstructorCertificate extends Model
     public function isImage(): bool
     {
         return in_array(strtolower($this->mime_type ?? ''), ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'], true)
-            || preg_match('/\.(jpg|jpeg|png|webp)$/i', $this->file_path);
+            || preg_match('/\.(jpg|jpeg|png|webp)$/i', (string) $this->file_path);
     }
 
     public function isPdf(): bool
     {
         return strtolower($this->mime_type ?? '') === 'application/pdf'
-            || preg_match('/\.pdf$/i', $this->file_path);
+            || preg_match('/\.pdf$/i', (string) $this->file_path);
+    }
+
+    public function isVideo(): bool
+    {
+        return str_starts_with(strtolower((string) $this->mime_type), 'video/')
+            || preg_match('/\.(mp4|mov|webm)$/i', (string) ($this->original_name ?: $this->file_path));
     }
 }

@@ -50,6 +50,11 @@ class InstructorRequirementService
         $certificates = $instructor->relationLoaded('instructorCertificates')
             ? $instructor->instructorCertificates
             : $instructor->instructorCertificates()->get();
+        $teachingFieldCategoryIds = $instructor->instructorProfile
+            ? $instructor->instructorProfile->teachingFields()
+                ->pluck('category_id', 'id')
+                ->map(fn ($categoryId) => (int) $categoryId)
+            : collect();
 
         $allFlatRequirements = [];
         $categoriesRequirements = [];
@@ -81,17 +86,22 @@ class InstructorRequirementService
 
             foreach ($catRequirements as $req) {
                 // Tìm tài liệu nộp cho requirement này
-                $reqCerts = $certificates->filter(function ($cert) use ($req) {
-                    if ($cert->requirement_id === $req->id) {
+                $reqCerts = $certificates->filter(function ($cert) use ($req, $cat, $teachingFieldCategoryIds) {
+                    $matchesRequirement = $cert->requirement_id === $req->id
+                        // Tương thích ngược với tài liệu cũ chưa gán requirement_id.
+                        || ($cert->requirement_id === null && $cert->status !== 'draft' && $cert->document_type === $req->document_type);
+                    if (! $matchesRequirement) {
+                        return false;
+                    }
+
+                    // Tài liệu legacy không gắn ngành vẫn giữ hành vi cũ. Tài liệu
+                    // mới đã gắn ngành chỉ được đáp ứng đúng ngành đó, kể cả khi
+                    // nhiều ngành con cùng kế thừa một requirement của ngành cha.
+                    if (! $cert->instructor_teaching_field_id) {
                         return true;
                     }
 
-                    // Tương thích ngược với tài liệu cũ chưa gán requirement_id
-                    if ($cert->requirement_id === null && $cert->status !== 'draft' && $cert->document_type === $req->document_type) {
-                        return true;
-                    }
-
-                    return false;
+                    return $teachingFieldCategoryIds->get((int) $cert->instructor_teaching_field_id) === (int) $cat->id;
                 });
 
                 $approvedDocs = $reqCerts->where('status', 'approved');
@@ -359,6 +369,35 @@ class InstructorRequirementService
         ];
     }
 
+    /** @return array{required_count: int, submitted_count: int, missing_count: int, missing_titles: array<int, string>, can_submit: bool, reason: ?string} */
+    public function getTeachingFieldAdminApprovalEligibility(InstructorTeachingField $field): array
+    {
+        $field->loadMissing(['category.parent', 'certificates']);
+        $required = $this->getRequirementsForTeachingField($field)->where('is_required', true);
+        $missingTitles = [];
+
+        foreach ($required as $requirement) {
+            $hasReviewableDocument = $field->certificates->contains(
+                fn (InstructorCertificate $certificate) => (int) $certificate->requirement_id === (int) $requirement->id
+                    && in_array($certificate->status, ['pending', 'approved'], true)
+            );
+            if (! $hasReviewableDocument) {
+                $missingTitles[] = $requirement->document_title;
+            }
+        }
+
+        $missingCount = count($missingTitles);
+
+        return [
+            'required_count' => $required->count(),
+            'submitted_count' => $required->count() - $missingCount,
+            'missing_count' => $missingCount,
+            'missing_titles' => $missingTitles,
+            'can_submit' => $missingCount === 0,
+            'reason' => $missingCount === 0 ? null : 'Ngành còn thiếu tài liệu đã gửi để Admin xét duyệt.',
+        ];
+    }
+
     public function promoteDraftCertificatesForTeachingField(InstructorTeachingField $field): int
     {
         $requirementIds = $this->getRequirementsForTeachingField($field)->pluck('id')->all();
@@ -458,20 +497,26 @@ class InstructorRequirementService
 
         $submittedCount = 0;
         $missingTitles = [];
-        foreach ($requirements['requirements'] as $item) {
-            if (! $item['requirement']->is_required) {
-                continue;
-            }
+        // The flat list de-duplicates requirement ids. Eligibility must not:
+        // sibling fields may inherit the same requirement, and each field needs
+        // its own field-scoped evidence.
+        foreach ($requirements['categories_requirements'] as $categoryGroup) {
+            foreach ($categoryGroup['requirements'] as $item) {
+                if (! $item['requirement']->is_required) {
+                    continue;
+                }
 
-            $hasEligibleDocument = $item['documents']->contains(
-                fn (InstructorCertificate $certificate) => in_array($certificate->status, $fulfillingStatuses, true)
-            );
-            if ($hasEligibleDocument) {
-                $submittedCount++;
-                continue;
-            }
+                $hasEligibleDocument = $item['documents']->contains(
+                    fn (InstructorCertificate $certificate) => in_array($certificate->status, $fulfillingStatuses, true)
+                );
+                if ($hasEligibleDocument) {
+                    $submittedCount++;
 
-            $missingTitles[] = "[{$item['category']->name}] {$item['requirement']->document_title}";
+                    continue;
+                }
+
+                $missingTitles[] = "[{$item['category']->name}] {$item['requirement']->document_title}";
+            }
         }
 
         $missingCount = count($missingTitles);

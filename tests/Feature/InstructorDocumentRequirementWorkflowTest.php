@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\InstructorApplication;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorDocumentRequirement;
-use App\Models\InstructorApplication;
 use App\Models\InstructorProfile;
 use App\Models\User;
 use App\Services\InstructorRequirementService;
@@ -219,6 +219,56 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_instructor_can_upload_images_and_supported_certificate_videos_up_to_50mb(): void
+    {
+        $files = [
+            UploadedFile::fake()->image('certificate.jpg')->size(1024),
+            UploadedFile::fake()->create('evidence.mp4', 51200, 'video/mp4'),
+            UploadedFile::fake()->create('evidence.mov', 2048, 'video/quicktime'),
+            UploadedFile::fake()->create('evidence.webm', 2048, 'video/webm'),
+        ];
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.profile.documents.upload'), [
+                'requirement_id' => $this->reqDegree->id,
+                'source_type' => 'file',
+                'files' => $files,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        foreach (['certificate.jpg', 'evidence.mp4', 'evidence.mov', 'evidence.webm'] as $originalName) {
+            $this->assertDatabaseHas('instructor_certificates', [
+                'user_id' => $this->instructor->id,
+                'requirement_id' => $this->reqDegree->id,
+                'original_name' => $originalName,
+                'source_type' => 'file',
+                'status' => 'draft',
+            ]);
+        }
+
+        $video = InstructorCertificate::query()->where('original_name', 'evidence.mp4')->firstOrFail();
+        $this->assertTrue($video->isVideo());
+        $this->assertSame(51200 * 1024, $video->file_size);
+    }
+
+    public function test_certificate_video_larger_than_50mb_is_rejected(): void
+    {
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.profile.documents.upload'), [
+                'requirement_id' => $this->reqDegree->id,
+                'source_type' => 'file',
+                'files' => [UploadedFile::fake()->create('too-large.mp4', 51201, 'video/mp4')],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors(['files.0']);
+
+        $this->assertDatabaseMissing('instructor_certificates', [
+            'user_id' => $this->instructor->id,
+            'original_name' => 'too-large.mp4',
+        ]);
+    }
+
     public function test_unverified_instructor_cannot_upload_documents(): void
     {
         $instructor = $this->createUnverifiedInstructor();
@@ -400,7 +450,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'requirement_id' => $this->reqDegree->id,
             'source_type' => 'url',
             'document_url' => 'https://example.com/documents/degree.pdf',
-            'status' => 'pending',
+            'status' => 'draft',
         ]);
     }
 
@@ -461,7 +511,7 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             'document_url' => 'https://example.com/degree.pdf',
             'title' => 'Bằng CNTT trực tuyến',
             'document_type' => 'degree',
-            'status' => 'pending',
+            'status' => 'draft',
             'uploaded_at' => now(),
         ]);
 
@@ -470,6 +520,111 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseMissing('instructor_certificates', ['id' => $document->id]);
+    }
+
+    public function test_url_document_stays_draft_when_edited_and_cannot_use_file_replacement(): void
+    {
+        $document = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/old.pdf',
+            'title' => 'Bằng trực tuyến',
+            'document_type' => 'degree',
+            'status' => 'draft',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($this->instructor)
+            ->put(route('instructor.profile.documents.url.update', $document), [
+                'document_url' => 'https://example.com/new.pdf',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('instructor_certificates', [
+            'id' => $document->id,
+            'document_url' => 'https://example.com/new.pdf',
+            'status' => 'draft',
+            'file_path' => null,
+        ]);
+
+        $this->actingAs($this->instructor)
+            ->patch(route('instructor.profile.documents.replace', $document), [
+                'file' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertNull($document->fresh()->file_path);
+    }
+
+    public function test_pending_url_cannot_be_mutated(): void
+    {
+        $document = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqDegree->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/original.pdf',
+            'title' => 'Bằng trực tuyến',
+            'document_type' => 'degree',
+            'status' => 'pending',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($this->instructor)
+            ->put(route('instructor.profile.documents.url.update', $document), [
+                'document_url' => 'https://example.com/tampered.pdf',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertSame('https://example.com/original.pdf', $document->fresh()->document_url);
+        $this->assertSame('pending', $document->fresh()->status);
+    }
+
+    public function test_another_instructor_cannot_replace_delete_or_edit_document(): void
+    {
+        $other = $this->createUnverifiedInstructor(['email_verified_at' => now()]);
+        $fileDocument = $this->createDocument($this->reqDegree, 'draft');
+        $urlDocument = InstructorCertificate::create([
+            'user_id' => $this->instructor->id,
+            'requirement_id' => $this->reqCert->id,
+            'source_type' => 'url',
+            'document_url' => 'https://example.com/document.pdf',
+            'document_type' => 'certificate',
+            'status' => 'draft',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($other)->patch(route('instructor.profile.documents.replace', $fileDocument), ['title' => 'Tampered'])->assertForbidden();
+        $this->actingAs($other)->delete(route('instructor.profile.documents.delete', $fileDocument))->assertForbidden();
+        $this->actingAs($other)->put(route('instructor.profile.documents.url.update', $urlDocument), [
+            'document_url' => 'https://example.com/tampered.pdf',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('instructor_certificates', ['id' => $fileDocument->id, 'title' => $this->reqDegree->document_title]);
+        $this->assertDatabaseHas('instructor_certificates', ['id' => $urlDocument->id, 'document_url' => 'https://example.com/document.pdf']);
+    }
+
+    public function test_free_upload_accepts_portfolio_and_employment_contract_types(): void
+    {
+        foreach (['portfolio', 'employment_contract'] as $documentType) {
+            $this->actingAs($this->instructor)
+                ->post(route('instructor.profile.documents.upload'), [
+                    'source_type' => 'url',
+                    'document_url' => "https://example.com/{$documentType}.pdf",
+                    'document_type' => $documentType,
+                ])
+                ->assertRedirect()
+                ->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('instructor_certificates', [
+                'user_id' => $this->instructor->id,
+                'document_type' => $documentType,
+                'status' => 'draft',
+            ]);
+        }
     }
 
     /**
@@ -759,6 +914,25 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
         $this->assertSame('pending', $certificate->fresh()->status);
         $this->assertSame('draft', $unassigned->fresh()->status);
         $this->assertSame('draft', $outsideDraft->fresh()->status);
+    }
+
+    public function test_duplicate_submit_does_not_repeat_application_transition(): void
+    {
+        $this->createDocument($this->reqDegree, 'draft');
+        $this->createDocument($this->reqCert, 'draft');
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.profile.submit-review'))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $submittedAt = $this->instructor->fresh()->submitted_for_review_at;
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.profile.submit-review'))
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Hồ sơ đã được gửi xét duyệt trước đó.');
+
+        $this->assertTrue($submittedAt->equalTo($this->instructor->fresh()->submitted_for_review_at));
     }
 
     public function test_draft_document_can_be_replaced_and_deleted_while_pending_cannot(): void

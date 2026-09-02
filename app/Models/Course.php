@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Data\CourseSubmissionCheckResult;
 use App\Enums\CourseStatus;
+use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Model Quản lý Khóa học Trực tuyến (Course Model)
@@ -270,6 +273,55 @@ class Course extends Model
         }
 
         return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80';
+    }
+
+    /**
+     * A course preview stores a durable S3 key, never an expiring signed URL.
+     * Legacy HTTP(S) preview links remain playable while courses are migrated.
+     */
+    public function previewVideoUrl(?string $previewVideo = null): ?string
+    {
+        $value = trim((string) ($previewVideo ?? $this->preview_video));
+        if ($value === '') {
+            return null;
+        }
+
+        if ($this->isCoursePreviewObjectKey($value)) {
+            try {
+                return app(AwsS3UploadService::class)->createPresignedViewUrl($value, 10);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+        if (! in_array($scheme, ['http', 'https'], true) || ! filter_var($value, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $host = strtolower((string) parse_url($value, PHP_URL_HOST));
+        $host = preg_replace('/^www\./', '', $host) ?: '';
+        $path = (string) parse_url($value, PHP_URL_PATH);
+        $videoId = null;
+        if ($host === 'youtube.com') {
+            parse_str((string) parse_url($value, PHP_URL_QUERY), $query);
+            $videoId = $query['v'] ?? (str_starts_with($path, '/embed/') ? basename($path) : null);
+        } elseif ($host === 'youtu.be') {
+            $videoId = trim($path, '/');
+        }
+
+        return is_string($videoId) && preg_match('/^[a-zA-Z0-9_-]+$/', $videoId)
+            ? 'https://www.youtube.com/embed/'.rawurlencode($videoId)
+            : $value;
+    }
+
+    public function isCoursePreviewObjectKey(?string $key = null): bool
+    {
+        $value = trim((string) ($key ?? $this->preview_video));
+
+        return $this->exists
+            && Str::startsWith($value, "previews/courses/{$this->getKey()}/")
+            && str_ends_with(strtolower($value), '.mp4');
     }
 
     /**

@@ -24,6 +24,8 @@ use Throwable;
 
 class S3MultipartUploadController extends Controller
 {
+    private const MEDIA_TYPE_COURSE_PREVIEW = 'course_preview';
+
     public function __construct(
         private AwsS3UploadService $s3Service,
         private InstructorCourseCategoryAccess $courseCategoryAccess,
@@ -34,6 +36,10 @@ class S3MultipartUploadController extends Controller
      */
     public function create(Request $request, Course $course): JsonResponse
     {
+        if ($this->isCoursePreviewRequest($request)) {
+            return $this->createCoursePreview($request, $course);
+        }
+
         $this->authorizeCourse($course);
 
         $maxVideoBytes = max(1, (int) config('video.upload.max_bytes'));
@@ -170,6 +176,10 @@ class S3MultipartUploadController extends Controller
      */
     public function getPartUrl(Request $request, Course $course): JsonResponse
     {
+        if ($this->isCoursePreviewRequest($request)) {
+            return $this->signCoursePreviewPart($request, $course);
+        }
+
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
@@ -211,6 +221,10 @@ class S3MultipartUploadController extends Controller
      */
     public function batchSignParts(Request $request, Course $course): JsonResponse
     {
+        if ($this->isCoursePreviewRequest($request)) {
+            return $this->batchSignCoursePreviewParts($request, $course);
+        }
+
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
@@ -254,6 +268,10 @@ class S3MultipartUploadController extends Controller
      */
     public function complete(Request $request, Course $course): JsonResponse
     {
+        if ($this->isCoursePreviewRequest($request)) {
+            return $this->completeCoursePreview($request, $course);
+        }
+
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
@@ -440,6 +458,10 @@ class S3MultipartUploadController extends Controller
      */
     public function abort(Request $request, Course $course): JsonResponse
     {
+        if ($this->isCoursePreviewRequest($request)) {
+            return $this->abortCoursePreview($request, $course);
+        }
+
         $this->authorizeCourse($course);
 
         $validated = $request->validate([
@@ -455,6 +477,196 @@ class S3MultipartUploadController extends Controller
         return response()->json([
             'status' => 'aborted',
         ]);
+    }
+
+    /**
+     * The preview branch is deliberately self-contained. The legacy lesson
+     * branch above remains unchanged when media_type is absent or different.
+     */
+    private function createCoursePreview(Request $request, Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+
+        $maxBytes = max(1, (int) config('video.course_preview.max_bytes'));
+        $maxMegabytes = (int) ceil($maxBytes / 1048576);
+        $validated = $request->validate([
+            'media_type' => ['required', Rule::in([self::MEDIA_TYPE_COURSE_PREVIEW])],
+            'filename' => ['required', 'string', 'max:255'],
+            'content_type' => ['nullable', 'string', 'max:100'],
+            'file_size' => ['required', 'integer', 'min:1', 'max:'.$maxBytes],
+        ], [
+            'file_size.max' => "Dung lượng video giới thiệu tối đa là {$maxMegabytes}MB.",
+        ]);
+
+        $extension = strtolower(pathinfo($validated['filename'], PATHINFO_EXTENSION));
+        if (! in_array($extension, config('video.course_preview.allowed_extensions', ['mp4']), true)) {
+            throw ValidationException::withMessages([
+                'filename' => 'Video giới thiệu chỉ hỗ trợ định dạng MP4.',
+            ]);
+        }
+
+        $contentType = strtolower((string) ($validated['content_type'] ?: 'video/mp4'));
+        if (! in_array($contentType, ['video/mp4', 'application/octet-stream'], true)) {
+            throw ValidationException::withMessages([
+                'content_type' => 'Video giới thiệu phải có định dạng MP4 hợp lệ.',
+            ]);
+        }
+
+        $key = $this->s3Service->generateCoursePreviewObjectKey($course->id, $validated['filename']);
+
+        try {
+            return response()->json([
+                'uploadId' => $this->s3Service->createMultipartUpload($key, 'video/mp4'),
+                'key' => $key,
+                'mediaType' => self::MEDIA_TYPE_COURSE_PREVIEW,
+                'status' => 'initialized',
+                'bucket' => $this->s3Service->getBucket(),
+            ]);
+        } catch (Throwable $e) {
+            Log::error('S3 course preview multipart upload create failed: '.$e->getMessage(), [
+                'course_id' => $course->id,
+                'key' => $key,
+            ]);
+
+            return response()->json([
+                'message' => 'Không thể khởi tạo tải video giới thiệu lên S3. Vui lòng thử lại sau.',
+            ], 500);
+        }
+    }
+
+    private function signCoursePreviewPart(Request $request, Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+        $validated = $request->validate([
+            'media_type' => ['required', Rule::in([self::MEDIA_TYPE_COURSE_PREVIEW])],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
+            'partNumber' => ['required', 'integer', 'min:1', 'max:10000'],
+        ]);
+        $this->validateCoursePreviewKey($course, $validated['key']);
+
+        try {
+            return response()->json([
+                'url' => $this->s3Service->createPresignedPartUrl(
+                    $validated['key'],
+                    $validated['uploadId'],
+                    $validated['partNumber'],
+                ),
+                'partNumber' => $validated['partNumber'],
+            ]);
+        } catch (Throwable $e) {
+            Log::error('S3 course preview part signing failed: '.$e->getMessage(), [
+                'course_id' => $course->id,
+                'key' => $validated['key'],
+                'partNumber' => $validated['partNumber'],
+            ]);
+
+            return response()->json(['message' => 'Không thể tạo URL tải lên cho video giới thiệu.'], 500);
+        }
+    }
+
+    private function batchSignCoursePreviewParts(Request $request, Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+        $validated = $request->validate([
+            'media_type' => ['required', Rule::in([self::MEDIA_TYPE_COURSE_PREVIEW])],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
+            'partNumbers' => ['required', 'array', 'min:1', 'max:1000'],
+            'partNumbers.*' => ['integer', 'min:1', 'max:10000'],
+        ]);
+        $this->validateCoursePreviewKey($course, $validated['key']);
+
+        try {
+            $urls = [];
+            foreach ($validated['partNumbers'] as $partNumber) {
+                $urls[$partNumber] = $this->s3Service->createPresignedPartUrl(
+                    $validated['key'],
+                    $validated['uploadId'],
+                    $partNumber,
+                );
+            }
+
+            return response()->json(['urls' => $urls]);
+        } catch (Throwable $e) {
+            Log::error('S3 course preview batch part signing failed: '.$e->getMessage(), [
+                'course_id' => $course->id,
+                'key' => $validated['key'],
+            ]);
+
+            return response()->json(['message' => 'Không thể tạo URLs tải lên cho video giới thiệu.'], 500);
+        }
+    }
+
+    private function completeCoursePreview(Request $request, Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+        $maxDuration = max(1, (int) config('video.course_preview.max_duration_seconds', 180));
+        $validated = $request->validate([
+            'media_type' => ['required', Rule::in([self::MEDIA_TYPE_COURSE_PREVIEW])],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
+            'parts' => ['required', 'array', 'min:1', 'max:10000'],
+            'parts.*.PartNumber' => ['required', 'integer', 'min:1', 'max:10000', 'distinct'],
+            'parts.*.ETag' => ['required', 'string', 'max:255'],
+            'duration' => ['nullable', 'numeric', 'min:0', 'max:'.$maxDuration],
+        ], [
+            'duration.max' => 'Video giới thiệu không được dài quá 3 phút.',
+        ]);
+        $this->validateCoursePreviewKey($course, $validated['key']);
+
+        try {
+            $result = $this->s3Service->completeMultipartUpload(
+                $validated['key'],
+                $validated['uploadId'],
+                $validated['parts'],
+            );
+
+            // Deliberately no Lesson mutation and no HLS queue dispatch here.
+            return response()->json([
+                'status' => 'success',
+                'key' => $validated['key'],
+                'location' => $result['location'] ?? null,
+                'mediaType' => self::MEDIA_TYPE_COURSE_PREVIEW,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('S3 course preview multipart upload completion failed.', [
+                'exception' => $e,
+                'course_id' => $course->id,
+                'key' => $validated['key'],
+            ]);
+
+            return response()->json(['message' => 'Không thể hoàn tất tải video giới thiệu. Vui lòng thử lại.'], 500);
+        }
+    }
+
+    private function abortCoursePreview(Request $request, Course $course): JsonResponse
+    {
+        $this->authorizeCourse($course);
+        $validated = $request->validate([
+            'media_type' => ['required', Rule::in([self::MEDIA_TYPE_COURSE_PREVIEW])],
+            'key' => ['required', 'string', 'max:1024'],
+            'uploadId' => ['required', 'string', 'max:1024'],
+        ]);
+        $this->validateCoursePreviewKey($course, $validated['key']);
+
+        $this->s3Service->abortMultipartUpload($validated['key'], $validated['uploadId']);
+
+        return response()->json(['status' => 'aborted']);
+    }
+
+    private function isCoursePreviewRequest(Request $request): bool
+    {
+        return $request->input('media_type') === self::MEDIA_TYPE_COURSE_PREVIEW;
+    }
+
+    private function validateCoursePreviewKey(Course $course, string $key): void
+    {
+        abort_unless(
+            $this->s3Service->isCoursePreviewObjectKeyForCourse($course->id, $key),
+            403,
+            'Đường dẫn S3 video giới thiệu không hợp lệ hoặc không thuộc khóa học này.',
+        );
     }
 
     private function authorizeCourse(Course $course): void

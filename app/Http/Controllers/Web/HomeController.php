@@ -6,10 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\Enrollment;
-use App\Models\Faq;
-use App\Models\LearningPath;
 use App\Models\Review;
 use App\Models\User;
+use App\Models\Wishlist;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -22,20 +22,24 @@ class HomeController extends Controller
             'subtitle' => 'Nền tảng học trực tuyến hàng đầu Việt Nam',
         ];
 
-        // 1. Khóa học nổi bật (STU-FE-04, STU-BE-01)
-        $featuredCoursesQuery = Course::published()
-            ->with(['instructor:id,name,avatar', 'category:id,parent_id,name,slug', 'category.parent:id,name,slug'])
-            ->withCount('lessons');
+        $freeCourses = $this->homepageCourseQuery()
+            ->whereRaw('COALESCE(discount_price, sale_price, price) <= 0')
+            ->orderByDesc('rating_avg')
+            ->orderByDesc('enrollment_count')
+            ->orderByDesc('published_at')
+            ->limit(4)
+            ->get();
 
-        $featuredCourses = $this->withFavoriteState((clone $featuredCoursesQuery)->where('is_featured', true))
+        $featuredCourses = $this->homepageCourseQuery()
+            ->where('is_featured', true)
             ->orderByDesc('rating_avg')
             ->orderByDesc('updated_at')
             ->limit(8)
             ->get();
 
-        // Fallback: nếu chưa có khóa học nào được đánh dấu is_featured, lấy các khóa có rating hoặc học viên cao nhất
+        // Preserve the current fallback when no published course has been explicitly featured.
         if ($featuredCourses->isEmpty()) {
-            $featuredCourses = $this->withFavoriteState((clone $featuredCoursesQuery))
+            $featuredCourses = $this->homepageCourseQuery()
                 ->orderByDesc('rating_avg')
                 ->orderByDesc('enrollment_count')
                 ->orderByDesc('published_at')
@@ -43,23 +47,24 @@ class HomeController extends Controller
                 ->get();
         }
 
-        // 2. Danh mục môn học (STU-FE-03, STU-BE-01)
+        $publishedCoursesCount = Course::query()
+            ->published()
+            ->selectRaw('COUNT(*)')
+            ->join('categories as homepage_course_categories', 'homepage_course_categories.id', '=', 'courses.category_id')
+            ->where(function (Builder $query): void {
+                $query->whereColumn('courses.category_id', 'categories.id')
+                    ->orWhereColumn('homepage_course_categories.parent_id', 'categories.id');
+            });
+
         $categories = Category::query()
+            ->select(['categories.id', 'categories.name', 'categories.slug', 'categories.description', 'categories.icon', 'categories.sort_order'])
             ->active()
             ->parent()
-            ->with([
-                'children' => fn ($q) => $q
-                    ->active()
-                    ->withCount(['courses' => fn ($courseQuery) => $courseQuery->published()])
-                    ->orderBy('sort_order')
-                    ->orderBy('name'),
-            ])
-            ->withCount(['courses' => fn ($q) => $q->published()])
+            ->selectSub($publishedCoursesCount, 'courses_count')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
-        // 3. Số liệu thống kê thực tế (STU-FE-02, STU-BE-01)
         $stats = [
             'courses' => Course::published()->count(),
             'students' => Enrollment::distinct('user_id')->count('user_id'),
@@ -70,33 +75,77 @@ class HomeController extends Controller
             'categories' => Category::active()->parent()->count(),
         ];
 
-        // 4. Lộ trình học tập & FAQ
-        $learningPaths = LearningPath::withCount('courses')->limit(3)->get();
-        $faqs = Faq::where('is_active', true)->orderBy('sort_order')->limit(5)->get();
-
-        // 5. Đánh giá thực tế của học viên đã được duyệt (STU-FE-06)
         $testimonials = Review::visible()
+            ->select(['id', 'user_id', 'course_id', 'rating', 'comment', 'created_at'])
             ->whereNull('parent_id')
-            ->where('rating', '>=', 4)
+            ->whereNotNull('comment')
+            ->whereRaw("TRIM(comment) <> ''")
+            ->whereBetween('rating', [1, 5])
+            ->whereHas('course', fn (Builder $query) => $query->published())
+            ->whereHas('user')
             ->with(['user:id,name,avatar', 'course:id,title,slug'])
             ->latest()
-            ->limit(6)
+            ->limit(3)
             ->get();
 
+        $homepageCourseIds = $freeCourses
+            ->pluck('id')
+            ->merge($featuredCourses->pluck('id'))
+            ->unique()
+            ->values();
+        $favoriteCourseIds = [];
+        $enrolledCourseIds = [];
+
+        if ($request->user()?->isStudent() && $homepageCourseIds->isNotEmpty()) {
+            $favoriteCourseIds = Wishlist::query()
+                ->where('user_id', $request->user()->id)
+                ->whereIn('course_id', $homepageCourseIds)
+                ->pluck('course_id')
+                ->map(fn ($courseId) => (int) $courseId)
+                ->all();
+
+            $enrolledCourseIds = Enrollment::query()
+                ->where('user_id', $request->user()->id)
+                ->whereIn('course_id', $homepageCourseIds)
+                ->withLearningAccess()
+                ->pluck('course_id')
+                ->map(fn ($courseId) => (int) $courseId)
+                ->all();
+        }
+
         return view('home', compact(
-            'banner', 'featuredCourses', 'categories',
-            'learningPaths', 'faqs', 'stats', 'testimonials'
+            'banner', 'categories', 'freeCourses', 'featuredCourses', 'testimonials', 'stats',
+            'favoriteCourseIds', 'enrolledCourseIds'
         ));
     }
 
-    private function withFavoriteState($query)
+    private function homepageCourseQuery(): Builder
     {
-        if (! auth()->check() || ! auth()->user()->isStudent()) {
-            return $query;
-        }
-
-        return $query->withExists([
-            'wishlists as is_favorited' => fn ($favoriteQuery) => $favoriteQuery->where('user_id', auth()->id()),
-        ]);
+        return Course::query()
+            ->published()
+            ->select([
+                'courses.id',
+                'courses.instructor_id',
+                'courses.category_id',
+                'courses.title',
+                'courses.slug',
+                'courses.thumbnail',
+                'courses.price',
+                'courses.discount_price',
+                'courses.sale_price',
+                'courses.level',
+                'courses.rating_avg',
+                'courses.rating_count',
+                'courses.enrollment_count',
+                'courses.is_featured',
+                'courses.published_at',
+                'courses.updated_at',
+            ])
+            ->with([
+                'instructor:id,name,avatar',
+                'category:id,parent_id,name,slug',
+                'category.parent:id,name,slug',
+            ])
+            ->withCount('lessons');
     }
 }

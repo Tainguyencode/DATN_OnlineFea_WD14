@@ -162,10 +162,21 @@
                 <p class="text-sm font-bold uppercase tracking-wide text-rose-600">Nội dung kiểm duyệt</p>
                 <h3 class="mt-1 text-lg font-bold text-slate-950">Chương và bài học</h3>
             </div>
-            @if($course->preview_video)
-                <a href="{{ $course->preview_video }}" target="_blank" class="inline-flex h-9 items-center rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 cursor-pointer">Mở video giới thiệu</a>
+            @if($previewVideoUrl)
+                <a href="{{ $previewVideoUrl }}" target="_blank" class="inline-flex h-9 items-center rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 cursor-pointer">Mở video giới thiệu</a>
             @endif
         </div>
+
+        @if($previewVideoUrl)
+            @php($previewIsYoutube = str_contains((string) $course->preview_video, 'youtube.com') || str_contains((string) $course->preview_video, 'youtu.be'))
+            <div class="mt-4 aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+                @if($previewIsYoutube)
+                    <iframe src="{{ $previewVideoUrl }}" title="Video giới thiệu khóa học" class="h-full w-full border-0" allowfullscreen></iframe>
+                @else
+                    <video src="{{ $previewVideoUrl }}" controls playsinline preload="metadata" class="h-full w-full object-contain"></video>
+                @endif
+            </div>
+        @endif
 
         <div class="mt-5 space-y-4">
             @forelse($curriculumSections as $section)

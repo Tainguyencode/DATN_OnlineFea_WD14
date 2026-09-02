@@ -32,6 +32,10 @@ class S3MultipartUploader {
         this.completeUrl = options.completeUrl;
         this.abortUrl = options.abortUrl;
         this.maxVideoBytes = Number(options.maxVideoBytes) || (5 * 1024 * 1024 * 1024);
+        this.mediaType = typeof options.mediaType === 'string' && options.mediaType !== ''
+            ? options.mediaType
+            : null;
+        this.maxDurationSeconds = Number(options.maxDurationSeconds) || 0;
         this.csrfToken = options.csrfToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         // Số luồng upload song song (4 luồng giúp tận dụng tối đa băng thông quốc tế)
@@ -88,9 +92,22 @@ class S3MultipartUploader {
 
         // 1. Lấy thời lượng video từ metadata
         let duration = await this.getVideoDuration(file).catch(() => 0);
+        if (this.maxDurationSeconds > 0 && duration > this.maxDurationSeconds) {
+            throw createS3UploadUserError(
+                `Video không được dài quá ${Math.floor(this.maxDurationSeconds / 60)} phút.`
+            );
+        }
 
         try {
             // 2. Khởi tạo Multipart Upload trên S3 qua Laravel
+            const initPayload = {
+                filename: file.name,
+                content_type: file.type || 'video/mp4',
+                file_size: file.size,
+                lesson_id: this.lessonId,
+                content_update_id: this.contentUpdateId,
+            };
+            if (this.mediaType) initPayload.media_type = this.mediaType;
             const initResponse = await fetch(this.createUrl, {
                 method: 'POST',
                 headers: {
@@ -98,13 +115,7 @@ class S3MultipartUploader {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
-                body: JSON.stringify({
-                    filename: file.name,
-                    content_type: file.type || 'video/mp4',
-                    file_size: file.size,
-                    lesson_id: this.lessonId,
-                    content_update_id: this.contentUpdateId,
-                }),
+                body: JSON.stringify(initPayload),
             });
 
             if (!initResponse.ok) {
@@ -154,6 +165,18 @@ class S3MultipartUploader {
             // 5. Hoàn tất Multipart Upload trên S3
             this.onStatusChange('completing', 'Đang xác thực và ghép file hoàn chỉnh trên S3...');
 
+            const completePayload = {
+                key: this.s3Key,
+                uploadId: this.uploadId,
+                parts: completedParts.map(p => ({
+                    PartNumber: p.partNumber,
+                    ETag: p.eTag,
+                })),
+                duration: duration,
+                lesson_id: this.lessonId || null,
+                content_update_id: this.contentUpdateId || null,
+            };
+            if (this.mediaType) completePayload.media_type = this.mediaType;
             const completeResponse = await fetch(this.completeUrl, {
                 method: 'POST',
                 headers: {
@@ -161,17 +184,7 @@ class S3MultipartUploader {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
-                body: JSON.stringify({
-                    key: this.s3Key,
-                    uploadId: this.uploadId,
-                    parts: completedParts.map(p => ({
-                        PartNumber: p.partNumber,
-                        ETag: p.eTag,
-                    })),
-                    duration: duration,
-                    lesson_id: this.lessonId || null,
-                    content_update_id: this.contentUpdateId || null,
-                }),
+                body: JSON.stringify(completePayload),
             });
 
             if (!completeResponse.ok) {
@@ -249,6 +262,7 @@ class S3MultipartUploader {
                     key: this.s3Key,
                     uploadId: this.uploadId,
                     partNumber: part.partNumber,
+                    ...(this.mediaType ? { media_type: this.mediaType } : {}),
                 }),
             });
 
@@ -382,6 +396,7 @@ class S3MultipartUploader {
                 body: JSON.stringify({
                     key: this.s3Key,
                     uploadId: this.uploadId,
+                    ...(this.mediaType ? { media_type: this.mediaType } : {}),
                 }),
             });
         } catch (e) {

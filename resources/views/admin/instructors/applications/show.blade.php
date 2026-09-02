@@ -489,6 +489,8 @@
                                                                             <h6 class="font-bold text-xs text-slate-900 dark:text-white truncate">{{ $doc->title ?: $doc->original_name }}</h6>
                                                                             @if($doc->status === 'approved')
                                                                                 <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                                                            @elseif($doc->status === 'draft')
+                                                                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
                                                                             @elseif($doc->status === 'rejected')
                                                                                 <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
                                                                             @else
@@ -500,7 +502,7 @@
                                                                 </div>
 
                                                                 <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
-                                                                    @php($isVideoFile = str_starts_with((string) $doc->mime_type, 'video/') || preg_match('/\.(mp4|webm|ogv|ogg)$/i', (string) $doc->original_name))
+                                                                    @php($isVideoFile = $doc->isVideo())
                                                                     <button type="button" @click="openPreview(@js($doc->isUrlSource() ? $doc->document_url : route('admin.instructors.applications.certificates.view', $doc)), @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'), '{{ $doc->isUrlSource() ? 'url' : ($isVideoFile ? 'file-video' : 'file') }}')" class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200">
                                                                         {{ $doc->isUrlSource() || $isVideoFile ? 'Xem video' : 'Xem tệp' }}
                                                                     </button>
@@ -513,8 +515,8 @@
                                                                             </button>
                                                                         </form>
                                                                     @endif
-                                                                    @if($doc->status !== 'rejected')
-                                                                        <button type="button" @click="selectedDocId = {{ $doc->id }}; selectedDocTitle = '{{ addslashes($doc->title ?: $doc->original_name) }}'; rejectDocModal = true" class="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100">
+                                                                    @if($doc->status === 'pending')
+                                                                        <button type="button" @click="selectedDocId = {{ $doc->id }}; selectedDocTitle = @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'); rejectDocModal = true" class="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100">
                                                                             ✖ Từ chối
                                                                         </button>
                                                                     @endif
@@ -554,7 +556,7 @@
                                                 <p class="text-[11px] text-slate-400">{{ $doc->documentTypeLabel() }} · Nguồn: {{ $doc->sourceLabel() }}{{ $doc->isUrlSource() ? '' : ' · '.$doc->formattedFileSize() }}</p>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                @php($isVideoFile = str_starts_with((string) $doc->mime_type, 'video/') || preg_match('/\.(mp4|webm|ogv|ogg)$/i', (string) $doc->original_name))
+                                                @php($isVideoFile = $doc->isVideo())
                                                 <button type="button" @click="openPreview(@js($doc->isUrlSource() ? $doc->document_url : route('admin.instructors.applications.certificates.view', $doc)), @js($doc->title ?: $doc->original_name ?: 'Tài liệu minh chứng'), '{{ $doc->isUrlSource() ? 'url' : ($isVideoFile ? 'file-video' : 'file') }}')" class="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">
                                                     {{ $doc->isUrlSource() || $isVideoFile ? 'Xem video' : 'Xem tệp' }}
                                                 </button>

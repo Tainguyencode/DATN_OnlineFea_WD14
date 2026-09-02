@@ -282,25 +282,25 @@
         </section>
     </div>
 
-    @if($course->preview_video)
+    @if($reviewPreviewVideoUrl)
         <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h3 class="text-lg font-bold text-slate-950">Video giới thiệu</h3>
-                <a href="{{ $course->preview_video }}" target="_blank" class="text-sm font-bold text-indigo-600 hover:underline">Mở trong tab mới</a>
+                <a href="{{ $reviewPreviewVideoUrl }}" target="_blank" class="text-sm font-bold text-indigo-600 hover:underline">Mở trong tab mới</a>
             </div>
             <div class="mt-4 aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-                @if(str_contains($course->preview_video, 'youtube.com') || str_contains($course->preview_video, 'youtu.be'))
+                @if(str_contains((string) $reviewPreviewVideo, 'youtube.com') || str_contains((string) $reviewPreviewVideo, 'youtu.be'))
                     @php
-                        preg_match('/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/', $course->preview_video, $matches);
+                        preg_match('/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/', $reviewPreviewVideo, $matches);
                         $youtubeId = $matches[1] ?? null;
                     @endphp
                     @if($youtubeId)
                         <iframe src="https://www.youtube.com/embed/{{ $youtubeId }}" class="h-full w-full" allowfullscreen></iframe>
                     @else
-                        <a href="{{ $course->preview_video }}" target="_blank" class="flex h-full items-center justify-center text-sm font-bold text-white">Xem video giới thiệu</a>
+                        <a href="{{ $reviewPreviewVideoUrl }}" target="_blank" class="flex h-full items-center justify-center text-sm font-bold text-white">Xem video giới thiệu</a>
                     @endif
                 @else
-                    <video src="{{ $course->preview_video }}" controls class="h-full w-full"></video>
+                    <video src="{{ $reviewPreviewVideoUrl }}" controls playsinline preload="metadata" class="h-full w-full object-contain"></video>
                 @endif
             </div>
         </section>

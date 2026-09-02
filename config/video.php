@@ -7,6 +7,13 @@ return [
         'allowed_extensions' => ['mp4', 'm4v', 'mov', 'avi', 'webm', 'mkv'],
     ],
 
+    // Isolated from the lesson-upload limit and HLS configuration.
+    'course_preview' => [
+        'max_bytes' => (int) env('COURSE_PREVIEW_MAX_BYTES', 250 * 1024 * 1024),
+        'max_duration_seconds' => (int) env('COURSE_PREVIEW_MAX_DURATION_SECONDS', 180),
+        'allowed_extensions' => ['mp4'],
+    ],
+
     'ffmpeg' => [
         // Environment access stays inside config so `php artisan config:cache` is safe.
         'binary' => env('FFMPEG_BINARIES', env('FFMPEG_BIN')),

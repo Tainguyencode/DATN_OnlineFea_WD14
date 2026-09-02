@@ -90,6 +90,9 @@ class InstructorProfile extends Model
         $isFirst = true;
         $primaryId = null;
         $primaryField = null;
+        $bootstrapApprovalStatus = $this->user?->instructor_status === 'approved'
+            ? InstructorTeachingField::STATUS_APPROVED
+            : InstructorTeachingField::STATUS_DRAFT;
 
         foreach ($fieldsData as $field) {
             $catId = isset($field['category_id']) ? (int) $field['category_id'] : null;
@@ -109,6 +112,10 @@ class InstructorProfile extends Model
                 'specialty' => $field['specialty'] ?? null,
                 'experience' => $field['experience'] ?? null,
                 'is_primary' => ($primaryId === $catId),
+                // This legacy/bootstrap sync is used by migrations, seeders and
+                // registration. Interactive profile edits use
+                // saveTeachingFieldRequests(), which always creates reviewable drafts.
+                'approval_status' => $bootstrapApprovalStatus,
             ];
 
             $isFirst = false;
@@ -161,14 +168,16 @@ class InstructorProfile extends Model
      * approved field. An approved field whose category is changed creates a
      * separate replacement request instead of changing the effective field.
      *
-     * @param array<int, array<string, mixed>> $fieldsData
+     * @param  array<int, array<string, mixed>>  $fieldsData
      */
     public function saveTeachingFieldRequests(array $fieldsData): void
     {
         $submittedFieldIds = collect($fieldsData)->pluck('teaching_field_id')->filter()->map(fn ($id) => (int) $id)->all();
+        $submittedCategoryIds = collect($fieldsData)->pluck('category_id')->filter()->map(fn ($id) => (int) $id)->all();
         $omittedApprovedIds = $this->teachingFields()
             ->approved()
             ->whereNotIn('id', $submittedFieldIds ?: [0])
+            ->whereNotIn('category_id', $submittedCategoryIds ?: [0])
             ->pluck('id')
             ->all();
 
@@ -182,6 +191,15 @@ class InstructorProfile extends Model
             $existing = $fieldId
                 ? $this->teachingFields()->whereKey($fieldId)->first()
                 : null;
+            if (! $existing) {
+                // Backward-compatible category_ids payloads do not carry row ids.
+                // Match an already-approved row by category so saving metadata
+                // cannot create a draft that incorrectly replaces the same field.
+                $existing = $this->teachingFields()
+                    ->approved()
+                    ->where('category_id', $categoryId)
+                    ->first();
+            }
             $attributes = [
                 'organization' => $fieldData['organization'] ?? null,
                 'position' => $fieldData['position'] ?? null,
@@ -193,6 +211,7 @@ class InstructorProfile extends Model
                 // Professional metadata is safe to keep current for an already
                 // approved teaching field; its authorization remains unchanged.
                 $existing->update($attributes);
+
                 continue;
             }
 
@@ -204,6 +223,7 @@ class InstructorProfile extends Model
                     'reviewed_by' => null,
                     'rejection_reason' => null,
                 ]));
+
                 continue;
             }
 

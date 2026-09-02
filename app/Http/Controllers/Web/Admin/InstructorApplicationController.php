@@ -16,6 +16,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -327,61 +328,93 @@ class InstructorApplicationController extends Controller
             return back()->with('error', 'Người dùng không phải giảng viên.');
         }
 
-        // Kiểm tra xem giảng viên đã nộp đầy đủ toàn bộ tài liệu bắt buộc của ngành chưa
-        $completeness = app(InstructorRequirementService::class)->checkCanApproveInstructor($user);
-        if (! $completeness['can_approve']) {
-            $missingList = implode(', ', $completeness['missing_titles']);
+        $adminId = $request->user()->id;
+        $requirements = app(InstructorRequirementService::class);
+        $approval = DB::transaction(function () use ($user, $adminId, $requirements): array {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            abort_unless($lockedUser->role === 'instructor', 422, 'Người dùng không phải giảng viên.');
+            $lockedUser->load(['instructorProfile', 'instructorApplication']);
+            $lockedCertificates = $lockedUser->instructorCertificates()->lockForUpdate()->get();
+            $lockedUser->setRelation('instructorCertificates', $lockedCertificates);
+            if ($lockedUser->instructorProfile) {
+                $lockedUser->instructorProfile->teachingFields()->lockForUpdate()->get();
+            }
+
+            // Re-check under the same locks used by upload/submit/review so an
+            // application cannot be approved from stale requirement state.
+            $completeness = $requirements->checkCanApproveInstructor($lockedUser);
+            if (! $completeness['can_approve']) {
+                return ['approved' => false, 'missing_titles' => $completeness['missing_titles']];
+            }
+
+            $wasAlreadyApproved = $lockedUser->instructor_status === 'approved';
+            $lockedUser->update([
+                'instructor_status' => 'approved',
+                'needs_admin_review' => false,
+                'admin_last_reviewed_at' => now(),
+                'approved_at' => now(),
+                'approved_by' => $adminId,
+                'rejected_reason' => null,
+            ]);
+
+            // This is the initial, whole-profile approval path. It promotes the
+            // instructor's existing initial fields only; later field requests are
+            // reviewed individually.
+            if (! $wasAlreadyApproved && $lockedUser->instructorProfile) {
+                $fields = $lockedUser->instructorProfile->teachingFields()
+                    ->whereIn('approval_status', [
+                        InstructorTeachingField::STATUS_DRAFT,
+                        InstructorTeachingField::STATUS_PENDING,
+                        InstructorTeachingField::STATUS_REJECTED,
+                    ])
+                    ->orderBy('id')
+                    ->get();
+                foreach ($fields as $field) {
+                    $field->update([
+                        'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+                        'reviewed_at' => now(),
+                        'reviewed_by' => $adminId,
+                        'rejection_reason' => null,
+                    ]);
+                }
+
+                if (! $lockedUser->instructorProfile->teachingFields()->approved()->where('is_primary', true)->exists()) {
+                    $primary = $fields->firstWhere('category_id', $lockedUser->instructorProfile->category_id) ?? $fields->first();
+                    if ($primary) {
+                        $primary->update(['is_primary' => true]);
+                        $lockedUser->instructorProfile->update(['category_id' => $primary->category_id]);
+                    }
+                }
+            }
+
+            $requirementIds = $requirements->getCurrentRequirementIds($lockedUser);
+            $lockedUser->instructorCertificates()
+                ->where('status', 'pending')
+                ->whereIn('requirement_id', $requirementIds)
+                ->update([
+                    'status' => 'approved',
+                    'reviewed_at' => now(),
+                    'reviewed_by' => $adminId,
+                ]);
+
+            if ($lockedUser->instructorApplication) {
+                $lockedUser->instructorApplication->update([
+                    'status' => 'approved',
+                    'reviewed_at' => now(),
+                    'reviewed_by' => $adminId,
+                ]);
+            }
+
+            return ['approved' => true];
+        });
+
+        if (! $approval['approved']) {
+            $missingList = implode(', ', $approval['missing_titles']);
 
             return back()->with('error', "Không thể duyệt hồ sơ. Giảng viên còn thiếu tài liệu bắt buộc của ngành: {$missingList}.");
         }
 
-        $adminId = $request->user()->id;
-        $wasAlreadyApproved = $user->instructor_status === 'approved';
-
-        $user->update([
-            'instructor_status' => 'approved',
-            'needs_admin_review' => false,
-            'admin_last_reviewed_at' => now(),
-            'approved_at' => now(),
-            'approved_by' => $adminId,
-            'rejected_reason' => null,
-        ]);
-
-        // This is the initial, whole-profile approval path. It promotes the
-        // instructor's existing initial fields only; later field requests are
-        // reviewed by InstructorTeachingFieldReviewController individually.
-        if (! $wasAlreadyApproved && $user->instructorProfile) {
-            $user->instructorProfile->teachingFields()
-                ->whereIn('approval_status', [
-                    InstructorTeachingField::STATUS_DRAFT,
-                    InstructorTeachingField::STATUS_PENDING,
-                    InstructorTeachingField::STATUS_REJECTED,
-                ])
-                ->update([
-                    'approval_status' => InstructorTeachingField::STATUS_APPROVED,
-                    'reviewed_at' => now(),
-                    'reviewed_by' => $adminId,
-                    'rejection_reason' => null,
-                ]);
-        }
-
-        $requirementIds = app(InstructorRequirementService::class)->getCurrentRequirementIds($user);
-        $user->instructorCertificates()
-            ->where('status', 'pending')
-            ->whereIn('requirement_id', $requirementIds)
-            ->update([
-            'status' => 'approved',
-            'reviewed_at' => now(),
-            'reviewed_by' => $adminId,
-        ]);
-
-        if ($user->instructorApplication) {
-            $user->instructorApplication->update([
-                'status' => 'approved',
-                'reviewed_at' => now(),
-                'reviewed_by' => $adminId,
-            ]);
-        }
+        $user->refresh();
 
         try {
             $user->notify(new InstructorApprovedNotification);
@@ -486,12 +519,18 @@ class InstructorApplicationController extends Controller
         $reason = $request->input('rejection_reason');
         $adminId = $request->user()->id;
 
-        $certificate->update([
-            'status' => $status,
-            'rejection_reason' => $status === 'rejected' ? $reason : null,
-            'reviewed_at' => now(),
-            'reviewed_by' => $adminId,
-        ]);
+        DB::transaction(function () use ($user, $certificate, $status, $reason, $adminId): void {
+            User::query()->lockForUpdate()->findOrFail($user->id);
+            $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+            abort_unless((int) $locked->user_id === (int) $user->id, 404, 'Tài liệu không thuộc về giảng viên này.');
+            abort_unless($locked->isPending(), 422, 'Chỉ có thể xét duyệt tài liệu đã gửi.');
+            $locked->update([
+                'status' => $status,
+                'rejection_reason' => $status === 'rejected' ? $reason : null,
+                'reviewed_at' => now(),
+                'reviewed_by' => $adminId,
+            ]);
+        });
 
         ActivityLogService::log($adminId, 'review_instructor_document', InstructorCertificate::class, $certificate->id, [
             'status' => $status,

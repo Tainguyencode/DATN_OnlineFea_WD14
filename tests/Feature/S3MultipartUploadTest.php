@@ -9,6 +9,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\AwsS3UploadService;
@@ -269,6 +270,82 @@ class S3MultipartUploadTest extends TestCase
         });
     }
 
+    public function test_course_preview_multipart_uses_its_own_key_prefix_without_touching_lessons(): void
+    {
+        Queue::fake();
+
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $key = "previews/courses/{$course->id}/preview-uuid.mp4";
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($course, $key): void {
+            $mock->shouldReceive('generateCoursePreviewObjectKey')
+                ->once()
+                ->with($course->id, 'gioi-thieu.mp4')
+                ->andReturn($key);
+            $mock->shouldReceive('createMultipartUpload')
+                ->once()
+                ->with($key, 'video/mp4')
+                ->andReturn('preview-upload-id');
+            $mock->shouldReceive('getBucket')
+                ->once()
+                ->andReturn('test-bucket');
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
+            'media_type' => 'course_preview',
+            'filename' => 'gioi-thieu.mp4',
+            'content_type' => 'video/mp4',
+            'file_size' => 10 * 1024 * 1024,
+        ])->assertOk()
+            ->assertJsonPath('key', $key)
+            ->assertJsonPath('mediaType', 'course_preview');
+
+        $this->assertDatabaseCount('lessons', 0);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_course_preview_multipart_complete_does_not_save_a_lesson_or_dispatch_hls(): void
+    {
+        Queue::fake();
+
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $key = "previews/courses/{$course->id}/preview-uuid.mp4";
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($course, $key): void {
+            $mock->shouldReceive('isCoursePreviewObjectKeyForCourse')
+                ->once()
+                ->with($course->id, $key)
+                ->andReturnTrue();
+            $mock->shouldReceive('completeMultipartUpload')
+                ->once()
+                ->with($key, 'preview-upload-id', [
+                    ['PartNumber' => 1, 'ETag' => '"preview-etag"'],
+                ])
+                ->andReturn([
+                    'location' => "https://s3.amazonaws.com/test-bucket/{$key}",
+                    'key' => $key,
+                ]);
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.complete', $course), [
+            'media_type' => 'course_preview',
+            'key' => $key,
+            'uploadId' => 'preview-upload-id',
+            'duration' => 120,
+            'parts' => [
+                ['PartNumber' => 1, 'ETag' => '"preview-etag"'],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('key', $key)
+            ->assertJsonPath('mediaType', 'course_preview');
+
+        $this->assertDatabaseCount('lessons', 0);
+        Queue::assertNotPushed(ConvertVideoToHLS::class);
+        Queue::assertNotPushed(ConvertContentUpdateVideoToHLS::class);
+    }
+
     public function test_legacy_video_player_falls_back_to_local_disk_when_s3_key_is_null(): void
     {
         Storage::fake('s3');
@@ -515,7 +592,10 @@ class S3MultipartUploadTest extends TestCase
         ]);
         $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
         $profile->teachingCategories()->syncWithoutDetaching([
-            $category->id => ['is_primary' => ! $profile->teachingCategories()->exists()],
+            $category->id => [
+                'is_primary' => ! $profile->teachingCategories()->exists(),
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ],
         ]);
 
         $course = Course::create([

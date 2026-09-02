@@ -11,6 +11,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseReview;
 use App\Models\CourseReviewItem;
+use App\Models\CourseVersion;
 use App\Models\Enrollment;
 use App\Models\HomepageSetting;
 use App\Models\Lesson;
@@ -147,6 +148,7 @@ class ManageController extends Controller
             ->whereHas('course', fn ($query) => $query->where('instructor_id', $course->instructor_id))
             ->distinct('user_id')
             ->count('user_id');
+        $previewVideoUrl = $course->previewVideoUrl();
 
         return view('admin.courses.show', [
             'course' => $course,
@@ -158,6 +160,7 @@ class ManageController extends Controller
             'courseRevenue' => $this->courseRevenue($course),
             'statusLabels' => $this->statusLabels(),
             'statusBadgeClasses' => $this->statusBadgeClasses(),
+            'previewVideoUrl' => $previewVideoUrl,
         ]);
     }
 
@@ -254,6 +257,24 @@ class ManageController extends Controller
                 'diff' => app(ContentUpdateDiffService::class)->build($update),
             ]);
 
+        $reviewPreviewVideo = $course->preview_video;
+        $pendingCourseUpdate = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('type', ContentUpdate::TYPE_COURSE)
+            ->where('action', ContentUpdate::ACTION_UPDATE)
+            ->where('status', ContentUpdate::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+        if ($pendingCourseUpdate) {
+            $candidate = CourseVersion::query()
+                ->where('course_id', $course->id)
+                ->where('content_update_id', $pendingCourseUpdate->id)
+                ->first();
+            $reviewPreviewVideo = $candidate?->preview_video
+                ?? data_get($pendingCourseUpdate->payload, 'preview_video', $reviewPreviewVideo);
+        }
+        $reviewPreviewVideoUrl = $course->previewVideoUrl($reviewPreviewVideo);
+
         return view('admin.courses.review', [
             'course' => $course,
             'curriculumSections' => $curriculumSections,
@@ -267,6 +288,8 @@ class ManageController extends Controller
             'checklistLabels' => CourseReviewItem::ITEM_LABELS,
             'instructorPendingCoursesCount' => $instructorPendingCoursesCount,
             'instructorTotalCoursesCount' => $instructorTotalCoursesCount,
+            'reviewPreviewVideo' => $reviewPreviewVideo,
+            'reviewPreviewVideoUrl' => $reviewPreviewVideoUrl,
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -25,6 +26,19 @@ return new class extends Migration
 
     public function down(): void
     {
+        $hasUrlOnlyRecords = Schema::hasColumn('instructor_certificates', 'source_type')
+            && DB::table('instructor_certificates')
+                ->where(function ($query) {
+                    $query->where('source_type', 'url')
+                        ->orWhereNull('file_path')
+                        ->orWhereNull('original_name');
+                })
+                ->exists();
+
+        if ($hasUrlOnlyRecords) {
+            throw new RuntimeException('Cannot roll back URL certificate support while URL-only records exist. Export or remove those records explicitly first.');
+        }
+
         Schema::table('instructor_certificates', function (Blueprint $table) {
             $table->dropColumn(['source_type', 'document_url']);
             $table->string('file_path')->nullable(false)->change();

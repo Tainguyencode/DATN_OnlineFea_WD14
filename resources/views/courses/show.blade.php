@@ -58,6 +58,25 @@
                 <span class="hidden text-slate-600 sm:inline">•</span>
                 <span>{{ $previewLessons }} bài xem thử</span>
             </div>
+
+            @if($previewVideoUrl)
+                @php
+                    $previewVideoValue = (string) $course->preview_video;
+                    $previewIsYoutube = str_contains($previewVideoValue, 'youtube.com') || str_contains($previewVideoValue, 'youtu.be');
+                @endphp
+                <div class="mt-6 max-w-xl">
+                    <p class="mb-2 text-sm font-bold text-slate-200">Video xem thử</p>
+                    <div class="overflow-hidden rounded-2xl border-2 border-slate-700/80 bg-slate-900/80 p-1.5 shadow-2xl ring-1 ring-white/15">
+                        <div class="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                            @if($previewIsYoutube)
+                                <iframe src="{{ $previewVideoUrl }}" title="Video giới thiệu khóa học" class="h-full w-full border-0 bg-black" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
+                            @else
+                                <video src="{{ $previewVideoUrl }}" controls playsinline preload="metadata" class="h-full w-full bg-black object-contain"></video>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <aside class="lg:row-span-2">
@@ -67,15 +86,6 @@
                         <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
                     @else
                         <div class="flex h-full w-full items-center justify-center text-4xl font-extrabold text-white/80">Fea</div>
-                    @endif
-
-                    @if($course->preview_video)
-                        <a href="{{ $course->preview_video }}" target="_blank"
-                           class="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-white transition hover:bg-slate-950/45">
-                            <span class="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 text-indigo-700 shadow-xl">
-                                <svg class="ml-1 h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                            </span>
-                        </a>
                     @endif
                 </div>
 

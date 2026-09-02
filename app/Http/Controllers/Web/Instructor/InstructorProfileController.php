@@ -64,20 +64,20 @@ class InstructorProfileController extends Controller
             ? $user->instructorProfile->teachingFields()->with('category.parent')->orderBy('id')->get()
             : collect();
         $teachingFields = $teachingFieldRecords->map(function (InstructorTeachingField $field) {
-                return [
-                    'teaching_field_id' => $field->id,
-                    'category_id' => (int) $field->category_id,
-                    'category_name' => $field->category?->name ?? '',
-                    'organization' => $field->organization ?? '',
-                    'position' => $field->position ?? '',
-                    'specialty' => $field->specialty ?? '',
-                    'experience' => $field->experience ?? '',
-                    'is_primary' => (bool) $field->is_primary,
-                    'approval_status' => $field->approval_status,
-                    'rejection_reason' => $field->rejection_reason,
-                    'replace_of_teaching_field_id' => $field->replace_of_teaching_field_id,
-                ];
-            })->values()->all();
+            return [
+                'teaching_field_id' => $field->id,
+                'category_id' => (int) $field->category_id,
+                'category_name' => $field->category?->name ?? '',
+                'organization' => $field->organization ?? '',
+                'position' => $field->position ?? '',
+                'specialty' => $field->specialty ?? '',
+                'experience' => $field->experience ?? '',
+                'is_primary' => (bool) $field->is_primary,
+                'approval_status' => $field->approval_status,
+                'rejection_reason' => $field->rejection_reason,
+                'replace_of_teaching_field_id' => $field->replace_of_teaching_field_id,
+            ];
+        })->values()->all();
 
         if (empty($teachingFields) && $profile) {
             $catId = $profile->category_id ?: ($categories->first()?->children->first()?->id ?? $categories->first()?->id);
@@ -278,18 +278,18 @@ class InstructorProfileController extends Controller
         $request->validate([
             'requirement_id' => ['nullable', 'integer'],
             'instructor_teaching_field_id' => ['nullable', 'integer'],
-            'document_type' => ['nullable', 'string', 'in:certificate,degree,employment_contract,transcript,employment_confirmation,other'],
+            'document_type' => ['nullable', 'string', 'in:certificate,degree,employment_contract,transcript,employment_confirmation,portfolio,other'],
             'title' => ['nullable', 'string', 'max:255'],
             'source_type' => ['nullable', 'in:file,url'],
             'document_url' => ['nullable', 'url', 'max:2048', 'regex:/^https?:\/\//i'],
             'files' => ['nullable', 'array', 'max:10'],
-            'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
-            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+            'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx,mp4,mov,webm', 'max:51200'],
+            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx,mp4,mov,webm', 'max:51200'],
         ], [
-            'files.*.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX.',
-            'files.*.max' => 'Dung lượng mỗi tài liệu tối đa là 10MB.',
-            'file.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX.',
-            'file.max' => 'Dung lượng tài liệu tối đa là 10MB.',
+            'files.*.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX, MP4, MOV, WEBM.',
+            'files.*.max' => 'Dung lượng mỗi tài liệu hoặc video tối đa là 50MB.',
+            'file.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX, MP4, MOV, WEBM.',
+            'file.max' => 'Dung lượng tài liệu hoặc video tối đa là 50MB.',
         ]);
 
         // Keep legacy upload endpoints working while requiring the new UI to state its intent.
@@ -312,79 +312,91 @@ class InstructorProfileController extends Controller
             return back()->withErrors(['document_url' => 'Vui lòng nhập URL tài liệu hợp lệ.'])->withInput();
         }
 
-        $teachingField = null;
-        if ($request->filled('instructor_teaching_field_id')) {
-            $teachingField = InstructorTeachingField::query()
-                ->with(['profile', 'category.parent'])
-                ->findOrFail($request->integer('instructor_teaching_field_id'));
-            abort_unless((int) $teachingField->profile?->user_id === (int) $user->id && $teachingField->isEditable(), 403);
-        }
-
-        $requirementId = $request->input('requirement_id');
+        $requirementId = $request->integer('requirement_id') ?: null;
+        $teachingFieldId = $request->integer('instructor_teaching_field_id') ?: null;
         $requirement = null;
-
-        if ($requirementId) {
-            $requirement = $teachingField
-                ? app(InstructorRequirementService::class)->validateRequirementForTeachingField($user, $teachingField, (int) $requirementId)
-                : app(InstructorRequirementService::class)->validateRequirementForInstructor($user, (int) $requirementId);
-            $documentType = $requirement->document_type;
-            $defaultTitle = $requirement->document_title;
-        } else {
-            $documentType = $request->input('document_type', 'certificate');
-            $defaultTitle = null;
-        }
-
-        $customTitle = $request->input('title') ?: $defaultTitle;
+        $teachingField = null;
+        $documentType = $request->input('document_type', 'certificate');
+        $customTitle = $request->input('title');
         $uploadedCount = 0;
+        $storedPaths = [];
 
-        if ($sourceType === 'url') {
-            $documentUrl = $request->input('document_url');
-            InstructorCertificate::create([
-                'user_id' => $user->id,
-                'requirement_id' => $requirement?->id,
-                'instructor_teaching_field_id' => $teachingField?->id,
-                'source_type' => 'url',
-                'document_url' => $documentUrl,
-                'title' => $customTitle ?: $defaultTitle ?: 'Tài liệu liên kết',
-                'document_type' => $documentType,
-                'status' => 'pending',
-                'uploaded_at' => now(),
-            ]);
-            $uploadedCount = 1;
-        }
+        try {
+            DB::transaction(function () use ($user, $sourceType, $files, $request, $requirementId, $teachingFieldId, &$requirement, &$teachingField, &$documentType, $customTitle, &$uploadedCount, &$storedPaths): void {
+                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
 
-        foreach ($files as $file) {
-            if (! $file || ! $file->isValid()) {
-                continue;
+                if ($teachingFieldId) {
+                    $teachingField = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingFieldId);
+                    $teachingField->loadMissing(['profile', 'category.parent']);
+                    abort_unless((int) $teachingField->profile?->user_id === (int) $lockedUser->id && $teachingField->isEditable(), 403);
+                }
+
+                $defaultTitle = null;
+                if ($requirementId) {
+                    $requirement = $teachingField
+                        ? app(InstructorRequirementService::class)->validateRequirementForTeachingField($lockedUser, $teachingField, $requirementId)
+                        : app(InstructorRequirementService::class)->validateRequirementForInstructor($lockedUser, $requirementId);
+                    $documentType = $requirement->document_type;
+                    $defaultTitle = $requirement->document_title;
+                }
+
+                if ($sourceType === 'url') {
+                    InstructorCertificate::create([
+                        'user_id' => $lockedUser->id,
+                        'requirement_id' => $requirement?->id,
+                        'instructor_teaching_field_id' => $teachingField?->id,
+                        'source_type' => 'url',
+                        'document_url' => $request->input('document_url'),
+                        'title' => $customTitle ?: $defaultTitle ?: 'Tài liệu liên kết',
+                        'document_type' => $documentType,
+                        'status' => 'draft',
+                        'uploaded_at' => now(),
+                    ]);
+                    $uploadedCount = 1;
+
+                    return;
+                }
+
+                foreach ($files as $file) {
+                    if (! $file || ! $file->isValid()) {
+                        continue;
+                    }
+
+                    $originalName = $file->getClientOriginalName();
+                    $extension = $file->getClientOriginalExtension() ?: 'pdf';
+                    $storedPath = $file->storeAs(
+                        "instructor-certificates/{$lockedUser->id}",
+                        Str::uuid().'.'.$extension,
+                        'local'
+                    );
+                    if (! $storedPath) {
+                        throw new \RuntimeException('Không thể lưu tài liệu vào bộ nhớ cục bộ.');
+                    }
+                    $storedPaths[] = $storedPath;
+
+                    InstructorCertificate::create([
+                        'user_id' => $lockedUser->id,
+                        'requirement_id' => $requirement?->id,
+                        'source_type' => 'file',
+                        'instructor_teaching_field_id' => $teachingField?->id,
+                        'file_path' => $storedPath,
+                        'original_name' => $originalName,
+                        'mime_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                        'title' => $customTitle ?: pathinfo($originalName, PATHINFO_FILENAME),
+                        'document_type' => $documentType,
+                        'status' => 'draft',
+                        'uploaded_at' => now(),
+                    ]);
+
+                    $uploadedCount++;
+                }
+            });
+        } catch (\Throwable $e) {
+            foreach ($storedPaths as $storedPath) {
+                Storage::disk('local')->delete($storedPath);
             }
-
-            $originalName = $file->getClientOriginalName();
-            $extension = $file->getClientOriginalExtension() ?: 'pdf';
-            $mimeType = $file->getClientMimeType();
-            $fileSize = $file->getSize();
-
-            $storedPath = $file->storeAs(
-                "instructor-certificates/{$user->id}",
-                Str::uuid().'.'.$extension,
-                'local'
-            );
-
-            InstructorCertificate::create([
-                'user_id' => $user->id,
-                'requirement_id' => $requirement?->id,
-                'source_type' => 'file',
-                'instructor_teaching_field_id' => $teachingField?->id,
-                'file_path' => $storedPath,
-                'original_name' => $originalName,
-                'mime_type' => $mimeType,
-                'file_size' => $fileSize,
-                'title' => $customTitle ?: pathinfo($originalName, PATHINFO_FILENAME),
-                'document_type' => $documentType,
-                'status' => 'draft',
-                'uploaded_at' => now(),
-            ]);
-
-            $uploadedCount++;
+            throw $e;
         }
 
         ActivityLogService::log($user->id, 'upload_instructor_document', User::class, $user->id, [
@@ -394,19 +406,6 @@ class InstructorProfileController extends Controller
             'uploaded_count' => $uploadedCount,
             'source_type' => $sourceType,
         ], $request);
-
-        if ($sourceType === 'url') {
-            try {
-                app(NotificationService::class)->notifyAdmins(
-                    'Giảng viên nộp tài liệu minh chứng',
-                    "Giảng viên {$user->name} ({$user->email}) vừa nộp {$uploadedCount} tài liệu minh chứng mới.",
-                    'instructor_documents_uploaded',
-                    route('admin.instructors.applications.show', $user)
-                );
-            } catch (\Throwable $e) {
-                Log::error('Gửi thông báo nộp tài liệu giảng viên cho admin thất bại: '.$e->getMessage());
-            }
-        }
 
         return back()->with('active_tab', 'documents')->with('success', "Đã tải lên {$uploadedCount} tài liệu minh chứng - Chưa gửi xét duyệt.");
     }
@@ -418,20 +417,23 @@ class InstructorProfileController extends Controller
         if ($certificate->user_id !== $user->id) {
             abort(403, 'Bạn không có quyền thay thế tài liệu này.');
         }
-        if (! $certificate->isDraft()) {
+        if (! $certificate->isDraft() || $certificate->isUrlSource()) {
             return back()->with('active_tab', 'documents')->with('error', 'Chỉ có thể thay thế tài liệu chưa gửi xét duyệt.');
         }
 
         $request->validate([
-            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx,mp4,mov,webm', 'max:51200'],
             'title' => ['nullable', 'string', 'max:255'],
+        ], [
+            'file.mimes' => 'Tài liệu phải có định dạng: PDF, JPG, PNG, WEBP, DOC, DOCX, MP4, MOV, WEBM.',
+            'file.max' => 'Dung lượng tài liệu hoặc video tối đa là 50MB.',
         ]);
         if (! $request->hasFile('file') && ! $request->has('title')) {
             return back()->with('active_tab', 'documents')->with('error', 'Vui lòng chọn tệp mới hoặc cập nhật tiêu đề.');
         }
 
         $newPath = null;
-        $oldPath = $certificate->file_path;
+        $oldPath = null;
         try {
             $updates = [];
             if ($request->hasFile('file')) {
@@ -449,11 +451,14 @@ class InstructorProfileController extends Controller
                 $updates['title'] = $request->input('title') ?: ($updates['original_name'] ?? $certificate->original_name);
             }
 
-            DB::transaction(function () use ($certificate, $updates) {
+            DB::transaction(function () use ($user, $certificate, $updates, &$oldPath) {
+                User::query()->lockForUpdate()->findOrFail($user->id);
                 $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
-                if (! $locked->isDraft()) {
+                abort_unless((int) $locked->user_id === (int) $user->id, 403);
+                if (! $locked->isDraft() || $locked->isUrlSource()) {
                     abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
                 }
+                $oldPath = $locked->file_path;
                 $locked->update($updates);
             });
         } catch (\Throwable $e) {
@@ -483,14 +488,26 @@ class InstructorProfileController extends Controller
             return back()->with('active_tab', 'documents')->with('error', 'Chỉ có thể xóa tài liệu chưa gửi xét duyệt.');
         }
 
-        if (! $certificate->isUrlSource() && $certificate->file_path && Storage::disk('local')->exists($certificate->file_path)) {
-            Storage::disk('local')->delete($certificate->file_path);
+        $filePath = null;
+        $fileName = null;
+        DB::transaction(function () use ($user, $certificate, &$filePath, &$fileName): void {
+            User::query()->lockForUpdate()->findOrFail($user->id);
+            $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+            abort_unless((int) $locked->user_id === (int) $user->id, 403);
+            if (! $locked->isDraft()) {
+                abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
+            }
+            $filePath = $locked->isUrlSource() ? null : $locked->file_path;
+            $fileName = $locked->original_name;
+            $locked->delete();
+        });
+
+        if ($filePath && Storage::disk('local')->exists($filePath) && ! Storage::disk('local')->delete($filePath)) {
+            Log::warning('Không thể xóa tệp tài liệu giảng viên sau khi xóa bản ghi.', ['path' => $filePath]);
         }
 
-        $certificate->delete();
-
         ActivityLogService::log($user->id, 'delete_instructor_document', InstructorCertificate::class, $certificate->id, [
-            'file_name' => $certificate->original_name,
+            'file_name' => $fileName,
         ], $request);
 
         return back()->with('active_tab', 'documents')->with('success', 'Đã xóa tài liệu thành công.');
@@ -503,8 +520,8 @@ class InstructorProfileController extends Controller
 
         abort_unless($certificate->user_id === $user->id && $certificate->isUrlSource(), 403);
 
-        if ($certificate->isApproved()) {
-            return back()->with('active_tab', 'documents')->with('error', 'Tài liệu đã được phê duyệt, không thể sửa liên kết.');
+        if (! $certificate->isDraft()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Chỉ có thể sửa liên kết chưa gửi xét duyệt.');
         }
 
         $validated = $request->validate([
@@ -514,19 +531,19 @@ class InstructorProfileController extends Controller
             'document_url.regex' => 'Chỉ chấp nhận URL bắt đầu bằng http:// hoặc https://.',
         ]);
 
-        $certificate->update([
-            'document_url' => $validated['document_url'],
-            'status' => 'pending',
-            'rejection_reason' => null,
-            'reviewed_at' => null,
-            'reviewed_by' => null,
-        ]);
-
-        $user->update(['needs_admin_review' => true]);
+        DB::transaction(function () use ($user, $certificate, $validated): void {
+            User::query()->lockForUpdate()->findOrFail($user->id);
+            $locked = InstructorCertificate::query()->lockForUpdate()->findOrFail($certificate->id);
+            abort_unless((int) $locked->user_id === (int) $user->id && $locked->isUrlSource(), 403);
+            if (! $locked->isDraft()) {
+                abort(409, 'Tài liệu không còn ở trạng thái chưa gửi.');
+            }
+            $locked->update(['document_url' => $validated['document_url']]);
+        });
 
         ActivityLogService::log($user->id, 'update_instructor_document_url', InstructorCertificate::class, $certificate->id, [], $request);
 
-        return back()->with('active_tab', 'documents')->with('success', 'Đã cập nhật liên kết tài liệu và chuyển về trạng thái chờ duyệt.');
+        return back()->with('active_tab', 'documents')->with('success', 'Đã cập nhật liên kết tài liệu chưa gửi.');
     }
 
     public function viewDocument(Request $request, InstructorCertificate $certificate): BinaryFileResponse|RedirectResponse
@@ -582,17 +599,28 @@ class InstructorProfileController extends Controller
             return back()->with('active_tab', 'documents')->with('error', 'Hãy gửi xét duyệt riêng cho ngành chưa được duyệt.');
         }
 
-        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($user);
-        if (! $eligibility['can_submit']) {
-            return back()
-                ->with('active_tab', 'documents')
-                ->with('error', $this->submitEligibilityError($eligibility));
-        }
-
-        $certsCount = $user->instructorCertificates()->count();
-        DB::transaction(function () use ($user) {
+        $requirements = app(InstructorRequirementService::class);
+        $result = DB::transaction(function () use ($user, $requirements): array {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-            app(InstructorRequirementService::class)->promoteDraftCertificatesForReview($lockedUser);
+            if ($lockedUser->instructor_status === 'approved') {
+                return ['submitted' => false, 'error' => 'Hãy gửi xét duyệt riêng cho ngành chưa được duyệt.'];
+            }
+
+            $lockedCertificates = InstructorCertificate::query()
+                ->where('user_id', $lockedUser->id)
+                ->lockForUpdate()
+                ->get();
+            $lockedUser->setRelation('instructorCertificates', $lockedCertificates);
+            $eligibility = $requirements->getSubmitEligibility($lockedUser);
+            if (! $eligibility['can_submit']) {
+                return ['submitted' => false, 'error' => $this->submitEligibilityError($eligibility)];
+            }
+            if ($lockedUser->instructor_status === 'pending' && $lockedUser->submitted_for_review_at) {
+                return ['submitted' => false, 'error' => 'Hồ sơ đã được gửi xét duyệt trước đó.'];
+            }
+
+            $certsCount = $lockedCertificates->count();
+            $requirements->promoteDraftCertificatesForReview($lockedUser);
             $lockedUser->update([
                 'submitted_for_review_at' => now(),
                 'instructor_status' => 'pending',
@@ -606,7 +634,15 @@ class InstructorProfileController extends Controller
                     'admin_notes' => null,
                 ]);
             }
+
+            return ['submitted' => true, 'certificates_count' => $certsCount];
         });
+
+        if (! $result['submitted']) {
+            return back()->with('active_tab', 'documents')->with('error', $result['error']);
+        }
+
+        $certsCount = $result['certificates_count'];
 
         ActivityLogService::log($user->id, 'submit_instructor_application', User::class, $user->id, [
             'certificates_count' => $certsCount,
@@ -637,14 +673,29 @@ class InstructorProfileController extends Controller
         }
 
         $requirements = app(InstructorRequirementService::class);
-        $eligibility = $requirements->getTeachingFieldSubmitEligibility($teachingField);
-        if (! $eligibility['can_submit']) {
-            return back()->with('active_tab', 'documents')->with('error', 'Ngành này còn thiếu tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']));
-        }
-
-        DB::transaction(function () use ($teachingField, $requirements): void {
+        $result = DB::transaction(function () use ($user, $teachingField, $requirements): array {
+            User::query()->lockForUpdate()->findOrFail($user->id);
             $locked = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
-            abort_unless($locked->isEditable(), 409, 'Ngành không còn ở trạng thái có thể gửi.');
+            $locked->loadMissing(['profile', 'category.parent']);
+            abort_unless((int) $locked->profile?->user_id === (int) $user->id, 403);
+            if (! $locked->isEditable()) {
+                return ['submitted' => false, 'error' => 'Ngành không còn ở trạng thái có thể gửi.'];
+            }
+
+            $lockedCertificates = InstructorCertificate::query()
+                ->where('user_id', $user->id)
+                ->where('instructor_teaching_field_id', $locked->id)
+                ->lockForUpdate()
+                ->get();
+            $locked->setRelation('certificates', $lockedCertificates);
+            $eligibility = $requirements->getTeachingFieldSubmitEligibility($locked);
+            if (! $eligibility['can_submit']) {
+                return [
+                    'submitted' => false,
+                    'error' => 'Ngành này còn thiếu tài liệu bắt buộc: '.implode(', ', $eligibility['missing_titles']),
+                ];
+            }
+
             $requirements->promoteDraftCertificatesForTeachingField($locked);
             $locked->update([
                 'approval_status' => InstructorTeachingField::STATUS_PENDING,
@@ -653,7 +704,13 @@ class InstructorProfileController extends Controller
                 'reviewed_by' => null,
                 'rejection_reason' => null,
             ]);
+
+            return ['submitted' => true];
         });
+
+        if (! $result['submitted']) {
+            return back()->with('active_tab', 'documents')->with('error', $result['error']);
+        }
 
         try {
             app(NotificationService::class)->notifyAdmins(

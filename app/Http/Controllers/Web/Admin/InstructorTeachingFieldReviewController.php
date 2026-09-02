@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\InstructorTeachingField;
+use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\InstructorRequirementService;
 use Illuminate\Http\RedirectResponse;
@@ -32,9 +33,23 @@ class InstructorTeachingFieldReviewController extends Controller
 
     public function approve(Request $request, InstructorTeachingField $teachingField): RedirectResponse
     {
-        DB::transaction(function () use ($request, $teachingField): void {
+        $teachingField->loadMissing('profile');
+        $ownerId = (int) $teachingField->profile?->user_id;
+
+        DB::transaction(function () use ($request, $teachingField, $ownerId): void {
+            User::query()->lockForUpdate()->findOrFail($ownerId);
             $field = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
             abort_unless($field->approval_status === InstructorTeachingField::STATUS_PENDING, 422, 'Chỉ ngành đang chờ duyệt mới có thể phê duyệt.');
+            $field->loadMissing(['profile', 'category.parent']);
+
+            $lockedCertificates = $field->certificates()->lockForUpdate()->get();
+            $field->setRelation('certificates', $lockedCertificates);
+            $eligibility = app(InstructorRequirementService::class)->getTeachingFieldAdminApprovalEligibility($field);
+            abort_unless(
+                $eligibility['can_submit'],
+                422,
+                'Không thể duyệt ngành vì còn thiếu tài liệu đã gửi: '.implode(', ', $eligibility['missing_titles'])
+            );
 
             $replacedField = $field->replace_of_teaching_field_id
                 ? InstructorTeachingField::query()
@@ -78,6 +93,10 @@ class InstructorTeachingFieldReviewController extends Controller
                 if ($wasPrimary) {
                     $field->profile()->update(['category_id' => $field->category_id]);
                 }
+            } elseif (! $field->profile->teachingFields()->where('id', '!=', $field->id)->approved()->exists()) {
+                // The first approved field becomes the canonical legacy primary.
+                $field->update(['is_primary' => true]);
+                $field->profile()->update(['category_id' => $field->category_id]);
             }
         });
 
@@ -89,8 +108,11 @@ class InstructorTeachingFieldReviewController extends Controller
     public function reject(Request $request, InstructorTeachingField $teachingField): RedirectResponse
     {
         $validated = $request->validate(['rejection_reason' => ['required', 'string', 'min:10', 'max:2000']]);
+        $teachingField->loadMissing('profile');
+        $ownerId = (int) $teachingField->profile?->user_id;
 
-        DB::transaction(function () use ($request, $teachingField, $validated): void {
+        DB::transaction(function () use ($request, $teachingField, $validated, $ownerId): void {
+            User::query()->lockForUpdate()->findOrFail($ownerId);
             $field = InstructorTeachingField::query()->lockForUpdate()->findOrFail($teachingField->id);
             abort_unless($field->approval_status === InstructorTeachingField::STATUS_PENDING, 422, 'Chỉ ngành đang chờ duyệt mới có thể từ chối.');
             $field->update([

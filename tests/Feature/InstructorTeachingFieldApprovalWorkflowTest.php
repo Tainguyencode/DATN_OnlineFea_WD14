@@ -9,6 +9,8 @@ use App\Models\InstructorDocumentRequirement;
 use App\Models\InstructorProfile;
 use App\Models\InstructorTeachingField;
 use App\Models\User;
+use App\Services\InstructorCourseCategoryAccess;
+use App\Services\InstructorRequirementService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -45,8 +47,8 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $this->assertSame($categoryA->id, $profile->fresh()->category_id);
         $this->assertSame([$categoryA->id], $profile->approvedTeachingCategories()->pluck('categories.id')->map(fn ($id) => (int) $id)->all());
         $this->assertSame([$categoryA->id], $instructor->fresh()->getTeachingCategories()->pluck('id')->map(fn ($id) => (int) $id)->all());
-        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
-        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
+        $this->assertTrue(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertFalse(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
         $this->assertCourseDenied($instructor, $categoryB);
         $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
     }
@@ -57,8 +59,33 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $category = Category::create(['name' => 'Legacy category', 'slug' => 'legacy-category', 'status' => true]);
         InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $category->id]);
 
-        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $category->id));
+        $this->assertTrue(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $category->id));
         $this->assertCourseAllowed($instructor, $category);
+    }
+
+    public function test_legacy_bootstrap_sync_preserves_approval_boundary(): void
+    {
+        $category = Category::create(['name' => 'Bootstrap category', 'slug' => 'bootstrap-category', 'status' => true]);
+        $approved = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
+        $approvedProfile = InstructorProfile::create(['user_id' => $approved->id]);
+        $approvedProfile->syncTeachingCategories([$category->id]);
+
+        $pending = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'pending', 'email_verified_at' => now()]);
+        $pendingProfile = InstructorProfile::create(['user_id' => $pending->id]);
+        $pendingProfile->syncTeachingCategories([$category->id]);
+
+        $this->assertDatabaseHas('instructor_profile_teaching_fields', [
+            'instructor_profile_id' => $approvedProfile->id,
+            'category_id' => $category->id,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            'is_primary' => true,
+        ]);
+        $this->assertDatabaseHas('instructor_profile_teaching_fields', [
+            'instructor_profile_id' => $pendingProfile->id,
+            'category_id' => $category->id,
+            'approval_status' => InstructorTeachingField::STATUS_DRAFT,
+            'is_primary' => true,
+        ]);
     }
 
     public function test_new_field_is_draft_scoped_documents_submit_and_admin_approval_grants_course_access(): void
@@ -67,7 +94,7 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
 
         $this->assertSame('approved', $fieldA->approval_status);
         $this->assertSame('draft', $fieldB->approval_status);
-        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
+        $this->assertFalse(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
 
         $document = $this->certificate($instructor, $fieldB, $requirementB, 'draft');
         $this->actingAs($instructor)
@@ -84,6 +111,136 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $this->assertDatabaseHas('instructor_certificates', ['id' => $document->id, 'status' => 'approved']);
         $this->assertCourseAllowed($instructor, $categoryB);
         $this->assertCourseAllowed($instructor, $categoryA);
+    }
+
+    public function test_url_upload_is_scoped_to_field_and_promoted_only_on_field_submit(): void
+    {
+        [$instructor, , , $fieldB, , , $requirementB] = $this->fixture();
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.documents.upload'), [
+                'instructor_teaching_field_id' => $fieldB->id,
+                'requirement_id' => $requirementB->id,
+                'source_type' => 'url',
+                'document_url' => 'https://example.com/field-proof.pdf',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $document = InstructorCertificate::query()
+            ->where('instructor_teaching_field_id', $fieldB->id)
+            ->where('source_type', 'url')
+            ->firstOrFail();
+        $this->assertSame('draft', $document->status);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.teaching-fields.submit-review', $fieldB))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('pending', $document->fresh()->status);
+        $this->assertSame(InstructorTeachingField::STATUS_PENDING, $fieldB->fresh()->approval_status);
+    }
+
+    public function test_instructor_cannot_upload_to_another_instructors_teaching_field(): void
+    {
+        [$owner, , , $fieldB, , , $requirementB] = $this->fixture();
+        $attacker = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'email_verified_at' => now(),
+        ]);
+        InstructorProfile::create(['user_id' => $attacker->id]);
+
+        $this->actingAs($attacker)
+            ->post(route('instructor.profile.documents.upload'), [
+                'instructor_teaching_field_id' => $fieldB->id,
+                'requirement_id' => $requirementB->id,
+                'source_type' => 'url',
+                'document_url' => 'https://example.com/unauthorized.pdf',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('instructor_certificates', [
+            'user_id' => $attacker->id,
+            'instructor_teaching_field_id' => $fieldB->id,
+        ]);
+        $this->assertSame($owner->id, $fieldB->profile->user_id);
+    }
+
+    public function test_one_scoped_document_cannot_satisfy_two_fields_with_the_same_inherited_requirement(): void
+    {
+        $instructor = User::factory()->create([
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'email_verified_at' => now(),
+        ]);
+        $parent = Category::create(['name' => 'Công nghệ', 'slug' => 'cong-nghe', 'status' => true]);
+        $categoryA = Category::create(['name' => 'Web', 'slug' => 'web', 'parent_id' => $parent->id, 'status' => true]);
+        $categoryB = Category::create(['name' => 'Mobile', 'slug' => 'mobile', 'parent_id' => $parent->id, 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $categoryA->id]);
+        $fieldA = InstructorTeachingField::create(['instructor_profile_id' => $profile->id, 'category_id' => $categoryA->id, 'is_primary' => true, 'approval_status' => 'draft']);
+        $fieldB = InstructorTeachingField::create(['instructor_profile_id' => $profile->id, 'category_id' => $categoryB->id, 'approval_status' => 'draft']);
+        $requirement = InstructorDocumentRequirement::create([
+            'category_id' => $parent->id,
+            'document_type' => 'degree',
+            'document_title' => 'Bằng công nghệ',
+            'is_required' => true,
+            'is_active' => true,
+        ]);
+        $this->certificate($instructor, $fieldA, $requirement, 'draft');
+
+        $eligibility = app(InstructorRequirementService::class)->getSubmitEligibility($instructor);
+
+        $this->assertFalse($eligibility['can_submit']);
+        $this->assertSame(1, $eligibility['submitted_count']);
+        $this->assertSame(1, $eligibility['missing_count']);
+        $this->assertStringContainsString($categoryB->name, implode(' ', $eligibility['missing_titles']));
+        $this->assertSame('draft', $fieldB->approval_status);
+    }
+
+    public function test_admin_cannot_approve_field_after_its_required_document_is_rejected(): void
+    {
+        [$instructor, $admin, , $fieldB, , , $requirementB] = $this->fixture();
+        $document = $this->certificate($instructor, $fieldB, $requirementB, 'rejected');
+        $fieldB->update(['approval_status' => InstructorTeachingField::STATUS_PENDING, 'submitted_at' => now()]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.teaching-fields.approve', $fieldB))
+            ->assertStatus(422);
+
+        $this->assertSame(InstructorTeachingField::STATUS_PENDING, $fieldB->fresh()->approval_status);
+        $this->assertSame('rejected', $document->fresh()->status);
+    }
+
+    public function test_first_individually_approved_field_becomes_primary(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $category = Category::create(['name' => 'Dữ liệu', 'slug' => 'du-lieu', 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id]);
+        $field = InstructorTeachingField::create([
+            'instructor_profile_id' => $profile->id,
+            'category_id' => $category->id,
+            'approval_status' => InstructorTeachingField::STATUS_PENDING,
+            'submitted_at' => now(),
+            'is_primary' => false,
+        ]);
+        $requirement = InstructorDocumentRequirement::create([
+            'category_id' => $category->id,
+            'document_type' => 'degree',
+            'document_title' => 'Bằng dữ liệu',
+            'is_required' => true,
+            'is_active' => true,
+        ]);
+        $this->certificate($instructor, $field, $requirement, 'pending');
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.teaching-fields.approve', $field))
+            ->assertRedirect();
+
+        $this->assertTrue($field->fresh()->is_primary);
+        $this->assertSame($category->id, $profile->fresh()->category_id);
     }
 
     public function test_rejection_does_not_revoke_existing_approved_field_or_course_management(): void
@@ -109,11 +266,11 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $fieldB->update(['replace_of_teaching_field_id' => $fieldA->id]);
         $this->certificate($instructor, $fieldB, $requirementB, 'draft');
 
-        $this->assertTrue(app(\App\Services\InstructorRequirementService::class)->getTeachingFieldSubmitEligibility($fieldB)['can_submit']);
+        $this->assertTrue(app(InstructorRequirementService::class)->getTeachingFieldSubmitEligibility($fieldB)['can_submit']);
         $fieldC = InstructorTeachingField::create(['instructor_profile_id' => $fieldA->instructor_profile_id, 'category_id' => $categoryC->id, 'approval_status' => 'draft']);
-        $this->assertFalse(app(\App\Services\InstructorRequirementService::class)->getTeachingFieldSubmitEligibility($fieldC)['can_submit']);
+        $this->assertFalse(app(InstructorRequirementService::class)->getTeachingFieldSubmitEligibility($fieldC)['can_submit']);
         $this->assertSame($fieldA->id, $fieldB->fresh()->replace_of_teaching_field_id);
-        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertTrue(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
 
         $courseA = $this->course($instructor, $categoryA);
         $this->actingAs($instructor)
@@ -165,8 +322,8 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $this->assertSame($categoryA->id, $profile->fresh()->category_id);
         $this->assertSame([$categoryA->id], $profile->approvedTeachingCategories()->pluck('categories.id')->map(fn ($id) => (int) $id)->all());
         $this->assertSame([$categoryA->id], $instructor->fresh()->getTeachingCategories()->pluck('id')->map(fn ($id) => (int) $id)->all());
-        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
-        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
+        $this->assertTrue(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertFalse(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
 
         $this->certificate($instructor, $replacement, $requirementB, 'draft');
         $this->actingAs($instructor)
@@ -185,8 +342,8 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
         $this->assertSame(InstructorTeachingField::STATUS_SUPERSEDED, $fieldA->fresh()->approval_status);
         $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $replacement->fresh()->approval_status);
         $this->assertSame($categoryB->id, $profile->fresh()->category_id);
-        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
-        $this->assertTrue(app(\App\Services\InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
+        $this->assertFalse(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryA->id));
+        $this->assertTrue(app(InstructorCourseCategoryAccess::class)->canTeachCategory($instructor, $categoryB->id));
         $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
     }
 

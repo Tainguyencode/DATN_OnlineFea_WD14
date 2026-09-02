@@ -57,7 +57,7 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
         return [$user, $profile];
     }
 
-    public function test_case_1_instructor_can_select_and_save_single_teaching_field()
+    public function test_case_1_approved_instructor_saves_new_single_field_as_draft()
     {
         [$user, $profile] = $this->createInstructor();
         $cat = $this->createCategory('Lập trình & Phát triển');
@@ -76,14 +76,14 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
         $this->assertDatabaseHas('instructor_profile_teaching_fields', [
             'instructor_profile_id' => $profile->id,
             'category_id' => $cat->id,
-            'is_primary' => true,
+            'is_primary' => false,
+            'approval_status' => 'draft',
         ]);
 
-        $this->assertEquals(1, $user->getTeachingCategories()->count());
-        $this->assertEquals($cat->id, $user->getTeachingCategories()->first()->id);
+        $this->assertTrue($user->getApprovedTeachingCategories()->isEmpty());
     }
 
-    public function test_case_2_instructor_can_select_and_save_multiple_teaching_fields()
+    public function test_case_2_approved_instructor_saves_multiple_new_fields_as_draft()
     {
         [$user, $profile] = $this->createInstructor();
         $cat1 = $this->createCategory('Lập trình Web');
@@ -100,10 +100,15 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
 
         $response->assertSessionHasNoErrors();
 
-        $this->assertEquals(3, $user->getTeachingCategories()->count());
-        $this->assertTrue($user->getTeachingCategories()->contains('id', $cat1->id));
-        $this->assertTrue($user->getTeachingCategories()->contains('id', $cat2->id));
-        $this->assertTrue($user->getTeachingCategories()->contains('id', $cat3->id));
+        $this->assertDatabaseCount('instructor_profile_teaching_fields', 3);
+        foreach ([$cat1, $cat2, $cat3] as $category) {
+            $this->assertDatabaseHas('instructor_profile_teaching_fields', [
+                'instructor_profile_id' => $profile->id,
+                'category_id' => $category->id,
+                'approval_status' => 'draft',
+            ]);
+        }
+        $this->assertTrue($user->getApprovedTeachingCategories()->isEmpty());
     }
 
     public function test_case_3_adding_new_teaching_field_preserves_old_fields_and_documents()
@@ -144,8 +149,13 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
 
         $response->assertSessionHasNoErrors();
 
-        // Kiểm tra cả 2 ngành đều tồn tại
-        $this->assertEquals(2, $user->getTeachingCategories()->count());
+        // Ngành cũ vẫn có hiệu lực; ngành mới chỉ là draft chờ duyệt.
+        $this->assertEquals(1, $user->getApprovedTeachingCategories()->count());
+        $this->assertDatabaseHas('instructor_profile_teaching_fields', [
+            'instructor_profile_id' => $profile->id,
+            'category_id' => $cat2->id,
+            'approval_status' => 'draft',
+        ]);
         // Kiểm tra tài liệu cũ không hề bị xóa hoặc mất
         $this->assertDatabaseHas('instructor_certificates', [
             'id' => $cert->id,
@@ -153,7 +163,7 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_case_4_removing_one_teaching_field_only_detaches_pivot_and_does_not_delete_documents()
+    public function test_case_4_profile_save_does_not_silently_revoke_an_approved_field_or_delete_documents()
     {
         [$user, $profile] = $this->createInstructor();
         $cat1 = $this->createCategory('Lập trình Web');
@@ -189,10 +199,11 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
 
         $response->assertSessionHasNoErrors();
 
-        // Ngành 1 bị bỏ khỏi pivot
-        $this->assertDatabaseMissing('instructor_profile_teaching_fields', [
+        // Approved history and authorization are immutable from this profile save.
+        $this->assertDatabaseHas('instructor_profile_teaching_fields', [
             'instructor_profile_id' => $profile->id,
             'category_id' => $cat1->id,
+            'approval_status' => 'approved',
         ]);
         $this->assertDatabaseHas('instructor_profile_teaching_fields', [
             'instructor_profile_id' => $profile->id,
@@ -359,7 +370,8 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
             'position' => 'Senior Frontend Engineer',
             'specialty' => 'React, Vue, Laravel',
             'experience' => '5 năm phát triển web',
-            'is_primary' => true,
+            'is_primary' => false,
+            'approval_status' => 'draft',
         ]);
 
         $this->assertDatabaseHas('instructor_profile_teaching_fields', [
@@ -370,6 +382,7 @@ class InstructorMultiTeachingFieldsWorkflowTest extends TestCase
             'specialty' => 'SEO, Google Ads, Meta Ads',
             'experience' => '3 năm chạy chiến dịch quảng cáo',
             'is_primary' => false,
+            'approval_status' => 'draft',
         ]);
     }
 

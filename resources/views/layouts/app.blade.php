@@ -39,7 +39,7 @@
                     <ul class="space-y-3 text-slate-300">
                         <li><a href="{{ route('courses.index') }}" class="transition-colors hover:text-white">Khóa học</a></li>
                         <li><a href="{{ route('home') }}#categories" class="transition-colors hover:text-white">Danh mục</a></li>
-                        <li><a href="{{ route('home') }}#paths" class="transition-colors hover:text-white">Lộ trình học</a></li>
+                        <li><a href="{{ route('learning-paths.index') }}" class="transition-colors hover:text-white">Lộ trình học</a></li>
                     </ul>
                 </div>
                 <div>
@@ -47,7 +47,7 @@
                     <ul class="space-y-3 text-slate-300">
                         <li>Email: support@fea-lms.vn</li>
                         <li>Hotline: 1900 88xx</li>
-                        <li><a href="{{ route('home') }}#faq" class="transition-colors hover:text-white">Câu hỏi thường gặp</a></li>
+                        <li><a href="mailto:support@fea-lms.vn" class="transition-colors hover:text-white">Liên hệ hỗ trợ</a></li>
                     </ul>
                 </div>
                 <div>

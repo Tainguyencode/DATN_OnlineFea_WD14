@@ -80,6 +80,9 @@ class CourseController extends Controller
             && auth()->user()->isInstructor()
             && $course->isOwnedBy(auth()->user());
         $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
+        $previewVideoUrl = ($isPublished || $canManageCourse || $canBypassCourseVisibility)
+            ? $course->previewVideoUrl()
+            : null;
 
         $course->load([
             'instructor:id,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
@@ -206,6 +209,7 @@ class CourseController extends Controller
             'recommendationTitle',
             'recommendationSubtitle',
             'topStudents',
+            'previewVideoUrl',
         ));
     }
 

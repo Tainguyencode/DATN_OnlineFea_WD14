@@ -95,6 +95,30 @@ class AwsS3UploadService
     }
 
     /**
+     * Object key dành riêng cho video giới thiệu của khóa học.
+     *
+     * Prefix này cố ý tách biệt hoàn toàn với originals/courses/.../lessons
+     * để luồng preview không thể đi vào pipeline video bài học/HLS.
+     */
+    public function generateCoursePreviewObjectKey(int|string $courseId, string $filename): string
+    {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        // Course preview hiện chỉ phát MP4 trực tiếp, không qua HLS.
+        if ($extension !== 'mp4') {
+            $extension = 'mp4';
+        }
+
+        return "previews/courses/{$courseId}/".Str::uuid().".{$extension}";
+    }
+
+    public function isCoursePreviewObjectKeyForCourse(int|string $courseId, string $key): bool
+    {
+        return Str::startsWith($key, "previews/courses/{$courseId}/")
+            && str_ends_with(strtolower($key), '.mp4');
+    }
+
+    /**
      * Khởi tạo S3 Multipart Upload
      */
     public function createMultipartUpload(string $key, string $contentType = 'video/mp4'): string
