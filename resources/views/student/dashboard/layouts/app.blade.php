@@ -55,6 +55,7 @@
         </main>
     </div>
 
+    <x-messenger.floating />
     <x-session-invalidation-monitor />
 </body>
 </html>

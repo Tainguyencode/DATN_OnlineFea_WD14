@@ -14,6 +14,16 @@ use Illuminate\Support\Facades\DB;
 
 class QuizAttemptService
 {
+    public const REVIEW_MODE_RESTRICTED = 'restricted';
+
+    public const REVIEW_MODE_FULL = 'full';
+
+    private const FINALIZED_STATUSES = [
+        QuizAttempt::STATUS_COMPLETED,
+        QuizAttempt::STATUS_TERMINATED,
+        QuizAttempt::STATUS_EXPIRED,
+    ];
+
     public function startOrResume(Course $course, Lesson $lesson, User $user): QuizAttempt
     {
         $this->assertAccess($course, $lesson, $user);
@@ -42,18 +52,10 @@ class QuizAttemptService
             if ($version->question_count) {
                 $questionIds = $questionIds->take(min($version->question_count, $questionIds->count()));
             }
-            $completedAttempts = QuizAttempt::query()
-                ->where('user_id', $user->id)
-                ->where('quiz_id', $quiz->id)
-                ->whereIn('status', [
-                    QuizAttempt::STATUS_COMPLETED,
-                    QuizAttempt::STATUS_TERMINATED,
-                    QuizAttempt::STATUS_EXPIRED,
-                ])
-                ->count();
+            $availability = $this->attemptAvailability($quiz, $user, $version);
 
             abort_if(
-                $version->max_attempts !== null && $completedAttempts >= $version->max_attempts,
+                ! $availability['has_remaining_attempts'],
                 422,
                 'Bạn đã hết số lần làm bài kiểm tra này.',
             );
@@ -338,12 +340,96 @@ class QuizAttemptService
     {
         return $quiz->attempts()
             ->where('user_id', $user->id)
-            ->whereIn('status', [
-                QuizAttempt::STATUS_COMPLETED,
-                QuizAttempt::STATUS_TERMINATED,
-                QuizAttempt::STATUS_EXPIRED,
-            ])
+            ->whereIn('status', self::FINALIZED_STATUSES)
             ->count();
+    }
+
+    /**
+     * Canonical attempt-cap state. A new attempt always uses the current
+     * published version; an existing in-progress attempt remains resumable.
+     *
+     * @return array{
+     *     max_attempts: ?int,
+     *     attempts_used: int,
+     *     remaining_attempts: ?int,
+     *     has_in_progress_attempt: bool,
+     *     has_remaining_attempts: bool
+     * }
+     */
+    public function attemptAvailability(Quiz $quiz, User $user, ?QuizVersion $currentVersion = null): array
+    {
+        $currentVersion ??= app(QuizVersioningService::class)->currentPublished($quiz);
+        abort_unless((int) $currentVersion->quiz_id === (int) $quiz->id, 409, 'Quiz version does not belong to this quiz.');
+
+        $attemptsUsed = $this->completedAttemptsCount($quiz, $user);
+        $hasInProgressAttempt = $quiz->attempts()
+            ->where('user_id', $user->id)
+            ->where('status', QuizAttempt::STATUS_IN_PROGRESS)
+            ->exists();
+        $maxAttempts = $currentVersion->max_attempts !== null
+            ? (int) $currentVersion->max_attempts
+            : null;
+        $remainingAttempts = $maxAttempts === null
+            ? null
+            : max(0, $maxAttempts - $attemptsUsed);
+
+        return [
+            'max_attempts' => $maxAttempts,
+            'attempts_used' => $attemptsUsed,
+            'remaining_attempts' => $remainingAttempts,
+            'has_in_progress_attempt' => $hasInProgressAttempt,
+            'has_remaining_attempts' => $hasInProgressAttempt
+                || $maxAttempts === null
+                || $attemptsUsed < $maxAttempts,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     review_mode: 'restricted'|'full',
+     *     review_restriction_reason: null|'attempts_remaining'|'abnormal_end',
+     *     has_remaining_attempts: bool,
+     *     max_attempts: ?int,
+     *     attempts_used: ?int,
+     *     remaining_attempts: ?int,
+     *     has_in_progress_attempt: bool
+     * }
+     */
+    public function reviewPolicy(QuizAttempt $attempt, User $viewer): array
+    {
+        $attempt->loadMissing('quiz');
+        abort_unless($attempt->quiz, 404);
+
+        if ($viewer->isAdmin() || $viewer->isInstructor()) {
+            return [
+                'review_mode' => self::REVIEW_MODE_FULL,
+                'review_restriction_reason' => null,
+                'has_remaining_attempts' => false,
+                'max_attempts' => null,
+                'attempts_used' => null,
+                'remaining_attempts' => null,
+                'has_in_progress_attempt' => false,
+            ];
+        }
+
+        abort_unless($viewer->isStudent() && (int) $attempt->user_id === (int) $viewer->id, 403);
+        abort_if($attempt->status === QuizAttempt::STATUS_IN_PROGRESS, 409, 'Không thể xem lại khi lượt làm bài vẫn đang diễn ra.');
+        abort_unless($attempt->isFinalized(), 409, 'Lượt làm bài chưa ở trạng thái có thể xem lại.');
+
+        $availability = $this->attemptAvailability($attempt->quiz, $viewer);
+        $isNormallySubmitted = $attempt->status === QuizAttempt::STATUS_COMPLETED
+            && $attempt->termination_reason === QuizAttempt::REASON_SUBMITTED;
+        $isFullReview = $isNormallySubmitted && ! $availability['has_remaining_attempts'];
+
+        return [
+            ...$availability,
+            'review_mode' => $isFullReview
+                ? self::REVIEW_MODE_FULL
+                : self::REVIEW_MODE_RESTRICTED,
+            'review_restriction_reason' => $isFullReview
+                ? null
+                : ($isNormallySubmitted ? 'attempts_remaining' : 'abnormal_end'),
+        ];
     }
 
     public function assertAccess(Course $course, Lesson $lesson, User $user): void

@@ -70,6 +70,15 @@ class InstructorTeachingField extends Model
         return in_array($this->approval_status, [self::STATUS_DRAFT, self::STATUS_REJECTED], true);
     }
 
+    public function acceptsDocumentUploads(): bool
+    {
+        return in_array($this->approval_status, [
+            self::STATUS_DRAFT,
+            self::STATUS_REJECTED,
+            self::STATUS_APPROVED,
+        ], true);
+    }
+
     public function isApproved(): bool
     {
         return $this->approval_status === self::STATUS_APPROVED;

@@ -69,6 +69,11 @@
         <x-learning-path.floating-ai :learning-path="$learningPath ?? null" />
     @endif
 
+    @auth
+        @if(auth()->user()->isStudent() || auth()->user()->isInstructor())
+            <x-messenger.floating />
+        @endif
+    @endauth
     <x-session-invalidation-monitor />
 </body>
 </html>

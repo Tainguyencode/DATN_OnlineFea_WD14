@@ -28,6 +28,7 @@ class StoreDiscussionReplyRequest extends FormRequest
         return [
             'content' => ['nullable', 'string', 'max:10000', 'required_without:attachment'],
             'reply_to_message_id' => ['nullable', 'integer'],
+            'reply_to_key' => ['nullable', 'string', 'regex:/^(discussion|reply):[1-9][0-9]*$/'],
             'lesson_id' => ['nullable', 'integer', Rule::exists('lessons', 'id')],
             'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,mkv,pdf,doc,docx,xls,xlsx,zip,rar,txt', 'max:51200', 'required_without:content'], // Max 50MB
         ];

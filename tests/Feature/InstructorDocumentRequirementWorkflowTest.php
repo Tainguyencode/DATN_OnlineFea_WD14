@@ -7,6 +7,7 @@ use App\Models\InstructorApplication;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorDocumentRequirement;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use App\Services\InstructorRequirementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -190,6 +191,13 @@ class InstructorDocumentRequirementWorkflowTest extends TestCase
      */
     public function test_instructor_profile_displays_field_requirements_checklist(): void
     {
+        InstructorTeachingField::create([
+            'instructor_profile_id' => $this->instructor->instructorProfile->id,
+            'category_id' => $this->categoryWeb->id,
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_DRAFT,
+        ]);
+
         $response = $this->actingAs($this->instructor)->get(route('instructor.profile'));
 
         $response->assertStatus(200);

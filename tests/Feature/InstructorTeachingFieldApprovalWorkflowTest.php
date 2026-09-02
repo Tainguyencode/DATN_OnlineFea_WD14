@@ -12,6 +12,8 @@ use App\Models\User;
 use App\Services\InstructorCourseCategoryAccess;
 use App\Services\InstructorRequirementService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
@@ -377,6 +379,145 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
             ->assertSee('⛔ Đã thay thế');
     }
 
+    public function test_approved_field_with_missing_requirement_can_upload_draft_supplement(): void
+    {
+        Storage::fake('local');
+        [$instructor, , $fieldA, , $categoryA] = $this->fixture();
+        $requirement = $this->requirement($categoryA, 'Chứng chỉ bổ sung A');
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.profile'))
+            ->assertOk()
+            ->assertSee('Thiếu 1 tài liệu bắt buộc')
+            ->assertSee("activeTeachingFieldId = {$fieldA->id}; activeRequirementId = {$requirement->id}", false)
+            ->assertSee('<span>Tải lên</span>', false);
+
+        $this->actingAs($instructor)
+            ->from(route('instructor.profile'))
+            ->post(route('instructor.profile.documents.upload'), [
+                'instructor_teaching_field_id' => $fieldA->id,
+                'requirement_id' => $requirement->id,
+                'file' => UploadedFile::fake()->create('supplement-a.pdf', 100, 'application/pdf'),
+            ])
+            ->assertRedirect(route('instructor.profile'))
+            ->assertSessionHasNoErrors();
+
+        $certificate = InstructorCertificate::query()
+            ->where('user_id', $instructor->id)
+            ->where('instructor_teaching_field_id', $fieldA->id)
+            ->where('requirement_id', $requirement->id)
+            ->firstOrFail();
+
+        $this->assertSame('draft', $certificate->status);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
+        $this->assertDatabaseCount('push_notifications', 0);
+    }
+
+    public function test_approved_field_submits_draft_supplement_without_losing_approval(): void
+    {
+        [$instructor, $admin, $fieldA, , $categoryA] = $this->fixture();
+        $requirement = $this->requirement($categoryA, 'Giấy xác nhận bổ sung A');
+        $certificate = $this->certificate($instructor, $fieldA, $requirement, 'draft');
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.profile'))
+            ->assertOk()
+            ->assertSee('Gửi bổ sung hồ sơ ngành này');
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.teaching-fields.submit-supplement', $fieldA))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Đã gửi bổ sung hồ sơ ngành này. Các tài liệu đang chờ Admin duyệt.');
+
+        $this->assertSame('pending', $certificate->fresh()->status);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
+        $this->assertDatabaseHas('push_notifications', [
+            'user_id' => $admin->id,
+            'type' => 'instructor_document_supplement_submitted',
+        ]);
+    }
+
+    public function test_admin_approve_or_reject_supplement_does_not_change_approved_field(): void
+    {
+        [$instructor, $admin, $fieldA, , $categoryA] = $this->fixture();
+        $approvedRequirement = $this->requirement($categoryA, 'Tài liệu duyệt bổ sung A');
+        $rejectedRequirement = $this->requirement($categoryA, 'Tài liệu từ chối bổ sung A');
+        $draftRequirement = $this->requirement($categoryA, 'Tài liệu chưa gửi A');
+        $approvedDocument = $this->certificate($instructor, $fieldA, $approvedRequirement, 'pending');
+        $rejectedDocument = $this->certificate($instructor, $fieldA, $rejectedRequirement, 'pending');
+        $draftDocument = $this->certificate($instructor, $fieldA, $draftRequirement, 'draft');
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.applications.documents.review', [$instructor, $approvedDocument]), [
+                'status' => 'approved',
+            ])
+            ->assertRedirect();
+        $this->assertSame('approved', $approvedDocument->fresh()->status);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.applications.documents.review', [$instructor, $rejectedDocument]), [
+                'status' => 'rejected',
+                'rejection_reason' => 'Tài liệu bổ sung chưa hợp lệ.',
+            ])
+            ->assertRedirect();
+        $this->assertSame('rejected', $rejectedDocument->fresh()->status);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.applications.documents.review', [$instructor, $draftDocument]), [
+                'status' => 'approved',
+            ])
+            ->assertStatus(422);
+        $this->assertSame('draft', $draftDocument->fresh()->status);
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'instructor_status' => 'approved']);
+    }
+
+    public function test_rejected_supplement_history_is_preserved_when_replacement_is_uploaded(): void
+    {
+        Storage::fake('local');
+        [$instructor, , $fieldA, , $categoryA] = $this->fixture();
+        $requirement = $this->requirement($categoryA, 'Tài liệu cần thay thế A');
+        $rejected = $this->certificate($instructor, $fieldA, $requirement, 'rejected');
+        $rejected->update(['rejection_reason' => 'Ảnh tài liệu bị mờ.']);
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.profile'))
+            ->assertOk()
+            ->assertSee('Tải file thay thế');
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.profile.documents.upload'), [
+                'instructor_teaching_field_id' => $fieldA->id,
+                'requirement_id' => $requirement->id,
+                'file' => UploadedFile::fake()->create('replacement-a.pdf', 100, 'application/pdf'),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('instructor_certificates', [
+            'id' => $rejected->id,
+            'status' => 'rejected',
+            'rejection_reason' => 'Ảnh tài liệu bị mờ.',
+        ]);
+        $this->assertDatabaseHas('instructor_certificates', [
+            'user_id' => $instructor->id,
+            'instructor_teaching_field_id' => $fieldA->id,
+            'requirement_id' => $requirement->id,
+            'status' => 'draft',
+            'original_name' => 'replacement-a.pdf',
+        ]);
+        $this->assertSame(2, InstructorCertificate::query()
+            ->where('instructor_teaching_field_id', $fieldA->id)
+            ->where('requirement_id', $requirement->id)
+            ->count());
+        $this->assertSame(InstructorTeachingField::STATUS_APPROVED, $fieldA->fresh()->approval_status);
+    }
+
     private function fixture(): array
     {
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved', 'email_verified_at' => now()]);
@@ -397,6 +538,17 @@ class InstructorTeachingFieldApprovalWorkflowTest extends TestCase
             'user_id' => $user->id, 'instructor_teaching_field_id' => $field->id, 'requirement_id' => $requirement->id,
             'file_path' => 'testing/'.$field->id.'-'.$status.'.pdf', 'original_name' => 'proof.pdf', 'title' => 'Proof',
             'document_type' => 'degree', 'status' => $status, 'uploaded_at' => now(),
+        ]);
+    }
+
+    private function requirement(Category $category, string $title): InstructorDocumentRequirement
+    {
+        return InstructorDocumentRequirement::create([
+            'category_id' => $category->id,
+            'document_type' => 'degree',
+            'document_title' => $title,
+            'is_required' => true,
+            'is_active' => true,
         ]);
     }
 

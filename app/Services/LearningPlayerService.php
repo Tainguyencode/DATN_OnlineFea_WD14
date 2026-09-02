@@ -360,17 +360,27 @@ class LearningPlayerService
         $attempt = $user?->isStudent() && $isEnrolled
             ? $attemptService->findInProgress($course, $lesson, $user)
             : null;
+        $availability = $user?->isStudent() && $isEnrolled
+            ? $attemptService->attemptAvailability($quiz, $user)
+            : null;
         $quiz = $attempt
             ? $attemptService->projectQuiz($attempt)
             : $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
 
-        $attemptsCount = $user
-            ? $attemptService->completedAttemptsCount($quiz, $user)
-            : 0;
+        $attemptsCount = $availability['attempts_used'] ?? 0;
+        $maxAttempts = $availability['max_attempts'] ?? $quiz->max_attempts;
 
-        $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
+        $attemptLimitReached = $availability ? ! $availability['has_remaining_attempts'] : false;
         $bestAttempt = $user
-            ? $quiz->attempts()->where('user_id', $user->id)->orderByDesc('percent')->first()
+            ? $quiz->attempts()
+                ->where('user_id', $user->id)
+                ->whereIn('status', [
+                    QuizAttempt::STATUS_COMPLETED,
+                    QuizAttempt::STATUS_TERMINATED,
+                    QuizAttempt::STATUS_EXPIRED,
+                ])
+                ->orderByDesc('percent')
+                ->first()
             : null;
 
         $questions = $quiz->questions->map(fn ($question) => [
@@ -389,7 +399,15 @@ class LearningPlayerService
         ])->values()->all();
 
         $userAttempts = $user
-            ? $quiz->attempts()->where('user_id', $user->id)->orderBy('id', 'asc')->get()
+            ? $quiz->attempts()
+                ->where('user_id', $user->id)
+                ->whereIn('status', [
+                    QuizAttempt::STATUS_COMPLETED,
+                    QuizAttempt::STATUS_TERMINATED,
+                    QuizAttempt::STATUS_EXPIRED,
+                ])
+                ->orderBy('id', 'asc')
+                ->get()
             : collect();
 
         $previousAttempts = $userAttempts->values()->map(function ($att, $idx) use ($course, $lesson) {
@@ -415,10 +433,12 @@ class LearningPlayerService
             'description' => $quiz->description,
             'pass_score' => (int) $quiz->pass_score,
             'time_limit_minutes' => $quiz->time_limit_minutes,
-            'max_attempts' => $quiz->max_attempts,
+            'max_attempts' => $maxAttempts,
             'attempts_count' => $attemptsCount,
             'attempt_limit_reached' => $attemptLimitReached,
-            'can_take' => $user?->isStudent() && $isEnrolled && ! $attemptLimitReached,
+            'can_take' => $user?->isStudent()
+                && $isEnrolled
+                && ($availability['has_remaining_attempts'] ?? false),
             'quiz_status' => $quizStatus,
             'attempt_id' => $attempt?->id,
             'focus_violation_url' => $attempt ? route('courses.lessons.quiz.focus-violation', [$course, $lesson, $attempt]) : null,
@@ -440,9 +460,7 @@ class LearningPlayerService
             'questions' => $questions,
             'best_percent' => $bestAttempt ? (float) $bestAttempt->percent : null,
             'previous_attempts' => $previousAttempts,
-            'remaining_attempts' => $quiz->max_attempts !== null
-                ? max(0, $quiz->max_attempts - $attemptsCount)
-                : null,
+            'remaining_attempts' => $availability['remaining_attempts'] ?? null,
             'user_info' => $user ? [
                 'id' => $user->id,
                 'name' => $user->name,

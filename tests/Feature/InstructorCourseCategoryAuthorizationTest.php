@@ -112,6 +112,73 @@ class InstructorCourseCategoryAuthorizationTest extends TestCase
             ->assertRedirect();
     }
 
+    public function test_published_course_in_approved_field_is_public(): void
+    {
+        [$instructor, $allowed] = $this->instructorWithTeachingFields(1);
+        $course = $this->course($instructor, $allowed);
+        $course->update([
+            'status' => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        $this->get(route('courses.show', $course->slug))->assertOk();
+    }
+
+    public function test_superseded_field_keeps_existing_published_course_public_and_manageable_but_blocks_new_course(): void
+    {
+        [$instructor, $allowed] = $this->instructorWithTeachingFields(1);
+        $course = $this->course($instructor, $allowed);
+        $course->update([
+            'status' => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $field = InstructorTeachingField::query()
+            ->where('instructor_profile_id', $instructor->instructorProfile->id)
+            ->where('category_id', $allowed->id)
+            ->firstOrFail();
+        $field->update(['approval_status' => InstructorTeachingField::STATUS_SUPERSEDED]);
+
+        $this->get(route('courses.show', $course->slug))->assertOk();
+        $this->actingAs($instructor)
+            ->get(route('instructor.courses.edit', $course))
+            ->assertOk();
+        $this->actingAs($instructor)
+            ->post(route('instructor.courses.store'), $this->coursePayload($allowed, 'New superseded course'))
+            ->assertSessionHasErrors('category_id');
+    }
+
+    public function test_published_course_in_unapproved_field_remains_hidden_from_public(): void
+    {
+        [$instructor, $allowed, $outside] = $this->instructorWithTeachingFields(1);
+        $course = $this->course($instructor, $outside);
+        $course->update([
+            'status' => Course::STATUS_PUBLISHED,
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        $this->assertFalse(app(\App\Services\InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course));
+        $this->get(route('courses.show', $course->slug))->assertNotFound();
+    }
+
+    public function test_unpublished_and_rejected_courses_remain_hidden_from_public(): void
+    {
+        [$instructor, $allowed] = $this->instructorWithTeachingFields(1);
+
+        foreach ([Course::STATUS_DRAFT, Course::STATUS_REJECTED] as $status) {
+            $course = $this->course($instructor, $allowed);
+            $course->update([
+                'status' => $status,
+                'is_published' => false,
+                'published_at' => null,
+            ]);
+
+            $this->get(route('courses.show', $course->slug))->assertNotFound();
+        }
+    }
+
     public function test_replacement_blocks_new_a_courses_after_b_approval_but_keeps_existing_a_course_manageable(): void
     {
         [$instructor, $categoryA, $categoryB] = $this->instructorWithTeachingFields(1);
