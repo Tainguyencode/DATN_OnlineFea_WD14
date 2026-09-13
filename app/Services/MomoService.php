@@ -13,6 +13,8 @@ class MomoService
 {
     public function createPaymentUrl(Order $order): string
     {
+        app(PaymentGatewayService::class)->ensureOrderReleases($order);
+
         $this->ensureConfigured();
         if ($order->status !== 'pending') throw new RuntimeException('Đơn hàng không ở trạng thái chờ thanh toán.');
         $amount = (int) round((float) $order->total_amount);

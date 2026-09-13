@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Assignment;
 use App\Models\AssignmentVersion;
 use App\Models\ContentUpdate;
 use App\Models\Course;
@@ -10,6 +11,7 @@ use App\Models\CourseSectionVersion;
 use App\Models\CourseVersion;
 use App\Models\Lesson;
 use App\Models\LessonVersion;
+use App\Models\Quiz;
 use App\Models\QuizVersion;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,56 @@ class CourseReleaseService
         }
 
         return $rules;
+    }
+
+    /**
+     * Give a published legacy course a forward-only release. Historical versions
+     * remain untouched; the new release describes the curriculum from now on.
+     */
+    public function ensureCurrentRelease(Course $course, ?User $actor = null): CourseVersion
+    {
+        return DB::transaction(function () use ($course, $actor): CourseVersion {
+            $course = app(CourseReleaseLock::class)->course($course->id);
+            $current = $course->published_version_id
+                ? CourseVersion::query()->lockForUpdate()->find($course->published_version_id)
+                : null;
+
+            if ($current && (int) $current->course_id === (int) $course->id
+                && $current->isPublished() && $current->published_at && $current->manifest_built_at) {
+                return $current;
+            }
+            if ($current && ((int) $current->course_id !== (int) $course->id || ! $current->isPublished())) {
+                $this->invalid('Invalid published course pointer.');
+            }
+
+            $state = $this->capture($course, $actor);
+            $metadata = $current
+                ? app(ContentVersionService::class)->withoutIdentity($current, ['course_id'])
+                : app(ContentVersionService::class)->courseSnapshot($course);
+            foreach ($this->ruleSnapshot($course) as $field => $value) {
+                $metadata[$field] ??= $value;
+            }
+            $publisherId = $actor?->id ?? $course->instructor_id;
+            $release = $course->versions()->create(array_merge($metadata, [
+                'version_number' => ((int) $course->versions()->max('version_number')) + 1,
+                'status' => CourseVersion::STATUS_DRAFT,
+                'source_version_id' => $current?->id,
+                'created_by' => $publisherId,
+            ]));
+            $this->seal($release, $state);
+            $current?->forceFill([
+                'status' => CourseVersion::STATUS_SUPERSEDED,
+                'superseded_at' => now(),
+            ])->save();
+            $release->forceFill([
+                'status' => CourseVersion::STATUS_PUBLISHED,
+                'published_by' => $publisherId,
+                'published_at' => now(),
+            ])->save();
+            $course->forceFill(['published_version_id' => $release->id])->save();
+
+            return $release->fresh();
+        });
     }
 
     /** Capture before any approved candidate is projected into mutable identities. */
@@ -176,7 +228,7 @@ class CourseReleaseService
             }
             if ($item['quiz_version_id']) {
                 $quiz = QuizVersion::query()->lockForUpdate()->findOrFail($item['quiz_version_id']);
-                $quizIdentity = \App\Models\Quiz::query()->lockForUpdate()->findOrFail($quiz->quiz_id);
+                $quizIdentity = Quiz::query()->lockForUpdate()->findOrFail($quiz->quiz_id);
                 if ((int) $quizIdentity->lesson_id !== (int) $lesson->id || ! in_array($quiz->status, ['published', 'superseded'], true)) {
                     $this->invalid('Invalid quiz release mapping.');
                 }
@@ -185,7 +237,7 @@ class CourseReleaseService
             }
             if ($item['assignment_version_id']) {
                 $assignment = AssignmentVersion::query()->lockForUpdate()->findOrFail($item['assignment_version_id']);
-                $assignmentIdentity = \App\Models\Assignment::query()->lockForUpdate()->findOrFail($assignment->assignment_id);
+                $assignmentIdentity = Assignment::query()->lockForUpdate()->findOrFail($assignment->assignment_id);
                 if ((int) $assignmentIdentity->lesson_id !== (int) $lesson->id || ! in_array($assignment->status, ['published', 'superseded'], true)) {
                     $this->invalid('Invalid assignment release mapping.');
                 }

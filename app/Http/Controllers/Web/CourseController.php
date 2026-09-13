@@ -89,7 +89,7 @@ class CourseController extends Controller
             : null;
 
         $course->load([
-            'instructor:id,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
+            'instructor:id,role,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
             'category:id,parent_id,name,slug',
             'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q

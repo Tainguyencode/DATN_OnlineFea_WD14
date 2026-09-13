@@ -25,6 +25,7 @@ use App\Services\QuizVersioningService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -291,12 +292,79 @@ class CourseReleaseFoundationTest extends TestCase
 
     private function order(float $amount = 100000): Order
     {
-        $order = Order::create(['order_code' => 'REL-'.fake()->uuid(), 'user_id' => User::factory()->create()->id,
+        $order = Order::create(['order_code' => 'REL-'.fake()->uuid(), 'user_id' => User::factory()->create(['role' => 'student'])->id,
             'subtotal' => $amount, 'total_amount' => $amount, 'status' => 'pending', 'payment_method' => 'bank_transfer']);
         $order->items()->create(['course_id' => $this->course->id, 'price' => $amount, 'commission_rate' => 20, 'commission_amount' => $amount * .2, 'instructor_earning' => $amount * .8]);
         Payment::create(['order_id' => $order->id, 'gateway' => 'bank_transfer', 'amount' => $amount, 'status' => 'pending']);
 
         return $order;
+    }
+
+    private function replaceCurrentWithLegacyRelease(): CourseVersion
+    {
+        $current = $this->course->fresh()->publishedVersion;
+        $current->forceFill(['status' => 'superseded', 'superseded_at' => now()])->save();
+        $legacy = $this->course->versions()->create([
+            ...app(ContentVersionService::class)->courseSnapshot($this->course),
+            'version_number' => $current->version_number + 1,
+            'status' => 'published',
+            'source_version_id' => $current->id,
+            'created_by' => $this->admin->id,
+            'published_by' => $this->admin->id,
+            'published_at' => now(),
+        ]);
+        $this->course->forceFill(['published_version_id' => $legacy->id])->save();
+
+        return $legacy;
+    }
+
+    public function test_payment_link_preflight_creates_forward_only_release_for_legacy_course(): void
+    {
+        config(['services.payos.mode' => 'live']);
+        $this->lesson();
+        $this->initial();
+        $legacy = $this->replaceCurrentWithLegacyRelease();
+        $order = $this->order();
+        Http::fake(['api-merchant.payos.vn/*' => Http::response([
+            'code' => '00', 'data' => ['checkoutUrl' => 'https://pay.payos.vn/web/release-ready'],
+        ])]);
+
+        $url = app(PaymentGatewayService::class)->getPaymentUrl($order);
+
+        $release = $this->course->fresh()->publishedVersion;
+        $this->assertSame('https://pay.payos.vn/web/release-ready', $url);
+        $this->assertNotSame($legacy->id, $release->id);
+        $this->assertSame('superseded', $legacy->fresh()->status);
+        $this->assertNotNull($release->manifest_built_at);
+        $this->assertSame($legacy->id, $release->source_version_id);
+        $this->assertSame(1, $release->lessonMappings()->count());
+    }
+
+    public function test_verified_paid_payos_order_recovers_from_local_cancel_and_legacy_release(): void
+    {
+        $this->lesson();
+        $this->initial();
+        $legacy = $this->replaceCurrentWithLegacyRelease();
+        $order = $this->order(99000);
+        $payment = $order->payment;
+        $payment->update(['gateway_order_code' => '987654321', 'status' => 'failed']);
+        $order->update(['status' => 'cancelled']);
+        Http::fake(['api-merchant.payos.vn/*' => Http::response(['code' => '00', 'data' => [
+            'orderCode' => 987654321, 'amount' => 99000, 'amountPaid' => 99000, 'status' => 'PAID',
+            'transactions' => [['reference' => 'BANK-PAID-987']],
+        ]])]);
+
+        $this->actingAs($order->user)
+            ->get(route('student.checkout.failed', $order->order_code))
+            ->assertRedirect(route('student.checkout.success', $order->order_code));
+
+        $release = $this->course->fresh()->publishedVersion;
+        $this->assertSame('paid', $order->fresh()->status);
+        $this->assertSame('success', $payment->fresh()->status);
+        $this->assertSame('BANK-PAID-987', $order->fresh()->transaction_id);
+        $this->assertNotSame($legacy->id, $release->id);
+        $this->assertNotNull($release->manifest_built_at);
+        $this->assertSame($release->id, Enrollment::where('user_id', $order->user_id)->sole()->course_version_id);
     }
 
     public function test_repeated_payos_callback_preserves_pin_after_a_new_release(): void

@@ -27,6 +27,8 @@ class PaymentGatewayService
             throw new RuntimeException('Cổng thanh toán không được hỗ trợ.');
         }
 
+        $this->ensureOrderReleases($order);
+
         if (config('services.payos.mode') === 'mock') {
             return $order->payment_method === 'bank_transfer'
                 ? route('student.checkout.pay', $order->order_code)
@@ -325,7 +327,8 @@ class PaymentGatewayService
     public function reconcilePayOSCancelReturn(Order $order): void
     {
         $payment = $order->payment;
-        if ($order->status !== 'pending' || ! $payment?->gateway_order_code || $payment->gateway !== 'bank_transfer') {
+        if (! in_array($order->status, ['pending', 'cancelled', 'failed'], true)
+            || ! $payment?->gateway_order_code || $payment->gateway !== 'bank_transfer') {
             return;
         }
         try {
@@ -345,7 +348,13 @@ class PaymentGatewayService
                 return;
             }
             if (($data['status'] ?? '') === 'PAID') {
-                $this->checkAndUpdatePayOSStatus($order);
+                $receivedAmount = (int) ($data['amountPaid'] ?? $data['amount'] ?? -1);
+                if ($receivedAmount !== (int) round((float) $order->total_amount)) {
+                    return;
+                }
+                $reference = (string) (($data['transactions'][0]['reference'] ?? null)
+                    ?: 'PAYOS-'.$payment->gateway_order_code);
+                $this->completePayOSPayment($order, $reference, $data);
 
                 return;
             }
@@ -450,6 +459,21 @@ class PaymentGatewayService
         );
     }
 
+    /** Ensure payment can create every enrollment before sending money to a gateway. */
+    public function ensureOrderReleases(Order $order): void
+    {
+        DB::transaction(function () use ($order): void {
+            app(InstructorFinanceService::class)->lockOrderInstructors($order);
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $courseIds = $lockedOrder->items()->orderBy('course_id')->pluck('course_id')->all();
+            app(CourseReleaseLock::class)->courses($courseIds);
+
+            foreach (Course::query()->whereIn('id', $courseIds)->orderBy('id')->with('instructor')->get() as $course) {
+                app(CourseReleaseService::class)->ensureCurrentRelease($course, $course->instructor);
+            }
+        });
+    }
+
     private function finalizePayment(Order $order, string $transactionId, array $gatewayResponse, bool $mock, array $paymentAttributes = []): bool
     {
         return DB::transaction(function () use ($order, $transactionId, $gatewayResponse, $mock, $paymentAttributes): bool {
@@ -477,6 +501,10 @@ class PaymentGatewayService
 
                 return false;
             }
+
+            // A verified payment must not be stranded because a course predates
+            // release manifests. This is also the recovery path for in-flight links.
+            $this->ensureOrderReleases($lockedOrder);
 
             // Honour the quoted discount after real money has arrived. Coupon expiry
             // or another buyer consuming the last use must not erase a received payment.

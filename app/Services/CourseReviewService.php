@@ -148,6 +148,11 @@ class CourseReviewService
                 ]);
             }
 
+            if (! $wasAlreadyPublished) {
+                app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+                app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
+            }
+
             // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này (phê duyệt chapter trước lesson)
             $pendingUpdates = ContentUpdate::query()
                 ->where('course_id', $course->id)
@@ -159,11 +164,6 @@ class CourseReviewService
             $contentUpdateService = app(ContentUpdateService::class);
             foreach ($pendingUpdates as $pendingUpdate) {
                 $contentUpdateService->applyApprovedUpdate($pendingUpdate, $admin);
-            }
-
-            if (! $wasAlreadyPublished) {
-                app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
-                app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
             }
 
             $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();

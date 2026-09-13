@@ -426,7 +426,7 @@ class PayOSPaymentSecurityTest extends TestCase
         $this->assertSame('cancelled', $order->fresh()->status);
         $this->assertSame('failed', $payment->fresh()->status);
         $this->get($url)->assertOk()->assertSee('Hủy đơn hàng thành công!');
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     public function test_cancel_query_string_does_not_override_remote_pending_or_other_owner(): void
@@ -466,7 +466,7 @@ class PayOSPaymentSecurityTest extends TestCase
         $this->assertSame('cancelled', $order->fresh()->status);
         $this->assertSame('failed', $payment->fresh()->status);
         $this->get($url)->assertOk()->assertSee('Hủy đơn hàng thành công!');
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     public function test_tampered_cancel_reference_cannot_cancel_an_order(): void

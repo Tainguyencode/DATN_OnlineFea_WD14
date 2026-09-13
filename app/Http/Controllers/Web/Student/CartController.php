@@ -831,7 +831,9 @@ class CartController extends Controller
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
-        if ($order->status === 'pending' && $order->payment?->gateway === 'bank_transfer') {
+        // PayOS may redirect to its cancellation URL while the webhook or local
+        // finalization is still catching up. A verified PAID state always wins.
+        if ($order->status !== 'paid' && $order->payment?->gateway === 'bank_transfer') {
             $paymentService->reconcilePayOSCancelReturn($order);
             $order->refresh();
         }
