@@ -19,7 +19,8 @@
                 <p class="text-lg font-black text-slate-950 dark:text-white">Phân tích hoạt động giảng dạy</p>
                 <p class="mt-1 text-xs text-slate-400">Theo dõi dữ liệu thực tế của từng khóa học</p>
             </div>
-            <div class="grid flex-1 gap-3 sm:grid-cols-3">
+            <div class="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Năm</span><select name="year" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">@foreach($availableYears as $y)<option value="{{ $y }}" @selected($filters['year'] === $y)>Năm {{ $y }}</option>@endforeach</select></label>
                 <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Khoảng thời gian</span><select name="period" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="6" @selected($filters['period'] === 6)>6 tháng gần nhất</option><option value="12" @selected($filters['period'] === 12)>12 tháng gần nhất</option><option value="all" @selected($filters['period'] === 'all')>Tất cả thời gian</option></select></label>
                 <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Khóa học</span><select name="course_id" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="">Tất cả khóa học</option>@foreach($courseOptions as $course)<option value="{{ $course->id }}" @selected($filters['courseId'] === $course->id)>{{ $course->title }}</option>@endforeach</select></label>
                 <label class="block"><span class="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">Trạng thái</span><select name="status" class="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="">Tất cả trạng thái</option>@foreach($statusOptions as $courseStatus)<option value="{{ $courseStatus->value }}" @selected($filters['status'] === $courseStatus->value)>{{ $courseStatus->label() }}</option>@endforeach</select></label>
@@ -31,7 +32,7 @@
     <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         @php
             $kpis = [
-                ['Thu nhập', number_format($stats['revenue'], 0, ',', '.').'đ', '₫', 'Trong kỳ đã chọn'],
+                ['Thu nhập', number_format($stats['revenue'], 0, ',', '.').'đ', '₫', 'Năm '.$filters['year']],
                 ['Khóa học', number_format($stats['courses']), '▤', 'Theo bộ lọc'],
                 ['Đã xuất bản', number_format($stats['published']), '✓', 'Đang hoạt động'],
                 ['Học viên', number_format($stats['students']), '◉', number_format($stats['enrollments']).' lượt ghi danh'],
@@ -47,36 +48,13 @@
     </section>
 
     <section class="grid gap-4 xl:grid-cols-12">
-        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-5"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Thu nhập và ghi danh theo tháng</h3><p class="mt-1 text-xs text-slate-400">{{ $filters['period'] === 'all' ? 'Xu hướng trong toàn bộ thời gian' : 'Xu hướng trong '.$filters['period'].' tháng gần nhất' }}</p></div><div class="h-[285px]"><canvas id="instructorTrendChart" role="img" aria-label="Biểu đồ thu nhập và ghi danh"></canvas></div></article>
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-5"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Thu nhập và ghi danh theo tháng</h3><p class="mt-1 text-xs text-slate-400">Xu hướng thu nhập và ghi danh theo 12 tháng năm {{ $filters['year'] }}</p></div><div class="h-[285px]"><canvas id="instructorTrendChart" role="img" aria-label="Biểu đồ thu nhập và ghi danh"></canvas></div></article>
         <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-3"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Cơ cấu khóa học</h3><p class="mt-1 text-xs text-slate-400">Phân bổ theo trạng thái xuất bản</p></div><div class="h-[285px]"><canvas id="instructorStatusChart" role="img" aria-label="Biểu đồ trạng thái khóa học"></canvas></div></article>
         <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-4"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Top khóa học</h3><p class="mt-1 text-xs text-slate-400">Xếp hạng theo lượt ghi danh trong kỳ</p></div><div class="h-[285px]"><canvas id="instructorTopCoursesChart" role="img" aria-label="Biểu đồ top khóa học"></canvas></div></article>
     </section>
 
     <section class="grid gap-4 xl:grid-cols-12">
-        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-4"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Phân bố điểm đánh giá</h3><p class="mt-1 text-xs text-slate-400">Phản hồi của học viên từ 1 đến 5 sao</p></div><div class="h-[310px]"><canvas id="instructorRatingChart" role="img" aria-label="Biểu đồ phân bố đánh giá"></canvas></div></article>
-        <article class="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-8">
-            <header class="flex items-center justify-between border-b border-blue-100 px-4 py-3 dark:border-slate-800"><div><h3 class="text-sm font-black text-slate-900 dark:text-white">Phân tích chi tiết khóa học</h3><p class="mt-1 text-xs text-slate-400">Hiệu suất nội dung theo bộ lọc hiện tại</p></div><a href="{{ route('instructor.courses.create') }}" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">+ Tạo khóa học</a></header>
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[720px] text-left text-xs">
-                    <thead class="bg-blue-600 text-white"><tr><th class="px-4 py-3 font-bold">Khóa học</th><th class="px-3 py-3 font-bold">Danh mục</th><th class="px-3 py-3 text-center font-bold">Ghi danh</th><th class="px-3 py-3 text-center font-bold">Đánh giá</th><th class="px-3 py-3 text-center font-bold">Điểm</th><th class="px-3 py-3 font-bold">Trạng thái</th><th class="px-4 py-3 text-right font-bold">Thao tác</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                        @forelse($topCourses as $course)
-                            <tr class="hover:bg-blue-50/50 dark:hover:bg-slate-800/60">
-                                <td class="max-w-[250px] px-4 py-3 font-bold text-slate-800 dark:text-slate-100"><span class="block truncate">{{ $course->title }}</span></td>
-                                <td class="px-3 py-3 text-slate-500 dark:text-slate-400">{{ $course->category?->name ?? '—' }}</td>
-                                <td class="px-3 py-3 text-center font-bold text-slate-700 dark:text-slate-200">{{ number_format($course->period_enrollments_count) }}</td>
-                                <td class="px-3 py-3 text-center text-slate-500">{{ number_format($course->reviews_count) }}</td>
-                                <td class="px-3 py-3 text-center"><span class="font-black text-amber-500">★</span> <strong class="text-slate-700 dark:text-slate-200">{{ number_format((float) ($course->reviews_avg_rating ?? 0), 1) }}</strong></td>
-                                <td class="px-3 py-3"><span class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{{ $course->statusEnum()->label() }}</span></td>
-                                <td class="px-4 py-3 text-right"><a href="{{ route('instructor.courses.edit', $course) }}" class="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-300">Chi tiết</a></td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="7" class="px-4 py-12 text-center text-slate-400">Không có dữ liệu phù hợp với bộ lọc.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </article>
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-12"><div class="mb-3"><h3 class="text-sm font-black text-slate-900 dark:text-white">Phân bố điểm đánh giá</h3><p class="mt-1 text-xs text-slate-400">Phản hồi của học viên từ 1 đến 5 sao</p></div><div class="h-[310px]"><canvas id="instructorRatingChart" role="img" aria-label="Biểu đồ phân bố đánh giá"></canvas></div></article>
     </section>
 </div>
 
