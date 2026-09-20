@@ -83,6 +83,25 @@ class CouponController extends Controller
             ->with('success', 'Tạo mã giảm giá thành công.');
     }
 
+    public function show(Coupon $coupon): View
+    {
+        $coupon->load([
+            'instructor:id,name,email,avatar',
+            'course:id,title,slug,price,discount_price,thumbnail',
+        ]);
+
+        $orders = Order::where('coupon_id', $coupon->id)
+            ->with(['user:id,name,email,avatar'])
+            ->latest()
+            ->paginate(15);
+
+        $totalDiscountGiven = (float) Order::where('coupon_id', $coupon->id)
+            ->where('status', 'paid')
+            ->sum('discount_amount');
+
+        return view('admin.coupons.show', compact('coupon', 'orders', 'totalDiscountGiven'));
+    }
+
     public function edit(Coupon $coupon): View
     {
         return view('admin.coupons.edit', compact('coupon'));

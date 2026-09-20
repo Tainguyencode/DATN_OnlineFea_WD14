@@ -13,6 +13,7 @@ use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\LessonVersion;
 use App\Models\LessonProgress;
@@ -52,7 +53,10 @@ class DefenseTopTenRegressionTest extends TestCase
             'status' => true,
         ]);
         $profile = InstructorProfile::create(['user_id' => $instructor->id]);
-        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
         $this->course = Course::create([
             'title' => 'Defense regression', 'slug' => (string) Str::uuid(),
             'category_id' => $category->id,

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -250,7 +251,10 @@ class CourseCategoryManagementTest extends TestCase
     private function registerTeachingCategory(User $instructor, Category $category): void
     {
         $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
-        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
     }
 
     private function course(User $instructor, Category $category): Course

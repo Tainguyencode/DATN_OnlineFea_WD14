@@ -568,6 +568,16 @@ class ContentUpdateService
                 ]);
             }
 
+            if ($update->action === ContentUpdate::ACTION_DELETE) {
+                if ($update->type === ContentUpdate::TYPE_LESSON && $update->entity_id) {
+                    app(HistoricalQuizDeletionGuard::class)->assertLessonCanBeHardDeleted($update->entity_id);
+                } elseif ($update->type === ContentUpdate::TYPE_CHAPTER && $update->entity_id) {
+                    app(HistoricalQuizDeletionGuard::class)->assertSectionCanBeHardDeleted($update->entity_id);
+                } elseif ($update->type === ContentUpdate::TYPE_COURSE && $update->course_id) {
+                    app(HistoricalQuizDeletionGuard::class)->assertCourseCanBeHardDeleted($update->course_id);
+                }
+            }
+
             $releases = app(CourseReleaseService::class);
             $releaseState = ! $alreadyApproved && $update->type !== ContentUpdate::TYPE_COURSE
                 ? $releases->capture($course, $admin) : null;

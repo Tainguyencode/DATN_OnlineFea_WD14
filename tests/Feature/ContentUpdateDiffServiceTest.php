@@ -38,7 +38,7 @@ class ContentUpdateDiffServiceTest extends TestCase
 
         $category->update(['status' => true]);
         $profile = InstructorProfile::create(['user_id' => $instructor->id]);
-        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        $profile->teachingCategories()->attach($category->id, ['is_primary' => true, 'approval_status' => 'approved']);
 
         return [$instructor, $course, $section, $lesson];
     }

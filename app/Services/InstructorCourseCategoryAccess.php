@@ -104,8 +104,28 @@ class InstructorCourseCategoryAccess
             return true;
         }
 
+        if (! $this->hasAnyConfiguredTeachingFields($instructor)) {
+            return true;
+        }
+
         return $this->canTeachCategory($instructor, (int) $course->category_id)
             || $this->hasSupersededFieldForCategory($instructor, (int) $course->category_id);
+    }
+
+    public function hasAnyConfiguredTeachingFields(User $instructor): bool
+    {
+        $profile = $instructor->relationLoaded('instructorProfile')
+            ? $instructor->instructorProfile
+            : $instructor->instructorProfile()->first();
+
+        if (! $profile) {
+            return false;
+        }
+
+        return $profile->teachingCategories()->exists()
+            || ! empty($profile->category_id)
+            || ! empty($profile->teaching_field)
+            || ! empty($profile->specialty);
     }
 
     /**

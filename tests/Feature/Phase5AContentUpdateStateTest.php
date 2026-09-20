@@ -8,6 +8,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\ContentUpdateService;
@@ -56,7 +57,10 @@ class Phase5AContentUpdateStateTest extends TestCase
             'status' => true,
         ]);
         $profile = InstructorProfile::create(['user_id' => $instructor->id]);
-        $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
 
         $course = Course::create([
             'instructor_id' => $instructor->id,

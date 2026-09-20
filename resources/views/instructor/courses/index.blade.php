@@ -167,8 +167,8 @@
                                                 @endif
                                             </div>
                                             <div class="min-w-0">
-                                                <p class="line-clamp-2 font-bold leading-snug text-slate-950">
-                                                    {{ $course->title }}</p>
+                                                <a href="{{ route('instructor.courses.show', $course) }}" class="line-clamp-2 font-bold leading-snug text-slate-950 hover:text-indigo-600 transition">
+                                                    {{ $course->title }}</a>
                                                 <p class="mt-1 truncate text-xs text-slate-500">
                                                     {{ $course->category?->name ?? 'Chưa chọn danh mục' }} ·
                                                     {{ $levelLabels[$course->level] ?? 'Chưa chọn trình độ' }}
@@ -262,7 +262,9 @@
                         <div class="space-y-4 p-4">
                             <div>
                                 <div class="flex items-start justify-between gap-3">
-                                    <h3 class="font-bold leading-6 text-slate-950">{{ $course->title }}</h3>
+                                    <h3 class="font-bold leading-6 text-slate-950">
+                                        <a href="{{ route('instructor.courses.show', $course) }}" class="hover:text-indigo-600 transition">{{ $course->title }}</a>
+                                    </h3>
                                     <span
                                         class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">
                                         {{ $statusOptions[$course->status] ?? $course->status }}

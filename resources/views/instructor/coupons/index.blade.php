@@ -46,8 +46,10 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @forelse($coupons as $coupon)
                             <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition duration-150">
-                                <td class="px-6 py-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                    {{ $coupon->code }}
+                                <td class="px-6 py-4 font-mono font-bold">
+                                    <a href="{{ route('instructor.coupons.show', $coupon) }}" class="text-emerald-600 hover:text-emerald-700 hover:underline dark:text-emerald-400">
+                                        {{ $coupon->code }}
+                                    </a>
                                 </td>
                                 <td class="px-6 py-4 font-semibold text-slate-800 dark:text-slate-200">
                                     @if($coupon->type === 'percent')
@@ -94,6 +96,10 @@
                                 </td>
                                 <td class="px-6 py-4 text-right">
                                     <div class="inline-flex items-center gap-2">
+                                        <a href="{{ route('instructor.coupons.show', $coupon) }}"
+                                           class="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950/50">
+                                            Chi tiết
+                                        </a>
                                         <a href="{{ route('instructor.coupons.edit', $coupon) }}"
                                            class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
                                             Sửa
