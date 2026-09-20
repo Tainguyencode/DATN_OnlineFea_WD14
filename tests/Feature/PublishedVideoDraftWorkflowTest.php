@@ -8,6 +8,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\LessonVersion;
 use App\Models\User;
@@ -407,7 +408,10 @@ class PublishedVideoDraftWorkflowTest extends TestCase
         $category = Category::create(['name' => 'Video versions', 'slug' => 'video-versions-'.uniqid()]);
         $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
         $profile->teachingCategories()->syncWithoutDetaching([
-            $category->id => ['is_primary' => true],
+            $category->id => [
+                'is_primary' => true,
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ],
         ]);
         $course = Course::create([
             'instructor_id' => $instructor->id,

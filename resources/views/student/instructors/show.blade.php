@@ -72,16 +72,23 @@
                 </div>
 
                 {{-- Specialty / Role --}}
-                <p style="font-size:15px;color:#94a3b8;margin:0 0 20px;">
-                    @if($courses->count() > 0 && $courses->first()->category)
-                        Chuyên gia {{ $courses->first()->category->name }}
-                        @if($courses->first()->category->parent)
-                            – {{ $courses->first()->category->parent->name }}
+                <div style="margin:0 0 20px;">
+                    <div style="font-size:16px;font-weight:600;color:#cbd5e1;margin-bottom:4px;">
+                        {{ $user->instructorProfile?->position ?? ($user->instructorProfile?->headline ?? 'Giảng viên') }}
+                        @if($user->instructorProfile?->organization)
+                            <span style="color:#94a3b8;font-size:14px;font-weight:normal;">• {{ $user->instructorProfile->organization }}</span>
                         @endif
-                    @else
-                        Giảng viên tại OnlineFEA
+                    </div>
+                    @if($user->instructorProfile?->specialty || $user->instructorProfile?->teaching_field)
+                        <div style="font-size:14px;color:#93c5fd;">
+                            Chuyên môn: <strong>{{ $user->instructorProfile?->specialty ?? $user->instructorProfile?->teaching_field }}</strong>
+                        </div>
+                    @elseif($courses->count() > 0 && $courses->first()->category)
+                        <div style="font-size:14px;color:#93c5fd;">
+                            Chuyên gia: <strong>{{ $courses->first()->category->name }}</strong>
+                        </div>
                     @endif
-                </p>
+                </div>
 
                 {{-- Stats row --}}
                 <div style="display:flex;gap:40px;flex-wrap:wrap;margin-bottom:28px;">
@@ -138,6 +145,16 @@
                         <p style="font-size:14px;color:#475569;line-height:1.75;margin:0;white-space:pre-line;">{{ $user->instructorProfile?->bio ?: $user->bio }}</p>
                     @else
                         <p style="font-size:14px;color:#94a3b8;font-style:italic;">Giảng viên chưa cập nhật thông tin giới thiệu.</p>
+                    @endif
+
+                    @if($user->instructorProfile?->experience)
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f1f5f9;">
+                            <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                                <span>💼</span>
+                                <span>Kinh nghiệm giảng dạy & làm việc</span>
+                            </div>
+                            <p style="font-size:14px;color:#475569;line-height:1.6;margin:0;white-space:pre-line;">{{ $user->instructorProfile->experience }}</p>
+                        </div>
                     @endif
                 </div>
             </div>
@@ -313,7 +330,7 @@
                                     </svg>
                                 @endfor
                                 <span style="font-size:11px;color:#94a3b8;">({{ number_format($course->rating_count) }})</span>
-                                <span style="font-size:11px;color:#94a3b8;margin-left:4px;">• {{ number_format($course->enrollment_count) }} học viên</span>
+                                <span style="font-size:11px;color:#94a3b8;margin-left:4px;">• {{ number_format($course->enrollments_count ?? $course->enrollment_count ?? 0) }} học viên</span>
                             </div>
 
                             {{-- Meta --}}

@@ -123,6 +123,10 @@
                     <dd class="mt-1 font-semibold text-slate-900">{{ $course->created_at?->format('d/m/Y H:i') }}</dd>
                 </div>
                 <div class="rounded-lg bg-slate-50 p-3">
+                    <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Ngày cập nhật</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">{{ $course->updated_at?->format('d/m/Y H:i') }}</dd>
+                </div>
+                <div class="rounded-lg bg-slate-50 p-3">
                     <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Ngày xuất bản</dt>
                     <dd class="mt-1 font-semibold text-slate-900">{{ $course->published_at?->format('d/m/Y H:i') ?? 'Chưa xuất bản' }}</dd>
                 </div>
@@ -137,8 +141,12 @@
         <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h3 class="text-lg font-bold text-slate-950">Giảng viên sở hữu</h3>
             <div class="mt-4 flex items-start gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-bold text-rose-700">
-                    {{ strtoupper(substr($course->instructor?->name ?? 'G', 0, 1)) }}
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-rose-100 text-sm font-bold text-rose-700">
+                    @if($course->instructor && method_exists($course->instructor, 'avatarUrl'))
+                        <img src="{{ $course->instructor->avatarUrl() }}" alt="{{ $course->instructor->name }}" class="h-full w-full object-cover">
+                    @else
+                        {{ strtoupper(substr($course->instructor?->name ?? 'G', 0, 1)) }}
+                    @endif
                 </div>
                 <div class="min-w-0">
                     <div class="truncate font-bold text-slate-950">{{ $course->instructor?->name ?? 'Chưa gán giảng viên' }}</div>

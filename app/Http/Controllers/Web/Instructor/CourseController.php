@@ -104,6 +104,28 @@ class CourseController extends Controller
             ->with('success', 'Tạo khóa học thành công. Khóa học đang được lưu ở trạng thái nháp.');
     }
 
+    public function show(Course $course): View
+    {
+        $this->ensureOwned($course);
+
+        $course->load([
+            'category.parent',
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'courseReviews',
+            'instructor:id,name,email,avatar',
+        ]);
+        $course->loadCount(['lessons', 'enrollments', 'reviews']);
+
+        $curriculumSections = $course->courseSections->isNotEmpty()
+            ? $course->courseSections
+            : $course->chapters;
+
+        $totalLessons = $course->lessons_count ?: $curriculumSections->sum(fn ($section) => $section->lessons->count());
+
+        return view('instructor.courses.show', compact('course', 'curriculumSections', 'totalLessons'));
+    }
+
     public function edit(Course $course): View
     {
         $this->ensureOwned($course);
@@ -307,15 +329,27 @@ class CourseController extends Controller
                     ->where('title', $chapter->title)
                     ->where('sort_order', $chapter->sort_order)
                     ->first();
-            $contentUpdate = $lessonService->createForManual(
-                $course,
-                $section ?? $chapter->id,
-                $validated,
+
+            $sortOrder = Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('chapter_id', $chapter->id)
+                ->count();
+
+            app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_LESSON,
+                ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, [
+                    'section_id' => $section?->id,
+                    'chapter_id' => $chapter->id,
+                    'sort_order' => $sortOrder,
+                    'is_preview' => $request->boolean('is_preview'),
+                    'status' => $validated['status'] ?? 'draft',
+                ]),
                 $request->user(),
+                ContentUpdate::STATUS_DRAFT,
             );
-            app(ContentUpdateService::class)->updateDraft($contentUpdate, [
-                'chapter_id' => $chapter->id,
-            ]);
 
             return back()->with('success', 'Đã lưu bản cập nhật bài học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
         }

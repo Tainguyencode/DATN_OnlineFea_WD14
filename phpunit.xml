@@ -35,6 +35,9 @@
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="PAYMENT_MODE" value="mock"/>
+        <env name="PAYOS_CLIENT_ID" value="test-payos-client"/>
+        <env name="PAYOS_API_KEY" value="test-payos-api-key"/>
+        <env name="PAYOS_CHECKSUM_KEY" value="test-payos-checksum-key"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>

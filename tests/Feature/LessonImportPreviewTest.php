@@ -8,6 +8,7 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\LessonImportBatch;
 use App\Models\User;
@@ -566,7 +567,10 @@ class LessonImportPreviewTest extends TestCase
         ]);
         $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
         $profile->teachingCategories()->syncWithoutDetaching([
-            $category->id => ['is_primary' => ! $profile->teachingCategories()->exists()],
+            $category->id => [
+                'is_primary' => ! $profile->teachingCategories()->exists(),
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ],
         ]);
         $course = Course::create([
             'instructor_id' => $instructor->id,

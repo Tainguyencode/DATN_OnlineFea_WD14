@@ -18,6 +18,11 @@
                             <div class="flex flex-wrap items-start justify-between gap-2"><code class="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-900 dark:bg-slate-800 dark:text-white">{{ $coupon->code }}</code><x-student.dashboard.status-badge :status="$userCoupon->computed_status" /></div>
                             <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">{{ $userCoupon->scope_label }}</p>
                             <dl class="mt-3 space-y-1 text-xs text-slate-500"><div class="flex justify-between gap-2"><dt>Đơn tối thiểu</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $coupon->min_order_amount > 0 ? number_format((float)$coupon->min_order_amount, 0, ',', '.').'đ' : 'Không yêu cầu' }}</dd></div><div class="flex justify-between gap-2"><dt>Hạn dùng</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $coupon->expires_at?->format('d/m/Y H:i') ?? 'Không giới hạn' }}</dd></div></dl>
+                            <div class="mt-3 flex items-center justify-end">
+                                <a href="{{ route('student.vouchers.show', $coupon) }}" class="inline-flex items-center gap-1 text-xs font-bold text-[#0056D2] hover:underline dark:text-blue-400">
+                                    Xem chi tiết →
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </article>

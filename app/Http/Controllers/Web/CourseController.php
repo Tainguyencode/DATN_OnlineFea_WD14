@@ -90,6 +90,7 @@ class CourseController extends Controller
 
         $course->load([
             'instructor:id,role,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
+            'instructor.instructorProfile',
             'category:id,parent_id,name,slug',
             'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
@@ -187,6 +188,22 @@ class CourseController extends Controller
             ->limit(10)
             ->get();
 
+        $instructorStats = [
+            'total_courses' => Course::published()->where('instructor_id', $course->instructor_id)->count(),
+            'total_students' => Enrollment::whereHas('course', fn ($q) => $q->published()->where('instructor_id', $course->instructor_id))->distinct('user_id')->count('user_id'),
+            'avg_rating' => 0.0,
+            'total_reviews' => 0,
+        ];
+        $instructorRatingData = Course::published()
+            ->where('instructor_id', $course->instructor_id)
+            ->whereNotNull('rating_avg')
+            ->selectRaw('AVG(rating_avg) as avg_rating, SUM(rating_count) as total_reviews')
+            ->first();
+        if ($instructorRatingData) {
+            $instructorStats['avg_rating'] = round((float) ($instructorRatingData->avg_rating ?? 0), 1);
+            $instructorStats['total_reviews'] = (int) ($instructorRatingData->total_reviews ?? 0);
+        }
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -214,6 +231,7 @@ class CourseController extends Controller
             'recommendationSubtitle',
             'topStudents',
             'previewVideoUrl',
+            'instructorStats',
         ));
     }
 

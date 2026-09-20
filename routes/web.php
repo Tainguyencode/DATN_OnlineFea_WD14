@@ -328,6 +328,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::delete('/orders/{order}', [StudentOrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
     Route::post('/orders/{order}/refund', [StudentRefundController::class, 'store'])->middleware('throttle:5,1')->block(10, 10)->name('orders.refund');
     Route::get('/vouchers', [StudentVoucherController::class, 'index'])->name('vouchers.index');
+    Route::get('/vouchers/{coupon}', [StudentVoucherController::class, 'show'])->name('vouchers.show');
     Route::get('/study-groups', [StudentStudyGroupController::class, 'index'])->name('study-groups.index');
     Route::get('/study-groups/{studyGroup}', [StudentStudyGroupController::class, 'show'])->name('study-groups.show');
     Route::get('/profile', [StudentProfileController::class, 'edit'])->name('profile');
@@ -372,6 +373,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:instructor'])->pre
         Route::post('/courses/import/confirm', [FullCourseImportController::class, 'confirm'])->name('courses.full-import.confirm');
         Route::get('/courses/import/previews/{batch}', [FullCourseImportController::class, 'show'])->name('courses.full-import.show');
         Route::get('/courses/create', [InstructorCourseController::class, 'create'])->name('courses.create');
+        Route::get('/courses/{course}', [InstructorCourseController::class, 'show'])->name('courses.show');
         Route::get('/courses/{course}/curriculum', [InstructorCurriculumController::class, 'index'])->name('courses.curriculum');
         Route::get('/courses/{course}/versions', [InstructorContentVersionHistoryController::class, 'index'])->name('courses.versions.index');
         Route::get('/courses/{course}/versions/{type}/{version}', [InstructorContentVersionHistoryController::class, 'show'])->name('courses.versions.show');
@@ -389,7 +391,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:instructor'])->pre
         Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
         Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->middleware('throttle:5,1')->name('wallet.bank-details.update');
         Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->middleware('throttle:5,1')->block(10, 10)->name('wallet.withdraw');
-        Route::resource('coupons', InstructorCouponController::class)->except(['show']);
+        Route::resource('coupons', InstructorCouponController::class);
         Route::post('coupons/{coupon}/toggle-status', [InstructorCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
         Route::resource('learning-paths', InstructorLearningPathController::class);
 
@@ -522,7 +524,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('coupons/reward-weekly-run-now', [AdminCouponController::class, 'rewardWeeklyRunNow'])->name('coupons.reward_weekly_run_now');
     Route::get('coupons/reward-history', [AdminCouponController::class, 'rewardHistory'])->name('coupons.reward_history');
 
-    Route::resource('coupons', AdminCouponController::class)->except(['show']);
+    Route::resource('coupons', AdminCouponController::class);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
 
     Route::resource('learning-paths', AdminLearningPathController::class);
