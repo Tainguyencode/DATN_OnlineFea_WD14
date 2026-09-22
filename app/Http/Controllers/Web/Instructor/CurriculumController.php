@@ -348,9 +348,23 @@ class CurriculumController extends Controller
             Log::info('[UPLOAD TRACE] RETURN RESPONSE (ContentUpdate)');
 
             if ($request->wantsJson() || $request->ajax()) {
-                $lesson = Lesson::query()
-                    ->where('course_id', $course->id)
-                    ->findOrFail($result->entity_id);
+                $lesson = $result->entity_id
+                    ? Lesson::query()->where('course_id', $course->id)->find($result->entity_id)
+                    : null;
+                if (! $lesson) {
+                    $payload = $result->payload ?? [];
+                    $lesson = new Lesson([
+                        'course_id' => $course->id,
+                        'section_id' => $sectionId,
+                        'title' => $payload['title'] ?? 'Bài học mới',
+                        'type' => $payload['type'] ?? Lesson::TYPE_VIDEO,
+                        'sort_order' => $payload['sort_order'] ?? 0,
+                        'status' => Lesson::STATUS_DRAFT,
+                        'upload_status' => $payload['upload_status'] ?? 'pending',
+                        'processing_status' => $payload['processing_status'] ?? 'pending',
+                    ]);
+                    $lesson->id = $result->id;
+                }
                 $lesson->draft_update = $result;
                 $lesson->update_status = $result->status;
                 $lesson->is_draft_create = true;

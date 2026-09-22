@@ -7,6 +7,7 @@ use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\QuizAttemptRequest;
 use App\Models\QuizVersion;
 use App\Models\QuizVersionQuestionInvalidation;
 use App\Models\User;
@@ -344,12 +345,32 @@ class QuizAttemptService
             ->count();
     }
 
+    public function extraAttemptsGranted(Quiz $quiz, User $user): int
+    {
+        return (int) QuizAttemptRequest::query()
+            ->where('quiz_id', $quiz->id)
+            ->where('user_id', $user->id)
+            ->where('status', QuizAttemptRequest::STATUS_APPROVED)
+            ->sum('extra_attempts_granted');
+    }
+
+    public function latestAttemptRequest(Quiz $quiz, User $user): ?QuizAttemptRequest
+    {
+        return QuizAttemptRequest::query()
+            ->where('quiz_id', $quiz->id)
+            ->where('user_id', $user->id)
+            ->latest('id')
+            ->first();
+    }
+
     /**
      * Canonical attempt-cap state. A new attempt always uses the current
      * published version; an existing in-progress attempt remains resumable.
      *
      * @return array{
      *     max_attempts: ?int,
+     *     extra_attempts: int,
+     *     effective_max_attempts: ?int,
      *     attempts_used: int,
      *     remaining_attempts: ?int,
      *     has_in_progress_attempt: bool,
@@ -369,18 +390,26 @@ class QuizAttemptService
         $maxAttempts = $currentVersion->max_attempts !== null
             ? (int) $currentVersion->max_attempts
             : null;
-        $remainingAttempts = $maxAttempts === null
+
+        $extraAttempts = $this->extraAttemptsGranted($quiz, $user);
+        $effectiveMaxAttempts = $maxAttempts !== null
+            ? ($maxAttempts + $extraAttempts)
+            : null;
+
+        $remainingAttempts = $effectiveMaxAttempts === null
             ? null
-            : max(0, $maxAttempts - $attemptsUsed);
+            : max(0, $effectiveMaxAttempts - $attemptsUsed);
 
         return [
             'max_attempts' => $maxAttempts,
+            'extra_attempts' => $extraAttempts,
+            'effective_max_attempts' => $effectiveMaxAttempts,
             'attempts_used' => $attemptsUsed,
             'remaining_attempts' => $remainingAttempts,
             'has_in_progress_attempt' => $hasInProgressAttempt,
             'has_remaining_attempts' => $hasInProgressAttempt
-                || $maxAttempts === null
-                || $attemptsUsed < $maxAttempts,
+                || $effectiveMaxAttempts === null
+                || $attemptsUsed < $effectiveMaxAttempts,
         ];
     }
 

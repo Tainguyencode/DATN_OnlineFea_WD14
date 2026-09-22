@@ -156,7 +156,28 @@
 
             <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                 @if($attemptLimitReached)
-                    <p class="font-bold">Bạn đã hết số lần làm quiz này ({{ $attemptsCount }}/{{ $quiz->max_attempts }} lượt).</p>
+                    <div class="space-y-3">
+                        <p class="font-bold">Bạn đã hết số lần làm quiz này ({{ $attemptsCount }}/{{ $quiz->max_attempts }} lượt).</p>
+                        @if(auth()->check() && auth()->user()->isStudent() && $isEnrolled)
+                            @php
+                                $reqAtt = app(\App\Services\QuizAttemptService::class)->latestAttemptRequest($quiz, auth()->user());
+                            @endphp
+                            @if($reqAtt && $reqAtt->isPending())
+                                <p class="text-xs text-amber-800 dark:text-amber-200 font-semibold">
+                                    Đang chờ giảng viên xử lý yêu cầu cấp lại lượt làm bài (gửi lúc {{ $reqAtt->created_at->format('d/m/Y H:i') }}).
+                                </p>
+                            @else
+                                @if($reqAtt && $reqAtt->isRejected())
+                                    <p class="text-xs text-rose-700 dark:text-rose-300">
+                                        Yêu cầu cấp lại lượt đã bị từ chối: {{ $reqAtt->rejection_reason ?: 'Giảng viên không chấp thuận.' }}
+                                    </p>
+                                @endif
+                                <a href="{{ route('learn.lessons.quiz.show', [$course->slug, $lesson]) }}" class="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 shadow hover:bg-amber-400 transition">
+                                    Yêu cầu cấp lại lượt Quiz
+                                </a>
+                            @endif
+                        @endif
+                    </div>
                 @elseif(! auth()->check())
                     <p class="font-bold">Đăng nhập để làm quiz và lưu kết quả.</p>
                     <a href="{{ route('login') }}" class="mt-3 inline-flex h-10 items-center rounded-xl bg-indigo-600 px-4 font-extrabold text-white transition hover:bg-indigo-700">Đăng nhập</a>

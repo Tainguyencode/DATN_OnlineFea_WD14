@@ -151,24 +151,14 @@ class CurriculumLessonService
         );
 
         try {
-            $contentUpdate = DB::transaction(function () use ($course, $sectionId, $lessonData, $payload, $data, $actor): ContentUpdate {
+            $contentUpdate = DB::transaction(function () use ($course, $payload, $actor): ContentUpdate {
                 app(CourseReleaseLock::class)->course($course->id);
-                // A published course still uses ContentUpdate for approval, but its
-                // new lesson needs a real identity before an async video upload starts.
-                $lesson = Lesson::create([
-                    ...$lessonData,
-                    'course_id' => $course->id,
-                    'section_id' => $sectionId,
-                    'chapter_id' => null,
-                    'status' => Lesson::STATUS_DRAFT,
-                ]);
-                $this->syncAssignment($lesson, $data);
 
                 return $this->contentUpdates->recordPendingUpdate(
                     ContentUpdate::TYPE_LESSON,
                     ContentUpdate::ACTION_CREATE,
                     $course->id,
-                    $lesson->id,
+                    null,
                     $payload,
                     $actor,
                     ContentUpdate::STATUS_DRAFT,
