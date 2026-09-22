@@ -9,9 +9,16 @@
 @php
     $currentUser = auth()->user();
     $instructorDiscussionsPendingCount = 0;
-    if ($currentUser && $currentUser->isInstructor()) {
+    $instructorQuizAttemptRequestsPendingCount = 0;
+    if ($currentUser && ($currentUser->isInstructor() || $currentUser->isAdmin())) {
         $instructorDiscussionsPendingCount = app(\App\Services\DiscussionChatService::class)
             ->pendingInstructorCount($currentUser);
+        $cIds = $currentUser->isAdmin()
+            ? \App\Models\Course::pluck('id')
+            : \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
+        $instructorQuizAttemptRequestsPendingCount = \App\Models\QuizAttemptRequest::whereIn('course_id', $cIds)
+            ->where('status', \App\Models\QuizAttemptRequest::STATUS_PENDING)
+            ->count();
     }
 
     $menu = [
@@ -90,6 +97,14 @@
                     'active' => ['instructor.comments.*'],
                     'label' => 'Bình luận bài học',
                     'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>',
+                ],
+                [
+                    'route' => 'instructor.quiz-attempt-requests.index',
+                    'active' => ['instructor.quiz-attempt-requests.*'],
+                    'label' => 'Yêu cầu làm lại Quiz',
+                    'badge' => $instructorQuizAttemptRequestsPendingCount > 0 ? $instructorQuizAttemptRequestsPendingCount : null,
+                    'badge_color' => 'bg-amber-500',
+                    'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>',
                 ],
                 [
                     'route' => 'study-groups.index',

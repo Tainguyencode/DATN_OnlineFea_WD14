@@ -368,7 +368,7 @@ class LearningPlayerService
             : $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
 
         $attemptsCount = $availability['attempts_used'] ?? 0;
-        $maxAttempts = $availability['max_attempts'] ?? $quiz->max_attempts;
+        $maxAttempts = $availability['effective_max_attempts'] ?? $availability['max_attempts'] ?? $quiz->max_attempts;
 
         $attemptLimitReached = $availability ? ! $availability['has_remaining_attempts'] : false;
         $bestAttempt = $user
@@ -427,6 +427,9 @@ class LearningPlayerService
             ? $quiz->attempts()->where('user_id', $user->id)->where('status', QuizAttempt::STATUS_TERMINATED)->orderByDesc('id')->first()
             : null;
 
+        $latestAttemptRequest = $user ? $attemptService->latestAttemptRequest($quiz, $user) : null;
+        $hasPendingRequest = $latestAttemptRequest ? $latestAttemptRequest->isPending() : false;
+
         return [
             'id' => $quiz->id,
             'title' => $quiz->title,
@@ -434,11 +437,24 @@ class LearningPlayerService
             'pass_score' => (int) $quiz->pass_score,
             'time_limit_minutes' => $quiz->time_limit_minutes,
             'max_attempts' => $maxAttempts,
+            'extra_attempts' => $availability['extra_attempts'] ?? 0,
             'attempts_count' => $attemptsCount,
             'attempt_limit_reached' => $attemptLimitReached,
             'can_take' => $user?->isStudent()
                 && $isEnrolled
                 && ($availability['has_remaining_attempts'] ?? false),
+            'has_pending_request' => $hasPendingRequest,
+            'can_request_attempt' => $attemptLimitReached && ! $hasPendingRequest,
+            'request_attempt_url' => route('courses.lessons.quiz.request-attempt', [$course, $lesson]),
+            'latest_attempt_request' => $latestAttemptRequest ? [
+                'id' => $latestAttemptRequest->id,
+                'status' => $latestAttemptRequest->status,
+                'status_label' => $latestAttemptRequest->getStatusLabel(),
+                'reason' => $latestAttemptRequest->reason,
+                'rejection_reason' => $latestAttemptRequest->rejection_reason,
+                'extra_attempts_granted' => $latestAttemptRequest->extra_attempts_granted,
+                'created_at' => $latestAttemptRequest->created_at?->format('d/m/Y H:i'),
+            ] : null,
             'quiz_status' => $quizStatus,
             'attempt_id' => $attempt?->id,
             'focus_violation_url' => $attempt ? route('courses.lessons.quiz.focus-violation', [$course, $lesson, $attempt]) : null,

@@ -87,7 +87,38 @@
                     {{ !empty($quizContext['previous_attempts']) ? 'Làm lại bài quiz' : 'Bắt đầu làm bài' }}
                 </button>
             @elseif($quizContext['attempt_limit_reached'])
-                <p class="mt-6 rounded border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">Bạn đã hết số lần làm quiz này ({{ $quizContext['attempts_count'] }}/{{ $quizContext['max_attempts'] }} lượt).</p>
+                <div class="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 p-5 text-amber-100 space-y-3">
+                    <p class="font-bold text-sm">
+                        Bạn đã hết số lần làm quiz này ({{ $quizContext['attempts_count'] }}/{{ $quizContext['max_attempts'] }} lượt).
+                    </p>
+
+                    @if(!empty($quizContext['has_pending_request']))
+                        <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-amber-400/20">
+                            <button type="button" disabled class="cursor-not-allowed rounded-lg bg-amber-500/20 px-4 py-2 text-xs font-bold text-amber-300 border border-amber-500/30">
+                                Đang chờ giảng viên xử lý
+                            </button>
+                            <span class="text-xs text-amber-200/80">
+                                Đã gửi yêu cầu lúc {{ $quizContext['latest_attempt_request']['created_at'] ?? '' }}. Vui lòng chờ giảng viên xử lý.
+                            </span>
+                        </div>
+                    @else
+                        @if(!empty($quizContext['latest_attempt_request']) && $quizContext['latest_attempt_request']['status'] === 'rejected')
+                            <div class="rounded-lg bg-rose-950/40 border border-rose-500/30 p-3 text-xs text-rose-200">
+                                <span class="font-bold">Yêu cầu cấp lại lượt đã bị từ chối.</span>
+                                @if(!empty($quizContext['latest_attempt_request']['rejection_reason']))
+                                    <span>Lý do: {{ $quizContext['latest_attempt_request']['rejection_reason'] }}</span>
+                                @endif
+                            </div>
+                        @endif
+
+                        <div class="pt-2 border-t border-amber-400/20 flex flex-wrap items-center justify-between gap-3">
+                            <p class="text-xs text-amber-200/80">Bạn có thể gửi yêu cầu đến giảng viên để xin cấp thêm lượt làm bài.</p>
+                            <button type="button" id="open-quiz-request-btn" class="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow">
+                                Yêu cầu cấp lại lượt Quiz
+                            </button>
+                        </div>
+                    @endif
+                </div>
             @else
                 <p class="mt-6 rounded border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">Đăng nhập và đăng ký khóa học để làm quiz.</p>
             @endif
@@ -169,6 +200,49 @@
         <div data-quiz-result class="mx-auto max-w-2xl text-white relative z-20" hidden></div>
     </div>
 
+    {{-- Modal Yêu cầu cấp lại lượt Quiz --}}
+    @if(!empty($quizContext['attempt_limit_reached']) && empty($quizContext['has_pending_request']))
+        <div id="quiz-request-attempt-modal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-modal="true">
+            <div class="flex min-h-screen items-center justify-center p-4 text-center">
+                <div class="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" id="quiz-request-attempt-backdrop"></div>
+
+                <div class="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-slate-900 border border-white/20 p-6 text-left shadow-2xl transition-all z-10 text-white">
+                    <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                        <h3 class="text-base font-bold text-white">Yêu cầu cấp lại lượt làm Quiz</h3>
+                        <button type="button" id="close-quiz-request-btn" class="text-slate-400 hover:text-white cursor-pointer text-lg font-bold">&times;</button>
+                    </div>
+
+                    <form id="quiz-request-attempt-form" action="{{ $quizContext['request_attempt_url'] }}" method="POST" class="mt-4 space-y-4">
+                        @csrf
+                        <div class="rounded-xl bg-white/5 p-3.5 border border-white/10 text-xs space-y-1.5 text-slate-300">
+                            <p><span class="text-slate-400">Khóa học:</span> <strong class="text-white">{{ $lesson->course?->title }}</strong></p>
+                            <p><span class="text-slate-400">Bài Quiz:</span> <strong class="text-white">{{ $quizContext['title'] }}</strong></p>
+                            <p><span class="text-slate-400">Học viên:</span> <strong class="text-white">{{ $quizContext['user_info']['name'] ?? auth()->user()?->name }}</strong></p>
+                            <p><span class="text-slate-400">Số lượt đã sử dụng:</span> <strong class="text-amber-400">{{ $quizContext['attempts_count'] }}/{{ $quizContext['max_attempts'] }} lượt</strong></p>
+                        </div>
+
+                        <div>
+                            <label for="quiz-request-reason" class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">
+                                Lý do xin cấp lại lượt <span class="text-rose-400">*</span>
+                            </label>
+                            <textarea name="reason" id="quiz-request-reason" rows="3" required minlength="5" maxlength="1000" class="w-full rounded-xl border border-white/20 bg-slate-950 p-3 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="Ví dụ: Em bị gián đoạn đường truyền mạng khi làm bài, em xin phép giảng viên cấp thêm lượt..."></textarea>
+                            <p id="quiz-request-error" class="text-xs text-rose-400 mt-1 hidden"></p>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-3 pt-2">
+                            <button type="button" id="cancel-quiz-request-btn" class="rounded-xl border border-white/20 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-white/10 transition cursor-pointer">
+                                Hủy
+                            </button>
+                            <button type="submit" id="submit-quiz-request-btn" class="rounded-xl bg-amber-500 px-5 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow">
+                                Gửi yêu cầu
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             if (!document.querySelector('script[data-mathjax-loader]')) {
@@ -219,6 +293,69 @@
             document.addEventListener('fullscreenchange', () => active && !document.fullscreenElement && report('Bạn đã thoát chế độ toàn màn hình.'));
             panel.addEventListener('contextmenu', event => active && event.preventDefault());
             panel.addEventListener('copy', event => active && event.preventDefault());
+
+            // Xử lý modal yêu cầu cấp lại lượt quiz
+            const modal = document.getElementById('quiz-request-attempt-modal');
+            const openBtn = document.getElementById('open-quiz-request-btn');
+            const closeBtn = document.getElementById('close-quiz-request-btn');
+            const cancelBtn = document.getElementById('cancel-quiz-request-btn');
+            const backdrop = document.getElementById('quiz-request-attempt-backdrop');
+            const reqForm = document.getElementById('quiz-request-attempt-form');
+            const errorEl = document.getElementById('quiz-request-error');
+            const submitBtn = document.getElementById('submit-quiz-request-btn');
+
+            const closeModal = () => modal?.classList.add('hidden');
+            const openModal = () => {
+                if (errorEl) { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
+                modal?.classList.remove('hidden');
+            };
+
+            openBtn?.addEventListener('click', openModal);
+            closeBtn?.addEventListener('click', closeModal);
+            cancelBtn?.addEventListener('click', closeModal);
+            backdrop?.addEventListener('click', closeModal);
+
+            reqForm?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const reasonVal = document.getElementById('quiz-request-reason')?.value?.trim();
+                if (!reasonVal || reasonVal.length < 5) {
+                    if (errorEl) {
+                        errorEl.textContent = 'Vui lòng nhập lý do tối thiểu 5 ký tự.';
+                        errorEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Đang gửi...';
+
+                try {
+                    const response = await fetch(reqForm.action, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                        },
+                        body: JSON.stringify({ reason: reasonVal })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Không thể gửi yêu cầu lúc này.');
+                    }
+
+                    alert('Đã gửi yêu cầu cấp lại lượt Quiz. Vui lòng chờ giảng viên xử lý.');
+                    window.location.reload();
+                } catch (err) {
+                    if (errorEl) {
+                        errorEl.textContent = err.message || 'Có lỗi xảy ra, vui lòng thử lại.';
+                        errorEl.classList.remove('hidden');
+                    }
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Gửi yêu cầu';
+                }
+            });
         });
     </script>
 @endif

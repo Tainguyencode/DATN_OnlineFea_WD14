@@ -9,6 +9,7 @@ use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\QuizAttemptRequest;
 use App\Services\EnrollmentVersionService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
@@ -402,5 +403,87 @@ class QuizController extends Controller
         }
 
         return $lesson->chapter_id && $lesson->chapter()->where('course_id', $course->id)->exists();
+    }
+
+    public function requestAttempt(Request $request, Course $course, Lesson $lesson): JsonResponse|RedirectResponse
+    {
+        $this->authorizePublishedLesson($course, $lesson);
+        $user = $request->user();
+        abort_unless($user && $user->isStudent(), 403, 'Chỉ học viên mới có thể gửi yêu cầu cấp lại lượt.');
+
+        if (! $this->isEnrolled($course)) {
+            abort(403, 'Bạn cần đăng ký khóa học để thực hiện thao tác này.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ], [
+            'reason.required' => 'Vui lòng nhập lý do xin cấp lại lượt làm bài.',
+            'reason.min' => 'Lý do xin cấp lại phải có ít nhất 5 ký tự.',
+            'reason.max' => 'Lý do xin cấp lại không được vượt quá 1000 ký tự.',
+        ]);
+
+        $quiz = $this->activeQuiz($lesson);
+        $attemptService = app(QuizAttemptService::class);
+        $availability = $attemptService->attemptAvailability($quiz, $user);
+
+        // Nút này chỉ xuất hiện khi học viên thực sự đã hết lượt
+        if ($availability['has_remaining_attempts']) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn vẫn còn lượt làm bài kiểm tra này.',
+                ], 422);
+            }
+
+            return back()->with('error', 'Bạn vẫn còn lượt làm bài kiểm tra này.');
+        }
+
+        // Chống gửi trùng: nếu đã có một yêu cầu đang "Chờ xử lý"
+        $hasPending = QuizAttemptRequest::query()
+            ->where('quiz_id', $quiz->id)
+            ->where('user_id', $user->id)
+            ->where('status', QuizAttemptRequest::STATUS_PENDING)
+            ->exists();
+
+        if ($hasPending) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn đã có một yêu cầu đang chờ giảng viên xử lý.',
+                ], 422);
+            }
+
+            return back()->with('error', 'Bạn đã có một yêu cầu đang chờ giảng viên xử lý.');
+        }
+
+        $attemptRequest = QuizAttemptRequest::create([
+            'user_id' => $user->id,
+            'quiz_id' => $quiz->id,
+            'course_id' => $course->id,
+            'lesson_id' => $lesson->id,
+            'attempts_used' => $availability['attempts_used'],
+            'max_attempts' => $availability['max_attempts'] ?? 3,
+            'reason' => $validated['reason'],
+            'status' => QuizAttemptRequest::STATUS_PENDING,
+        ]);
+
+        $message = 'Đã gửi yêu cầu cấp lại lượt Quiz. Vui lòng chờ giảng viên xử lý.';
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'request' => [
+                    'id' => $attemptRequest->id,
+                    'status' => $attemptRequest->status,
+                    'status_label' => $attemptRequest->getStatusLabel(),
+                    'reason' => $attemptRequest->reason,
+                    'created_at' => $attemptRequest->created_at->format('d/m/Y H:i'),
+                ],
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 }
