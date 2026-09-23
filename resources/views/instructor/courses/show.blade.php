@@ -206,17 +206,31 @@
             </div>
 
             @if($course->courseReviews && $course->courseReviews->isNotEmpty())
+                @php
+                    $reviewBadges = [
+                        \App\Enums\CourseReviewStatus::Approved->value => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        \App\Enums\CourseReviewStatus::Rejected->value => 'bg-rose-50 text-rose-700 border-rose-200',
+                        \App\Enums\CourseReviewStatus::Pending->value => 'bg-amber-50 text-amber-700 border-amber-200',
+                    ];
+                @endphp
                 <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h3 class="text-base font-bold text-slate-950">Lịch sử kiểm duyệt</h3>
                     <div class="mt-3 divide-y divide-slate-100">
                         @foreach($course->courseReviews->take(3) as $review)
+                            @php
+                                $statusVal = $review->status instanceof \App\Enums\CourseReviewStatus ? $review->status->value : (string) $review->status;
+                                $badgeClass = $reviewBadges[$statusVal] ?? 'bg-slate-50 text-slate-700 border-slate-200';
+                            @endphp
                             <div class="py-3 text-xs">
                                 <div class="flex items-center justify-between">
-                                    <span class="font-semibold text-slate-800">Lần {{ $review->submission_number ?? 1 }}: {{ ucfirst($review->status) }}</span>
-                                    <span class="text-slate-400">{{ $review->created_at?->format('d/m/Y') }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-semibold text-slate-800">Lần {{ $review->submission_number ?? 1 }}:</span>
+                                        <span class="rounded-full border px-2 py-0.5 text-[11px] font-bold {{ $badgeClass }}">{{ $review->statusLabel() }}</span>
+                                    </div>
+                                    <span class="text-slate-400">{{ ($review->reviewed_at ?? $review->submitted_at ?? $review->created_at)?->format('d/m/Y') }}</span>
                                 </div>
-                                @if($review->feedback)
-                                    <p class="mt-1 text-slate-600 italic">"{{ $review->feedback }}"</p>
+                                @if($review->comment ?? $review->feedback)
+                                    <p class="mt-1 text-slate-600 italic">"{{ $review->comment ?? $review->feedback }}"</p>
                                 @endif
                             </div>
                         @endforeach
