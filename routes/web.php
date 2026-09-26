@@ -394,6 +394,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:instructor'])->pre
         Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
         Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->middleware('throttle:5,1')->name('wallet.bank-details.update');
         Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->middleware('throttle:5,1')->block(10, 10)->name('wallet.withdraw');
+        Route::post('/wallet/withdrawals/{withdrawal}/confirm-receipt', [InstructorWalletController::class, 'confirmReceipt'])->middleware('throttle:10,1')->name('wallet.withdrawals.confirm-receipt');
+        Route::get('/wallet/withdrawals/{withdrawal}/transfer-proof', [InstructorWalletController::class, 'transferProof'])->name('wallet.withdrawals.transfer-proof');
+        Route::get('/wallet/withdrawals/{withdrawal}/reconciliation-proof', [InstructorWalletController::class, 'reconciliationProof'])->name('wallet.withdrawals.reconciliation-proof');
         Route::resource('coupons', InstructorCouponController::class);
         Route::post('coupons/{coupon}/toggle-status', [InstructorCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
         Route::resource('learning-paths', InstructorLearningPathController::class);
@@ -579,6 +582,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals.index');
     Route::post('/withdrawals/{withdrawal}/approve', [AdminWithdrawalController::class, 'approve'])->middleware('throttle:20,1')->name('withdrawals.approve');
     Route::post('/withdrawals/{withdrawal}/reject', [AdminWithdrawalController::class, 'reject'])->middleware('throttle:20,1')->name('withdrawals.reject');
+    Route::get('/withdrawals/{withdrawal}/transfer-proof', [AdminWithdrawalController::class, 'transferProof'])->name('withdrawals.transfer-proof');
+    Route::post('/withdrawals/{withdrawal}/reconciliation', [AdminWithdrawalController::class, 'updateReconciliation'])->middleware('throttle:20,1')->name('withdrawals.reconciliation.update');
+    Route::get('/withdrawals/{withdrawal}/reconciliation-proof', [AdminWithdrawalController::class, 'reconciliationProof'])->name('withdrawals.reconciliation-proof');
     Route::get('/refunds', [AdminRefundController::class, 'index'])->name('refunds.index');
     Route::get('/refunds/{refund}', [AdminRefundController::class, 'show'])->name('refunds.show');
     Route::post('/refunds/{refund}/approve', [AdminRefundController::class, 'approve'])->middleware('throttle:20,1')->name('refunds.approve');

@@ -78,7 +78,10 @@
             </p>
         @endunless
 
-        <form method="POST" action="{{ route('register.role', $role) }}" enctype="multipart/form-data" class="space-y-4" x-on:submit="loading = true">
+        @if($isStudent)
+            <script src="{{ asset('js/student-registration.js') }}?v={{ filemtime(public_path('js/student-registration.js')) }}"></script>
+        @endif
+        <form method="POST" action="{{ route('register.role', $role) }}" enctype="multipart/form-data" class="space-y-4" @if($isStudent) novalidate x-on:submit.prevent="if (!loading) { loading = true; window.submitStudentRegistration($el).finally(() => loading = false) }" @else x-on:submit="loading = true" @endif>
             @csrf
             <input type="hidden" name="captcha_token" value="{{ $captcha['token'] }}">
 

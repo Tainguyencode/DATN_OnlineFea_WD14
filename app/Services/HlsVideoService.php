@@ -16,7 +16,7 @@ use Throwable;
 class HlsVideoService
 {
     /**
-     * @return array{duration_seconds: int|null, file_count: int, segment_count: int}
+     * @return array{duration_seconds: int|null, file_count: int, segment_count: int, mode: string}
      */
     public function transcode(string $inputPath, string $outputDirectory): array
     {
@@ -25,6 +25,9 @@ class HlsVideoService
         }
 
         File::ensureDirectoryExists($outputDirectory);
+        if (File::files($outputDirectory) !== []) {
+            throw new RuntimeException('HLS output directory must be empty.');
+        }
 
         $ffmpegConfig = $this->ffmpegConfig();
         $probe = $this->probe($inputPath, $ffmpegConfig);
@@ -33,69 +36,72 @@ class HlsVideoService
         $crf = max(0, min(51, (int) config('video.hls.crf', 23)));
         $playlistPath = $outputDirectory.'/playlist.m3u8';
 
-        $streamCopyCommand = [
+        $command = [
             $ffmpegConfig['ffmpeg.binaries'],
             '-hide_banner',
             '-y',
             '-i', $inputPath,
-            '-c', 'copy',
+            '-map', '0:v:0',
+            '-map', '0:a:0?',
+            '-c:v', 'libx264',
+            '-preset', $preset,
+            '-crf', (string) $crf,
+            '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-ac', '2',
+            '-sc_threshold', '0',
+            '-force_key_frames', 'expr:gte(t,n_forced*'.$segmentSeconds.')',
             '-hls_time', (string) $segmentSeconds,
             '-hls_list_size', '0',
+            '-hls_flags', 'independent_segments',
             '-hls_segment_filename', $outputDirectory.'/segment_%05d.ts',
             '-f', 'hls',
             $playlistPath,
         ];
 
-        $process = new Process($streamCopyCommand);
-        $process->setTimeout((float) $ffmpegConfig['timeout']);
-        $process->run();
-
-        $segments = array_values(File::glob($outputDirectory.'/segment_*.ts') ?: []);
-        $streamCopySuccessful = $process->isSuccessful() && is_file($playlistPath) && filesize($playlistPath) > 0 && $segments !== [];
-
-        if (! $streamCopySuccessful) {
-            Log::warning('[HlsVideoService] Stream copy failed or unproduced; falling back to re-encode.');
-            File::cleanDirectory($outputDirectory);
-
-            $reencodeCommand = [
-                $ffmpegConfig['ffmpeg.binaries'],
-                '-hide_banner',
-                '-y',
-                '-i', $inputPath,
-                '-map', '0:v:0',
-                '-map', '0:a:0?',
-                '-c:v', 'libx264',
-                '-preset', $preset,
-                '-crf', (string) $crf,
-                '-threads', (string) $ffmpegConfig['ffmpeg.threads'],
-                '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                '-ac', '2',
-                '-sc_threshold', '0',
-                '-force_key_frames', 'expr:gte(t,n_forced*'.$segmentSeconds.')',
-                '-hls_time', (string) $segmentSeconds,
-                '-hls_list_size', '0',
-                '-hls_flags', 'independent_segments',
+        $mode = 'cpu_encode';
+        $segments = null;
+        $startedAt = microtime(true);
+        // Unknown metadata always takes the existing compatibility path.
+        if (config('video.hls.fast_copy', true) && $probe['copy_video']) {
+            $mode = $probe['copy_audio'] ? 'stream_copy' : 'video_copy_audio_encode';
+            $fastCommand = [
+                $ffmpegConfig['ffmpeg.binaries'], '-hide_banner', '-y', '-i', $inputPath,
+                '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'copy',
+                ...($probe['copy_audio'] ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']),
+                '-hls_time', (string) $segmentSeconds, '-hls_list_size', '0',
                 '-hls_segment_filename', $outputDirectory.'/segment_%05d.ts',
-                '-f', 'hls',
-                $playlistPath,
+                '-f', 'hls', $playlistPath,
             ];
-
-            $reencodeProcess = new Process($reencodeCommand);
-            $reencodeProcess->setTimeout((float) $ffmpegConfig['timeout']);
-            $reencodeProcess->mustRun();
-
-            $segments = array_values(File::glob($outputDirectory.'/segment_*.ts') ?: []);
-            if (! is_file($playlistPath) || filesize($playlistPath) === 0 || $segments === []) {
-                throw new RuntimeException('FFmpeg did not produce a complete HLS playlist.');
+            try {
+                $this->runConversion($fastCommand, min(300, $ffmpegConfig['timeout']));
+                $segments = $this->validateOutput($outputDirectory, $segmentSeconds * 2, $probe['duration_seconds']);
+            } catch (Throwable $exception) {
+                Log::warning('[HlsVideoService] Fast packaging failed; falling back to CPU.', [
+                    'reason' => $exception->getMessage(),
+                ]);
+                // Only remove files generated by this attempt, never source video.
+                File::delete(array_merge(File::glob($outputDirectory.'/segment_*.ts') ?: [], [$playlistPath]));
+                $mode = 'cpu_encode';
             }
         }
+
+        if ($segments === null) {
+            $this->runConversion($command, $ffmpegConfig['timeout']);
+            $segments = $this->validateOutput($outputDirectory, null, $probe['duration_seconds']);
+        }
+
+        Log::info('[HlsVideoService] HLS conversion finished.', [
+            'mode' => $mode, 'duration_seconds' => round(microtime(true) - $startedAt, 2),
+        ]);
 
         $masterContent = $this->masterPlaylist(
             $probe['width'],
             $probe['height'],
             $probe['bandwidth'],
+            $mode === 'cpu_encode',
         );
         file_put_contents($outputDirectory.'/master.m3u8', $masterContent);
 
@@ -103,7 +109,51 @@ class HlsVideoService
             'duration_seconds' => $probe['duration_seconds'],
             'file_count' => count(File::files($outputDirectory)),
             'segment_count' => count($segments),
+            'mode' => $mode,
         ];
+    }
+
+    private function runConversion(array $command, int $timeout): void
+    {
+        $process = new Process($command);
+        $process->setTimeout((float) $timeout);
+        $process->mustRun();
+    }
+
+    /** Validate every referenced segment before publication; long GOPs use CPU fallback. */
+    private function validateOutput(string $directory, ?int $maxSegmentSeconds, ?int $sourceDuration): array
+    {
+        $playlist = $directory.'/playlist.m3u8';
+        if (! is_file($playlist)) {
+            throw new RuntimeException('FFmpeg did not produce an HLS playlist.');
+        }
+        $content = file_get_contents($playlist);
+        if (! str_contains($content, '#EXT-X-ENDLIST')) {
+            throw new RuntimeException('HLS playlist is incomplete.');
+        }
+        preg_match_all('/#EXTINF:([0-9.]+)[^\r\n]*\r?\n(segment_\d+\.ts)/', $content, $matches, PREG_SET_ORDER);
+        if ($matches === []) {
+            throw new RuntimeException('HLS playlist contains no segments.');
+        }
+        $segments = [];
+        $duration = 0.0;
+        foreach ($matches as $match) {
+            $seconds = (float) $match[1];
+            $path = $directory.'/'.$match[2];
+            if ($seconds <= 0 || ! is_file($path) || filesize($path) === 0) {
+                throw new RuntimeException('HLS segment is empty or missing.');
+            }
+            if ($maxSegmentSeconds !== null && $seconds > $maxSegmentSeconds + 0.5) {
+                throw new RuntimeException('Source keyframes are too far apart for fast HLS packaging.');
+            }
+            $segments[] = $path;
+            $duration += $seconds;
+        }
+        if ($sourceDuration && abs($duration - $sourceDuration) > max(2, $sourceDuration * 0.02)) {
+            throw new RuntimeException('HLS duration does not match the source video.');
+        }
+
+        return $segments;
     }
 
     /**
@@ -161,7 +211,7 @@ class HlsVideoService
 
     /**
      * @param  array{ffmpeg.binaries: string, ffprobe.binaries: string, timeout: int, ffmpeg.threads: int}  $ffmpegConfig
-     * @return array{duration_seconds: int|null, width: int|null, height: int|null, bandwidth: int}
+     * @return array{duration_seconds: int|null, width: int|null, height: int|null, bandwidth: int, copy_video: bool, copy_audio: bool}
      */
     private function probe(string $inputPath, array $ffmpegConfig): array
     {
@@ -170,6 +220,8 @@ class HlsVideoService
             'width' => null,
             'height' => null,
             'bandwidth' => 2_500_000,
+            'copy_video' => false,
+            'copy_audio' => false,
         ];
 
         try {
@@ -178,6 +230,9 @@ class HlsVideoService
             $duration = (int) round((float) $format->get('duration'));
             $sourceBitrate = (int) $format->get('bit_rate');
             $video = $ffprobe->streams($inputPath)->videos()->first();
+            $audio = $ffprobe->streams($inputPath)->audios()->first();
+            $result['copy_audio'] = ! $audio || ($audio->get('codec_name') === 'aac'
+                && $audio->get('profile') === 'LC' && (int) $audio->get('channels') <= 2);
 
             if ($duration > 0) {
                 $result['duration_seconds'] = $duration;
@@ -187,11 +242,20 @@ class HlsVideoService
                 $height = (int) $video->get('height');
                 $result['width'] = $width > 0 ? $width : null;
                 $result['height'] = $height > 0 ? $height : null;
+                $result['copy_video'] = $video->get('codec_name') === 'h264'
+                    && $video->get('pix_fmt') === 'yuv420p'
+                    && in_array($video->get('profile'), ['Baseline', 'Constrained Baseline', 'Main', 'High'], true)
+                    && (int) $video->get('level') > 0 && (int) $video->get('level') <= 42
+                    && $video->get('field_order') === 'progressive'
+                    && empty($video->get('tags')['rotate'])
+                    && ! array_filter($video->get('side_data_list') ?: [], fn ($side) => ! empty($side['rotation']));
             }
             if ($sourceBitrate > 0) {
                 $result['bandwidth'] = max(500_000, min(12_000_000, (int) ceil($sourceBitrate * 1.2)));
             }
         } catch (Throwable $exception) {
+            $result['copy_video'] = false;
+            $result['copy_audio'] = false;
             Log::warning('[HlsVideoService] Could not probe source metadata.', [
                 'message' => $exception->getMessage(),
             ]);
@@ -200,7 +264,7 @@ class HlsVideoService
         return $result;
     }
 
-    private function masterPlaylist(?int $width, ?int $height, int $bandwidth): string
+    private function masterPlaylist(?int $width, ?int $height, int $bandwidth, bool $independent = true): string
     {
         $attributes = ['BANDWIDTH='.$bandwidth];
         if ($width && $height) {
@@ -209,7 +273,7 @@ class HlsVideoService
 
         return "#EXTM3U\n"
             ."#EXT-X-VERSION:3\n"
-            ."#EXT-X-INDEPENDENT-SEGMENTS\n"
+            .($independent ? "#EXT-X-INDEPENDENT-SEGMENTS\n" : '')
             .'#EXT-X-STREAM-INF:'.implode(',', $attributes)."\n"
             ."playlist.m3u8\n";
     }

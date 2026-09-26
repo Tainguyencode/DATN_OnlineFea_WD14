@@ -1219,14 +1219,43 @@ function showCurriculumToast(message, isError = false) {
  * Polling trạng thái HLS tự động trên trang Curriculum cấp Course
  * Cập nhật DUY NHẤT 1 Banner thông báo chung và khóa/mở nút "Gửi duyệt"
  */
+function updateCurriculumReadiness(items) {
+    if (!Array.isArray(items)) return;
+    const passed = items.filter(item => item.passed).length;
+    const percent = items.length ? Math.round(passed / items.length * 100) : 0;
+    const count = document.querySelector('[data-readiness-count]');
+    const bar = document.querySelector('[data-readiness-bar]');
+    const label = document.querySelector('[data-readiness-percent]');
+    const list = document.querySelector('[data-readiness-items]');
+    if (count) count.innerHTML = `${passed}<span class="text-base text-slate-400">/${items.length}</span>`;
+    if (bar) bar.style.width = `${percent}%`;
+    if (label) label.textContent = `${percent}%`;
+    if (list) list.innerHTML = items.map(item => `
+        <li class="flex items-start gap-2.5 py-2.5 text-xs">
+            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white ${item.passed ? 'bg-emerald-500' : 'bg-amber-500'}">${item.passed ? '✓' : '!'}</span>
+            <div class="min-w-0">
+                <p class="font-bold text-slate-700 dark:text-slate-200">${escapeHtml(item.label)}</p>
+                ${!item.passed && item.message ? `<p class="mt-0.5 leading-5 text-amber-700 dark:text-amber-300">${escapeHtml(item.message)}</p>` : ''}
+            </div>
+        </li>`).join('');
+}
+
 function initCurriculumHlsPolling(hlsStatusUrl) {
     if (!hlsStatusUrl) return;
 
     let pollInterval = null;
+    let requestInFlight = false;
+    let refreshRequested = false;
 
     async function checkStatus() {
+        if (requestInFlight) {
+            refreshRequested = true;
+            return;
+        }
+        requestInFlight = true;
         try {
             const response = await fetch(hlsStatusUrl, {
+                cache: 'no-store',
                 headers: {
                     'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
@@ -1236,6 +1265,7 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             if (!response.ok) return;
 
             const data = await response.json();
+            updateCurriculumReadiness(data.readiness_items);
             const commonState = data.common_state || 'completed'; // 'completed' | 'processing' | 'failed'
             const commonMessage = data.common_message || '';
             const canSubmit = data.reviewState
@@ -1340,6 +1370,12 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             }
         } catch (e) {
             console.warn('HLS status poll error:', e);
+        } finally {
+            requestInFlight = false;
+            if (refreshRequested) {
+                refreshRequested = false;
+                window.triggerHlsPolling();
+            }
         }
     }
 

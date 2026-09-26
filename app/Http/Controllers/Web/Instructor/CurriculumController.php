@@ -1129,6 +1129,7 @@ class CurriculumController extends Controller
                 && ! $hasFailed
                 && ! $hasProcessing,
             'submission_message' => $submissionCheck->summaryMessage(),
+            'readiness_items' => array_values($submissionCheck->items()),
             'common_state' => $commonState,
             'common_message' => $commonMessage,
             ...$this->reviewStateResponseData($course, auth()->user()),

@@ -11,10 +11,12 @@ use App\Services\PayoutService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WalletController extends Controller
 {
@@ -178,5 +180,73 @@ class WalletController extends Controller
         );
 
         return back()->with('success', 'Đã gửi yêu cầu rút tiền '.number_format($amount, 0, ',', '.').' VNĐ thành công! Quản trị viên sẽ kiểm tra và chuyển khoản cho bạn trong thời gian sớm nhất.');
+    }
+
+    public function confirmReceipt(Request $request, Withdrawal $withdrawal): RedirectResponse
+    {
+        abort_unless((int) $withdrawal->user_id === (int) $request->user()->id, 403);
+
+        $validated = $request->validate([
+            'receipt_status' => ['required', Rule::in([Withdrawal::RECEIPT_RECEIVED, Withdrawal::RECEIPT_NOT_RECEIVED])],
+        ]);
+
+        if ($withdrawal->status !== Withdrawal::STATUS_APPROVED || ! $withdrawal->transfer_proof_path) {
+            return back()->withErrors(['receipt_status' => 'Giao dịch này chưa được Admin xác nhận chuyển khoản.']);
+        }
+
+        if ($withdrawal->receipt_status === Withdrawal::RECEIPT_RECEIVED
+            || $withdrawal->receipt_status === $validated['receipt_status']) {
+            return back()->withErrors(['receipt_status' => 'Bạn đã phản hồi giao dịch này trước đó.']);
+        }
+
+        $withdrawal->update([
+            'receipt_status' => $validated['receipt_status'],
+            'receipt_confirmed_at' => now(),
+        ]);
+
+        if ($validated['receipt_status'] === Withdrawal::RECEIPT_NOT_RECEIVED) {
+            app(NotificationService::class)->notifyAdmins(
+                'Giảng viên báo chưa nhận được tiền',
+                "Giảng viên {$request->user()->name} báo chưa nhận được khoản rút #{$withdrawal->id} trị giá ".number_format($withdrawal->amount, 0, ',', '.').' VNĐ. Vui lòng kiểm tra lại giao dịch.',
+                'withdrawal_not_received',
+                route('admin.withdrawals.index', ['search' => $withdrawal->id])
+            );
+        }
+
+        ActivityLogService::log(
+            $request->user()->id,
+            'confirm_withdrawal_receipt',
+            Withdrawal::class,
+            $withdrawal->id,
+            ['receipt_status' => $validated['receipt_status']],
+            $request,
+            $validated['receipt_status'] === Withdrawal::RECEIPT_RECEIVED
+                ? 'Giảng viên xác nhận đã nhận được tiền rút.'
+                : 'Giảng viên báo chưa nhận được tiền rút.'
+        );
+
+        return back()->with('success', $validated['receipt_status'] === Withdrawal::RECEIPT_RECEIVED
+            ? 'Cảm ơn bạn đã xác nhận đã nhận được tiền.'
+            : 'Đã ghi nhận phản hồi chưa nhận được tiền và thông báo tới Admin.');
+    }
+
+    public function transferProof(Request $request, Withdrawal $withdrawal): StreamedResponse
+    {
+        abort_unless((int) $withdrawal->user_id === (int) $request->user()->id, 403);
+        abort_unless($withdrawal->transfer_proof_path && Storage::disk('local')->exists($withdrawal->transfer_proof_path), 404);
+
+        return Storage::disk('local')->response($withdrawal->transfer_proof_path, null, [
+            'Content-Disposition' => 'inline',
+        ]);
+    }
+
+    public function reconciliationProof(Request $request, Withdrawal $withdrawal): StreamedResponse
+    {
+        abort_unless((int) $withdrawal->user_id === (int) $request->user()->id, 403);
+        abort_unless($withdrawal->reconciliation_proof_path && Storage::disk('local')->exists($withdrawal->reconciliation_proof_path), 404);
+
+        return Storage::disk('local')->response($withdrawal->reconciliation_proof_path, null, [
+            'Content-Disposition' => 'inline',
+        ]);
     }
 }

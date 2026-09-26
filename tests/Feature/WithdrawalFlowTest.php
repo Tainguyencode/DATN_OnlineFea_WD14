@@ -7,16 +7,27 @@ use App\Models\Course;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PushNotification;
+use App\Models\Refund;
 use App\Models\User;
 use App\Models\Withdrawal;
+use App\Services\NotificationService;
+use App\Services\PaymentGatewayService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class WithdrawalFlowTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+    }
 
     public function test_instructor_must_add_bank_account_before_requesting_withdrawal(): void
     {
@@ -103,6 +114,7 @@ class WithdrawalFlowTest extends TestCase
         $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), [
             'transaction_ref' => 'TEST-PAYOUT-001',
             'admin_note' => 'Đã đối soát chuyển khoản thử nghiệm.',
+            'transfer_proof' => UploadedFile::fake()->image('bill.jpg'),
         ])->assertSessionHasNoErrors();
 
         $withdrawal->refresh();
@@ -118,6 +130,7 @@ class WithdrawalFlowTest extends TestCase
         $notificationCount = PushNotification::where('user_id', $instructor->id)->count();
         $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), [
             'transaction_ref' => 'TEST-PAYOUT-002',
+            'transfer_proof' => UploadedFile::fake()->image('bill-lan-2.jpg'),
         ])->assertSessionHasErrors('error');
 
         $this->assertSame('TEST-PAYOUT-001', $withdrawal->fresh()->transaction_ref);
@@ -198,7 +211,7 @@ class WithdrawalFlowTest extends TestCase
     public function test_notification_failure_rolls_back_the_withdrawal(): void
     {
         $instructor = $this->createInstructorWithEarnings(bankConfigured: true);
-        $this->mock(\App\Services\NotificationService::class)
+        $this->mock(NotificationService::class)
             ->shouldReceive('notifyAdmins')->once()->andThrow(new \RuntimeException('notification storage unavailable'));
         $this->withoutExceptionHandling();
 
@@ -217,10 +230,71 @@ class WithdrawalFlowTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $instructor = $this->createInstructorWithEarnings(true);
         $withdrawal = $this->createPendingWithdrawal($instructor, 30000);
-        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), [])
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), [
+            'transfer_proof' => UploadedFile::fake()->image('bill.jpg'),
+        ])
             ->assertSessionHasNoErrors();
         $this->assertSame('approved', $withdrawal->fresh()->status);
         $this->assertNull($withdrawal->fresh()->transaction_ref);
+    }
+
+    public function test_admin_must_upload_a_transfer_bill_before_approving(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $instructor = $this->createInstructorWithEarnings(true);
+        $withdrawal = $this->createPendingWithdrawal($instructor, 30000);
+
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal))
+            ->assertSessionHasErrors('transfer_proof');
+
+        $this->assertSame(Withdrawal::STATUS_PENDING, $withdrawal->fresh()->status);
+        $this->assertNull($withdrawal->fresh()->transfer_proof_path);
+    }
+
+    public function test_instructor_can_confirm_receipt_or_report_money_not_received(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $instructor = $this->createInstructorWithEarnings(true);
+        $withdrawal = $this->createPendingWithdrawal($instructor, 30000);
+
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), [
+            'transfer_proof' => UploadedFile::fake()->image('bill.jpg'),
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($instructor)->post(route('instructor.wallet.withdrawals.confirm-receipt', $withdrawal), [
+            'receipt_status' => Withdrawal::RECEIPT_NOT_RECEIVED,
+        ])->assertSessionHasNoErrors();
+
+        $withdrawal->refresh();
+        $this->assertSame(Withdrawal::RECEIPT_NOT_RECEIVED, $withdrawal->receipt_status);
+        $this->assertNotNull($withdrawal->receipt_confirmed_at);
+        $this->assertDatabaseHas('push_notifications', [
+            'user_id' => $admin->id,
+            'type' => 'withdrawal_not_received',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.withdrawals.reconciliation.update', $withdrawal), [
+            'reconciliation_status' => Withdrawal::RECONCILIATION_BANK_CHECK,
+            'reconciliation_note' => 'Đã tiếp nhận và đang làm việc với ngân hàng thụ hưởng.',
+        ])->assertSessionHasNoErrors();
+
+        $withdrawal->refresh();
+        $this->assertSame(Withdrawal::RECONCILIATION_BANK_CHECK, $withdrawal->reconciliation_status);
+        $this->assertNotNull($withdrawal->reconciliation_updated_at);
+        $this->assertDatabaseHas('push_notifications', [
+            'user_id' => $instructor->id,
+            'type' => 'withdrawal_reconciliation',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.withdrawals.reconciliation.update', $withdrawal), [
+            'reconciliation_status' => Withdrawal::RECONCILIATION_RETRANSFERRED,
+            'reconciliation_note' => 'Ngân hàng hoàn tiền nên Admin thực hiện chuyển khoản lại.',
+        ])->assertSessionHasErrors('reconciliation_proof');
+
+        $this->actingAs($instructor)->post(route('instructor.wallet.withdrawals.confirm-receipt', $withdrawal), [
+            'receipt_status' => Withdrawal::RECEIPT_RECEIVED,
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(Withdrawal::RECEIPT_RECEIVED, $withdrawal->fresh()->receipt_status);
     }
 
     public function test_refund_reserves_earnings_and_blocks_pending_withdrawal_until_rejected(): void
@@ -233,7 +307,7 @@ class WithdrawalFlowTest extends TestCase
         $this->assertSame(0.0, $instructor->fresh()->available_balance);
         $this->actingAs($instructor)->post(route('instructor.wallet.withdraw'), ['amount' => 10000])
             ->assertSessionHasErrors('amount');
-        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), ['transaction_ref' => 'BANK-001'])
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), ['transaction_ref' => 'BANK-001', 'transfer_proof' => UploadedFile::fake()->image('bill.jpg')])
             ->assertSessionHasErrors('error');
         $this->assertSame('pending', $withdrawal->fresh()->status);
         $this->actingAs($admin)->get(route('admin.withdrawals.index'))->assertOk()->assertSee('Thiếu nguồn tiền sau đối soát.');
@@ -241,7 +315,7 @@ class WithdrawalFlowTest extends TestCase
         $this->assertSame(0.0, $instructor->fresh()->refund_reserve);
         $this->assertSame(10000.0, $instructor->fresh()->available_balance);
         $this->flushSession();
-        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), ['transaction_ref' => 'BANK-002'])
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), ['transaction_ref' => 'BANK-002', 'transfer_proof' => UploadedFile::fake()->image('bill.jpg')])
             ->assertSessionHasNoErrors();
         $this->assertSame('approved', $withdrawal->fresh()->status);
     }
@@ -252,28 +326,29 @@ class WithdrawalFlowTest extends TestCase
         $instructor = $this->createInstructorWithEarnings(true);
         $withdrawal = $this->createPendingWithdrawal($instructor, 30000);
         $refund = $this->createRefundForInstructor($instructor);
-        app(\App\Services\PaymentGatewayService::class)->processRefund($refund, 'manual', null, 'REFUND-001');
+        app(PaymentGatewayService::class)->processRefund($refund, 'manual', null, 'REFUND-001');
         $this->assertSame(0.0, $instructor->fresh()->total_earnings);
-        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), ['transaction_ref' => 'BANK-001'])
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $withdrawal), ['transaction_ref' => 'BANK-001', 'transfer_proof' => UploadedFile::fake()->image('bill.jpg')])
             ->assertSessionHasErrors('error');
         $this->assertSame('pending', $withdrawal->fresh()->status);
 
         $paidInstructor = $this->createInstructorWithEarnings(true);
         $paidWithdrawal = $this->createPendingWithdrawal($paidInstructor, 30000);
         $this->flushSession();
-        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $paidWithdrawal), ['transaction_ref' => 'BANK-002'])
+        $this->actingAs($admin)->post(route('admin.withdrawals.approve', $paidWithdrawal), ['transaction_ref' => 'BANK-002', 'transfer_proof' => UploadedFile::fake()->image('bill.jpg')])
             ->assertSessionHasNoErrors();
         $paidRefund = $this->createRefundForInstructor($paidInstructor);
-        app(\App\Services\PaymentGatewayService::class)->processRefund($paidRefund, 'manual', null, 'REFUND-002');
+        app(PaymentGatewayService::class)->processRefund($paidRefund, 'manual', null, 'REFUND-002');
         $this->assertSame(30000.0, $paidInstructor->fresh()->settlement_deficit);
         $this->assertSame(0.0, $paidInstructor->fresh()->available_balance);
         $this->actingAs($paidInstructor)->get(route('instructor.wallet.index'))->assertOk()->assertSee('Khoản cần đối soát sau hoàn tiền');
     }
 
-    private function createRefundForInstructor(User $instructor): \App\Models\Refund
+    private function createRefundForInstructor(User $instructor): Refund
     {
         $order = Order::whereHas('items.course', fn ($q) => $q->where('instructor_id', $instructor->id))->firstOrFail();
-        return \App\Models\Refund::create([
+
+        return Refund::create([
             'order_id' => $order->id, 'user_id' => $order->user_id, 'amount' => $order->total_amount,
             'reason' => 'Không còn nhu cầu học.', 'status' => 'pending', 'refund_method' => 'manual',
             'bank_code' => 'VCB', 'bank_account_number' => '0123456789', 'bank_account_name' => 'TEST STUDENT',

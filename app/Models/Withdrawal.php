@@ -16,6 +16,22 @@ class Withdrawal extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    public const RECEIPT_PENDING = 'pending';
+
+    public const RECEIPT_RECEIVED = 'received';
+
+    public const RECEIPT_NOT_RECEIVED = 'not_received';
+
+    public const RECONCILIATION_CONTACTING = 'contacting';
+
+    public const RECONCILIATION_BANK_CHECK = 'bank_check';
+
+    public const RECONCILIATION_MEETING = 'meeting';
+
+    public const RECONCILIATION_RETRANSFERRED = 'retransferred';
+
+    public const RECONCILIATION_CLOSED = 'closed';
+
     protected $fillable = [
         'user_id',
         'idempotency_key',
@@ -26,6 +42,13 @@ class Withdrawal extends Model
         'bank_account_name',
         'status',
         'transaction_ref',
+        'transfer_proof_path',
+        'receipt_status',
+        'receipt_confirmed_at',
+        'reconciliation_status',
+        'reconciliation_note',
+        'reconciliation_proof_path',
+        'reconciliation_updated_at',
         'admin_note',
         'processed_at',
     ];
@@ -33,6 +56,8 @@ class Withdrawal extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'processed_at' => 'datetime',
+        'receipt_confirmed_at' => 'datetime',
+        'reconciliation_updated_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

@@ -23,6 +23,7 @@ return [
     ],
 
     'hls' => [
+        'fast_copy' => (bool) env('HLS_FAST_COPY', true),
         // Favor shorter processing time; superfast produces larger files than veryfast.
         'preset' => env('HLS_FFMPEG_PRESET', 'superfast'),
         'crf' => (int) env('HLS_FFMPEG_CRF', 23),
