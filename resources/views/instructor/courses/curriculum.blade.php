@@ -77,21 +77,47 @@
 
     <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <aside class="order-2 space-y-3 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:pr-1">
+            <section class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                    <a href="{{ route('instructor.courses.edit', $course) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        Thông tin khóa học
+                    </a>
+                    @if($course->canBeSubmittedForReview())
+                        <form method="POST" action="{{ route('instructor.courses.submit', $course) }}" id="curriculumSubmitForm">
+                            @csrf
+                            <input type="hidden" name="copyright_agreed" value="1">
+                            <button type="submit"
+                                    id="curriculum-submit-review-btn"
+                                    {{ !$canSubmitCourse ? 'disabled' : '' }}
+                                    @if(!$canSubmitCourse)
+                                        title="{{ $hasVideoReadinessBlockers ? 'Khóa học chưa thể gửi duyệt vì video chưa sẵn sàng: '.$videoBlockerTitle : $submissionCheck->summaryMessage() }}"
+                                    @endif
+                                    class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black transition {{ $hasVideoReadinessBlockers || !$canSubmitCourse ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600' : 'cursor-pointer bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700' }}">
+                                {{ in_array($course->status, ['need_revision', 'rejected'], true) ? 'Gửi duyệt lại' : 'Gửi duyệt' }}
+                            </button>
+                        </form>
+                    @endif
+                </div>
+                @if(! $canSubmitCourse)
+                    <p class="mt-3 text-center text-xs leading-5 text-slate-500 dark:text-slate-400">Hoàn thành các mục còn thiếu để gửi khóa học.</p>
+                @endif
+            </section>
+
             <section class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                 <div class="flex items-end justify-between gap-3">
                     <div>
                         <h2 class="text-base font-black text-slate-950 dark:text-white">Mức độ hoàn thiện</h2>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Điều kiện trước khi gửi duyệt</p>
                     </div>
-                    <strong class="text-2xl font-black text-slate-950 dark:text-white">{{ $passedReadinessItems }}<span class="text-base text-slate-400">/{{ count($readinessItems) }}</span></strong>
+                    <strong data-readiness-count class="text-2xl font-black text-slate-950 dark:text-white">{{ $passedReadinessItems }}<span class="text-base text-slate-400">/{{ count($readinessItems) }}</span></strong>
                 </div>
                 <div class="mt-4 flex items-center gap-3">
                     <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                        <div class="h-full rounded-full bg-blue-600 transition-[width] duration-300" style="width: {{ $readinessProgress }}%"></div>
+                        <div data-readiness-bar class="h-full rounded-full bg-blue-600 transition-[width] duration-300" style="width: {{ $readinessProgress }}%"></div>
                     </div>
-                    <span class="text-xs font-black text-blue-600 dark:text-blue-300">{{ $readinessProgress }}%</span>
+                    <span data-readiness-percent class="text-xs font-black text-blue-600 dark:text-blue-300">{{ $readinessProgress }}%</span>
                 </div>
-                <ul class="mt-4 divide-y divide-dashed divide-slate-200 dark:divide-slate-700">
+                <ul data-readiness-items class="mt-4 divide-y divide-dashed divide-slate-200 dark:divide-slate-700">
                     @foreach($readinessItems as $item)
                         <li class="flex items-start gap-2.5 py-2.5 text-xs">
                             <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white {{ $item['passed'] ? 'bg-emerald-500' : 'bg-amber-500' }}">

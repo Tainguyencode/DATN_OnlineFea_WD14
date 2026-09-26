@@ -104,8 +104,12 @@ class AuthController extends Controller
         Request $request,
         AuthService $authService,
         EmailVerificationService $emailVerificationService
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         abort_unless(in_array($role, ['student', 'instructor'], true), Response::HTTP_NOT_FOUND);
+
+        $respond = fn (RedirectResponse $response) => $request->expectsJson()
+            ? response()->json(['redirect' => $response->getTargetUrl()])
+            : $response;
 
         if ($role === 'instructor') {
             $formRequest = app(RegisterInstructorRequest::class);
@@ -113,7 +117,17 @@ class AuthController extends Controller
             $formRequest = app(RegisterRequest::class);
         }
 
-        $formRequest->validateCaptcha();
+        try {
+            $formRequest->validateCaptcha();
+        } catch (ValidationException $exception) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'errors' => $exception->errors(),
+                    'captcha' => CaptchaService::generate('register'),
+                ], 422);
+            }
+            throw $exception;
+        }
 
         $data = $formRequest->validated();
         $data['role'] = $role;
@@ -130,16 +144,16 @@ class AuthController extends Controller
         }
 
         if (! config('auth.email_verification_enabled', true)) {
-            return $this->redirectAfterNewInstructorRegistration($user, $request)
-                ->with('success', 'Đăng ký thành công.');
+            return $respond($this->redirectAfterNewInstructorRegistration($user, $request)
+                ->with('success', 'Đăng ký thành công.'));
         }
 
         try {
             event(new Registered($user));
         } catch (ValidationException $exception) {
-            return redirect()->route('verification.notice')
+            return $respond(redirect()->route('verification.notice')
                 ->withErrors($exception->errors())
-                ->with('resend_after', $emailVerificationService->resendCooldownSeconds($user));
+                ->with('resend_after', $emailVerificationService->resendCooldownSeconds($user)));
         } catch (Throwable $exception) {
             Log::error('Verification code email could not be sent after registration.', [
                 'user_id' => $user->id,
@@ -147,13 +161,13 @@ class AuthController extends Controller
                 'error' => $exception->getMessage(),
             ]);
 
-            return redirect()->route('verification.notice')
-                ->with('error', 'Đăng ký thành công nhưng chưa gửi được mã xác thực: '.MailErrorFormatter::verificationSendFailure($exception));
+            return $respond(redirect()->route('verification.notice')
+                ->with('error', 'Đăng ký thành công nhưng chưa gửi được mã xác thực: '.MailErrorFormatter::verificationSendFailure($exception)));
         }
 
-        return redirect()->route('verification.notice')
+        return $respond(redirect()->route('verification.notice')
             ->with('success', 'Đăng ký thành công. Vui lòng kiểm tra email để nhập mã xác thực.')
-            ->with('resend_after', $emailVerificationService->resendCooldownSeconds($user) ?: EmailVerificationCode::RESEND_COOLDOWN_SECONDS);
+            ->with('resend_after', $emailVerificationService->resendCooldownSeconds($user) ?: EmailVerificationCode::RESEND_COOLDOWN_SECONDS));
     }
 
     public function logout(Request $request): RedirectResponse
@@ -175,10 +189,15 @@ class AuthController extends Controller
         ]);
 
         $exists = User::where($validated['field'], $validated['value'])->exists();
+        $duplicateMessage = match ($validated['field']) {
+            'email' => 'Email đã được sử dụng.',
+            'phone' => 'Số điện thoại đã được sử dụng.',
+            'username' => 'Tên đăng nhập đã được sử dụng.',
+        };
 
         return response()->json([
             'available' => ! $exists,
-            'message' => $exists ? 'Giá trị này đã được sử dụng.' : 'Có thể sử dụng.',
+            'message' => $exists ? $duplicateMessage : 'Có thể sử dụng.',
         ]);
     }
 

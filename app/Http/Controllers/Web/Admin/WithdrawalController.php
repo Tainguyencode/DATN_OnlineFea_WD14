@@ -10,8 +10,11 @@ use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WithdrawalController extends Controller
 {
@@ -59,34 +62,51 @@ class WithdrawalController extends Controller
         $validated = $request->validate([
             'transaction_ref' => ['nullable', 'string', 'max:100'],
             'admin_note' => ['nullable', 'string', 'max:500'],
+            'transfer_proof' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'transfer_proof.required' => 'Vui lòng tải hình ảnh bill giao dịch sau khi chuyển khoản.',
+            'transfer_proof.image' => 'Bill giao dịch phải là một hình ảnh hợp lệ.',
+            'transfer_proof.mimes' => 'Bill giao dịch chỉ hỗ trợ định dạng JPG, JPEG, PNG hoặc WEBP.',
+            'transfer_proof.max' => 'Ảnh bill giao dịch không được vượt quá 5 MB.',
         ]);
 
         $txnRef = trim($validated['transaction_ref'] ?? '') ?: null;
 
-        $processed = DB::transaction(function () use ($withdrawal, $validated, $txnRef) {
-            $instructor = User::query()->lockForUpdate()->findOrFail($withdrawal->user_id);
-            $lockedWithdrawal = Withdrawal::query()->lockForUpdate()->find($withdrawal->id);
-            if (! $lockedWithdrawal || $lockedWithdrawal->status !== Withdrawal::STATUS_PENDING) {
-                return false;
-            }
+        $proofPath = $request->file('transfer_proof')->store('withdrawal-proofs', 'local');
 
-            if (! $instructor->canSettlePendingWithdrawals()) {
-                throw ValidationException::withMessages([
-                    'error' => 'Không đủ nguồn tiền chi trả do hoàn tiền hoặc các khoản rút đang chờ. Không chuyển tiền; hãy đối soát và từ chối yêu cầu không còn hợp lệ.',
+        try {
+            $processed = DB::transaction(function () use ($withdrawal, $validated, $txnRef, $proofPath) {
+                $instructor = User::query()->lockForUpdate()->findOrFail($withdrawal->user_id);
+                $lockedWithdrawal = Withdrawal::query()->lockForUpdate()->find($withdrawal->id);
+                if (! $lockedWithdrawal || $lockedWithdrawal->status !== Withdrawal::STATUS_PENDING) {
+                    return false;
+                }
+
+                if (! $instructor->canSettlePendingWithdrawals()) {
+                    throw ValidationException::withMessages([
+                        'error' => 'Không đủ nguồn tiền chi trả do hoàn tiền hoặc các khoản rút đang chờ. Không chuyển tiền; hãy đối soát và từ chối yêu cầu không còn hợp lệ.',
+                    ]);
+                }
+
+                $lockedWithdrawal->update([
+                    'status' => Withdrawal::STATUS_APPROVED,
+                    'transaction_ref' => $txnRef,
+                    'transfer_proof_path' => $proofPath,
+                    'receipt_status' => Withdrawal::RECEIPT_PENDING,
+                    'admin_note' => trim($validated['admin_note'] ?? '') ?: 'Đã chuyển khoản VietQR/Napas247 thành công.',
+                    'processed_at' => now(),
                 ]);
-            }
 
-            $lockedWithdrawal->update([
-                'status' => Withdrawal::STATUS_APPROVED,
-                'transaction_ref' => $txnRef,
-                'admin_note' => trim($validated['admin_note'] ?? '') ?: 'Đã chuyển khoản VietQR/Napas247 thành công.',
-                'processed_at' => now(),
-            ]);
-
-            return $lockedWithdrawal;
-        });
+                return $lockedWithdrawal;
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($proofPath);
+            throw $exception;
+        }
 
         if (! $processed) {
+            Storage::disk('local')->delete($proofPath);
+
             return back()->withErrors(['error' => 'Yêu cầu rút tiền này đã được xử lý từ trước.']);
         }
 
@@ -110,6 +130,95 @@ class WithdrawalController extends Controller
         );
 
         return back()->with('success', 'Đã duyệt yêu cầu rút tiền #'.$withdrawal->id.' và thông báo thành công tới giảng viên!');
+    }
+
+    public function transferProof(Withdrawal $withdrawal): StreamedResponse
+    {
+        abort_unless($withdrawal->transfer_proof_path && Storage::disk('local')->exists($withdrawal->transfer_proof_path), 404);
+
+        return Storage::disk('local')->response($withdrawal->transfer_proof_path, null, [
+            'Content-Disposition' => 'inline',
+        ]);
+    }
+
+    public function updateReconciliation(Request $request, Withdrawal $withdrawal): RedirectResponse
+    {
+        if ($withdrawal->status !== Withdrawal::STATUS_APPROVED
+            || $withdrawal->receipt_status !== Withdrawal::RECEIPT_NOT_RECEIVED) {
+            return back()->withErrors(['reconciliation' => 'Chỉ có thể đối soát giao dịch được giảng viên báo chưa nhận tiền.']);
+        }
+
+        $validated = $request->validate([
+            'reconciliation_status' => ['required', Rule::in([
+                Withdrawal::RECONCILIATION_CONTACTING,
+                Withdrawal::RECONCILIATION_BANK_CHECK,
+                Withdrawal::RECONCILIATION_MEETING,
+                Withdrawal::RECONCILIATION_RETRANSFERRED,
+                Withdrawal::RECONCILIATION_CLOSED,
+            ])],
+            'reconciliation_note' => ['required', 'string', 'min:10', 'max:1000'],
+            'reconciliation_proof' => [
+                Rule::requiredIf($request->input('reconciliation_status') === Withdrawal::RECONCILIATION_RETRANSFERRED),
+                'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120',
+            ],
+        ], [
+            'reconciliation_note.required' => 'Vui lòng ghi rõ nội dung và phương án đối soát.',
+            'reconciliation_note.min' => 'Nội dung đối soát phải có ít nhất 10 ký tự.',
+            'reconciliation_proof.required' => 'Khi chọn đã chuyển lại, Admin bắt buộc tải bill giao dịch mới.',
+        ]);
+
+        $newProofPath = $request->hasFile('reconciliation_proof')
+            ? $request->file('reconciliation_proof')->store('withdrawal-reconciliations', 'local')
+            : null;
+        $oldProofPath = $withdrawal->reconciliation_proof_path;
+
+        $withdrawal->update([
+            'reconciliation_status' => $validated['reconciliation_status'],
+            'reconciliation_note' => trim($validated['reconciliation_note']),
+            'reconciliation_proof_path' => $newProofPath ?: $oldProofPath,
+            'reconciliation_updated_at' => now(),
+        ]);
+
+        if ($newProofPath && $oldProofPath && $oldProofPath !== $newProofPath) {
+            Storage::disk('local')->delete($oldProofPath);
+        }
+
+        $labels = [
+            Withdrawal::RECONCILIATION_CONTACTING => 'Đang liên hệ giảng viên',
+            Withdrawal::RECONCILIATION_BANK_CHECK => 'Đang làm việc với ngân hàng',
+            Withdrawal::RECONCILIATION_MEETING => 'Đã hẹn gặp trực tiếp',
+            Withdrawal::RECONCILIATION_RETRANSFERRED => 'Đã chuyển khoản lại',
+            Withdrawal::RECONCILIATION_CLOSED => 'Đã thống nhất phương án xử lý',
+        ];
+
+        PushNotification::create([
+            'user_id' => $withdrawal->user_id,
+            'title' => 'Cập nhật đối soát khoản rút tiền #'.$withdrawal->id,
+            'message' => ($labels[$validated['reconciliation_status']] ?? 'Đã cập nhật đối soát').'. '.$validated['reconciliation_note'],
+            'type' => 'withdrawal_reconciliation',
+            'url' => route('instructor.wallet.index'),
+        ]);
+
+        ActivityLogService::log(
+            auth()->id(),
+            'update_withdrawal_reconciliation',
+            Withdrawal::class,
+            $withdrawal->id,
+            ['status' => $validated['reconciliation_status'], 'note' => $validated['reconciliation_note']],
+            $request,
+            'Admin cập nhật đối soát yêu cầu rút tiền #'.$withdrawal->id
+        );
+
+        return back()->with('success', 'Đã cập nhật phương án đối soát và thông báo cho giảng viên.');
+    }
+
+    public function reconciliationProof(Withdrawal $withdrawal): StreamedResponse
+    {
+        abort_unless($withdrawal->reconciliation_proof_path && Storage::disk('local')->exists($withdrawal->reconciliation_proof_path), 404);
+
+        return Storage::disk('local')->response($withdrawal->reconciliation_proof_path, null, [
+            'Content-Disposition' => 'inline',
+        ]);
     }
 
     public function reject(Request $request, Withdrawal $withdrawal): RedirectResponse

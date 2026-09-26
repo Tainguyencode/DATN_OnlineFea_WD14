@@ -258,16 +258,58 @@
                                         </div>
                                     @else
                                         <div class="text-left text-[11px] space-y-0.5">
+                                            @if ($item->transfer_proof_path)
+                                                <a href="{{ route('admin.withdrawals.transfer-proof', $item) }}" target="_blank" class="inline-flex font-bold text-sky-700 hover:underline">Xem bill chuyển khoản</a>
+                                            @endif
                                             @if ($item->transaction_ref)
                                                 <p class="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded w-fit">Ref: {{ $item->transaction_ref }}</p>
                                             @endif
                                             @if ($item->admin_note)
                                                 <p class="text-slate-500 italic max-w-xs truncate">{{ $item->admin_note }}</p>
                                             @endif
+                                            @if ($item->status === 'approved')
+                                                <p class="font-bold {{ $item->receipt_status === 'received' ? 'text-emerald-700' : ($item->receipt_status === 'not_received' ? 'text-rose-700' : 'text-amber-700') }}">
+                                                    {{ $item->receipt_status === 'received' ? 'Giảng viên: Đã nhận tiền' : ($item->receipt_status === 'not_received' ? 'Giảng viên: Chưa nhận được tiền' : 'Chờ giảng viên xác nhận') }}
+                                                </p>
+                                            @endif
                                         </div>
                                     @endif
                                 </td>
                             </tr>
+                            @if ($item->status === 'approved' && $item->receipt_status === 'not_received')
+                                <tr class="bg-rose-50/60">
+                                    <td colspan="6" class="px-5 py-4">
+                                        <form method="POST" action="{{ route('admin.withdrawals.reconciliation.update', $item) }}" enctype="multipart/form-data" class="grid items-end gap-3 lg:grid-cols-[220px_minmax(280px,1fr)_220px_auto]">
+                                            @csrf
+                                            <div>
+                                                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-rose-800">Phương án đối soát</label>
+                                                <select name="reconciliation_status" required class="h-10 w-full rounded-xl border-rose-200 bg-white px-3 text-xs font-semibold text-slate-700 focus:border-rose-400 focus:ring-rose-400">
+                                                    <option value="contacting" @selected($item->reconciliation_status === 'contacting')>Liên hệ giảng viên</option>
+                                                    <option value="bank_check" @selected($item->reconciliation_status === 'bank_check')>Làm việc với ngân hàng</option>
+                                                    <option value="meeting" @selected($item->reconciliation_status === 'meeting')>Hẹn gặp trực tiếp</option>
+                                                    <option value="retransferred" @selected($item->reconciliation_status === 'retransferred')>Đã chuyển khoản lại</option>
+                                                    <option value="closed" @selected($item->reconciliation_status === 'closed')>Đã thống nhất xử lý</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-rose-800">Nội dung trao đổi / kết quả</label>
+                                                <input type="text" name="reconciliation_note" value="{{ $item->reconciliation_note }}" required minlength="10" maxlength="1000" placeholder="Ví dụ: Đã liên hệ, đang chờ ngân hàng thụ hưởng kiểm tra..." class="h-10 w-full rounded-xl border-rose-200 bg-white px-3 text-xs text-slate-700 focus:border-rose-400 focus:ring-rose-400">
+                                            </div>
+                                            <div>
+                                                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-rose-800">Minh chứng bổ sung</label>
+                                                <input type="file" name="reconciliation_proof" accept="image/jpeg,image/png,image/webp" class="block h-10 w-full rounded-xl border border-rose-200 bg-white text-[10px] text-slate-600 file:mr-2 file:h-full file:border-0 file:bg-rose-100 file:px-2 file:font-bold file:text-rose-700">
+                                            </div>
+                                            <button type="submit" class="h-10 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700">Cập nhật đối soát</button>
+                                        </form>
+                                        <div class="mt-2 flex items-center gap-3 text-[11px]">
+                                            <span class="font-semibold text-rose-700">Không tự động chuyển lần hai. Hãy xác minh với ngân hàng trước.</span>
+                                            @if ($item->reconciliation_proof_path)
+                                                <a href="{{ route('admin.withdrawals.reconciliation-proof', $item) }}" target="_blank" class="font-bold text-sky-700 hover:underline">Xem minh chứng hiện tại</a>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
                         @empty
                             <tr>
                                 <td colspan="6" class="px-6 py-12 text-center text-slate-500">
@@ -326,7 +368,7 @@
                         <span>Mở App Ngân hàng bất kỳ để <strong>quét mã VietQR</strong> hoặc <strong>chuyển khoản</strong> chính xác số tiền, nội dung bên dưới</span>
                     </div>
 
-                    <form :action="'/admin/withdrawals/' + withdrawalId + '/approve'" method="POST" class="flex-1 py-5">
+                    <form :action="'/admin/withdrawals/' + withdrawalId + '/approve'" method="POST" enctype="multipart/form-data" class="flex-1 py-5">
                         @csrf
 
                         <div class="mx-auto grid w-full max-w-4xl items-center gap-6 lg:grid-cols-[minmax(260px,340px)_1px_minmax(0,1fr)] lg:gap-8">
@@ -448,6 +490,12 @@
                                 <p class="text-xs text-slate-500 pt-0.5 leading-relaxed">
                                     💡 <strong>Lưu ý:</strong> Nhập chính xác số tiền <strong class="text-slate-900 font-bold" x-text="new Intl.NumberFormat('vi-VN').format(amount) + 'đ'"></strong> và nội dung <strong class="text-slate-900 font-bold" x-text="transferContent"></strong> khi thao tác chuyển khoản.
                                 </p>
+
+                                <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                                    <label for="withdrawal-transfer-proof" class="block text-xs font-bold text-amber-900">Ảnh bill giao dịch <span class="text-rose-600">*</span></label>
+                                    <input id="withdrawal-transfer-proof" type="file" name="transfer_proof" accept="image/jpeg,image/png,image/webp" required class="mt-2 block w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-600 file:px-3 file:py-2 file:font-bold file:text-white hover:file:bg-amber-700">
+                                    <p class="mt-1.5 text-[11px] text-amber-800">Bắt buộc tải bill sau khi chuyển khoản thành công. Hỗ trợ JPG, PNG, WEBP; tối đa 5 MB.</p>
+                                </div>
 
                                 {{-- Nút Xác Nhận Duyệt Đơn --}}
                                 <div class="pt-1">

@@ -59,6 +59,35 @@ class AuthenticationTest extends TestCase
             ->assertDontSee('name="certificates[]"', false);
     }
 
+    public function test_student_registration_json_returns_all_missing_field_errors(): void
+    {
+        $this->postJson(route('register.role', 'student'), [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name', 'email', 'phone', 'password', 'terms', 'captcha_token', 'captcha_answer']);
+        $this->assertGuest();
+    }
+
+    public function test_student_registration_json_refreshes_bad_captcha_and_allows_retry(): void
+    {
+        Notification::fake();
+        $captcha = $this->registerCaptcha();
+        $payload = [
+            ...$this->registerPayload('student'),
+            'captcha_token' => $captcha['token'],
+            'captcha_answer' => '999',
+        ];
+        $response = $this->postJson(route('register.role', 'student'), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('captcha_answer')
+            ->assertJsonStructure(['captcha' => ['token', 'question']]);
+        $token = $response->json('captcha.token');
+        $this->assertNotSame($captcha['token'], $token);
+        $captchas = session('auth_captchas');
+        $this->postJson(route('register.role', 'student'), [
+            ...$payload, 'captcha_token' => $token, 'captcha_answer' => $captchas[$token]['answer'],
+        ])->assertOk()->assertJsonPath('redirect', route('verification.notice'));
+        $this->assertAuthenticated();
+    }
+
     public function test_instructor_registration_ignores_avatar_upload(): void
     {
         Notification::fake();

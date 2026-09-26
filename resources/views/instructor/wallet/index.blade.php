@@ -313,11 +313,32 @@
                                     @elseif(!$item->transaction_ref)
                                         <span class="text-slate-400 italic">Đang chờ xử lý...</span>
                                     @endif
+                                    @if ($item->reconciliation_status)
+                                        @php
+                                            $reconciliationLabels = [
+                                                'contacting' => 'Admin đang liên hệ để đối soát',
+                                                'bank_check' => 'Đang làm việc với ngân hàng',
+                                                'meeting' => 'Đã hẹn gặp trực tiếp',
+                                                'retransferred' => 'Admin đã chuyển khoản lại',
+                                                'closed' => 'Đã thống nhất phương án xử lý',
+                                            ];
+                                        @endphp
+                                        <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px]">
+                                            <p class="font-bold text-amber-800">{{ $reconciliationLabels[$item->reconciliation_status] ?? 'Đang đối soát' }}</p>
+                                            @if ($item->reconciliation_note)
+                                                <p class="mt-0.5 not-italic text-slate-600">{{ $item->reconciliation_note }}</p>
+                                            @endif
+                                            @if ($item->reconciliation_proof_path)
+                                                <a href="{{ route('instructor.wallet.withdrawals.reconciliation-proof', $item) }}" target="_blank" class="mt-1 inline-flex font-bold text-sky-700 hover:underline">Xem minh chứng đối soát</a>
+                                            @endif
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-6 py-4 text-slate-500">
                                     {{ $item->created_at->format('H:i - d/m/Y') }}
                                 </td>
-                                <td class="px-6 py-4 text-center">
+                                <td class="px-4 py-4 text-center whitespace-nowrap">
+                                    <div class="flex min-w-max items-center justify-center gap-1.5">
                                     <button
                                         type="button"
                                         @click="openDetail({{ json_encode([
@@ -329,14 +350,38 @@
                                             'status' => $item->status,
                                             'transaction_ref' => $item->transaction_ref ?? '---',
                                             'admin_note' => $item->admin_note ?? '',
+                                            'transfer_proof_url' => $item->transfer_proof_path ? route('instructor.wallet.withdrawals.transfer-proof', $item) : null,
+                                            'receipt_status' => $item->receipt_status,
                                             'created_at' => $item->created_at->format('H:i:s - d/m/Y'),
                                             'processed_at' => $item->processed_at ? $item->processed_at->format('H:i:s - d/m/Y') : 'Chưa xử lý',
                                         ]) }})"
-                                        class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer"
+                                        class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 shadow-xs transition hover:border-slate-300 hover:bg-slate-50 cursor-pointer"
                                     >
-                                        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                        Xem chi tiết
+                                        <svg class="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        Chi tiết
                                     </button>
+                                    @if ($item->status === 'approved' && $item->transfer_proof_path && $item->receipt_status === 'pending')
+                                        <form method="POST" action="{{ route('instructor.wallet.withdrawals.confirm-receipt', $item) }}">
+                                            @csrf
+                                            <input type="hidden" name="receipt_status" value="received">
+                                            <button type="submit" onclick="return confirm('Xác nhận bạn đã nhận được khoản tiền này?')" class="h-8 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Đã nhận</button>
+                                        </form>
+                                        <form method="POST" action="{{ route('instructor.wallet.withdrawals.confirm-receipt', $item) }}">
+                                            @csrf
+                                            <input type="hidden" name="receipt_status" value="not_received">
+                                            <button type="submit" onclick="return confirm('Báo với Admin rằng bạn chưa nhận được khoản tiền này?')" class="h-8 rounded-lg border border-rose-300 bg-white px-2.5 text-[11px] font-bold text-rose-700 transition hover:bg-rose-50">Chưa nhận</button>
+                                        </form>
+                                    @elseif ($item->status === 'approved' && $item->receipt_status === 'received')
+                                        <span class="inline-flex h-8 items-center rounded-lg bg-emerald-50 px-2.5 text-[11px] font-bold text-emerald-700">✓ Đã xác nhận</span>
+                                    @elseif ($item->status === 'approved' && $item->receipt_status === 'not_received')
+                                        <span class="inline-flex h-8 items-center rounded-lg bg-rose-50 px-2.5 text-[11px] font-bold text-rose-700">Chưa nhận</span>
+                                        <form method="POST" action="{{ route('instructor.wallet.withdrawals.confirm-receipt', $item) }}">
+                                            @csrf
+                                            <input type="hidden" name="receipt_status" value="received">
+                                            <button type="submit" onclick="return confirm('Xác nhận cuối cùng rằng bạn đã nhận được khoản tiền này?')" class="h-8 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Đã nhận lại</button>
+                                        </form>
+                                    @endif
+                                    </div>
                                 </td>
                             </tr>
                         @empty
@@ -738,6 +783,13 @@
                                 <div class="rounded-2xl border border-slate-200 bg-amber-50/50 p-4 text-xs">
                                     <span class="font-bold text-slate-800 block mb-1">Ghi chú từ Admin:</span>
                                     <p class="text-slate-700 italic" x-text="activeDetail.admin_note"></p>
+                                </div>
+                            </template>
+
+                            <template x-if="activeDetail.transfer_proof_url">
+                                <div class="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-xs">
+                                    <span class="font-bold text-slate-800">Minh chứng chuyển khoản:</span>
+                                    <a :href="activeDetail.transfer_proof_url" target="_blank" class="ml-2 font-bold text-sky-700 hover:underline">Xem ảnh bill</a>
                                 </div>
                             </template>
                         </div>
