@@ -11,13 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('lessons', function (Blueprint $table) {
-            $table->unsignedInteger('content_version')->default(1)->after('status');
-        });
+        if (Schema::hasTable('lessons') && !Schema::hasColumn('lessons', 'content_version')) {
+            Schema::table('lessons', function (Blueprint $table) {
+                $table->unsignedInteger('content_version')->default(1)->after('status');
+            });
+        }
 
-        Schema::table('lesson_progress', function (Blueprint $table) {
-            $table->unsignedInteger('last_viewed_content_version')->default(1)->after('completed_at');
-        });
+        if (Schema::hasTable('lesson_progress') && !Schema::hasColumn('lesson_progress', 'last_viewed_content_version')) {
+            Schema::table('lesson_progress', function (Blueprint $table) {
+                $table->unsignedInteger('last_viewed_content_version')->default(1)->after('completed_at');
+            });
+        }
     }
 
     /**
@@ -25,12 +29,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('lessons', function (Blueprint $table) {
-            $table->dropColumn('content_version');
-        });
+        if (Schema::hasTable('lessons') && Schema::hasColumn('lessons', 'content_version')) {
+            Schema::table('lessons', function (Blueprint $table) {
+                $table->dropColumn('content_version');
+            });
+        }
 
-        Schema::table('lesson_progress', function (Blueprint $table) {
-            $table->dropColumn('last_viewed_content_version');
-        });
+        if (Schema::hasTable('lesson_progress') && Schema::hasColumn('lesson_progress', 'last_viewed_content_version')) {
+            Schema::table('lesson_progress', function (Blueprint $table) {
+                $table->dropColumn('last_viewed_content_version');
+            });
+        }
     }
 };

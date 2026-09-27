@@ -19,9 +19,8 @@ return new class extends Migration
 
             $table->enum('gateway', [
                 'momo',
-                'vnpay',
                 'bank_transfer',
-            ])->default('vnpay');
+            ])->default('bank_transfer');
 
             $table->string('transaction_id')
                 ->nullable();

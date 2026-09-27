@@ -54,6 +54,7 @@ class PushNotification extends Model
             'course_rejected' => 'Khóa học từ chối',
             'new_enrollment' => 'Ghi danh mới',
             'order_paid' => 'Thanh toán',
+            'withdrawal_requested' => 'Yêu cầu rút tiền',
             'certificate_issued' => 'Chứng chỉ',
             'course_review_created' => 'Đánh giá mới',
             'course_review_replied', 'review_reply' => 'Phản hồi đánh giá',
@@ -64,6 +65,8 @@ class PushNotification extends Model
             'course_video_updated' => 'Cập nhật video',
             'study_group' => 'Nhóm học tập',
             'study_group_invitation' => 'Lời mời tham gia nhóm',
+            'quiz_attempt_granted' => 'Cấp lại lượt Quiz',
+            'quiz_attempt_rejected' => 'Từ chối cấp lại Quiz',
             default => 'Thông báo',
         };
     }
@@ -78,6 +81,7 @@ class PushNotification extends Model
             'course_rejected' => 'bg-red-100 text-red-700',
             'new_enrollment' => 'bg-cyan-100 text-cyan-700',
             'order_paid' => 'bg-indigo-100 text-indigo-700',
+            'withdrawal_requested' => 'bg-amber-100 text-amber-700',
             'certificate_issued' => 'bg-teal-100 text-teal-700',
             'course_review_created', 'course_review_replied' => 'bg-amber-100 text-amber-700',
             'review_reply' => 'bg-emerald-100 text-emerald-700',
@@ -88,6 +92,8 @@ class PushNotification extends Model
             'course_video_updated' => 'bg-purple-100 text-purple-700',
             'study_group' => 'bg-blue-100 text-blue-700',
             'study_group_invitation' => 'bg-indigo-100 text-indigo-700',
+            'quiz_attempt_granted' => 'bg-emerald-100 text-emerald-700',
+            'quiz_attempt_rejected' => 'bg-rose-100 text-rose-700',
             default => 'bg-slate-100 text-slate-700',
         };
     }

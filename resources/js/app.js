@@ -1,4 +1,5 @@
 import './bootstrap';
+import './navigation-state';
 import './lesson-import';
 import './full-course-import';
 import './course-actions';

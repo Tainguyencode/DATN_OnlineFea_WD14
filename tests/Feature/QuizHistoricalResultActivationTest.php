@@ -7,6 +7,8 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\QuestionVersion;
 use App\Models\Quiz;
@@ -36,7 +38,7 @@ class QuizHistoricalResultActivationTest extends TestCase
         $this->actingAs($student)
             ->get(route('learn.lessons.quiz.show', [$course->slug, $lesson]))
             ->assertOk()
-            ->assertSee('data-math-content', false);
+            ->assertSee('V1 question 1');
         $this->actingAs($student)
             ->post(route('learn.lessons.quiz.submit', [$course, $lesson]), [
                 'attempt_id' => $attempt->id,
@@ -52,7 +54,7 @@ class QuizHistoricalResultActivationTest extends TestCase
             ->assertSee('Ket qua Quiz - Phien ban V1')
             ->assertSee('V1 question 1')
             ->assertSee('V1 Correct 1')
-            ->assertSee('Dap an dung')
+            ->assertDontSee('Dap an dung')
             ->assertDontSee('V2 question 1')
             ->assertDontSee('V2 option 1-1');
 
@@ -70,6 +72,7 @@ class QuizHistoricalResultActivationTest extends TestCase
     public function test_historical_result_marks_latex_content_as_safe_render_targets(): void
     {
         [$student, $course, $lesson, , $v1] = $this->publishedQuiz();
+        $v1->update(['max_attempts' => 1]);
         $v1->load('questionMappings.questionVersion.options');
         $first = $v1->questionMappings->first();
         $questionText = 'Solve \\(x^2 = 4\\) <script>alert(1)</script>';
@@ -246,6 +249,11 @@ class QuizHistoricalResultActivationTest extends TestCase
     {
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $category = Category::create(['name' => 'Quiz history '.uniqid(), 'slug' => 'quiz-history-'.uniqid(), 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $category->id]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

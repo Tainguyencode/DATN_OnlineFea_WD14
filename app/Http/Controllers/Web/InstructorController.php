@@ -147,7 +147,7 @@ class InstructorController extends Controller
         $coursesQuery = Course::published()
             ->where('instructor_id', $user->id)
             ->with(['category:id,name,slug,parent_id', 'category.parent:id,name,slug'])
-            ->withCount('lessons')
+            ->withCount(['lessons', 'enrollments'])
             ->orderByDesc('published_at');
 
         $courses = $coursesQuery->paginate(8)->withQueryString();

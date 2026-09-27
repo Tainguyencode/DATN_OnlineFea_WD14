@@ -45,4 +45,19 @@ class Assignment extends Model
     {
         return $this->hasMany(Submission::class);
     }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(AssignmentVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(AssignmentVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(AssignmentVersion::class, 'draft_version_id');
+    }
 }

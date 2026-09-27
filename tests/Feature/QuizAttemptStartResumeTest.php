@@ -6,6 +6,8 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\QuestionVersion;
 use App\Models\Quiz;
@@ -177,6 +179,54 @@ class QuizAttemptStartResumeTest extends TestCase
         $this->assertSame(100.0, (float) $result['attempt']->percent);
     }
 
+    public function test_direct_submission_after_server_deadline_is_expired_without_grading(): void
+    {
+        [$student, $course, $lesson, $quiz, $version] = $this->publishedQuiz();
+        $attempt = app(QuizAttemptService::class)->startOrResume($course, $lesson, $student);
+        $projection = app(QuizAttemptService::class)->projectQuiz($attempt);
+        $answers = $projection->questions->mapWithKeys(fn ($question) => [
+            $question->id => $question->options->firstWhere('is_correct', true)->id,
+        ])->all();
+        $this->travel(11)->minutes();
+
+        $result = app(QuizAttemptService::class)->submit($course, $lesson, $student, $attempt->id, $answers);
+
+        $this->assertSame(QuizAttempt::STATUS_EXPIRED, $result['attempt']->status);
+        $this->assertFalse((bool) $result['attempt']->passed);
+        $this->assertFalse($result['completed_now']);
+        $this->assertSame(0, $attempt->attemptAnswers()->count());
+        $this->travelBack();
+    }
+
+    public function test_save_progress_after_deadline_cannot_extend_attempt(): void
+    {
+        [$student, $course, $lesson] = $this->publishedQuiz();
+        $attempt = app(QuizAttemptService::class)->startOrResume($course, $lesson, $student);
+        $this->travel(11)->minutes();
+
+        $saved = app(QuizAttemptService::class)->saveProgress($course, $lesson, $student, $attempt->id, [], 99999);
+
+        $this->assertSame(QuizAttempt::STATUS_EXPIRED, $saved->status);
+        $this->assertSame(0, $saved->remaining_seconds);
+        $this->travelBack();
+    }
+
+    public function test_termination_endpoint_cannot_grade_answers_after_deadline(): void
+    {
+        [$student, $course, $lesson] = $this->publishedQuiz();
+        $attempt = app(QuizAttemptService::class)->startOrResume($course, $lesson, $student);
+        $this->travel(11)->minutes();
+
+        $result = app(QuizAttemptService::class)->terminate(
+            $course, $lesson, $student, $attempt->id, 'tab_switch', [], 99999
+        );
+
+        $this->assertSame(QuizAttempt::STATUS_EXPIRED, $result['attempt']->status);
+        $this->assertFalse($result['completed_now']);
+        $this->assertSame(0, $attempt->attemptAnswers()->count());
+        $this->travelBack();
+    }
+
     /** @return array{0: User, 1: Course, 2: Lesson, 3: Quiz, 4: QuizVersion} */
     private function publishedQuiz(): array
     {
@@ -219,6 +269,11 @@ class QuizAttemptStartResumeTest extends TestCase
     {
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $category = Category::create(['name' => $title.' category', 'slug' => str($title)->slug().'-'.uniqid(), 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $category->id]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
         $course = Course::create(['instructor_id' => $instructor->id, 'category_id' => $category->id, 'title' => $title, 'slug' => str($title)->slug().'-'.uniqid(), 'description' => 'Description', 'price' => 0, 'language' => 'vi', 'status' => Course::STATUS_PUBLISHED, 'is_published' => true, 'published_at' => now()]);
         CourseSection::create(['course_id' => $course->id, 'title' => 'Section', 'sort_order' => 0]);
 

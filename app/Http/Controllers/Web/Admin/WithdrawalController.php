@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\PushNotification;
+use App\Models\User;
 use App\Models\Withdrawal;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Illuminate\Validation\ValidationException;
 
 class WithdrawalController extends Controller
 {
@@ -38,6 +40,9 @@ class WithdrawalController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $settlementAllowed = $withdrawals->getCollection()->pluck('user')->filter()->unique('id')
+            ->mapWithKeys(fn (User $user) => [$user->id => $user->canSettlePendingWithdrawals()]);
+
         $stats = [
             'total_approved' => (float) Withdrawal::where('status', Withdrawal::STATUS_APPROVED)->sum('amount'),
             'total_pending' => (float) Withdrawal::where('status', Withdrawal::STATUS_PENDING)->sum('amount'),
@@ -46,7 +51,7 @@ class WithdrawalController extends Controller
             'count_rejected' => Withdrawal::where('status', Withdrawal::STATUS_REJECTED)->count(),
         ];
 
-        return view('admin.withdrawals.index', compact('withdrawals', 'stats', 'status', 'search'));
+        return view('admin.withdrawals.index', compact('withdrawals', 'stats', 'status', 'search', 'settlementAllowed'));
     }
 
     public function approve(Request $request, Withdrawal $withdrawal): RedirectResponse
@@ -56,12 +61,19 @@ class WithdrawalController extends Controller
             'admin_note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $txnRef = trim($validated['transaction_ref'] ?? '') ?: 'FT'.date('YmdHis').rand(100, 999);
+        $txnRef = trim($validated['transaction_ref'] ?? '') ?: null;
 
         $processed = DB::transaction(function () use ($withdrawal, $validated, $txnRef) {
+            $instructor = User::query()->lockForUpdate()->findOrFail($withdrawal->user_id);
             $lockedWithdrawal = Withdrawal::query()->lockForUpdate()->find($withdrawal->id);
             if (! $lockedWithdrawal || $lockedWithdrawal->status !== Withdrawal::STATUS_PENDING) {
                 return false;
+            }
+
+            if (! $instructor->canSettlePendingWithdrawals()) {
+                throw ValidationException::withMessages([
+                    'error' => 'Không đủ nguồn tiền chi trả do hoàn tiền hoặc các khoản rút đang chờ. Không chuyển tiền; hãy đối soát và từ chối yêu cầu không còn hợp lệ.',
+                ]);
             }
 
             $lockedWithdrawal->update([
@@ -82,7 +94,7 @@ class WithdrawalController extends Controller
         PushNotification::create([
             'user_id' => $withdrawal->user_id,
             'title' => 'Rút tiền thành công! 💰',
-            'message' => 'Yêu cầu rút '.number_format($withdrawal->amount, 0, ',', '.').' VNĐ đã được Admin chuyển khoản thành công vào tài khoản '.$withdrawal->bank_name.' ('.$withdrawal->bank_account_number.'). Mã GD: '.$txnRef.'.',
+            'message' => 'Yêu cầu rút '.number_format($withdrawal->amount, 0, ',', '.').' VNĐ đã được Admin chuyển khoản thành công vào tài khoản '.$withdrawal->bank_name.' ('.$withdrawal->bank_account_number.').'.($txnRef ? ' Mã GD: '.$txnRef.'.' : ''),
             'type' => 'order_paid',
             'url' => route('instructor.wallet.index'),
         ]);

@@ -6,12 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
 use App\Models\Category;
 use App\Models\Chapter;
+use App\Models\ContentUpdate;
 use App\Models\Course;
+use App\Models\CourseSection;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Services\ActivityLogService;
+use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
+use App\Services\CurriculumLessonService;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -36,6 +41,7 @@ class InstructorController extends Controller
     public function storeCourse(Request $request): JsonResponse
     {
         $validated = $this->validateCoursePayload($request);
+        abort_unless(app(InstructorCourseCategoryAccess::class)->canTeachCategory($request->user(), (int) $validated['category_id']), 403, 'Giảng viên chưa được duyệt ngành của khóa học này.');
 
         $course = Course::create([
             ...$validated,
@@ -55,12 +61,25 @@ class InstructorController extends Controller
 
         $validated = $this->validateCoursePayload($request, $course);
 
+        if ($course->isContentApproved()) {
+            $update = app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_COURSE,
+                ContentUpdate::ACTION_UPDATE,
+                $course->id,
+                $course->id,
+                $validated,
+                $request->user(),
+            );
+
+            return $this->success($update, 'Đã lưu bản cập nhật khóa học, chờ Admin duyệt.', 202);
+        }
+
         $course->update($validated);
 
         return $this->success($course->fresh(), 'Cập nhật khóa học thành công');
     }
 
-    public function submitForReview(Request $request, Course $course): JsonResponse
+    public function submitForReview(Request $request, Course $course, CourseReviewService $reviewService): JsonResponse
     {
         $this->authorizeCourse($request, $course);
 
@@ -72,7 +91,7 @@ class InstructorController extends Controller
             return $this->error($submissionCheck->summaryMessage(), 422);
         }
 
-        app(CourseReviewService::class)->submitForReview($course, $request->user());
+        $reviewService->submitForReview($course, $request->user());
 
         return $this->success($course, 'Đã gửi khóa học để duyệt');
     }
@@ -86,6 +105,19 @@ class InstructorController extends Controller
             'sort_order' => 'sometimes|integer|min:0',
         ]);
 
+        if ($course->isContentApproved()) {
+            $update = app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_CHAPTER,
+                ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, ['sort_order' => $validated['sort_order'] ?? $course->courseSections()->count()]),
+                $request->user(),
+            );
+
+            return $this->success($update, 'Đã lưu bản cập nhật chương, chờ Admin duyệt.', 202);
+        }
+
         $chapter = Chapter::create([
             ...$validated,
             'course_id' => $course->id,
@@ -95,7 +127,7 @@ class InstructorController extends Controller
         return $this->success($chapter, 'Thêm chương thành công', 201);
     }
 
-    public function storeLesson(Request $request, Chapter $chapter): JsonResponse
+    public function storeLesson(Request $request, Chapter $chapter, CurriculumLessonService $lessonService): JsonResponse
     {
         $this->authorizeCourse($request, $chapter->course);
 
@@ -108,6 +140,31 @@ class InstructorController extends Controller
             'is_preview' => 'sometimes|boolean',
             'sort_order' => 'sometimes|integer|min:0',
         ]);
+
+        $course = $chapter->course;
+        if ($course->isContentApproved()) {
+            $sectionId = Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('chapter_id', $chapter->id)
+                ->whereNotNull('section_id')
+                ->value('section_id');
+            $section = $sectionId
+                ? CourseSection::query()->where('course_id', $course->id)->find($sectionId)
+                : CourseSection::query()
+                    ->where('course_id', $course->id)
+                    ->where('title', $chapter->title)
+                    ->where('sort_order', $chapter->sort_order)
+                    ->first();
+            $update = $lessonService->createForManual(
+                $course,
+                $section ?? $chapter->id,
+                $validated,
+                $request->user(),
+            );
+            app(ContentUpdateService::class)->updateDraft($update, ['chapter_id' => $chapter->id]);
+
+            return $this->success($update, 'Đã lưu bản cập nhật bài học, chờ Admin duyệt.', 202);
+        }
 
         $lesson = Lesson::create([
             ...$validated,
@@ -173,6 +230,10 @@ class InstructorController extends Controller
         if ($course->instructor_id !== $request->user()->id && ! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized');
         }
+
+        if (! $request->user()->isAdmin()) {
+            abort_unless(app(InstructorCourseCategoryAccess::class)->canManageCourse($request->user(), $course), 403, 'Giảng viên chưa được duyệt ngành của khóa học này.');
+        }
     }
 
     /** @return array<string, mixed> */
@@ -193,7 +254,17 @@ class InstructorController extends Controller
 
         $validator->after(function ($validator) use ($course, $request): void {
             if ($request->filled('category_id')) {
-                $category = Category::with('parent:id,status')->find($request->integer('category_id'));
+                $categoryId = $request->integer('category_id');
+                $category = Category::with('parent:id,status')->find($categoryId);
+                $access = app(InstructorCourseCategoryAccess::class);
+                $isKeepingExistingCategory = $course
+                    && (int) $course->category_id === $categoryId
+                    && $access->canManageCourse($request->user(), $course);
+
+                if (! $isKeepingExistingCategory && ! $access->canTeachCategory($request->user(), $categoryId)) {
+                    $validator->errors()->add('category_id', 'Bạn không có quyền tạo hoặc chuyển khóa học sang ngành này.');
+                }
+
                 if ($category && (! $category->status || ($category->parent_id && ! $category->parent?->status))) {
                     $validator->errors()->add('category_id', 'Danh mục được chọn hoặc danh mục cha đang bị tắt.');
                 }

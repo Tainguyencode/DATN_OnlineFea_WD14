@@ -6,6 +6,8 @@ use App\Models\Assignment;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\CurriculumLessonService;
@@ -428,6 +430,14 @@ class InstructorCurriculumLessonTest extends TestCase
         $category = Category::create([
             'name' => 'Danh mục '.uniqid(),
             'slug' => 'category-'.uniqid(),
+            'status' => true,
+        ]);
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->syncWithoutDetaching([
+            $category->id => [
+                'is_primary' => ! $profile->teachingCategories()->exists(),
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ],
         ]);
 
         $course = Course::create([

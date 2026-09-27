@@ -5,11 +5,13 @@ use App\Http\Controllers\Web\Admin\AiModerationController;
 use App\Http\Controllers\Web\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Web\Admin\CommissionController;
 use App\Http\Controllers\Web\Admin\ContentUpdateController;
+use App\Http\Controllers\Web\Admin\ContentVersionHistoryController as AdminContentVersionHistoryController;
 use App\Http\Controllers\Web\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Web\Admin\CourseReviewController;
 use App\Http\Controllers\Web\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Web\Admin\InstructorApplicationController;
 use App\Http\Controllers\Web\Admin\InstructorDocumentRequirementController;
+use App\Http\Controllers\Web\Admin\InstructorTeachingFieldReviewController;
 use App\Http\Controllers\Web\Admin\LearningPathController as AdminLearningPathController;
 use App\Http\Controllers\Web\Admin\ManageController;
 use App\Http\Controllers\Web\Admin\NotificationController as AdminNotificationController;
@@ -24,6 +26,7 @@ use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\CourseController;
 use App\Http\Controllers\Web\DiscussionController;
 use App\Http\Controllers\Web\HomeController;
+use App\Http\Controllers\Web\Instructor\ContentVersionHistoryController as InstructorContentVersionHistoryController;
 use App\Http\Controllers\Web\Instructor\CouponController as InstructorCouponController;
 use App\Http\Controllers\Web\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Web\Instructor\CurriculumController as InstructorCurriculumController;
@@ -33,6 +36,7 @@ use App\Http\Controllers\Web\Instructor\FullCourseImportController;
 use App\Http\Controllers\Web\Instructor\InstructorProfileController;
 use App\Http\Controllers\Web\Instructor\LearningPathController as InstructorLearningPathController;
 use App\Http\Controllers\Web\Instructor\LessonImportController as InstructorLessonImportController;
+use App\Http\Controllers\Web\Instructor\QuizAttemptRequestController as InstructorQuizAttemptRequestController;
 use App\Http\Controllers\Web\Instructor\QuizController as InstructorQuizController;
 use App\Http\Controllers\Web\Instructor\QuizQuestionInvalidationController as InstructorQuizQuestionInvalidationController;
 use App\Http\Controllers\Web\Instructor\ReviewController as InstructorReviewController;
@@ -47,6 +51,7 @@ use App\Http\Controllers\Web\LearningPathAiController;
 use App\Http\Controllers\Web\LearningPathController;
 use App\Http\Controllers\Web\LegalDocumentController;
 use App\Http\Controllers\Web\LessonCommentController;
+use App\Http\Controllers\Web\MessengerController;
 use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\PageController;
 use App\Http\Controllers\Web\PaymentController;
@@ -56,9 +61,9 @@ use App\Http\Controllers\Web\ReviewHelpfulController;
 use App\Http\Controllers\Web\SocialAuthController;
 use App\Http\Controllers\Web\Student\AssignmentController as StudentAssignmentController;
 use App\Http\Controllers\Web\Student\CartController;
+use App\Http\Controllers\Web\Student\CertificateController as StudentCertificateController;
 use App\Http\Controllers\Web\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Web\Student\DashboardController as StudentDashboardController;
-use App\Http\Controllers\Web\Student\CertificateController as StudentCertificateController;
 use App\Http\Controllers\Web\Student\LessonAiController;
 use App\Http\Controllers\Web\Student\LessonNoteController;
 use App\Http\Controllers\Web\Student\LessonNoteLibraryController;
@@ -69,9 +74,9 @@ use App\Http\Controllers\Web\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Web\Student\RecentlyViewedCourseController;
 use App\Http\Controllers\Web\Student\RefundController as StudentRefundController;
 use App\Http\Controllers\Web\Student\ReviewController as StudentReviewController;
-use App\Http\Controllers\Web\Student\VoucherController as StudentVoucherController;
 use App\Http\Controllers\Web\Student\SecurityController as StudentSecurityController;
 use App\Http\Controllers\Web\Student\StudyGroupController as StudentStudyGroupController;
+use App\Http\Controllers\Web\Student\VoucherController as StudentVoucherController;
 use App\Http\Controllers\Web\Student\WishlistController as StudentWishlistController;
 use App\Http\Controllers\Web\SupportTicketController;
 use App\Models\Course;
@@ -135,32 +140,40 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/study-groups/invitations/{invitation}/accept', [StudyGroupController::class, 'acceptInvitation'])->name('study-groups.invitations.accept');
     Route::post('/study-groups/invitations/{invitation}/reject', [StudyGroupController::class, 'rejectInvitation'])->name('study-groups.invitations.reject');
 });
-Route::middleware(['auth', 'active', 'role:student'])->group(function () {
+Route::middleware(['auth', 'active', 'verified', 'role:student'])->group(function () {
     Route::get('/favorites', [StudentWishlistController::class, 'index'])->name('favorites.index');
     Route::post('/courses/{course}/favorite', [StudentMiscController::class, 'storeFavorite'])->name('courses.favorite.store');
     Route::delete('/courses/{course}/favorite', [StudentMiscController::class, 'destroyFavorite'])->name('courses.favorite.destroy');
 });
 Route::get('/courses/{course}/lessons/{lesson}', [CourseController::class, 'lesson'])->name('courses.lessons.show');
-Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->middleware('auth')->name('courses.lessons.progress');
-Route::post('/courses/{course}/lessons/{lesson}/quiz/start', [StudentQuizController::class, 'start'])->middleware('auth')->name('courses.lessons.quiz.start');
-Route::post('/courses/{course}/lessons/{lesson}/quiz/save-progress', [StudentQuizController::class, 'saveProgress'])->middleware('auth')->name('courses.lessons.quiz.save-progress');
-Route::post('/courses/{course}/lessons/{lesson}/quiz/terminate', [StudentQuizController::class, 'terminate'])->middleware('auth')->name('courses.lessons.quiz.terminate');
-Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->middleware('auth')->name('courses.lessons.quiz.submit');
-Route::get('/courses/{course}/lessons/{lesson}/assignment/download', [StudentAssignmentController::class, 'download'])->middleware('auth')->name('courses.lessons.assignment.download');
-Route::post('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}/focus-violation', [StudentQuizController::class, 'recordFocusViolation'])->middleware(['auth', 'throttle:20,1'])->name('courses.lessons.quiz.focus-violation');
-Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('courses.lessons.quiz.attempts.show');
-Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssignmentController::class, 'submit'])->middleware('auth')->name('courses.lessons.assignment.submit');
-Route::post('/courses/{course}/lessons/{lesson}/assignment/retry', [StudentAssignmentController::class, 'retry'])->middleware('auth')->name('courses.lessons.assignment.retry');
+Route::middleware(['auth', 'active', 'verified'])->group(function () {
+    Route::post('/courses/{course}/lessons/{lesson}/progress', [CourseController::class, 'updateLessonProgress'])->name('courses.lessons.progress');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz/start', [StudentQuizController::class, 'start'])->name('courses.lessons.quiz.start');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz/save-progress', [StudentQuizController::class, 'saveProgress'])->name('courses.lessons.quiz.save-progress');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz/terminate', [StudentQuizController::class, 'terminate'])->name('courses.lessons.quiz.terminate');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submitAjax'])->name('courses.lessons.quiz.submit');
+    Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->name('courses.lessons.quiz.attempts.show');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz/request-attempt', [StudentQuizController::class, 'requestAttempt'])->name('courses.lessons.quiz.request-attempt');
+    Route::get('/courses/{course}/lessons/{lesson}/assignment/download', [StudentAssignmentController::class, 'download'])->name('courses.lessons.assignment.download');
+    Route::post('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}/focus-violation', [StudentQuizController::class, 'recordFocusViolation'])->middleware('throttle:20,1')->name('courses.lessons.quiz.focus-violation');
+    Route::post('/courses/{course}/lessons/{lesson}/assignment/submit', [StudentAssignmentController::class, 'submit'])->name('courses.lessons.assignment.submit');
+    Route::post('/courses/{course}/lessons/{lesson}/assignment/retry', [StudentAssignmentController::class, 'retry'])->name('courses.lessons.assignment.retry');
+});
 
-Route::middleware(['auth', 'active'])->group(function () {
+Route::middleware(['auth', 'active', 'verified'])->group(function () {
+    Route::get('/messenger/conversations', [MessengerController::class, 'index'])->name('messenger.conversations.index');
     Route::post('/courses/{course}/lessons/{lesson}/discussions', [DiscussionController::class, 'store'])->name('courses.lessons.discussions.store');
     Route::get('/discussions/{discussion}/messages', [DiscussionController::class, 'messages'])->name('discussions.messages');
+    Route::get('/discussions/{discussion}/messages/{messageKey}', [DiscussionController::class, 'message'])->name('discussions.message');
+    Route::post('/discussions/{discussion}/read', [DiscussionController::class, 'markRead'])->name('discussions.read');
+    Route::get('/discussion-messages/{kind}/{message}/attachment', [DiscussionController::class, 'attachment'])->name('discussion-messages.attachment');
     Route::post('/discussions/{discussion}/recall', [DiscussionController::class, 'recallDiscussion'])->name('discussions.recall');
     Route::delete('/discussions/{discussion}', [DiscussionController::class, 'destroyDiscussion'])->name('discussions.destroy');
     Route::post('/discussions/{discussion}/replies', [DiscussionController::class, 'storeReply'])->name('discussions.replies.store');
     Route::post('/discussion-replies/{reply}/recall', [DiscussionController::class, 'recallReply'])->name('discussions.replies.recall');
     Route::delete('/discussion-replies/{reply}', [DiscussionController::class, 'destroyReply'])->name('discussions.replies.destroy');
     Route::post('/discussion-replies/{reply}/toggle-helpful', [DiscussionController::class, 'toggleHelpful'])->name('discussions.replies.toggle-helpful');
+    Route::get('/lessons/{lesson}/comments', [LessonCommentController::class, 'index'])->name('lessons.comments.index');
     Route::post('/lessons/{lesson}/comments', [LessonCommentController::class, 'store'])->name('lessons.comments.store');
     Route::put('/comments/{comment}', [LessonCommentController::class, 'update'])->name('comments.update');
     Route::delete('/comments/{comment}', [LessonCommentController::class, 'destroy'])->name('comments.destroy');
@@ -190,11 +203,9 @@ Route::middleware(['auth', 'active', 'verified', 'throttle:20,1'])->group(functi
 });
 
 Route::get('/learn/{course:slug}/lessons/{lesson}/quiz', [StudentQuizController::class, 'show'])->name('learn.lessons.quiz.show');
-Route::get('/learn/{course:slug}/lessons/{lesson}/quiz-attempts/{attempt}/result', [StudentQuizController::class, 'result'])->middleware('auth')->name('learn.lessons.quiz.result');
-Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('learn.lessons.quiz.submit');
-Route::post('/courses/{course}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware('auth')->name('courses.lessons.quiz.submit');
-Route::get('/learn/{course:slug}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('learn.lessons.quiz.attempts.show');
-Route::get('/courses/{course}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware('auth')->name('courses.lessons.quiz.attempts.show');
+Route::get('/learn/{course:slug}/lessons/{lesson}/quiz-attempts/{attempt}/result', [StudentQuizController::class, 'result'])->middleware(['auth', 'active', 'verified'])->name('learn.lessons.quiz.result');
+Route::post('/learn/{course:slug}/lessons/{lesson}/quiz/submit', [StudentQuizController::class, 'submit'])->middleware(['auth', 'active', 'verified'])->name('learn.lessons.quiz.submit');
+Route::get('/learn/{course:slug}/lessons/{lesson}/quiz/attempts/{attempt}', [StudentQuizController::class, 'reviewAttempt'])->middleware(['auth', 'active', 'verified'])->name('learn.lessons.quiz.attempts.show');
 Route::middleware(['auth', 'active', 'verified', 'role:student', 'throttle:6,1'])->group(function () {
     Route::post('/courses/{course}/reviews', [ReviewController::class, 'store'])->name('courses.reviews.store');
     Route::put('/courses/{course}/reviews/{review}', [ReviewController::class, 'update'])->name('courses.reviews.update');
@@ -243,11 +254,13 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/email/verification-notification', [AuthController::class, 'resendVerification'])
         ->middleware('throttle:5,15')
         ->name('verification.send');
-    Route::post('/email/verify/instant', [AuthController::class, 'instantVerify'])
-        ->name('verification.instant');
-    Route::get('/two-factor-challenge', [AuthController::class, 'showTwoFactorChallenge'])->name('two-factor.challenge');
-    Route::post('/two-factor-challenge', [AuthController::class, 'verifyTwoFactor'])->middleware('throttle:6,1')->name('two-factor.verify');
-    Route::post('/two-factor-challenge/resend', [AuthController::class, 'resendTwoFactor'])->middleware('throttle:3,1')->name('two-factor.resend');
+    if (app()->environment('local')) {
+        Route::post('/email/verify/instant', [AuthController::class, 'instantVerify'])
+            ->name('verification.instant');
+    }
+    Route::get('/two-factor-challenge', [AuthController::class, 'showTwoFactorChallenge'])->middleware('verified')->name('two-factor.challenge');
+    Route::post('/two-factor-challenge', [AuthController::class, 'verifyTwoFactor'])->middleware(['verified', 'throttle:6,1'])->name('two-factor.verify');
+    Route::post('/two-factor-challenge/resend', [AuthController::class, 'resendTwoFactor'])->middleware(['verified', 'throttle:3,1'])->name('two-factor.resend');
 });
 
 Route::middleware(['auth', 'active', 'verified', '2fa'])->group(function () {
@@ -318,6 +331,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
     Route::delete('/orders/{order}', [StudentOrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
     Route::post('/orders/{order}/refund', [StudentRefundController::class, 'store'])->middleware('throttle:5,1')->block(10, 10)->name('orders.refund');
     Route::get('/vouchers', [StudentVoucherController::class, 'index'])->name('vouchers.index');
+    Route::get('/vouchers/{coupon}', [StudentVoucherController::class, 'show'])->name('vouchers.show');
     Route::get('/study-groups', [StudentStudyGroupController::class, 'index'])->name('study-groups.index');
     Route::get('/study-groups/{studyGroup}', [StudentStudyGroupController::class, 'show'])->name('study-groups.show');
     Route::get('/profile', [StudentProfileController::class, 'edit'])->name('profile');
@@ -330,20 +344,25 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:student'])->prefix
 Route::redirect('/cart', '/student/cart')->name('cart');
 
 // ─── GIẢNG VIÊN ───
-Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
+Route::middleware(['auth', 'active', 'verified', '2fa', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
     // Trang hồ sơ & quản lý chứng chỉ / tài liệu minh chứng (luôn truy cập được kể cả khi locked)
     Route::get('/profile', [InstructorProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/documents', [InstructorProfileController::class, 'uploadDocument'])->name('profile.documents.upload');
+    Route::put('/profile/documents/{certificate}/url', [InstructorProfileController::class, 'updateDocumentUrl'])->name('profile.documents.url.update');
     Route::delete('/profile/documents/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('profile.documents.delete');
+    Route::patch('/profile/documents/{certificate}', [InstructorProfileController::class, 'replaceDocument'])->name('profile.documents.replace');
     Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('profile.documents.view');
     Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('profile.submit-review');
+    Route::post('/profile/teaching-fields/{teachingField}/submit-review', [InstructorProfileController::class, 'submitTeachingFieldForReview'])->middleware('throttle:5,1')->name('profile.teaching-fields.submit-review');
+    Route::post('/profile/teaching-fields/{teachingField}/submit-supplement', [InstructorProfileController::class, 'submitTeachingFieldSupplement'])->middleware('throttle:5,1')->name('profile.teaching-fields.submit-supplement');
     Route::post('/profile/request-reactivation', [InstructorProfileController::class, 'requestReactivation'])->middleware('throttle:5,1')->name('profile.request-reactivation');
 
     // Backward compatibility aliases for certificate upload/view/delete
     Route::get('/pending', [InstructorPendingController::class, 'show'])->name('pending');
     Route::post('/certificates/upload', [InstructorProfileController::class, 'uploadDocument'])->name('certificates.upload');
     Route::delete('/certificates/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('certificates.delete');
+    Route::patch('/certificates/{certificate}', [InstructorProfileController::class, 'replaceDocument'])->name('certificates.replace');
     Route::get('/certificates/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('certificates.view');
     Route::post('/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('submit-review');
     Route::post('/resubmit', [InstructorPendingController::class, 'resubmit'])->middleware('throttle:5,1')->name('resubmit');
@@ -357,7 +376,13 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::post('/courses/import/confirm', [FullCourseImportController::class, 'confirm'])->name('courses.full-import.confirm');
         Route::get('/courses/import/previews/{batch}', [FullCourseImportController::class, 'show'])->name('courses.full-import.show');
         Route::get('/courses/create', [InstructorCourseController::class, 'create'])->name('courses.create');
+        Route::get('/courses/{course}', [InstructorCourseController::class, 'show'])->name('courses.show');
         Route::get('/courses/{course}/curriculum', [InstructorCurriculumController::class, 'index'])->name('courses.curriculum');
+        Route::get('/courses/{course}/versions', [InstructorContentVersionHistoryController::class, 'index'])->name('courses.versions.index');
+        Route::get('/courses/{course}/versions/{type}/{version}', [InstructorContentVersionHistoryController::class, 'show'])->name('courses.versions.show');
+        Route::get('/courses/{course}/versions/{type}/{version}/compare', [InstructorContentVersionHistoryController::class, 'compare'])->name('courses.versions.compare');
+        Route::get('/courses/{course}/versions/{type}/{version}/rollback', [InstructorContentVersionHistoryController::class, 'confirmRollback'])->name('courses.versions.rollback.confirm');
+        Route::post('/courses/{course}/versions/{type}/{version}/rollback', [InstructorContentVersionHistoryController::class, 'storeRollback'])->name('courses.versions.rollback.store');
         Route::get('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'show'])->name('courses.lessons.quiz.show');
         Route::get('/courses/{course}/edit', [InstructorCourseController::class, 'edit'])->name('courses.edit');
         Route::get('/courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
@@ -369,7 +394,7 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/wallet', [InstructorWalletController::class, 'index'])->name('wallet.index');
         Route::put('/wallet/bank-details', [InstructorWalletController::class, 'updateBankDetails'])->middleware('throttle:5,1')->name('wallet.bank-details.update');
         Route::post('/wallet/withdraw', [InstructorWalletController::class, 'requestWithdrawal'])->middleware('throttle:5,1')->block(10, 10)->name('wallet.withdraw');
-        Route::resource('coupons', InstructorCouponController::class)->except(['show']);
+        Route::resource('coupons', InstructorCouponController::class);
         Route::post('coupons/{coupon}/toggle-status', [InstructorCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
         Route::resource('learning-paths', InstructorLearningPathController::class);
 
@@ -378,64 +403,66 @@ Route::middleware(['auth', 'active', '2fa', 'role:instructor'])->prefix('instruc
         Route::get('/submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
         Route::post('/submissions/{submission}/grade', [SubmissionController::class, 'grade'])->name('submissions.grade');
         Route::post('/submissions/{submission}/grant-retry', [SubmissionController::class, 'grantRetry'])->name('submissions.grant-retry');
+        Route::get('/quiz-attempt-requests', [InstructorQuizAttemptRequestController::class, 'index'])->name('quiz-attempt-requests.index');
+        Route::post('/quiz-attempt-requests/{attemptRequest}/approve', [InstructorQuizAttemptRequestController::class, 'approve'])->name('quiz-attempt-requests.approve');
+        Route::post('/quiz-attempt-requests/{attemptRequest}/reject', [InstructorQuizAttemptRequestController::class, 'reject'])->name('quiz-attempt-requests.reject');
         Route::get('/discussions', [InstructorDiscussionController::class, 'index'])->name('discussions.index');
         Route::get('/discussions/{discussion}', [InstructorDiscussionController::class, 'show'])->name('discussions.show');
         Route::get('/comments', [App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'index'])->name('comments.index');
         Route::get('/comments/{comment}', [App\Http\Controllers\Web\Instructor\LessonCommentController::class, 'show'])->name('comments.show');
 
-        Route::middleware('verified')->group(function () {
-            Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
-            Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
-            Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
-            Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
-            Route::post('/courses/{course}/s3/multipart/create', [S3MultipartUploadController::class, 'create'])->name('courses.s3.multipart.create');
-            Route::post('/courses/{course}/s3/multipart/batch-sign', [S3MultipartUploadController::class, 'batchSign'])->name('courses.s3.multipart.batch-sign');
-            Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'signPart'])->name('courses.s3.multipart.sign-part');
-            Route::post('/courses/{course}/s3/multipart/complete', [S3MultipartUploadController::class, 'complete'])->name('courses.s3.multipart.complete');
-            Route::post('/courses/{course}/s3/multipart/abort', [S3MultipartUploadController::class, 'abort'])->name('courses.s3.multipart.abort');
-            Route::get('/courses/{course}/hls-status', [InstructorCurriculumController::class, 'getHlsStatus'])->name('courses.hls-status');
-            Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
-            Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
-            Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
-            Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
-            Route::get('/courses/{course}/lessons/import/template', [InstructorLessonImportController::class, 'downloadTemplate'])->name('courses.lessons.import.template');
-            Route::post('/courses/{course}/sections/{section}/lessons/import/preview', [InstructorLessonImportController::class, 'preview'])->name('courses.lessons.import.preview');
-            Route::post('/courses/{course}/sections/{section}/lessons/import/confirm', [InstructorLessonImportController::class, 'confirm'])->name('courses.lessons.import.confirm');
-            Route::get('/courses/{course}/sections/{section}/lessons', function (Course $course, CourseSection $section) {
-                $targetCourse = (int) $section->course_id === (int) $course->id
-                    ? $course
-                    : $section->course_id;
+        Route::post('/reviews/{review}/reply', [ReviewReplyController::class, 'store'])->middleware('throttle:12,1')->name('reviews.reply');
+        Route::put('/replies/{review}', [ReviewReplyController::class, 'update'])->middleware('throttle:12,1')->name('replies.update');
+        Route::delete('/replies/{review}', [ReviewReplyController::class, 'destroy'])->name('replies.destroy');
+        Route::post('/courses', [InstructorCourseController::class, 'store'])->name('courses.store');
+        Route::post('/courses/{course}/s3/multipart/create', [S3MultipartUploadController::class, 'create'])->name('courses.s3.multipart.create');
+        Route::post('/courses/{course}/s3/multipart/batch-sign', [S3MultipartUploadController::class, 'batchSignParts'])->name('courses.s3.multipart.batch-sign');
+        Route::post('/courses/{course}/s3/multipart/sign-part', [S3MultipartUploadController::class, 'getPartUrl'])->name('courses.s3.multipart.sign-part');
+        Route::post('/courses/{course}/s3/multipart/complete', [S3MultipartUploadController::class, 'complete'])->name('courses.s3.multipart.complete');
+        Route::post('/courses/{course}/s3/multipart/abort', [S3MultipartUploadController::class, 'abort'])->name('courses.s3.multipart.abort');
+        Route::get('/courses/{course}/hls-status', [InstructorCurriculumController::class, 'getHlsStatus'])->name('courses.hls-status');
+        Route::post('/courses/{course}/sections', [InstructorCurriculumController::class, 'storeSection'])->name('courses.sections.store');
+        Route::put('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'updateSection'])->name('courses.sections.update');
+        Route::delete('/courses/{course}/sections/{section}', [InstructorCurriculumController::class, 'destroySection'])->name('courses.sections.destroy');
+        Route::post('/courses/{course}/sections/{section}/lessons', [InstructorCurriculumController::class, 'storeLesson'])->name('courses.sections.lessons.store');
+        Route::get('/courses/{course}/lessons/import/template', [InstructorLessonImportController::class, 'downloadTemplate'])->name('courses.lessons.import.template');
+        Route::post('/courses/{course}/sections/{section}/lessons/import/preview', [InstructorLessonImportController::class, 'preview'])->name('courses.lessons.import.preview');
+        Route::post('/courses/{course}/sections/{section}/lessons/import/confirm', [InstructorLessonImportController::class, 'confirm'])->name('courses.lessons.import.confirm');
+        Route::get('/courses/{course}/sections/{section}/lessons', function (Course $course, CourseSection $section) {
+            $targetCourse = (int) $section->course_id === (int) $course->id
+                ? $course
+                : $section->course_id;
 
-                return redirect()
-                    ->route('instructor.courses.curriculum', $targetCourse)
-                    ->with('error', (int) $section->course_id === (int) $course->id
-                        ? null
-                        : 'Liên kết chương học không khớp khóa học. Hệ thống đã chuyển đến đúng khóa học.');
-            });
-            Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
-            Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
-            Route::put('/courses/{course}/content-updates/{contentUpdate}', [InstructorCurriculumController::class, 'updateContentUpdate'])->name('courses.content-updates.update');
-            Route::delete('/courses/{course}/content-updates/{contentUpdate}', [InstructorCurriculumController::class, 'destroyContentUpdate'])->name('courses.content-updates.destroy');
-            Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
-            Route::get('/quizzes/questions/sample-template', [InstructorQuizController::class, 'downloadSampleTemplate'])->name('quizzes.questions.sample-template');
-            Route::post('/quizzes/{quiz}/import-questions', [InstructorQuizController::class, 'importQuestions'])->name('quizzes.questions.import');
-            Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
-            Route::post('/quiz-version-questions/{mapping}/invalidations', [InstructorQuizQuestionInvalidationController::class, 'store'])->name('quiz-version-questions.invalidations.store');
-            Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
-            Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
-            Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
-            Route::put('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'updateAnswers'])->name('quiz-questions.answers.update');
-            Route::put('/quiz-answers/{answer}', [InstructorQuizController::class, 'updateAnswer'])->name('quiz-answers.update');
-            Route::delete('/quiz-answers/{answer}', [InstructorQuizController::class, 'destroyAnswer'])->name('quiz-answers.destroy');
-            Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
-            Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
-            Route::post('/courses/{course}/archive', [InstructorCourseController::class, 'archive'])->name('courses.archive');
-            Route::post('/courses/{course}/toggle-featured', [InstructorCourseController::class, 'toggleFeatured'])->name('courses.toggle-featured');
-            Route::post('/courses/{course}/chapters', [InstructorCourseController::class, 'addChapter'])->name('courses.chapters.store');
-            Route::get('/courses/{course}/submit', [InstructorCourseController::class, 'submitPage'])->name('courses.submit.page');
-            Route::post('/courses/{course}/submit', [InstructorCourseController::class, 'submit'])->name('courses.submit');
-            Route::post('/chapters/{chapter}/lessons', [InstructorCourseController::class, 'addLesson'])->name('chapters.lessons.store');
+            return redirect()
+                ->route('instructor.courses.curriculum', $targetCourse)
+                ->with('error', (int) $section->course_id === (int) $course->id
+                    ? null
+                    : 'Liên kết chương học không khớp khóa học. Hệ thống đã chuyển đến đúng khóa học.');
         });
+        Route::put('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'updateLesson'])->name('courses.lessons.update');
+        Route::delete('/courses/{course}/lessons/{lesson}', [InstructorCurriculumController::class, 'destroyLesson'])->name('courses.lessons.destroy');
+        Route::put('/courses/{course}/content-updates/{contentUpdate}', [InstructorCurriculumController::class, 'updateContentUpdate'])->name('courses.content-updates.update');
+        Route::delete('/courses/{course}/content-updates/{contentUpdate}', [InstructorCurriculumController::class, 'destroyContentUpdate'])->name('courses.content-updates.destroy');
+        Route::post('/courses/{course}/content-updates/{contentUpdate}/revise', [InstructorCurriculumController::class, 'reviseRejectedContentUpdate'])->name('courses.content-updates.revise');
+        Route::post('/courses/{course}/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('courses.lessons.quiz.store');
+        Route::get('/quizzes/questions/sample-template', [InstructorQuizController::class, 'downloadSampleTemplate'])->name('quizzes.questions.sample-template');
+        Route::post('/quizzes/{quiz}/import-questions', [InstructorQuizController::class, 'importQuestions'])->name('quizzes.questions.import');
+        Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
+        Route::post('/quiz-version-questions/{mapping}/invalidations', [InstructorQuizQuestionInvalidationController::class, 'store'])->name('quiz-version-questions.invalidations.store');
+        Route::put('/quiz-questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quiz-questions.update');
+        Route::delete('/quiz-questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quiz-questions.destroy');
+        Route::post('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'storeAnswer'])->name('quiz-questions.answers.store');
+        Route::put('/quiz-questions/{question}/answers', [InstructorQuizController::class, 'updateAnswers'])->name('quiz-questions.answers.update');
+        Route::put('/quiz-answers/{answer}', [InstructorQuizController::class, 'updateAnswer'])->name('quiz-answers.update');
+        Route::delete('/quiz-answers/{answer}', [InstructorQuizController::class, 'destroyAnswer'])->name('quiz-answers.destroy');
+        Route::put('/courses/{course}', [InstructorCourseController::class, 'update'])->name('courses.update');
+        Route::delete('/courses/{course}', [InstructorCourseController::class, 'destroy'])->name('courses.destroy');
+        Route::post('/courses/{course}/archive', [InstructorCourseController::class, 'archive'])->name('courses.archive');
+        Route::post('/courses/{course}/toggle-featured', [InstructorCourseController::class, 'toggleFeatured'])->name('courses.toggle-featured');
+        Route::post('/courses/{course}/chapters', [InstructorCourseController::class, 'addChapter'])->name('courses.chapters.store');
+        Route::get('/courses/{course}/submit', [InstructorCourseController::class, 'submitPage'])->name('courses.submit.page');
+        Route::post('/courses/{course}/submit', [InstructorCourseController::class, 'submit'])->name('courses.submit');
+        Route::post('/chapters/{chapter}/lessons', [InstructorCourseController::class, 'addLesson'])->name('chapters.lessons.store');
     });
 });
 
@@ -461,6 +488,8 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
 
     // Quản lý duyệt Giảng viên
+    Route::get('/instructors/statistics', [InstructorApplicationController::class, 'statistics'])->name('instructors.statistics');
+    Route::get('/instructors/supplements', [InstructorApplicationController::class, 'supplements'])->name('instructors.supplements.index');
     Route::prefix('instructors/applications')->name('instructors.applications.')->group(function () {
         Route::get('/', [InstructorApplicationController::class, 'index'])->name('index');
         Route::get('/{user}', [InstructorApplicationController::class, 'show'])->name('show');
@@ -471,6 +500,12 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::post('/{user}/reactivation/reject', [InstructorApplicationController::class, 'rejectReactivation'])->name('reactivation.reject');
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
+    });
+
+    Route::prefix('instructors/teaching-fields')->name('instructors.teaching-fields.')->group(function () {
+        Route::get('/', [InstructorTeachingFieldReviewController::class, 'index'])->name('index');
+        Route::post('/{teachingField}/approve', [InstructorTeachingFieldReviewController::class, 'approve'])->name('approve');
+        Route::post('/{teachingField}/reject', [InstructorTeachingFieldReviewController::class, 'reject'])->name('reject');
     });
 
     // Quản lý cấu hình yêu cầu hồ sơ theo ngành
@@ -495,7 +530,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('coupons/reward-weekly-run-now', [AdminCouponController::class, 'rewardWeeklyRunNow'])->name('coupons.reward_weekly_run_now');
     Route::get('coupons/reward-history', [AdminCouponController::class, 'rewardHistory'])->name('coupons.reward_history');
 
-    Route::resource('coupons', AdminCouponController::class)->except(['show']);
+    Route::resource('coupons', AdminCouponController::class);
     Route::post('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus'])->name('coupons.toggle-status');
 
     Route::resource('learning-paths', AdminLearningPathController::class);
@@ -505,8 +540,12 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/course-reviews/{course}/approve', [CourseReviewController::class, 'approve'])->name('course-reviews.approve');
     Route::post('/course-reviews/{course}/reject', [CourseReviewController::class, 'reject'])->name('course-reviews.reject');
     Route::get('/content-updates', [ContentUpdateController::class, 'index'])->name('content-updates.index');
+    Route::get('/content-updates/{contentUpdate}', [ContentUpdateController::class, 'show'])->name('content-updates.show');
     Route::post('/content-updates/{contentUpdate}/approve', [ContentUpdateController::class, 'approve'])->name('content-updates.approve');
     Route::post('/content-updates/{contentUpdate}/reject', [ContentUpdateController::class, 'reject'])->name('content-updates.reject');
+    Route::get('/courses/{course}/versions', [AdminContentVersionHistoryController::class, 'index'])->name('courses.versions.index');
+    Route::get('/courses/{course}/versions/{type}/{version}', [AdminContentVersionHistoryController::class, 'show'])->name('courses.versions.show');
+    Route::get('/courses/{course}/versions/{type}/{version}/compare', [AdminContentVersionHistoryController::class, 'compare'])->name('courses.versions.compare');
     Route::get('/quiz-invalidations', [QuizQuestionInvalidationController::class, 'index'])->name('quiz-invalidations.index');
     Route::get('/quiz-invalidations/{invalidation}', [QuizQuestionInvalidationController::class, 'show'])->name('quiz-invalidations.show');
     Route::post('/quiz-invalidations/{invalidation}/approve', [QuizQuestionInvalidationController::class, 'approve'])->name('quiz-invalidations.approve');
@@ -527,6 +566,7 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
     Route::post('/courses/{course}/publish', [ManageController::class, 'publish'])->name('courses.publish');
     Route::post('/ai-moderation/{lesson}/extract', [AiModerationController::class, 'extractFrames'])->name('ai-moderation.extract');
     Route::post('/ai-moderation/analyze-frame', [AiModerationController::class, 'analyzeFrame'])->name('ai-moderation.analyze-frame');
+    Route::post('/ai-moderation/{lesson}/category-match', [AiModerationController::class, 'checkCategoryMatch'])->name('ai-moderation.category-match');
     Route::post('/ai-moderation/{lesson}/save', [AiModerationController::class, 'saveResults'])->name('ai-moderation.save');
     Route::post('/courses/{course}/archive', [ManageController::class, 'archive'])->name('courses.archive');
     Route::post('/courses/{course}/restore', [ManageController::class, 'restore'])->name('courses.restore');
@@ -584,3 +624,5 @@ if (app()->environment('local')) {
 
 // ─── CỔNG THANH TOÁN THỰC TẾ (REAL PAYMENT GATEWAYS) ───
 Route::post('/payments/payos/ipn', [PaymentController::class, 'payosIpn'])->name('payments.payos.ipn');
+Route::post('/payments/momo/ipn', [PaymentController::class, 'momoIpn'])->name('payments.momo.ipn');
+Route::get('/payments/momo/return', [PaymentController::class, 'momoReturn'])->name('payments.momo.return');

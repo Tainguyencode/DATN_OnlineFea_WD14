@@ -7,8 +7,10 @@ use App\Models\Category;
 use App\Models\InstructorCertificate;
 use App\Models\InstructorDocumentRequirement;
 use App\Services\ActivityLogService;
+use App\Services\InstructorRequirementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class InstructorDocumentRequirementController extends Controller
@@ -58,15 +60,19 @@ class InstructorDocumentRequirementController extends Controller
             'document_title.required' => 'Vui lòng nhập tên yêu cầu tài liệu.',
         ]);
 
-        $requirement = InstructorDocumentRequirement::create([
-            'category_id' => $validated['category_id'],
-            'document_type' => $validated['document_type'],
-            'document_title' => $validated['document_title'],
-            'description' => $validated['description'] ?? null,
-            'is_required' => $request->boolean('is_required'),
-            'is_active' => true,
-            'sort_order' => $validated['sort_order'] ?? 0,
-        ]);
+        $requirement = DB::transaction(function () use ($request, $validated): InstructorDocumentRequirement {
+            $this->ensureCategoryIsNotUnderReview((int) $validated['category_id']);
+
+            return InstructorDocumentRequirement::create([
+                'category_id' => $validated['category_id'],
+                'document_type' => $validated['document_type'],
+                'document_title' => $validated['document_title'],
+                'description' => $validated['description'] ?? null,
+                'is_required' => $request->boolean('is_required'),
+                'is_active' => true,
+                'sort_order' => $validated['sort_order'] ?? 0,
+            ]);
+        });
 
         ActivityLogService::log($request->user()->id, 'create_instructor_requirement', InstructorDocumentRequirement::class, $requirement->id, [
             'category_id' => $requirement->category_id,
@@ -90,14 +96,18 @@ class InstructorDocumentRequirementController extends Controller
             'document_title.required' => 'Vui lòng nhập tên yêu cầu tài liệu.',
         ]);
 
-        $requirement->update([
-            'document_type' => $validated['document_type'],
-            'document_title' => $validated['document_title'],
-            'description' => $validated['description'] ?? null,
-            'is_required' => $request->boolean('is_required'),
-            'is_active' => $request->has('is_active') ? $request->boolean('is_active') : $requirement->is_active,
-            'sort_order' => $validated['sort_order'] ?? $requirement->sort_order,
-        ]);
+        DB::transaction(function () use ($request, $requirement, $validated): void {
+            $locked = InstructorDocumentRequirement::query()->lockForUpdate()->findOrFail($requirement->id);
+            $this->ensureCategoryIsNotUnderReview((int) $locked->category_id);
+            $locked->update([
+                'document_type' => $validated['document_type'],
+                'document_title' => $validated['document_title'],
+                'description' => $validated['description'] ?? null,
+                'is_required' => $request->boolean('is_required'),
+                'is_active' => $request->has('is_active') ? $request->boolean('is_active') : $locked->is_active,
+                'sort_order' => $validated['sort_order'] ?? $locked->sort_order,
+            ]);
+        });
 
         ActivityLogService::log($request->user()->id, 'update_instructor_requirement', InstructorDocumentRequirement::class, $requirement->id, [], $request);
 
@@ -106,9 +116,12 @@ class InstructorDocumentRequirementController extends Controller
 
     public function toggleStatus(Request $request, InstructorDocumentRequirement $requirement): RedirectResponse
     {
-        $requirement->update([
-            'is_active' => ! $requirement->is_active,
-        ]);
+        DB::transaction(function () use ($requirement): void {
+            $locked = InstructorDocumentRequirement::query()->lockForUpdate()->findOrFail($requirement->id);
+            $this->ensureCategoryIsNotUnderReview((int) $locked->category_id);
+            $locked->update(['is_active' => ! $locked->is_active]);
+            $requirement->setRawAttributes($locked->getAttributes(), true);
+        });
 
         $statusText = $requirement->is_active ? 'Kích hoạt' : 'Vô hiệu hóa';
         ActivityLogService::log($request->user()->id, 'toggle_instructor_requirement_status', InstructorDocumentRequirement::class, $requirement->id, [
@@ -121,12 +134,23 @@ class InstructorDocumentRequirementController extends Controller
     public function destroy(Request $request, InstructorDocumentRequirement $requirement): RedirectResponse
     {
         $title = $requirement->document_title;
-        $requirement->delete();
+        DB::transaction(function () use ($requirement): void {
+            $locked = InstructorDocumentRequirement::query()->lockForUpdate()->findOrFail($requirement->id);
+            $this->ensureCategoryIsNotUnderReview((int) $locked->category_id);
+            $locked->delete();
+        });
 
         ActivityLogService::log($request->user()->id, 'delete_instructor_requirement', InstructorDocumentRequirement::class, $requirement->id, [
             'title' => $title,
         ], $request);
 
         return back()->with('success', 'Đã xóa yêu cầu hồ sơ "'.$title.'".');
+    }
+
+    private function ensureCategoryIsNotUnderReview(int $categoryId): void
+    {
+        if (app(InstructorRequirementService::class)->categoryHasPendingReview($categoryId)) {
+            abort(409, 'Không thể thay đổi yêu cầu hồ sơ vì ngành này đang có hồ sơ chờ xét duyệt.');
+        }
     }
 }

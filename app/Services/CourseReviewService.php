@@ -16,14 +16,41 @@ class CourseReviewService
     public function submitForReview(Course $course, User $instructor): CourseReview
     {
         abort_unless($course->isOwnedBy($instructor), 403);
+        abort_unless(app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 403, 'Giảng viên chưa được duyệt ngành của khóa học này.');
         abort_unless($course->canBeSubmittedForReview(), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
 
         $hasAgreement = $course->copyright_agreed || request()->boolean('copyright_agreed');
         abort_unless($hasAgreement, 422, 'Bạn phải đồng ý với cam kết bản quyền trước khi gửi duyệt.');
 
-        $isAlreadyPublished = (bool) $course->is_published || in_array($course->status, [CourseStatus::Published->value, CourseStatus::PendingUpdate->value, CourseStatus::RejectedUpdate->value], true);
+        return DB::transaction(function () use ($course, $instructor) {
+            // Serialize submission against concurrent approval/rejection and
+            // only transition drafts. Existing pending/terminal records are
+            // never silently rewritten.
+            $course = app(CourseReleaseLock::class)->course($course->id);
+            $hasPendingBatch = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->lockForUpdate()
+                ->exists();
+            abort_if($hasPendingBatch, 422, 'Đang có một lượt duyệt chưa được xử lý.');
 
-        return DB::transaction(function () use ($course, $instructor, $isAlreadyPublished) {
+            abort_unless(in_array($course->status, [
+                CourseStatus::Draft->value,
+                CourseStatus::Rejected->value,
+                CourseStatus::Published->value,
+                CourseStatus::PendingUpdate->value,
+                CourseStatus::RejectedUpdate->value,
+            ], true), 422, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
+            $isAlreadyPublished = (bool) $course->is_published || in_array($course->status, [CourseStatus::Published->value, CourseStatus::PendingUpdate->value, CourseStatus::RejectedUpdate->value], true);
+            if ($isAlreadyPublished) {
+                $hasDraftUpdates = ContentUpdate::query()
+                    ->where('course_id', $course->id)
+                    ->where('created_by', $instructor->id)
+                    ->where('status', ContentUpdate::STATUS_DRAFT)
+                    ->lockForUpdate()
+                    ->exists();
+                abort_unless($hasDraftUpdates, 422, 'Không có thay đổi mới để gửi duyệt.');
+            }
             $submissionNumber = (int) $course->submission_count + 1;
 
             $review = CourseReview::create([
@@ -48,12 +75,24 @@ class CourseReviewService
             ]);
 
             // Cập nhật mốc thời gian submitted_at và chuyển trạng thái pending cho các bản ghi content_updates của khóa học này
-            ContentUpdate::where('course_id', $course->id)
-                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
-                ->update([
+            $draftUpdates = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('created_by', $instructor->id)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($draftUpdates as $draftUpdate) {
+                if ($isAlreadyPublished) {
+                    // Finalize the mutable authoring candidate before crossing
+                    // the immutable draft -> pending boundary.
+                    app(ContentVersionService::class)->prepareDraftCandidate($draftUpdate, $instructor);
+                }
+                $draftUpdate->update([
                     'status' => ContentUpdate::STATUS_PENDING,
                     'submitted_at' => now(),
                 ]);
+            }
 
             $noticeMsg = $isAlreadyPublished
                 ? "Giảng viên đã gửi bản CẬP NHẬT khóa học \"{$course->title}\" lần {$submissionNumber}."
@@ -85,16 +124,19 @@ class CourseReviewService
     {
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
+        $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+        abort_unless($instructor && app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 422, 'Ngành của giảng viên chưa được duyệt.');
 
         $this->assertChecklistComplete($checklist);
 
-        $wasAlreadyPublished = (bool) $course->is_published || in_array($course->status, [
-            Course::STATUS_PUBLISHED,
-            Course::STATUS_PENDING_UPDATE,
-            Course::STATUS_REJECTED_UPDATE,
-        ], true);
-
-        return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately, $wasAlreadyPublished) {
+        return DB::transaction(function () use ($course, $admin, $checklist, $publishImmediately) {
+            $course = app(CourseReleaseLock::class)->course($course->id);
+            abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
+            $wasAlreadyPublished = (bool) $course->is_published || in_array($course->status, [
+                Course::STATUS_PUBLISHED,
+                Course::STATUS_PENDING_UPDATE,
+                Course::STATUS_REJECTED_UPDATE,
+            ], true);
             $review = $this->latestPendingReview($course);
 
             if ($review) {
@@ -106,19 +148,22 @@ class CourseReviewService
                 ]);
             }
 
+            if (! $wasAlreadyPublished) {
+                app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+                app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
+            }
+
             // Tự động phê duyệt toàn bộ các bản ghi content_updates đang pending của khóa học này (phê duyệt chapter trước lesson)
-            $pendingUpdates = ContentUpdate::where('course_id', $course->id)
+            $pendingUpdates = ContentUpdate::query()
+                ->where('course_id', $course->id)
                 ->where('status', ContentUpdate::STATUS_PENDING)
                 ->orderByRaw("CASE type WHEN 'chapter' THEN 1 WHEN 'lesson' THEN 2 WHEN 'quiz' THEN 3 WHEN 'course' THEN 4 ELSE 5 END")
+                ->lockForUpdate()
                 ->get();
 
             $contentUpdateService = app(ContentUpdateService::class);
             foreach ($pendingUpdates as $pendingUpdate) {
                 $contentUpdateService->applyApprovedUpdate($pendingUpdate, $admin);
-            }
-
-            if (! $wasAlreadyPublished) {
-                app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
             }
 
             $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
@@ -195,6 +240,7 @@ class CourseReviewService
         $count = 0;
         foreach ($approvedCourses as $course) {
             app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+            app(ContentVersionService::class)->publishInitialCourseTree($course, $instructor);
             $course->update([
                 'status' => CourseStatus::Published->value,
                 'is_published' => true,
@@ -222,9 +268,10 @@ class CourseReviewService
         $comment = trim($comment);
         abort_if(strlen($comment) < config('course.reject_reason_min_length', 10), 422, 'Lý do từ chối phải có ít nhất 10 ký tự.');
 
-        $wasPublished = (bool) $course->is_published || $course->status === CourseStatus::PendingUpdate->value;
-
-        return DB::transaction(function () use ($course, $admin, $comment, $checklist, $wasPublished) {
+        return DB::transaction(function () use ($course, $admin, $comment, $checklist) {
+            $course = app(CourseReleaseLock::class)->course($course->id);
+            abort_unless(in_array($course->status, [CourseStatus::PendingReview->value, CourseStatus::PendingUpdate->value], true), 422);
+            $wasPublished = (bool) $course->is_published || $course->status === CourseStatus::PendingUpdate->value;
             $review = $this->latestPendingReview($course);
 
             if ($review) {
@@ -238,14 +285,16 @@ class CourseReviewService
             }
 
             // Cập nhật trạng thái các content_updates đang pending thành rejected
-            ContentUpdate::where('course_id', $course->id)
+            $pendingUpdates = ContentUpdate::query()
+                ->where('course_id', $course->id)
                 ->where('status', ContentUpdate::STATUS_PENDING)
-                ->update([
-                    'status' => ContentUpdate::STATUS_REJECTED,
-                    'rejection_reason' => $comment,
-                    'reviewed_by' => $admin->id,
-                    'reviewed_at' => now(),
-                ]);
+                ->lockForUpdate()
+                ->get();
+
+            $contentUpdateService = app(ContentUpdateService::class);
+            foreach ($pendingUpdates as $pendingUpdate) {
+                $contentUpdateService->rejectUpdate($pendingUpdate, $admin, $comment);
+            }
 
             $newStatus = $wasPublished ? CourseStatus::RejectedUpdate->value : CourseStatus::Rejected->value;
 
@@ -281,9 +330,13 @@ class CourseReviewService
     {
         abort_unless($admin->isAdmin(), 403);
         abort_unless(in_array($course->status, [CourseStatus::Approved->value, CourseStatus::Suspended->value], true), 422);
+        $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+        abort_unless($instructor && app(InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course), 422, 'Ngành của giảng viên chưa được duyệt.');
 
-        DB::transaction(function () use ($course): void {
+        DB::transaction(function () use ($course, $admin): void {
+            $course = app(CourseReleaseLock::class)->course($course->id);
             app(QuizVersioningService::class)->publishInitialCourseDrafts($course);
+            app(ContentVersionService::class)->publishInitialCourseTree($course, $admin);
             $course->update([
                 'status' => CourseStatus::Published->value,
                 'is_published' => true,

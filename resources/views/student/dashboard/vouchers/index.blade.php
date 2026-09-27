@@ -1,7 +1,7 @@
 <x-student-layout title="Voucher của tôi" page-title="Voucher của tôi" breadcrumb="Chỉ hiển thị voucher đã được lưu hoặc cấp cho tài khoản của bạn.">
     <div class="mb-5 flex flex-wrap gap-2" aria-label="Lọc voucher">
         @foreach(['all' => 'Tất cả', 'active' => 'Còn hiệu lực', 'used' => 'Đã sử dụng', 'expired' => 'Hết hạn'] as $key => $label)
-            <a href="{{ route('student.vouchers.index', ['status' => $key]) }}" @if($status === $key) aria-current="page" @endif class="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold {{ $status === $key ? 'bg-[#0056D2] text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300' }}"><span>{{ $label }}</span><span class="rounded-full bg-black/10 px-2 py-0.5 text-xs">{{ $counts[$key] }}</span></a>
+            <a href="{{ route('student.vouchers.index', ['status' => $key]) }}" @if($status === $key) aria-current="page" @endif class="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 {{ $status === $key ? 'bg-[#0056D2] text-white shadow-blue-500/20 hover:bg-[#0046B8]' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}"><span>{{ $label }}</span><span class="rounded-full bg-black/10 px-2 py-0.5 text-xs">{{ $counts[$key] }}</span></a>
         @endforeach
     </div>
 
@@ -18,6 +18,11 @@
                             <div class="flex flex-wrap items-start justify-between gap-2"><code class="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-900 dark:bg-slate-800 dark:text-white">{{ $coupon->code }}</code><x-student.dashboard.status-badge :status="$userCoupon->computed_status" /></div>
                             <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">{{ $userCoupon->scope_label }}</p>
                             <dl class="mt-3 space-y-1 text-xs text-slate-500"><div class="flex justify-between gap-2"><dt>Đơn tối thiểu</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $coupon->min_order_amount > 0 ? number_format((float)$coupon->min_order_amount, 0, ',', '.').'đ' : 'Không yêu cầu' }}</dd></div><div class="flex justify-between gap-2"><dt>Hạn dùng</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $coupon->expires_at?->format('d/m/Y H:i') ?? 'Không giới hạn' }}</dd></div></dl>
+                            <div class="mt-3 flex items-center justify-end">
+                                <a href="{{ route('student.vouchers.show', $coupon) }}" class="inline-flex items-center gap-1 text-xs font-bold text-[#0056D2] hover:underline dark:text-blue-400">
+                                    Xem chi tiết →
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </article>

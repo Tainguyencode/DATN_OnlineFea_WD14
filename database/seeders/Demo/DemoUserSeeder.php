@@ -2,15 +2,12 @@
 
 namespace Database\Seeders\Demo;
 
-use App\Enums\UserRole;
-use App\Enums\UserStatus;
 use App\Models\InstructorApplication;
 use App\Models\InstructorProfile;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Withdrawal;
 use App\Services\RoleSyncService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 

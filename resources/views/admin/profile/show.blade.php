@@ -15,31 +15,33 @@
 @endphp
 
 <x-dynamic-component :component="$layout" title="Hồ sơ" page-title="Hồ sơ cá nhân" breadcrumb="Bảo mật tài khoản và hoạt động đăng nhập">
-    <div class="space-y-6">
+    <div class="admin-profile-page space-y-5">
 
         {{-- Header card --}}
-        <div class="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-6 text-white shadow-md">
+        <div class="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-600 p-6 text-white shadow-[0_14px_35px_rgba(37,99,235,0.2)]">
+            <div class="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10"></div>
+            <div class="absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-blue-300/10"></div>
             <div class="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                 <div class="flex items-center gap-5">
-                    <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-24 w-24 rounded-xl border border-white/20 object-cover shadow-md">
+                    <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}" class="h-24 w-24 rounded-2xl border-4 border-white/20 object-cover shadow-xl">
                     <div>
-                        <div class="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-blue-100">{{ $roleLabels[$user->role] ?? $user->role }}</div>
+                        <div class="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold text-blue-50">{{ $roleLabels[$user->role] ?? $user->role }}</div>
                         <h2 class="mt-3 text-3xl font-extrabold tracking-tight">{{ $user->name }}</h2>
-                        <p class="mt-1 text-sm text-slate-300">{{ '@'.$user->username }} · {{ $user->email }}</p>
+                        <p class="mt-1 text-sm text-blue-100">{{ '@'.$user->username }} · {{ $user->email }}</p>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3 text-center sm:grid-cols-3">
-                    <div class="rounded-xl bg-white/10 px-4 py-3">
+                    <div class="rounded-xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm">
                         <div class="text-lg font-black">{{ $user->email_verified_at ? 'OK' : '!' }}</div>
-                        <div class="text-xs text-slate-300">Email</div>
+                        <div class="text-xs text-blue-100">Email</div>
                     </div>
-                    <div class="rounded-xl bg-white/10 px-4 py-3">
+                    <div class="rounded-xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm">
                         <div class="text-lg font-black">{{ $user->two_factor_enabled ? 'ON' : 'OFF' }}</div>
-                        <div class="text-xs text-slate-300">2FA</div>
+                        <div class="text-xs text-blue-100">2FA</div>
                     </div>
-                    <div class="rounded-xl bg-white/10 px-4 py-3">
+                    <div class="rounded-xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm">
                         <div class="text-lg font-black">{{ $sessions->count() }}</div>
-                        <div class="text-xs text-slate-300">Thiết bị</div>
+                        <div class="text-xs text-blue-100">Thiết bị</div>
                     </div>
                 </div>
             </div>
@@ -52,7 +54,7 @@
             <div class="space-y-6 min-w-0">
 
                 {{-- Thông tin cá nhân --}}
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
                     <h3 class="text-lg font-bold text-slate-900">Thông tin cá nhân</h3>
                     <p class="mt-1 text-sm text-slate-500">Cập nhật avatar, username, số điện thoại và giới thiệu.</p>
 
@@ -96,7 +98,7 @@
 
                 @if($user->role === 'instructor')
                 {{-- Thông tin tài khoản ngân hàng nhận đối soát --}}
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
                     <h3 class="text-lg font-bold text-slate-900">Tài khoản ngân hàng nhận tiền</h3>
                     <p class="mt-1 text-sm text-slate-500">Cung cấp thông tin tài khoản ngân hàng để nền tảng đối soát và chuyển khoản chiết khấu doanh thu khóa học cho bạn.</p>
 
@@ -126,7 +128,7 @@
                 @endif
 
                 {{-- Đổi email & Đổi mật khẩu: mỗi cái 1 hàng riêng để không bị hẹp --}}
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
                     <h3 class="text-lg font-bold text-slate-900">Đổi email</h3>
                     <form method="POST" action="{{ route('profile.email.update') }}" class="mt-5 space-y-4">
                         @csrf
@@ -143,11 +145,11 @@
                                 class="block w-full rounded-2xl border px-4 py-3 text-sm outline-none @error('current_password') border-rose-500 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 @else border-slate-200 focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10 @enderror">
                             @error('current_password') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                         </div>
-                        <button class="rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700">Cập nhật email</button>
+                        <button class="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700">Cập nhật email</button>
                     </form>
                 </div>
 
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
                     <h3 class="text-lg font-bold text-slate-900">Đổi mật khẩu</h3>
                     <form method="POST" action="{{ route('profile.password.update') }}" class="mt-5 space-y-4">
                         @csrf
@@ -172,7 +174,7 @@
                                 @error('password_confirmation') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                             </div>
                         </div>
-                        <button class="rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700">Cập nhật mật khẩu</button>
+                        <button class="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700">Cập nhật mật khẩu</button>
                     </form>
                 </div>
 
@@ -182,7 +184,7 @@
             <div class="space-y-6 min-w-0">
 
                 {{-- Xác thực hai lớp --}}
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
                     <div class="flex items-center justify-between gap-4">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900">Xác thực hai lớp</h3>
@@ -200,7 +202,7 @@
                             <form method="POST" action="{{ route('profile.two-factor.enable') }}" class="mt-4 flex gap-3">
                                 @csrf
                                 <input name="code" required maxlength="6" class="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-[#0056D2] focus:ring-4 focus:ring-blue-500/10" placeholder="Nhập mã 6 số">
-                                <button class="shrink-0 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white">Xác nhận</button>
+                                <button class="shrink-0 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">Xác nhận</button>
                             </form>
                         @endif
                     @else
@@ -215,13 +217,13 @@
                 </div>
 
                 {{-- Thiết bị đăng nhập --}}
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
                     <div class="mb-5 flex items-center justify-between">
                         <h3 class="text-lg font-bold text-slate-900">Thiết bị đăng nhập</h3>
                         <form method="POST" action="{{ route('profile.sessions.destroy-others') }}">
                             @csrf
                             @method('DELETE')
-                            <button class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">Đăng xuất thiết bị khác</button>
+                            <button class="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300">Đăng xuất thiết bị khác</button>
                         </form>
                     </div>
                     <div class="space-y-3">
@@ -244,8 +246,8 @@
                 </div>
 
                 {{-- Activity Timeline --}}
-                <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-bold text-slate-900">Activity Timeline</h3>
+                <div class="rounded-2xl border border-blue-100 bg-white p-6 shadow-[0_8px_25px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
+                    <h3 class="text-lg font-bold text-slate-900">Hoạt động gần đây</h3>
                     <div class="mt-5 space-y-4">
                         @forelse($activityLogs as $log)
                             <div class="flex gap-3">

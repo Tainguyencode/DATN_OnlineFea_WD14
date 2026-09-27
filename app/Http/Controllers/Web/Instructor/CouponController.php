@@ -70,6 +70,20 @@ class CouponController extends Controller
             ->with('success', "Tạo mã giảm giá {$data['code']} thành công!");
     }
 
+    public function show(Coupon $coupon): View
+    {
+        $this->authorizeCouponOwner($coupon);
+
+        $coupon->load(['course:id,title,slug,thumbnail,price,discount_price']);
+
+        $orders = $coupon->orders()
+            ->with(['user:id,name,email,avatar'])
+            ->latest()
+            ->paginate(10);
+
+        return view('instructor.coupons.show', compact('coupon', 'orders'));
+    }
+
     public function edit(Coupon $coupon): View
     {
         $this->authorizeCouponOwner($coupon);

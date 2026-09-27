@@ -2,36 +2,13 @@
     <div class="space-y-6" x-data="{ 
         rejectModal: false, 
         rejectUrl: '', 
-        rejectName: '',
-        selectedIds: [],
-        applicationsCount: {{ $applications->count() }},
-        toggleSelectAll() {
-            if (this.selectedIds.length === this.applicationsCount) {
-                this.selectedIds = [];
-            } else {
-                this.selectedIds = Array.from(document.querySelectorAll('.row-checkbox')).map(el => parseInt(el.value));
-            }
-        },
-        isAllSelected() {
-            return this.selectedIds.length > 0 && this.selectedIds.length === this.applicationsCount;
-        },
-        toggleSelect(id) {
-            const idx = this.selectedIds.indexOf(id);
-            if (idx > -1) {
-                this.selectedIds.splice(idx, 1);
-            } else {
-                this.selectedIds.push(id);
-            }
-        },
-        clearSelection() {
-            this.selectedIds = [];
-        }
+        rejectName: ''
     }">
         {{-- ========================================================================= --}}
         {{-- HEADER SECTION WITH CONFIG BUTTON                                         --}}
         {{-- ========================================================================= --}}
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Thống kê & Quản lý ứng tuyển</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Quản lý ứng tuyển giảng viên</h2>
             <div>
                 <a href="{{ route('admin.instructors.requirements.index') }}"
                    class="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs sm:text-sm font-bold text-[#0056D2] shadow-sm transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60">
@@ -47,7 +24,68 @@
         {{-- ========================================================================= --}}
         {{-- SUMMARY STAT TABLE                                                        --}}
         {{-- ========================================================================= --}}
-        <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        @if(false) {{-- Statistics moved to admin.instructors.statistics --}}
+        <div class="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,.75fr)]">
+            <section class="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                        <h3 class="text-base font-black text-slate-950 dark:text-white">Biểu đồ tăng trưởng giảng viên</h3>
+                        <p class="mt-1 text-xs text-slate-400">Dữ liệu đăng ký mới và phê duyệt theo 12 tháng của năm {{ $growthYear }}</p>
+                    </div>
+                    <div class="flex flex-wrap items-end gap-2">
+                        <form method="GET" action="{{ route('admin.instructors.applications.index') }}">
+                            @foreach(request()->except(['growth_year', 'page']) as $key => $value)
+                                @if(is_scalar($value))
+                                    <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                                @endif
+                            @endforeach
+                            <label class="block rounded-xl border border-blue-100 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                                <span class="mb-1 block text-[10px] font-semibold text-slate-400">Xem theo năm</span>
+                                <select name="growth_year" onchange="this.form.submit()" class="min-w-24 border-0 bg-transparent p-0 text-sm font-black text-blue-700 focus:ring-0 dark:text-blue-300">
+                                    @foreach($growthYears as $year)
+                                        <option value="{{ $year }}" @selected($growthYear === $year)>{{ $year }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                        </form>
+                        <div class="rounded-xl bg-blue-50 px-3 py-2 dark:bg-blue-500/10">
+                            <p class="text-[10px] font-semibold text-slate-400">Năm {{ $growthYear }}</p>
+                            <p class="mt-0.5 text-sm font-black text-slate-900 dark:text-white">+{{ $yearRegistered }} giảng viên</p>
+                        </div>
+                        <div class="rounded-xl px-3 py-2 {{ $growthRate >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-red-50 dark:bg-red-500/10' }}">
+                            <p class="text-[10px] font-semibold text-slate-400">So với năm {{ $growthYear - 1 }}</p>
+                            <p class="mt-0.5 text-sm font-black {{ $growthRate >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300' }}">{{ $growthRate >= 0 ? '↑' : '↓' }} {{ number_format(abs($growthRate), 1, ',', '.') }}%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-5 h-[300px]">
+                    <canvas id="instructorGrowthChart" role="img" aria-label="Biểu đồ tăng trưởng giảng viên theo tháng"></canvas>
+                </div>
+            </section>
+
+            <aside class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                @php
+                    $growthCards = [
+                        ['all', 'Tổng giảng viên', $counts['all'], 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'],
+                        ['pending', 'Đang chờ duyệt', $counts['pending'], 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'],
+                        ['new_updates', 'Có cập nhật mới', $counts['new_updates'], 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'],
+                        ['approved', 'Đã phê duyệt', $counts['approved'], 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'],
+                        ['rejected', 'Đã từ chối', $counts['rejected'], 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'],
+                    ];
+                @endphp
+                @foreach($growthCards as $card)
+                    <a href="{{ $card[0] === 'all' ? route('admin.instructors.applications.index', request()->except('status')) : route('admin.instructors.applications.index', array_merge(request()->query(), ['status' => $card[0]])) }}" class="group flex items-center justify-between rounded-2xl border border-blue-100 bg-white px-4 py-3.5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-xl {{ $card[3] }} text-sm font-black">{{ $card[2] }}</span>
+                            <span class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ $card[1] }}</span>
+                        </div>
+                        <svg class="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                @endforeach
+            </aside>
+        </div>
+
+        <div class="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                     <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
@@ -160,11 +198,13 @@
             </div>
         </div>
 
+        @endif
+
         {{-- ========================================================================= --}}
         {{-- FILTER BAR (ADVANCED FILTER)                                              --}}
         {{-- ========================================================================= --}}
         <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <form method="GET" action="{{ route('admin.instructors.applications.index') }}" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end">
+            <form method="GET" action="{{ route('admin.instructors.applications.index') }}" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-6">
                 {{-- Ô tìm kiếm --}}
                 <div class="space-y-1">
                     <label for="search" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tìm kiếm</label>
@@ -194,10 +234,17 @@
                     </select>
                 </div>
 
-                {{-- Ô ngày đăng ký --}}
+                {{-- Khoảng ngày đăng ký --}}
                 <div class="space-y-1">
-                    <label for="date" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ngày đăng ký</label>
-                    <input type="date" id="date" name="date" value="{{ $date }}" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <label for="date_from" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Từ ngày</label>
+                    <input type="date" id="date_from" name="date_from" value="{{ $dateFrom }}" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    @error('date_from')<p class="text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
+                </div>
+
+                <div class="space-y-1">
+                    <label for="date_to" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Đến ngày</label>
+                    <input type="date" id="date_to" name="date_to" value="{{ $dateTo }}" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    @error('date_to')<p class="text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
                 </div>
 
                 {{-- Nút hành động --}}
@@ -249,28 +296,6 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- BULK ACTIONS BAR (UI ONLY)                                                --}}
-        {{-- ========================================================================= --}}
-        <div x-show="selectedIds.length > 0" x-cloak class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-blue-50 p-4 border border-blue-100 dark:bg-blue-950/40 dark:border-blue-900/60 transition duration-200">
-            <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-[#0056D2] dark:text-blue-300">
-                    Đã chọn <span x-text="selectedIds.length"></span> giảng viên
-                </span>
-            </div>
-            <div class="flex items-center gap-2">
-                <button type="button" disabled class="opacity-50 cursor-not-allowed inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition">
-                    Duyệt đã chọn
-                </button>
-                <button type="button" disabled class="opacity-50 cursor-not-allowed inline-flex items-center gap-1 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition">
-                    Từ chối đã chọn
-                </button>
-                <button type="button" @click="clearSelection()" class="inline-flex items-center gap-1 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 px-3.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 transition">
-                    Bỏ chọn
-                </button>
-            </div>
-        </div>
-
-        {{-- ========================================================================= --}}
         {{-- APPLICATIONS TABLE                                                        --}}
         {{-- ========================================================================= --}}
         <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -278,12 +303,9 @@
                 <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                     <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                         <tr>
-                            <th class="px-4 py-4 w-12 text-center">
-                                <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" :checked="isAllSelected()" @change="toggleSelectAll()">
-                            </th>
-                            <th class="px-4 py-4 w-16 text-center">STT</th>
                             <th class="px-6 py-4 font-black">Giảng viên</th>
                             <th class="px-6 py-4 font-black">Chuyên môn</th>
+                            <th class="px-6 py-4 font-black">Minh chứng</th>
                             <th class="px-6 py-4 font-black">Kinh nghiệm giảng dạy</th>
                             <th class="px-6 py-4 font-black">Trạng thái</th>
                             <th class="px-6 py-4 font-black">Ngày đăng ký</th>
@@ -293,16 +315,6 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @forelse($applications as $app)
                             <tr class="transition duration-150 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 {{ $app->needs_admin_review ? 'bg-rose-50/30 dark:bg-rose-950/10' : '' }}">
-                                {{-- Checkbox --}}
-                                <td class="px-4 py-4 text-center">
-                                    <input type="checkbox" value="{{ $app->id }}" class="row-checkbox rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" :checked="selectedIds.includes({{ $app->id }})" @change="toggleSelect({{ $app->id }})">
-                                </td>
-
-                                {{-- STT --}}
-                                <td class="px-4 py-4 text-center font-bold text-slate-400 dark:text-slate-500">
-                                    {{ ($applications->currentPage() - 1) * $applications->perPage() + $loop->iteration }}
-                                </td>
-
                                 {{-- Giảng viên (Gộp basic info: Avatar, Name, Username, Email, Phone) --}}
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
@@ -348,6 +360,29 @@
                                     </div>
                                 </td>
 
+                                {{-- Minh chứng (Certificate Progress) --}}
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @php
+                                        $progress = $app->certificate_progress ?? null;
+                                        $reqCount = $progress['required_count'] ?? 0;
+                                        $completedCount = $progress['completed_count'] ?? 0;
+                                        $pct = $progress['percentage'] ?? null;
+                                    @endphp
+                                    @if($reqCount > 0)
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                <span>{{ $completedCount }}/{{ $reqCount }}</span>
+                                                <span>{{ $pct !== null ? $pct.'%' : '0%' }}</span>
+                                            </div>
+                                            <div class="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                                <div class="h-full rounded-full transition-all duration-300 {{ ($pct ?? 0) >= 100 ? 'bg-emerald-500' : 'bg-blue-600' }}" style="width: {{ $pct ?? 0 }}%"></div>
+                                            </div>
+                                        </div>
+                                    @else
+                                        <span class="text-xs text-slate-400">Không bắt buộc</span>
+                                    @endif
+                                </td>
+
                                 {{-- Kinh nghiệm giảng dạy --}}
                                 <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
                                     {{ $app->instructorProfile?->experience ?? 'Chưa cập nhật' }}
@@ -372,9 +407,13 @@
                                         <span class="inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 dark:bg-rose-900/40 dark:text-rose-300">
                                              Từ chối
                                         </span>
-                                    @else
+                                    @elseif($app->isGlobalReviewPending())
                                         <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                                              Chờ duyệt
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                             Chưa gửi xét duyệt
                                         </span>
                                     @endif
                                 </td>
@@ -407,7 +446,7 @@
                                         </div>
 
                                         {{-- Duyệt --}}
-                                        @if($app->instructor_status !== 'approved')
+                                        @if($app->isGlobalReviewPending() && $app->instructorApplication?->isPending())
                                             <div class="relative group">
                                                 <form method="POST" action="{{ route('admin.instructors.applications.approve', $app) }}" class="inline">
                                                     @csrf
@@ -425,7 +464,7 @@
                                         @endif
 
                                         {{-- Từ chối --}}
-                                        @if($app->instructor_status !== 'rejected')
+                                        @if($app->isGlobalReviewPending() && $app->instructorApplication?->isPending())
                                             <div class="relative group">
                                                 <button type="button"
                                                         @click="rejectModal = true; rejectUrl = '{{ route('admin.instructors.applications.reject', $app) }}'; rejectName = '{{ $app->name }}'"
@@ -494,4 +533,73 @@
             </div>
         </div>
     </div>
+
+    @if(false) {{-- Chart script moved to admin.instructors.statistics --}}
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!window.Chart) return;
+
+        const dark = document.documentElement.classList.contains('dark');
+        const text = dark ? '#cbd5e1' : '#64748b';
+        const grid = dark ? 'rgba(148,163,184,.12)' : 'rgba(148,163,184,.18)';
+        const growthData = @json($growthData);
+
+        new Chart(document.getElementById('instructorGrowthChart'), {
+            type: 'bar',
+            data: {
+                labels: growthData.map(item => item.label),
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Đăng ký mới',
+                        data: growthData.map(item => item.registered),
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6,
+                        maxBarThickness: 28,
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Được phê duyệt',
+                        data: growthData.map(item => item.approved),
+                        backgroundColor: '#22c55e',
+                        borderRadius: 6,
+                        maxBarThickness: 28,
+                    },
+                    {
+                        type: 'line',
+                        label: 'Tổng tích lũy',
+                        data: growthData.map(item => item.cumulative),
+                        borderColor: '#1e3a8a',
+                        backgroundColor: '#1e3a8a',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: .35,
+                        yAxisID: 'y1',
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        labels: { color: text, usePointStyle: true, boxWidth: 9, font: { size: 10 } },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: items => growthData[items[0].dataIndex]?.full_label ?? items[0].label,
+                        },
+                    },
+                },
+                scales: {
+                    x: { ticks: { color: text }, grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } },
+                    y1: { beginAtZero: true, position: 'right', ticks: { color: text, precision: 0 }, grid: { display: false } },
+                },
+            },
+        });
+    });
+    </script>
+    @endif
 </x-admin-layout>

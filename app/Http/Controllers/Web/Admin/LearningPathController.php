@@ -14,6 +14,11 @@ use Illuminate\View\View;
 
 class LearningPathController extends Controller
 {
+    public function show(LearningPath $learningPath): RedirectResponse
+    {
+        return redirect()->route('admin.learning-paths.edit', $learningPath);
+    }
+
     public function index(Request $request): View
     {
         $query = LearningPath::withCount('courses');

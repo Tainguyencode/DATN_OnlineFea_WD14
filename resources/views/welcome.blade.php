@@ -10,29 +10,12 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-        @vite(['resources/css/app.css', 'resources/css/welcome.css', 'resources/js/app.js'])
+        @include('partials.theme-init')
+    @vite(['resources/css/app.css', 'resources/css/welcome.css', 'resources/js/app.js'])
     </head>
     <body class="fea-welcome-page">
         <div class="landing-shell">
-            <header class="landing-nav" aria-label="Điều hướng chính">
-                <a href="{{ route('home') }}" class="brand-link" aria-label="Fea LMS Platform">
-                    <span class="brand-mark">Fea</span>
-                    <span class="brand-text">
-                        <strong>Fea</strong>
-                        <small>LMS Platform</small>
-                    </span>
-                </a>
-
-                <nav class="nav-links" aria-label="Liên kết nhanh">
-                    <a href="{{ route('courses.index') }}">Khóa học</a>
-                    <a href="#features">Tính năng</a>
-                    @guest
-                        <a href="{{ route('login') }}">Đăng nhập</a>
-                    @else
-                        <a href="{{ auth()->user()->dashboardUrl() }}">Dashboard</a>
-                    @endguest
-                </nav>
-            </header>
+            <x-public.header />
 
             <main>
                 <section class="hero-section" aria-labelledby="welcome-title">

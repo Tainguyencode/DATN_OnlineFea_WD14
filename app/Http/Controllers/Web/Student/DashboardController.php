@@ -13,10 +13,11 @@ class DashboardController extends Controller
 {
     public function index(Request $request): View
     {
-        $user = $request->user();
+        $user = $request->user() ?? auth()->user();
+        $userId = $user?->id;
 
         $summary = Enrollment::query()
-            ->where('user_id', $user->id)
+            ->where('user_id', $userId)
             ->withLearningAccess()
             ->selectRaw('COUNT(*) as enrolled')
             ->selectRaw('SUM(CASE WHEN completed_at IS NULL AND progress_percent < 100 THEN 1 ELSE 0 END) as in_progress')
@@ -25,7 +26,7 @@ class DashboardController extends Controller
             ->first();
 
         $continueLearning = Enrollment::query()
-            ->where('user_id', $user->id)
+            ->where('user_id', $userId)
             ->withLearningAccess()
             ->whereNull('completed_at')
             ->where('progress_percent', '<', 100)

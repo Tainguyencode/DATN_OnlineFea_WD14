@@ -4,12 +4,15 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\InstructorApplication;
 use App\Models\User;
 use App\Services\RoleSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class InstructorRegistrationWorkflowTest extends TestCase
@@ -18,19 +21,39 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
     private const PASSWORD = 'Password1!';
 
+    private string $localStorageRoot;
+
+    private string $publicStorageRoot;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        Storage::fake('local');
-        Storage::fake('public');
+        $this->localStorageRoot = storage_path('framework/testing/instructor-registration/local/'.Str::uuid());
+        $this->publicStorageRoot = storage_path('framework/testing/instructor-registration/public/'.Str::uuid());
+        config([
+            'filesystems.disks.local.root' => $this->localStorageRoot,
+            'filesystems.disks.public.root' => $this->publicStorageRoot,
+        ]);
+        Storage::forgetDisk('local');
+        Storage::forgetDisk('public');
         app(RoleSyncService::class)->ensurePrimaryRolesExist();
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        Storage::forgetDisk('public');
+        File::deleteDirectory(dirname($this->localStorageRoot));
+        File::deleteDirectory(dirname($this->publicStorageRoot));
+
+        parent::tearDown();
     }
 
     /**
      * CASE 1: Instructor đăng ký -> verify email -> vào Dashboard được ngay.
      */
-    public function test_case_1_verified_instructor_can_access_dashboard_immediately(): void
+    public function test_case_1_verified_pending_instructor_is_redirected_to_profile(): void
     {
         $user = User::factory()->create([
             'role' => 'instructor',
@@ -41,14 +64,13 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('instructor.dashboard'))
-            ->assertOk()
-            ->assertSee('Dashboard Giảng viên');
+            ->assertRedirect(route('instructor.profile'));
     }
 
     /**
      * CASE 2: Instructor chưa approved (pending) -> tạo khóa học được.
      */
-    public function test_case_2_pending_instructor_can_create_course(): void
+    public function test_case_2_pending_instructor_cannot_create_course(): void
     {
         $user = User::factory()->create([
             'role' => 'instructor',
@@ -60,7 +82,11 @@ class InstructorRegistrationWorkflowTest extends TestCase
         $category = Category::create([
             'name' => 'Lập trình',
             'slug' => 'lap-trinh',
-            'is_active' => true,
+            'status' => true,
+        ]);
+
+        $user->instructorProfile()->create([
+            'category_id' => $category->id,
         ]);
 
         $response = $this->actingAs($user)
@@ -74,7 +100,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $this->assertDatabaseHas('courses', [
+        $this->assertDatabaseMissing('courses', [
             'instructor_id' => $user->id,
             'title' => 'Khóa học Laravel 12 Pro',
         ]);
@@ -83,7 +109,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
     /**
      * CASE 3: Instructor chưa approved -> truy cập curriculum / quản lý bài học được.
      */
-    public function test_case_3_pending_instructor_can_manage_curriculum(): void
+    public function test_case_3_pending_instructor_cannot_manage_curriculum(): void
     {
         $user = User::factory()->create([
             'role' => 'instructor',
@@ -103,8 +129,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('instructor.courses.curriculum', $course))
-            ->assertOk()
-            ->assertSee('Khóa học Node.js Master');
+            ->assertRedirect(route('instructor.profile'));
     }
 
     /**
@@ -231,6 +256,10 @@ class InstructorRegistrationWorkflowTest extends TestCase
         $category = Category::create(['name' => 'Lập trình', 'slug' => 'lap-trinh-c8', 'status' => true]);
         $profile = $instructor->instructorProfile()->create(['category_id' => $category->id]);
         $profile->teachingCategories()->attach($category->id, ['is_primary' => true]);
+        Storage::disk('public')->put('instructor_cvs/case-8.pdf', 'pdf');
+        $profile->update(['cv' => 'instructor_cvs/case-8.pdf']);
+        $instructor->update(['submitted_for_review_at' => now(), 'needs_admin_review' => true]);
+        InstructorApplication::create(['user_id' => $instructor->id, 'status' => 'pending', 'cv_path' => $profile->cv]);
 
         $this->actingAs($admin)
             ->post(route('admin.instructors.applications.approve', $instructor))
@@ -246,7 +275,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
     /**
      * CASE 9: Dashboard hiển thị cảnh báo cần cập nhật hồ sơ sau 7 ngày khi pending.
      */
-    public function test_case_9_dashboard_shows_pending_warning_banner(): void
+    public function test_case_9_pending_instructor_uses_profile_status_page_instead_of_dashboard(): void
     {
         $instructor = User::factory()->create([
             'role' => 'instructor',
@@ -257,8 +286,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
 
         $this->actingAs($instructor)
             ->get(route('instructor.dashboard'))
-            ->assertOk()
-            ->assertSee('Hồ sơ giảng viên đang chờ xét duyệt.');
+            ->assertRedirect(route('instructor.profile'));
     }
 
     /**
@@ -464,6 +492,7 @@ class InstructorRegistrationWorkflowTest extends TestCase
             'role' => 'instructor',
             'instructor_status' => 'pending',
             'needs_admin_review' => true,
+            'submitted_for_review_at' => now(),
             'email_verified_at' => now(),
         ]);
 
@@ -482,9 +511,9 @@ class InstructorRegistrationWorkflowTest extends TestCase
     }
 
     /**
-     * CASE 18: Instructor updates profile / uploads document -> sets needs_admin_review = true, Admin views -> sets to false
+     * CASE 18: Upload document only creates a draft; it does not notify or queue admin review before submission.
      */
-    public function test_case_18_instructor_update_marks_needs_admin_review_and_admin_view_clears_it(): void
+    public function test_case_18_upload_document_keeps_admin_review_queue_clean_until_submission(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
         $instructor = User::factory()->create([
@@ -503,15 +532,84 @@ class InstructorRegistrationWorkflowTest extends TestCase
             ])
             ->assertRedirect();
 
-        $this->assertTrue($instructor->fresh()->needs_admin_review);
-
-        // Admin views the detail page
-        $this->actingAs($admin)
-            ->get(route('admin.instructors.applications.show', $instructor))
-            ->assertOk()
-            ->assertSee('Cập nhật mới');
-
         $this->assertFalse($instructor->fresh()->needs_admin_review);
-        $this->assertNotNull($instructor->fresh()->admin_last_reviewed_at);
+        $this->assertSame('draft', $instructor->instructorCertificates()->firstOrFail()->status);
+    }
+
+    /**
+     * CASE 19: Test unified filters: status, date_from, date_to, category_id
+     */
+    public function test_case_19_unified_instructor_applications_filter(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+        $catWeb = Category::create(['name' => 'Web Development', 'slug' => 'web-dev', 'status' => true]);
+        $catMobile = Category::create(['name' => 'Mobile Development', 'slug' => 'mobile-dev', 'status' => true]);
+
+        $instPending = User::factory()->create([
+            'name' => 'Pending Instructor',
+            'role' => 'instructor',
+            'instructor_status' => 'pending',
+            'submitted_for_review_at' => now(),
+            'created_at' => '2026-01-10 10:00:00',
+            'email_verified_at' => now(),
+        ]);
+        $instPending->instructorProfile()->create([
+            'category_id' => $catWeb->id,
+            'specialty' => 'Laravel Expert',
+        ]);
+
+        $instApproved = User::factory()->create([
+            'name' => 'Approved Instructor',
+            'role' => 'instructor',
+            'instructor_status' => 'approved',
+            'created_at' => '2026-02-15 10:00:00',
+            'email_verified_at' => now(),
+        ]);
+        $instApproved->instructorProfile()->create([
+            'category_id' => $catMobile->id,
+            'specialty' => 'Flutter Developer',
+        ]);
+
+        // Filter status=pending
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['status' => 'pending']));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+
+        // Filter status=approved
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['status' => 'approved']));
+        $res->assertOk();
+        $res->assertSee('Approved Instructor');
+        $res->assertDontSee('Pending Instructor');
+
+        // Filter date_from = 2026-02-01
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['date_from' => '2026-02-01']));
+        $res->assertOk();
+        $res->assertSee('Approved Instructor');
+        $res->assertDontSee('Pending Instructor');
+
+        // Filter date_to = 2026-01-31
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['date_to' => '2026-01-31']));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+
+        // Filter category_id = catWeb
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', ['category_id' => $catWeb->id]));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
+
+        // Filter combined
+        $res = $this->actingAs($admin)->get(route('admin.instructors.applications.index', [
+            'status' => 'pending',
+            'date_from' => '2026-01-01',
+            'date_to' => '2026-01-31',
+            'category_id' => $catWeb->id,
+        ]));
+        $res->assertOk();
+        $res->assertSee('Pending Instructor');
+        $res->assertDontSee('Approved Instructor');
     }
 }

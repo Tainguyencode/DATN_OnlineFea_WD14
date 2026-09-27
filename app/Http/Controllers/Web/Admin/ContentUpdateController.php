@@ -6,15 +6,18 @@ use App\Exceptions\HistoricalQuizDeletionException;
 use App\Http\Controllers\Controller;
 use App\Models\ContentUpdate;
 use App\Models\QuizVersion;
+use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ContentUpdateController extends Controller
 {
     public function __construct(
-        protected ContentUpdateService $contentUpdateService
+        protected ContentUpdateService $contentUpdateService,
+        protected ContentUpdateDiffService $contentUpdateDiffService,
     ) {}
 
     public function index(Request $request): View
@@ -34,6 +37,7 @@ class ContentUpdateController extends Controller
 
         $statusOptions = [
             'pending' => 'Chờ duyệt',
+            'draft' => 'Bản nháp',
             'approved' => 'Đã duyệt',
             'rejected' => 'Đã từ chối',
         ];
@@ -42,6 +46,7 @@ class ContentUpdateController extends Controller
             ContentUpdate::TYPE_COURSE => 'Khóa học',
             ContentUpdate::TYPE_CHAPTER => 'Chương học',
             ContentUpdate::TYPE_LESSON => 'Bài học',
+            ContentUpdate::TYPE_ASSIGNMENT => 'Bài tập',
             ContentUpdate::TYPE_QUIZ => 'Quiz',
         ];
 
@@ -56,6 +61,9 @@ class ContentUpdateController extends Controller
             ->get()
             ->keyBy('id');
 
+        $updateSummaries = $updates->getCollection()
+            ->mapWithKeys(fn (ContentUpdate $update) => [$update->id => $this->contentUpdateDiffService->summary($update)]);
+
         return view('admin.content-updates.index', compact(
             'updates',
             'status',
@@ -64,15 +72,30 @@ class ContentUpdateController extends Controller
             'statusOptions',
             'typeOptions',
             'quizCandidates',
+            'updateSummaries',
         ));
+    }
+
+    public function show(ContentUpdate $contentUpdate): View
+    {
+        $contentUpdate->load(['course.category', 'creator:id,name,email', 'reviewer:id,name,email']);
+
+        return view('admin.content-updates.show', [
+            'contentUpdate' => $contentUpdate,
+            'diff' => $this->contentUpdateDiffService->build($contentUpdate),
+        ]);
     }
 
     public function approve(ContentUpdate $contentUpdate): RedirectResponse
     {
         try {
             $this->contentUpdateService->applyApprovedUpdate($contentUpdate, auth()->user());
-        } catch (HistoricalQuizDeletionException $exception) {
-            return back()->withErrors(['content_update' => $exception->getMessage()]);
+        } catch (HistoricalQuizDeletionException|ValidationException $exception) {
+            $message = $exception instanceof ValidationException
+                ? ($exception->validator->errors()->first() ?: $exception->getMessage())
+                : $exception->getMessage();
+
+            return back()->withErrors(['content_update' => $message]);
         }
 
         return back()->with(
@@ -92,7 +115,13 @@ class ContentUpdateController extends Controller
             'rejection_reason.min' => 'Lý do từ chối phải có ít nhất 5 ký tự.',
         ]);
 
-        $this->contentUpdateService->rejectUpdate($contentUpdate, auth()->user(), $request->input('rejection_reason'));
+        try {
+            $this->contentUpdateService->rejectUpdate($contentUpdate, auth()->user(), $request->input('rejection_reason'));
+        } catch (ValidationException $exception) {
+            return back()->withErrors([
+                'content_update' => $exception->validator->errors()->first() ?: $exception->getMessage(),
+            ]);
+        }
 
         return back()->with('success', 'Đã từ chối bản cập nhật nội dung.');
     }

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -105,6 +107,7 @@ class CourseCategoryManagementTest extends TestCase
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
         $this->category('Web Development', $parent);
+        $this->registerTeachingCategory($instructor, $parent);
 
         $response = $this->actingAs($instructor)->get(route('instructor.courses.create'));
 
@@ -118,6 +121,7 @@ class CourseCategoryManagementTest extends TestCase
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
         $child = $this->category('Web Development', $parent);
+        $this->registerTeachingCategory($instructor, $parent);
 
         $response = $this->actingAs($instructor)->post(route('instructor.courses.store'), [
             'title' => 'Laravel Basics',
@@ -142,6 +146,7 @@ class CourseCategoryManagementTest extends TestCase
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
         $this->category('Web Development', $parent);
+        $this->registerTeachingCategory($instructor, $parent);
 
         $response = $this->actingAs($instructor)
             ->from(route('instructor.courses.create'))
@@ -155,6 +160,7 @@ class CourseCategoryManagementTest extends TestCase
     {
         $instructor = $this->user('instructor');
         $leafCategory = $this->category('Programming');
+        $this->registerTeachingCategory($instructor, $leafCategory);
 
         $response = $this->actingAs($instructor)
             ->post(route('instructor.courses.store'), $this->coursePayload($leafCategory->id));
@@ -170,6 +176,7 @@ class CourseCategoryManagementTest extends TestCase
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
         $child = $this->category('Web Development', $parent, false);
+        $this->registerTeachingCategory($instructor, $parent);
 
         $response = $this->actingAs($instructor)
             ->from(route('instructor.courses.create'))
@@ -184,6 +191,7 @@ class CourseCategoryManagementTest extends TestCase
         $instructor = $this->user('instructor');
         $parent = $this->category('Programming');
         $child = $this->category('Web Development', $parent);
+        $this->registerTeachingCategory($instructor, $parent);
         $course = $this->course($instructor, $child);
 
         $response = $this->actingAs($instructor)->get(route('instructor.courses.edit', $course));
@@ -237,6 +245,15 @@ class CourseCategoryManagementTest extends TestCase
             'slug' => Str::slug($name),
             'status' => $status,
             'sort_order' => 1,
+        ]);
+    }
+
+    private function registerTeachingCategory(User $instructor, Category $category): void
+    {
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
         ]);
     }
 

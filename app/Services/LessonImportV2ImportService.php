@@ -70,7 +70,7 @@ class LessonImportV2ImportService
             $createData = [
                 ...$lessonRow,
                 'sort_order' => $nextSortOrder + (int) $lessonRow['relative_order'],
-                'status' => Lesson::STATUS_DRAFT,
+                'status' => Lesson::STATUS_PUBLISHED,
                 'is_preview' => false,
             ];
             unset($createData['row_number'], $createData['relative_order'], $createData['lesson_code']);

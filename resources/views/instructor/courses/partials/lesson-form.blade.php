@@ -24,13 +24,24 @@
     $signPartUrl = $courseModel ? route('instructor.courses.s3.multipart.sign-part', $courseModel) : '';
     $completeMultipartUrl = $courseModel ? route('instructor.courses.s3.multipart.complete', $courseModel) : '';
     $abortMultipartUrl = $courseModel ? route('instructor.courses.s3.multipart.abort', $courseModel) : '';
+    $activeLessonUpdate = $lessonUpdate ?? $lesson?->draft_update ?? null;
+    $activeLessonVersion = $activeLessonUpdate && $lesson?->id
+        ? \App\Models\LessonVersion::query()
+            ->where('content_update_id', $activeLessonUpdate->id)
+            ->where('lesson_id', $lesson->id)
+            ->first()
+        : null;
+    $publishedLessonVersion = $courseModel?->isPublished() && $lesson?->id && ! $lesson?->is_draft_create
+        ? \App\Models\Lesson::query()->find($lesson->id)?->publishedVersion()->first()
+        : null;
+    $visibleVideo = $publishedLessonVersion ?? $lesson;
 @endphp
 
 <form method="POST"
       action="{{ $action }}"
       enctype="multipart/form-data"
       @submit="submitLessonForm($event)"
-      class="space-y-4"
+      class="curriculum-lesson-form space-y-4"
       x-data="createLessonFormState({
           selectedType: @js($selectedType),
           s3Key: @js($valueFor('s3_key', $lesson->original_video_key ?? '')),
@@ -43,6 +54,8 @@
           courseId: @js($courseModel?->id),
           lessonId: @js($lesson?->id),
           maxVideoBytes: @js((int) config('video.upload.max_bytes')),
+          contentUpdateId: @js($activeLessonUpdate?->id),
+          draftVersionNumber: @js($activeLessonVersion?->version_number),
           createUrl: @js($createMultipartUrl),
           signPartUrl: @js($signPartUrl),
           completeUrl: @js($completeMultipartUrl),
@@ -60,6 +73,14 @@
     <input type="hidden" name="video_original_name" x-model="videoOriginalName">
     <input type="hidden" name="video_size" x-model="videoSize">
     <input type="hidden" name="video_mime" x-model="videoMime">
+    <input type="hidden" name="content_update_id" x-model="contentUpdateId">
+
+    <template x-if="draftVersionNumber">
+        <div class="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-indigo-950" role="status" aria-live="polite">
+            <p class="text-sm font-extrabold">Đang chỉnh sửa bản nháp V<span x-text="draftVersionNumber"></span></p>
+            <p class="mt-1 text-xs leading-5 text-indigo-700">Video đang xuất bản vẫn được giữ nguyên cho học viên cho đến khi Admin duyệt bản này.</p>
+        </div>
+    </template>
 
     <div class="rounded-lg border border-slate-200 bg-white p-4">
         <div class="grid gap-4 lg:grid-cols-2">
@@ -77,7 +98,7 @@
                         class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition-colors duration-200 cursor-pointer @error('type', $bagName) border-rose-500 focus:border-rose-500 @else border-slate-300 focus:border-emerald-500 @enderror">
                     <option value="">Chọn loại bài học</option>
                     @foreach($lessonTypes as $value => $label)
-                        <option value="{{ $value }}">{{ $label }}</option>
+                        <option value="{{ $value }}" @selected($selectedType === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
                 @error('type', $bagName) <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
@@ -143,7 +164,7 @@
                             </svg>
                         </div>
                         <span class="text-sm font-bold text-slate-800">Nhấn để chọn video cho bài học này</span>
-                        <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV — tối đa {{ number_format(config('video.upload.max_bytes') / 1048576, 0) }}MB</span>
+                        <span class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, WEBM, MKV — tối đa {{ config('video.upload.max_bytes') >= 1073741824 ? number_format(config('video.upload.max_bytes') / 1073741824, 0).' GB' : number_format(config('video.upload.max_bytes') / 1048576, 0).' MB' }}</span>
                         <input type="file"
                                x-ref="s3FileInput"
                                accept=".mp4,.mov,.avi,.webm,.m4v,.mkv,video/*"
@@ -234,13 +255,16 @@
         </div>
 
         {{-- Video hiện tại của bài học (nếu đang chỉnh sửa) --}}
-        @if($lesson?->video_path || $lesson?->original_video_key)
+        @if($visibleVideo?->video_path || $visibleVideo?->original_video_key)
             <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
                 <div class="font-bold text-xs flex items-center gap-2 text-slate-800">
                     <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                    <span>Video hiện tại: {{ $lesson->video_original_name ?: basename($lesson->original_video_key ?: $lesson->video_path) }}</span>
-                    @if($formatVideoSize($lesson->video_size))
-                        <span class="text-slate-500 font-normal">({{ $formatVideoSize($lesson->video_size) }})</span>
+                    <span>
+                        {{ $publishedLessonVersion ? 'Video đang xuất bản (V'.$publishedLessonVersion->version_number.')' : 'Video hiện tại' }}:
+                        {{ $visibleVideo->video_original_name ?: basename($visibleVideo->original_video_key ?: $visibleVideo->video_path) }}
+                    </span>
+                    @if($formatVideoSize($visibleVideo->video_size))
+                        <span class="text-slate-500 font-normal">({{ $formatVideoSize($visibleVideo->video_size) }})</span>
                     @endif
                 </div>
             </div>

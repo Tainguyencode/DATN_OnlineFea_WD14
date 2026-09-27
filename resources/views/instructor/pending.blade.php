@@ -202,8 +202,21 @@
                         </div>
                     </div>
 
-                    {{-- Resubmit Form --}}
                     <div class="border-t border-slate-100 pt-6 dark:border-slate-800">
+                        <div class="rounded-2xl border border-violet-200 bg-violet-50 p-5 dark:border-violet-900/40 dark:bg-violet-950/20">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">Chỉnh sửa hồ sơ trước khi gửi lại</h3>
+                            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                Hồ sơ đã được mở khóa. Hãy cập nhật thông tin, CV, lĩnh vực giảng dạy và tài liệu trong trang hồ sơ; nút gửi lại sẽ xuất hiện khi hồ sơ đáp ứng đầy đủ yêu cầu.
+                            </p>
+                            <a href="{{ route('instructor.profile') }}" class="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700">
+                                Đi đến hồ sơ giảng viên
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            </a>
+                        </div>
+                    </div>
+
+                    {{-- Legacy resubmit form retained only as non-rendered fallback; the canonical workflow lives on the profile page. --}}
+                    <div class="hidden" aria-hidden="true">
                         <h3 class="mb-4 text-base font-bold text-slate-900 dark:text-white">Cập nhật thông tin và gửi lại hồ sơ</h3>
                         <form method="POST" action="{{ route('instructor.resubmit') }}" enctype="multipart/form-data" class="space-y-4">
                             @csrf

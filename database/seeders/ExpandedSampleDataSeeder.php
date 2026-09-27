@@ -13,7 +13,7 @@ use Illuminate\Database\Seeder;
 class ExpandedSampleDataSeeder extends Seeder
 {
     /**
-     * Seed the application's database with expanded sample data.
+     * Seed the application's database with expanded sample data and user roles.
      */
     public function run(): void
     {

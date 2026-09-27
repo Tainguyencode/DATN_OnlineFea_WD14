@@ -18,6 +18,7 @@ use App\Services\LearningProgressService;
 use App\Services\QuizContentService;
 use App\Services\QuizVersioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class LearningProgressTest extends TestCase
@@ -244,6 +245,7 @@ class LearningProgressTest extends TestCase
             'status' => 'published',
         ]);
         $this->enroll($student, $course);
+        Cache::put('reading-start:'.$student->id.':'.$lesson->id, now()->subSeconds(30)->timestamp, now()->addMinute());
 
         $this->actingAs($student)
             ->postJson(route('courses.lessons.progress', [$course, $lesson]), [
@@ -483,19 +485,18 @@ class LearningProgressTest extends TestCase
             ->assertJsonPath('data.1.is_recalled', true);
     }
 
-    public function test_course_chat_drawer_uses_ajax_handlers_instead_of_native_submission(): void
+    public function test_course_chat_surfaces_use_shared_canonical_thread_and_incremental_fallback(): void
     {
         $view = file_get_contents(resource_path('views/components/learning/course-chat-drawer.blade.php'));
         $instructorView = file_get_contents(resource_path('views/instructor/discussions/show.blade.php'));
         $script = file_get_contents(resource_path('js/course-chat.js'));
 
-        $this->assertStringContainsString('data-course-chat-send', $view);
-        $this->assertStringContainsString('data-course-chat-recall', $view);
-        $this->assertStringContainsString('data-course-chat-send', $instructorView);
-        $this->assertStringContainsString('data-course-chat-recall', $instructorView);
+        $this->assertStringContainsString('<x-chat.thread', $view);
+        $this->assertStringContainsString('<x-chat.thread', $instructorView);
         $this->assertStringContainsString("event.stopImmediatePropagation()", $script);
-        $this->assertStringContainsString('window.Echo.private(`course-discussion.${discussionId}`)', $script);
-        $this->assertStringContainsString('window.setInterval(() => syncCourseChat(root), 1500)', $script);
+        $this->assertStringContainsString('window.Echo.private(`course-discussion.${id}`)', $script);
+        $this->assertStringContainsString("url.searchParams.set('after', root.dataset.chatCursor)", $script);
+        $this->assertStringNotContainsString('setInterval(() => syncCourseChat(root), 1500)', $script);
     }
 
     /** @return array{0: User, 1: Course, 2: Lesson, 3: Quiz, 4: array<int, int>, 5: array<int, int>} */

@@ -86,7 +86,10 @@ class CourseCompletionService
                     $q->where('result', 'pass')
                         ->orWhere(function ($legacy) use ($assignment) {
                             $legacy->where('status', 'graded')
-                                ->where('score', '>=', $assignment->passing_score ?? 70);
+                                ->whereRaw(
+                                    'score >= COALESCE((SELECT passing_score FROM assignment_versions WHERE assignment_versions.id = submissions.assignment_version_id), ?)',
+                                    [$assignment->passing_score ?? 70],
+                                );
                         });
                 })
                 ->exists();

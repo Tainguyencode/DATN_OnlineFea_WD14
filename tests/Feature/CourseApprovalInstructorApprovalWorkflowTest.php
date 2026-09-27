@@ -6,16 +6,24 @@ use App\Enums\CourseStatus;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorApplication;
 use App\Models\InstructorProfile;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\CourseReviewService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('public');
+    }
 
     private function createInstructor(array $attributes = []): User
     {
@@ -31,7 +39,8 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
             'email_verified_at' => now(),
         ], $attributes));
 
-        InstructorProfile::firstOrCreate(
+        Storage::disk('public')->put("instructor_cvs/{$user->id}.pdf", 'pdf');
+        $profile = InstructorProfile::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'category_id' => $category->id,
@@ -42,8 +51,17 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
                 'bio' => 'Giảng viên',
                 'agree_information' => true,
                 'agree_terms' => true,
+                'cv' => "instructor_cvs/{$user->id}.pdf",
             ]
         );
+
+        if ($user->instructor_status === 'pending') {
+            $user->update(['submitted_for_review_at' => now(), 'needs_admin_review' => true]);
+            InstructorApplication::query()->updateOrCreate(
+                ['user_id' => $user->id],
+                ['status' => 'pending', 'cv_path' => $profile->cv],
+            );
+        }
 
         return $user;
     }
@@ -159,17 +177,12 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
      */
     public function test_case_3_unapproved_instructor_and_approved_course_not_visible_to_student(): void
     {
-        $admin = $this->createAdmin();
         $instructor = $this->createInstructor(['instructor_status' => 'pending']);
-        $course = $this->createCourse($instructor);
-
-        // Instructor submits course for review
-        app(CourseReviewService::class)->submitForReview($course, $instructor);
-        $this->assertEquals(CourseStatus::PendingReview->value, $course->fresh()->status);
-
-        // Admin approves course
-        $checklist = collect(config('course.admin_review_checklist'))->mapWithKeys(fn ($l, $k) => [$k => true])->all();
-        app(CourseReviewService::class)->approve($course->fresh(), $admin, $checklist, true);
+        $course = $this->createCourse($instructor, [
+            'status' => CourseStatus::Approved->value,
+            'is_published' => false,
+            'approved_at' => now(),
+        ]);
 
         $course->refresh();
         // Course content is approved internally, but not published because instructor is pending
@@ -191,12 +204,11 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
     {
         $admin = $this->createAdmin();
         $instructor = $this->createInstructor(['instructor_status' => 'pending']);
-        $course = $this->createCourse($instructor);
-
-        // Step 1: Submit & Admin approves course first
-        app(CourseReviewService::class)->submitForReview($course, $instructor);
-        $checklist = collect(config('course.admin_review_checklist'))->mapWithKeys(fn ($l, $k) => [$k => true])->all();
-        app(CourseReviewService::class)->approve($course->fresh(), $admin, $checklist, true);
+        $course = $this->createCourse($instructor, [
+            'status' => CourseStatus::Approved->value,
+            'is_published' => false,
+            'approved_at' => now(),
+        ]);
 
         $this->assertEquals(CourseStatus::Approved->value, $course->fresh()->status);
         $this->assertFalse($course->fresh()->isPublished());
@@ -432,12 +444,12 @@ class CourseApprovalInstructorApprovalWorkflowTest extends TestCase
     {
         $admin = $this->createAdmin();
         $instructor = $this->createInstructor(['instructor_status' => 'pending']);
-        $course = $this->createCourse($instructor);
-
-        // Step 1: Submit & Admin approves course first
-        app(CourseReviewService::class)->submitForReview($course, $instructor);
-        $checklist = collect(config('course.admin_review_checklist'))->mapWithKeys(fn ($l, $k) => [$k => true])->all();
-        app(CourseReviewService::class)->approve($course->fresh(), $admin, $checklist, true);
+        $course = $this->createCourse($instructor, [
+            'status' => CourseStatus::Approved->value,
+            'is_published' => false,
+            'approved_at' => now(),
+            'submission_count' => 1,
+        ]);
 
         $this->assertEquals(CourseStatus::Approved->value, $course->fresh()->status);
         $this->assertEquals(1, $course->fresh()->submission_count);

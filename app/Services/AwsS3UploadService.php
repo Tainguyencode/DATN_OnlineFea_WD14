@@ -70,6 +70,54 @@ class AwsS3UploadService
         return "originals/courses/{$courseId}/lessons/{$lessonSegment}/{$uuid}.{$extension}";
     }
 
+    public function generateDraftVideoObjectKey(
+        int|string $courseId,
+        int|string $lessonId,
+        int|string $contentUpdateId,
+        int|string $versionNumber,
+        string $filename
+    ): string {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION)) ?: 'mp4';
+        $allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
+        if (! in_array($extension, $allowedExtensions, true)) {
+            $extension = 'mp4';
+        }
+
+        return sprintf(
+            'originals/courses/%s/lessons/%s/content-updates/%s/versions/v%s/%s.%s',
+            $courseId,
+            $lessonId,
+            $contentUpdateId,
+            $versionNumber,
+            Str::uuid(),
+            $extension
+        );
+    }
+
+    /**
+     * Object key dành riêng cho video giới thiệu của khóa học.
+     *
+     * Prefix này cố ý tách biệt hoàn toàn với originals/courses/.../lessons
+     * để luồng preview không thể đi vào pipeline video bài học/HLS.
+     */
+    public function generateCoursePreviewObjectKey(int|string $courseId, string $filename): string
+    {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        // Course preview hiện chỉ phát MP4 trực tiếp, không qua HLS.
+        if ($extension !== 'mp4') {
+            $extension = 'mp4';
+        }
+
+        return "previews/courses/{$courseId}/".Str::uuid().".{$extension}";
+    }
+
+    public function isCoursePreviewObjectKeyForCourse(int|string $courseId, string $key): bool
+    {
+        return Str::startsWith($key, "previews/courses/{$courseId}/")
+            && str_ends_with(strtolower($key), '.mp4');
+    }
+
     /**
      * Khởi tạo S3 Multipart Upload
      */

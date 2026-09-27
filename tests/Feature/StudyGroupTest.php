@@ -10,17 +10,39 @@ use App\Models\Enrollment;
 use App\Models\StudyGroup;
 use App\Models\StudyGroupInvitation;
 use App\Models\User;
+use Illuminate\Broadcasting\Broadcasters\Broadcaster as TestBroadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class StudyGroupTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $localStorageRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->localStorageRoot = storage_path('framework/testing/study-group/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory($this->localStorageRoot);
+
+        parent::tearDown();
+    }
 
     private function createCourseWithEnrollment(User $student, ?User $instructor = null): Course
     {
@@ -647,8 +669,6 @@ class StudyGroupTest extends TestCase
     // CASE 24: Group chat private file attachment & download security
     public function test_case_24_member_can_upload_and_download_file(): void
     {
-        Storage::fake('local');
-
         $student = User::factory()->create(['role' => 'student']);
         $course = $this->createCourseWithEnrollment($student);
 
@@ -708,11 +728,26 @@ class StudyGroupTest extends TestCase
     public function test_only_group_members_and_admins_can_authorize_the_private_chat_channel(): void
     {
         config([
-            'broadcasting.default' => 'reverb',
-            'broadcasting.connections.reverb.key' => 'test-key',
-            'broadcasting.connections.reverb.secret' => 'test-secret',
-            'broadcasting.connections.reverb.app_id' => 'test-app',
+            'broadcasting.default' => 'testing',
+            'broadcasting.connections.testing.driver' => 'testing',
         ]);
+        Broadcast::extend('testing', fn () => new class extends TestBroadcaster
+        {
+            public function auth($request)
+            {
+                return $this->verifyUserCanAccessChannel(
+                    $request,
+                    preg_replace('/^(private|presence)-/', '', (string) $request->channel_name),
+                );
+            }
+
+            public function validAuthenticationResponse($request, $result): array
+            {
+                return ['auth' => 'testing-signature'];
+            }
+
+            public function broadcast(array $channels, $event, array $payload = []): void {}
+        });
         Broadcast::getFacadeRoot()->purge();
         require base_path('routes/channels.php');
         $member = User::factory()->create(['role' => 'student']);

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 class InstructorCertificate extends Model
 {
@@ -13,7 +14,10 @@ class InstructorCertificate extends Model
     protected $fillable = [
         'user_id',
         'requirement_id',
+        'source_type',
+        'instructor_teaching_field_id',
         'file_path',
+        'document_url',
         'original_name',
         'mime_type',
         'file_size',
@@ -51,7 +55,7 @@ class InstructorCertificate extends Model
         return $this->title ?: $this->original_name;
     }
 
-    public function getIssuedAtAttribute(): ?\Illuminate\Support\Carbon
+    public function getIssuedAtAttribute(): ?Carbon
     {
         return $this->reviewed_at ?: $this->uploaded_at ?: $this->created_at;
     }
@@ -80,6 +84,11 @@ class InstructorCertificate extends Model
         return $this->belongsTo(InstructorDocumentRequirement::class, 'requirement_id');
     }
 
+    public function teachingField(): BelongsTo
+    {
+        return $this->belongsTo(InstructorTeachingField::class, 'instructor_teaching_field_id');
+    }
+
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
@@ -88,6 +97,11 @@ class InstructorCertificate extends Model
     public function isPending(): bool
     {
         return $this->status === 'pending';
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
     }
 
     public function isApproved(): bool
@@ -113,15 +127,31 @@ class InstructorCertificate extends Model
         return $bytes > 0 ? $bytes.' B' : 'N/A';
     }
 
+    public function isUrlSource(): bool
+    {
+        return $this->source_type === 'url';
+    }
+
+    public function sourceLabel(): string
+    {
+        return $this->isUrlSource() ? 'URL' : 'File upload';
+    }
+
     public function isImage(): bool
     {
         return in_array(strtolower($this->mime_type ?? ''), ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'], true)
-            || preg_match('/\.(jpg|jpeg|png|webp)$/i', $this->file_path);
+            || preg_match('/\.(jpg|jpeg|png|webp)$/i', (string) $this->file_path);
     }
 
     public function isPdf(): bool
     {
         return strtolower($this->mime_type ?? '') === 'application/pdf'
-            || preg_match('/\.pdf$/i', $this->file_path);
+            || preg_match('/\.pdf$/i', (string) $this->file_path);
+    }
+
+    public function isVideo(): bool
+    {
+        return str_starts_with(strtolower((string) $this->mime_type), 'video/')
+            || preg_match('/\.(mp4|mov|webm)$/i', (string) ($this->original_name ?: $this->file_path));
     }
 }

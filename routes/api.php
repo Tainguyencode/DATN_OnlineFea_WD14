@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
  * Tất cả routes trong file này sẽ có prefix: /api
  * Xem app/Http/Kernel.php hoặc routes/web.php để biết cách kích hoạt
  */
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth', 'active', 'verified'])->group(function () {
     // ============================================
     // LEARNING PROGRESS ROUTES
     // ============================================

@@ -1,7 +1,7 @@
 <x-instructor-layout title="Hồ sơ & Chứng chỉ" page-title="Hồ sơ & Chứng chỉ Giảng viên" breadcrumb="Quản lý thông tin cá nhân, chuyên môn và tài liệu minh chứng">
 
-<div class="space-y-8" x-data="{ 
-    activeTab: '{{ session('active_tab', request()->query('tab')) }}' || (['general', 'documents', 'security'].includes(window.location.hash.replace('#', '')) ? window.location.hash.replace('#', '') : 'general'), 
+<div class="space-y-8" x-data="{
+    activeTab: '{{ session('active_tab', request()->query('tab')) }}' || (['general', 'documents', 'security'].includes(window.location.hash.replace('#', '')) ? window.location.hash.replace('#', '') : 'general'),
     showUploadModal: false,
     setTab(tab) {
         this.activeTab = tab;
@@ -64,7 +64,7 @@
                         </div>
                         <div>
                             <h3 class="font-bold">Hồ sơ đang chờ Ban quản trị xét duyệt</h3>
-                            <p class="text-xs text-blue-700 dark:text-blue-300">Hồ sơ đã nộp lúc {{ $user->submitted_for_review_at->format('d/m/Y H:i') }}. Bạn vẫn có thể tạo khóa học, chỉnh sửa nội dung và tải video bình thường.</p>
+                            <p class="text-xs text-blue-700 dark:text-blue-300">Hồ sơ đã nộp lúc {{ $user->submitted_for_review_at->format('d/m/Y H:i') }}. Hồ sơ, CV, ngành và tài liệu đang được khóa để bảo toàn gói xét duyệt. Bạn chưa thể tạo hoặc quản lý khóa học cho đến khi được phê duyệt.</p>
                         </div>
                     </div>
                 </div>
@@ -81,17 +81,27 @@
                             <p class="text-xs text-amber-800 dark:text-amber-300">
                                 Bạn còn <span class="font-black text-amber-600 dark:text-amber-400">{{ $daysRemaining }} ngày</span> để hoàn thiện hồ sơ chứng chỉ trước khi bị khóa tạm thời.
                             </p>
+                            <p class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                                Bạn hãy hoàn thành cập nhật chứng chỉ bắt buộc ngay để Admin trả lời bạn sớm nhất trong vòng 72h tới. Trong khi chờ Admin duyệt bạn vẫn có thể xử dụng các chức năng quản trị bình thường.
+                            </p>
                         </div>
                     </div>
-                    @if($certificatesCount > 0)
-                        <form method="POST" action="{{ route('instructor.profile.submit-review') }}" class="shrink-0">
+                    <div class="shrink-0 text-right">
+                        @if($submitEligibility['can_submit'])
+                            <p class="mb-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">Đã đủ hồ sơ để gửi xét duyệt</p>
+                        @elseif($submitEligibility['missing_count'] > 0)
+                            <p class="mb-2 text-xs font-bold text-amber-800 dark:text-amber-300">Còn thiếu {{ $submitEligibility['missing_count'] }} tài liệu bắt buộc</p>
+                        @else
+                            <p class="mb-2 text-xs font-bold text-amber-800 dark:text-amber-300">{{ $submitEligibility['reason'] }}</p>
+                        @endif
+                        <form method="POST" action="{{ route('instructor.profile.submit-review') }}">
                             @csrf
-                            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-amber-700">
+                            <button type="{{ $submitEligibility['can_submit'] ? 'submit' : 'button' }}" @disabled(! $submitEligibility['can_submit']) class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md transition {{ $submitEligibility['can_submit'] ? 'bg-amber-600 text-white hover:bg-amber-700' : 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-70 dark:bg-slate-700 dark:text-slate-400' }}">
                                 <span>Gửi hồ sơ xét duyệt ngay</span>
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
                         </form>
-                    @endif
+                    </div>
                 </div>
             </div>
         @endif
@@ -102,13 +112,22 @@
                     <h3 class="font-bold text-rose-800 dark:text-rose-300">Hồ sơ giảng viên cần bổ sung / chỉnh sửa</h3>
                     <p class="mt-1 text-xs text-rose-700 dark:text-rose-400"><span class="font-bold">Ghi chú từ Admin:</span> {{ $user->rejected_reason ?: 'Vui lòng bổ sung đầy đủ văn bằng chứng chỉ hợp lệ.' }}</p>
                 </div>
-                <form method="POST" action="{{ route('instructor.profile.submit-review') }}" class="shrink-0">
-                    @csrf
-                    <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-rose-700">
-                        <span>Gửi lại hồ sơ xét duyệt</span>
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    </button>
-                </form>
+                <div class="shrink-0 text-right">
+                    @if($submitEligibility['can_submit'])
+                        <p class="mb-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">Đã đủ hồ sơ để gửi xét duyệt</p>
+                    @elseif($submitEligibility['missing_count'] > 0)
+                        <p class="mb-2 text-xs font-bold text-rose-700 dark:text-rose-300">Còn thiếu {{ $submitEligibility['missing_count'] }} tài liệu bắt buộc</p>
+                    @else
+                        <p class="mb-2 text-xs font-bold text-rose-700 dark:text-rose-300">{{ $submitEligibility['reason'] }}</p>
+                    @endif
+                    <form method="POST" action="{{ route('instructor.profile.submit-review') }}">
+                        @csrf
+                        <button type="{{ $submitEligibility['can_submit'] ? 'submit' : 'button' }}" @disabled(! $submitEligibility['can_submit']) class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md transition {{ $submitEligibility['can_submit'] ? 'bg-rose-600 text-white hover:bg-rose-700' : 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-70 dark:bg-slate-700 dark:text-slate-400' }}">
+                            <span>Gửi lại hồ sơ xét duyệt</span>
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     @elseif($user->instructor_status === 'approved')
@@ -196,9 +215,42 @@
     {{-- TAB 1: THÔNG TIN CÁ NHÂN & NGHỀ NGHIỆP                                    --}}
     {{-- ========================================================================= --}}
     <div x-show="activeTab === 'general'" x-cloak class="space-y-6">
-        <form method="POST" action="{{ route('instructor.profile.update') }}" enctype="multipart/form-data" class="space-y-6">
+        @php
+            $profileValidationFailed = collect($errors->keys())->contains(fn ($key) => in_array($key, [
+                'name', 'username', 'phone', 'avatar', 'cv', 'bio', 'bank_name', 'bank_account_number', 'bank_account_name',
+                'category_ids', 'teaching_fields',
+            ], true) || str_starts_with($key, 'category_ids.') || str_starts_with($key, 'teaching_fields.'));
+        @endphp
+        <form method="POST" action="{{ route('instructor.profile.update') }}" enctype="multipart/form-data" class="space-y-6"
+            x-data="{
+                baseline: '',
+                isDirty: false,
+                hasProfileValidationError: @js($profileValidationFailed),
+                snapshot() {
+                    return JSON.stringify(Array.from(new FormData(this.$el).entries())
+                        .filter(([name]) => !['_token', '_method'].includes(name))
+                        .map(([name, value]) => [name, value instanceof File ? [value.name, value.size, value.lastModified] : value]));
+                },
+                checkDirty() {
+                    this.$nextTick(() => {
+                        this.isDirty = this.hasProfileValidationError || this.snapshot() !== this.baseline;
+                    });
+                }
+            }"
+            x-init="$nextTick(() => { baseline = snapshot(); isDirty = hasProfileValidationError; })"
+            @input="checkDirty()"
+            @change="checkDirty()"
+            @profile-form-fields-changed="checkDirty()">
             @csrf
             @method('PUT')
+
+            @if($user->isGlobalReviewPending())
+                <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+                    Hồ sơ đang được xét duyệt. Mọi thay đổi đối với thông tin hồ sơ, CV, ngành và tài liệu sẽ được mở lại sau khi Admin phản hồi.
+                </div>
+            @endif
+
+            <fieldset @disabled($user->isGlobalReviewPending()) class="space-y-6 disabled:opacity-70">
 
             {{-- SECTION A: THÔNG TIN CÁ NHÂN --}}
             <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -231,6 +283,18 @@
                             class="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         @error('avatar') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
                     </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">CV xét duyệt (PDF) *</label>
+                        <input type="file" name="cv" accept="application/pdf"
+                            class="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        @if($profile->cv)
+                            <p class="mt-1 text-xs text-slate-500">Đã có CV: {{ basename($profile->cv) }}. Chọn tệp mới để thay thế.</p>
+                        @else
+                            <p class="mt-1 text-xs font-semibold text-amber-700">Bạn cần tải lên CV trước khi gửi hồ sơ.</p>
+                        @endif
+                        @error('cv') <p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p> @enderror
+                    </div>
                 </div>
 
                 <div class="mt-5">
@@ -249,6 +313,7 @@
                     'specialty' => $profile->specialty ?? '',
                     'experience' => $profile->experience ?? '',
                 ]])),
+                pendingReplacementId: null,
                 categories: @js($categories->map(function($c) {
                     return [
                         'id' => $c->id,
@@ -288,19 +353,25 @@
                     const available = all.find(c => !selectedIds.includes(c.id));
                     this.fields.push({
                         category_id: available ? available.id : (all[0]?.id || ''),
+                        replace_of_teaching_field_id: this.pendingReplacementId,
                         organization: '',
                         position: '',
                         specialty: '',
                         experience: ''
                     });
+                    this.pendingReplacementId = null;
                 },
                 removeField(index) {
                     if (this.fields.length > 1) {
+                        const removed = this.fields[index];
+                        if (removed?.teaching_field_id && ['approved', 'draft', 'rejected'].includes(removed?.approval_status || 'draft')) {
+                            this.pendingReplacementId = removed.teaching_field_id;
+                        }
                         this.fields.splice(index, 1);
                     }
                 }
             }" class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6">
-                
+
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
                     <div>
                         <h3 class="text-base font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
@@ -310,7 +381,7 @@
                         <p class="mt-1 text-xs text-slate-500">Mỗi ngành giảng dạy có thể khai báo đơn vị công tác, chức vụ và kinh nghiệm riêng biệt.</p>
                     </div>
 
-                    <button type="button" @click="addField()"
+                    <button type="button" @click="addField(); $dispatch('profile-form-fields-changed')"
                             class="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-4 py-2 text-xs font-bold text-[#0056D2] transition hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span>+ Thêm ngành giảng dạy</span>
@@ -325,18 +396,23 @@
 
                 {{-- DANH SÁCH KHỐI THÔNG TIN TỪNG NGÀNH --}}
                 <div class="space-y-6">
-                    <template x-for="(field, index) in fields" :key="index">
+                    <template x-for="(field, index) in fields" :key="field.teaching_field_id || index">
                         <div class="relative rounded-2xl border-2 border-slate-200/80 bg-slate-50/60 p-5 sm:p-6 transition hover:border-blue-300 dark:border-slate-800 dark:bg-slate-800/40 space-y-5">
-                            
+
                             {{-- Header của từng Khối Ngành --}}
                             <div class="flex items-center justify-between border-b border-slate-200/70 pb-3 dark:border-slate-700/60">
                                 <div class="flex items-center gap-2.5">
                                     <span class="flex h-7 w-7 items-center justify-center rounded-xl bg-[#0056D2] text-xs font-black text-white shadow-sm" x-text="index + 1"></span>
                                     <span class="text-sm font-black text-slate-900 dark:text-white" x-text="getCategoryName(field.category_id)"></span>
+                                    <template x-if="field.approval_status === 'approved'"><span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✅ Đã duyệt</span></template>
+                                    <template x-if="!field.approval_status || field.approval_status === 'draft'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">📝 Chưa gửi</span></template>
+                                    <template x-if="field.approval_status === 'pending'"><span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span></template>
+                                    <template x-if="field.approval_status === 'rejected'"><span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">❌ Bị từ chối</span></template>
+                                    <template x-if="field.approval_status === 'superseded'"><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">⛔ Đã thay thế</span></template>
                                 </div>
 
                                 <template x-if="fields.length > 1">
-                                    <button type="button" @click="removeField(index)"
+                                    <button type="button" x-show="!['pending', 'superseded'].includes(field.approval_status)" @click="removeField(index); $dispatch('profile-form-fields-changed')"
                                             class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         <span>Xóa ngành này</span>
@@ -347,11 +423,14 @@
                             {{-- Hàng 1: Ngành + Đơn vị + Chức vụ --}}
                             <div class="grid gap-4 sm:grid-cols-3">
                                 <div>
+                                    <input type="hidden" :name="'teaching_fields[' + index + '][teaching_field_id]'" x-model="field.teaching_field_id">
+                                    <input type="hidden" :name="'teaching_fields[' + index + '][replace_of_teaching_field_id]'" x-model="field.replace_of_teaching_field_id">
                                     <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                                         Ngành / Lĩnh vực giảng dạy *
                                     </label>
                                     <select :name="'teaching_fields[' + index + '][category_id]'"
                                             x-model="field.category_id"
+                                            :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                             required
                                             class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                         <option value="" disabled>-- Chọn ngành giảng dạy --</option>
@@ -377,6 +456,7 @@
                                     <input type="text"
                                            :name="'teaching_fields[' + index + '][organization]'"
                                            x-model="field.organization"
+                                           :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                            placeholder="VD: Đại học Bách Khoa, FPT Software..."
                                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                 </div>
@@ -388,6 +468,7 @@
                                     <input type="text"
                                            :name="'teaching_fields[' + index + '][position]'"
                                            x-model="field.position"
+                                           :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                            placeholder="VD: Giảng viên chính, Senior Engineer..."
                                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                                 </div>
@@ -401,6 +482,7 @@
                                 <input type="text"
                                        :name="'teaching_fields[' + index + '][specialty]'"
                                        x-model="field.specialty"
+                                       :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                        placeholder="VD: Fullstack Web, React, Laravel, Node.js, Cloud..."
                                        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                             </div>
@@ -412,6 +494,7 @@
                                 </label>
                                 <textarea :name="'teaching_fields[' + index + '][experience]'"
                                           x-model="field.experience"
+                                          :disabled="['pending', 'superseded'].includes(field.approval_status)"
                                           rows="3"
                                           placeholder="Mô tả các dự án thực tế, số năm kinh nghiệm hoặc các cơ sở đào tạo đã từng tham gia..."
                                           class="w-full rounded-xl border border-slate-300 bg-white p-3.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white"></textarea>
@@ -422,10 +505,10 @@
 
                 {{-- Nút Thêm Ngành ở cuối --}}
                 <div class="pt-2">
-                    <button type="button" @click="addField()"
+                    <button type="button" @click="addField(); $dispatch('profile-form-fields-changed')"
                             class="w-full rounded-2xl border-2 border-dashed border-slate-300 p-4 text-center text-xs font-bold text-slate-600 transition hover:border-[#0056D2] hover:bg-blue-50/50 hover:text-[#0056D2] dark:border-slate-700 dark:text-slate-400 dark:hover:border-blue-500 dark:hover:bg-slate-800/60 dark:hover:text-blue-300 flex items-center justify-center gap-2">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        <span>+ Thêm một ngành / lĩnh vực giảng dạy khác</span>
+                        <span>Thêm một ngành / lĩnh vực giảng dạy khác</span>
                     </button>
                 </div>
             </div>
@@ -453,29 +536,59 @@
                 </div>
             </div>
 
-            <div class="flex justify-end">
+            <div class="flex justify-end" x-show="isDirty" x-cloak>
                 <button type="submit" class="inline-flex items-center gap-2 rounded-2xl bg-[#0056D2] px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:bg-[#0046B8]">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <span>Lưu thay đổi hồ sơ</span>
                 </button>
             </div>
+            </fieldset>
         </form>
     </div>
 
     {{-- ========================================================================= --}}
     {{-- TAB 2: HỒ SƠ MINH CHỨNG & CHỨNG CHỈ THEO NGÀNH                           --}}
     {{-- ========================================================================= --}}
-    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{ uploadModal: false, activeRequirementId: null, activeRequirementTitle: '', activeDocType: 'certificate' }">
+    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{
+        uploadModal: false,
+        editUrlModal: false,
+        activeRequirementId: null,
+        activeTeachingFieldId: null,
+        activeRequirementTitle: '',
+        activeDocType: 'certificate',
+        submissionSource: 'file',
+        editingDocumentId: null,
+        editingDocumentUrl: '',
+        uploadError: '',
+        uploading: false,
+        validateEvidenceFiles(event) {
+            this.uploadError = '';
+            const oversizedFile = Array.from(event.target.files).find(file => file.size > 50 * 1024 * 1024);
+
+            if (oversizedFile) {
+                this.uploadError = `Tệp “${oversizedFile.name}” vượt quá giới hạn 50MB.`;
+                event.target.value = '';
+            }
+        }
+    }">
+
+        @if($user->isGlobalReviewPending())
+            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+                Hồ sơ đang được xét duyệt. Bạn có thể xem tài liệu đã gửi nhưng không thể tải lên, thay thế, sửa liên kết hoặc xóa tài liệu lúc này.
+            </div>
+        @endif
+
+        <fieldset @disabled($user->isGlobalReviewPending()) class="contents">
 
         {{-- BANNER TÓM TẮT TIẾN ĐỘ HỒ SƠ THEO NGÀNH --}}
         <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-5 dark:border-slate-800">
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
-                        @if(!empty($requirementData['categories']) && $requirementData['categories']->isNotEmpty())
-                            @foreach($requirementData['categories'] as $cat)
+                        @if($teachingFieldRecords->isNotEmpty())
+                            @foreach($teachingFieldRecords as $teachingField)
                                 <span class="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-[#0056D2] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                                     {{ $cat->name }}
+                                     {{ $teachingField->category->name }}
                                 </span>
                             @endforeach
                         @else
@@ -484,23 +597,6 @@
                             </span>
                         @endif
 
-                        @if($requirementData['summary']['total_requirements'] === 0)
-                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                ℹ Chưa có cấu hình yêu cầu hồ sơ
-                            </span>
-                        @elseif($requirementData['summary']['required_count'] === 0)
-                            <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                                ℹ Không có hồ sơ bắt buộc
-                            </span>
-                        @elseif($requirementData['summary']['can_approve'])
-                            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                ✔ Đã đủ hồ sơ bắt buộc
-                            </span>
-                        @else
-                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                 Còn thiếu {{ $requirementData['summary']['required_missing_count'] + $requirementData['summary']['required_rejected_count'] }} tài liệu bắt buộc
-                            </span>
-                        @endif
                     </div>
                     <h3 class="text-xl font-black text-slate-900 dark:text-white mt-2">Hồ sơ minh chứng theo ngành giảng dạy</h3>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -510,18 +606,103 @@
             </div>
 
             {{-- Checklist các yêu cầu theo từng ngành --}}
-            @if(empty($requirementData['categories_requirements']))
-                <div class="my-8 rounded-2xl bg-amber-50 p-6 text-center text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                    <p class="text-sm font-bold">Chưa có danh sách yêu cầu tài liệu cụ thể hoặc bạn chưa chọn ngành giảng dạy.</p>
-                    <p class="mt-1 text-xs">Vui lòng chọn ngành ở Tab "Thông tin cá nhân & nghề nghiệp" để hệ thống tải bộ yêu cầu tương ứng.</p>
-                </div>
+            @if($teachingFieldRecords->isEmpty())
+                @if(!empty($requirementData['categories_requirements']))
+                    <div class="mt-6 space-y-6">
+                        @foreach($requirementData['categories_requirements'] as $legacyGroup)
+                            <div class="rounded-3xl border border-slate-200 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
+                                <h4 class="border-b border-slate-200 pb-3 text-base font-black text-slate-900 dark:border-slate-800 dark:text-white">
+                                    Ngành: {{ $legacyGroup['category']->name }}
+                                </h4>
+                                <div class="mt-4 space-y-4">
+                                    @forelse($legacyGroup['requirements'] as $item)
+                                        @php
+                                            $req = $item['requirement'];
+                                            $docs = $item['documents'];
+                                            $status = $item['status'];
+                                        @endphp
+                                        <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/90">
+                                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div>
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <h5 class="text-sm font-black text-slate-900 dark:text-white">{{ $req->document_title }}</h5>
+                                                        <span class="rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ $req->is_required ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-600' }}">
+                                                            {{ $req->is_required ? 'Bắt buộc' : 'Tùy chọn' }}
+                                                        </span>
+                                                        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-700">
+                                                            {{ ['approved' => 'Đã duyệt', 'pending' => 'Chờ duyệt', 'draft' => 'Chưa gửi', 'rejected' => 'Bị từ chối'][$status] ?? 'Chưa nộp' }}
+                                                        </span>
+                                                    </div>
+                                                    @if($req->description)
+                                                        <p class="mt-1 text-xs text-slate-500">{{ $req->description }}</p>
+                                                    @endif
+                                                </div>
+                                                <button type="button"
+                                                        @click="activeTeachingFieldId = null; activeRequirementId = {{ $req->id }}; activeRequirementTitle = @js($req->document_title.' ('.$legacyGroup['category']->name.')'); activeDocType = '{{ $req->document_type }}'; submissionSource = 'file'; uploadError = ''; uploading = false; uploadModal = true"
+                                                        class="shrink-0 rounded-xl bg-[#0056D2] px-4 py-2 text-xs font-bold text-white">
+                                                    Tải lên
+                                                </button>
+                                            </div>
+
+                                            @if($docs->isNotEmpty())
+                                                <div class="mt-3 space-y-2 border-t border-slate-100 pt-3 dark:border-slate-700">
+                                                    @foreach($docs as $doc)
+                                                        <div class="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between">
+                                                            <div class="min-w-0">
+                                                                <p class="truncate text-xs font-bold text-slate-800 dark:text-white">{{ $doc->title ?: $doc->original_name }}</p>
+                                                                <p class="text-[11px] text-slate-400">{{ $doc->isUrlSource() ? 'Liên kết tài liệu' : $doc->original_name.' · '.$doc->formattedFileSize() }}</p>
+                                                            </div>
+                                                            <div class="flex shrink-0 items-center gap-2">
+                                                                <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{{ $doc->isUrlSource() ? 'Xem tài liệu' : ($doc->isVideo() ? 'Xem video' : 'Xem tệp') }}</a>
+                                                                @if($doc->isUrlSource() && $doc->isDraft())
+                                                                    <button type="button" @click="editingDocumentId = {{ $doc->id }}; editingDocumentUrl = @js($doc->document_url); editUrlModal = true" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">Sửa link</button>
+                                                                @endif
+                                                                @if($doc->isDraft() && ! $doc->isUrlSource())
+                                                                    <form method="POST" action="{{ route('instructor.profile.documents.replace', $doc) }}" enctype="multipart/form-data" class="flex items-center gap-1">
+                                                                        @csrf
+                                                                        @method('PATCH')
+                                                                        <input type="file" name="file" class="max-w-28 text-[10px]">
+                                                                        <button type="submit" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2]">Thay file</button>
+                                                                    </form>
+                                                                @endif
+                                                                @if($doc->isDraft())
+                                                                    <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button type="submit" class="rounded-lg bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600">Xóa</button>
+                                                                    </form>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @empty
+                                        <p class="text-center text-xs text-slate-400">Ngành này chưa có cấu hình yêu cầu tài liệu.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="my-8 rounded-2xl bg-amber-50 p-6 text-center text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                        <p class="text-sm font-bold">Chưa có danh sách yêu cầu tài liệu cụ thể hoặc bạn chưa chọn ngành giảng dạy.</p>
+                        <p class="mt-1 text-xs">Vui lòng chọn ngành ở Tab "Thông tin cá nhân & nghề nghiệp" để hệ thống tải bộ yêu cầu tương ứng.</p>
+                    </div>
+                @endif
             @else
                 <div class="mt-6 space-y-8">
-                    @foreach($requirementData['categories_requirements'] as $catGroup)
+                    @foreach($teachingFieldRecords as $teachingField)
                         @php
-                            $groupCat = $catGroup['category'];
-                            $groupReqs = $catGroup['requirements'];
-                            $groupSummary = $catGroup['summary'];
+                            $fieldData = $teachingFieldRequirementData[$teachingField->id];
+                            $groupReqs = $fieldData['requirements'];
+                            $groupSummary = $fieldData['summary'];
+                            $groupOptionalCount = collect($groupReqs)
+                                ->reject(fn ($item) => $item['requirement']->is_required)
+                                ->count();
+                            $groupDraftDocumentCount = collect($groupReqs)
+                                ->sum(fn ($item) => $item['documents']->where('status', 'draft')->count());
                         @endphp
                         <div class="rounded-3xl border border-slate-200 bg-slate-50/50 p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/50 space-y-4">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3 dark:border-slate-800">
@@ -531,16 +712,16 @@
                                     </span>
                                     <div>
                                         <h4 class="text-base font-black text-slate-900 dark:text-white">
-                                            Ngành: {{ $groupCat->name }}
+                                            Ngành: {{ $teachingField->category->name }}
                                         </h4>
                                         <p class="text-xs text-slate-500">
-                                            {{ $groupSummary['required_count'] }} yêu cầu bắt buộc · {{ $groupSummary['optional_count'] }} tùy chọn
+                                            {{ $groupSummary['required_count'] }} yêu cầu bắt buộc · {{ $groupOptionalCount }} tùy chọn
                                         </p>
                                     </div>
                                 </div>
 
-                                <div>
-                                    @if($groupSummary['total_requirements'] === 0)
+                                <div class="flex flex-col items-start gap-2 sm:items-end">
+                                    @if(empty($groupReqs))
                                         <span class="rounded-full bg-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                             ℹ Chưa cấu hình hồ sơ
                                         </span>
@@ -548,14 +729,36 @@
                                         <span class="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
                                             ℹ Không có hồ sơ bắt buộc
                                         </span>
-                                    @elseif($groupSummary['has_all_required_submitted'])
+                                    @elseif($groupSummary['can_submit'])
                                         <span class="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                                             ✔ Đủ hồ sơ ngành này
                                         </span>
                                     @else
                                         <span class="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                             Thiếu {{ $groupSummary['required_missing_count'] + $groupSummary['required_rejected_count'] }} tài liệu bắt buộc
+                                             Thiếu {{ $groupSummary['missing_count'] }} tài liệu bắt buộc
                                         </span>
+                                    @endif
+                                    @if($teachingField->approval_status === 'approved')
+                                        <span class="text-xs font-bold text-emerald-700">✅ Đã duyệt — có thể tạo và quản lý khóa học</span>
+                                    @elseif($teachingField->approval_status === 'pending')
+                                        <span class="text-xs font-bold text-amber-700">⏳ Chờ admin duyệt</span>
+                                    @elseif($teachingField->approval_status === 'rejected')
+                                        <span class="text-xs font-bold text-rose-700">❌ Bị từ chối: {{ $teachingField->rejection_reason }}</span>
+                                    @elseif($teachingField->approval_status === 'superseded')
+                                        <span class="text-xs font-bold text-slate-600">⛔ Đã thay thế — vẫn giữ lịch sử và quản lý khóa học cũ</span>
+                                    @else
+                                        <span class="text-xs font-bold text-slate-600">📝 Chưa gửi xét duyệt</span>
+                                    @endif
+                                    @if($teachingField->isApproved() && $groupDraftDocumentCount > 0)
+                                        <form method="POST" action="{{ route('instructor.profile.teaching-fields.submit-supplement', $teachingField) }}">
+                                            @csrf
+                                            <button class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white">Gửi bổ sung hồ sơ ngành này</button>
+                                        </form>
+                                    @elseif($teachingField->isEditable())
+                                        <form method="POST" action="{{ route('instructor.profile.teaching-fields.submit-review', $teachingField) }}">
+                                            @csrf
+                                            <button {{ $groupSummary['can_submit'] ? '' : 'disabled' }} class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Gửi xét duyệt ngành này</button>
+                                        </form>
                                     @endif
                                 </div>
                             </div>
@@ -572,7 +775,7 @@
                                             $docs = $item['documents'];
                                             $status = $item['status'];
                                         @endphp
-                                        <div class="rounded-2xl border {{ $req->is_required ? ($item['is_fulfilled'] ? 'border-emerald-200 bg-white dark:bg-slate-800/90' : 'border-amber-200 bg-white dark:bg-slate-800/90') : 'border-slate-200 bg-white dark:bg-slate-800/90' }} p-4.5 transition">
+                                        <div class="rounded-2xl border {{ $req->is_required ? (in_array($status, ['draft', 'pending', 'approved'], true) ? 'border-emerald-200 bg-white dark:bg-slate-800/90' : 'border-amber-200 bg-white dark:bg-slate-800/90') : 'border-slate-200 bg-white dark:bg-slate-800/90' }} p-4.5 transition">
                                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                 <div class="space-y-1 min-w-0">
                                                     <div class="flex flex-wrap items-center gap-2">
@@ -592,11 +795,15 @@
                                                         {{-- Badge trạng thái --}}
                                                         @if($status === 'approved')
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                                                ✔ Đã duyệt ({{ $item['approved_count'] }})
+                                                                ✔ Đã duyệt ({{ $docs->where('status', 'approved')->count() }})
                                                             </span>
-                                                        @elseif($status === 'pending')
-                                                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                                                 Đã nộp - Chờ duyệt ({{ $item['pending_count'] }})
+                                                         @elseif($status === 'pending')
+                                                             <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                                                  Đã nộp - Chờ duyệt ({{ $docs->where('status', 'pending')->count() }})
+                                                             </span>
+                                                        @elseif($status === 'draft')
+                                                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                                Chưa gửi ({{ $docs->where('status', 'draft')->count() }})
                                                             </span>
                                                         @elseif($status === 'rejected')
                                                             <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
@@ -616,12 +823,14 @@
                                                     @endif
                                                 </div>
 
-                                                <button type="button"
-                                                        @click="activeRequirementId = {{ $req->id }}; activeRequirementTitle = '{{ addslashes($req->document_title) }} ({{ addslashes($groupCat->name) }})'; activeDocType = '{{ $req->document_type }}'; uploadModal = true"
-                                                        class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#0056D2] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0046B8]">
-                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                                                    <span>Tải lên</span>
-                                                </button>
+                                                @if($status === 'missing' && $teachingField->acceptsDocumentUploads())
+                                                    <button type="button"
+                                                            @click="activeTeachingFieldId = {{ $teachingField->id }}; activeRequirementId = {{ $req->id }}; activeRequirementTitle = @js($req->document_title.' ('.$teachingField->category->name.')'); activeDocType = '{{ $req->document_type }}'; submissionSource = 'file'; uploadError = ''; uploading = false; uploadModal = true"
+                                                            class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#0056D2] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0046B8]">
+                                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                                        <span>Tải lên</span>
+                                                    </button>
+                                                @endif
                                             </div>
 
                                             {{-- Danh sách file đã nộp cho requirement này --}}
@@ -631,21 +840,27 @@
                                                     @foreach($docs as $doc)
                                                         <div class="flex flex-col gap-2 rounded-xl bg-slate-50/80 p-3 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between border border-slate-100 dark:border-slate-700/40">
                                                             <div class="flex items-center gap-3 min-w-0">
-                                                                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {{ $doc->isPdf() ? 'bg-rose-50 text-rose-600 font-bold text-[10px]' : 'bg-blue-50 text-blue-600 text-xs' }}">
-                                                                    {{ $doc->isPdf() ? 'PDF' : 'IMG' }}
+                                                                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {{ $doc->isUrlSource() ? 'bg-violet-50 text-violet-600 text-xs' : ($doc->isPdf() ? 'bg-rose-50 text-rose-600 font-bold text-[10px]' : 'bg-blue-50 text-blue-600 text-xs') }}">
+                                                                    {{ $doc->isUrlSource() ? 'URL' : ($doc->isVideo() ? 'VIDEO' : ($doc->isPdf() ? 'PDF' : 'IMG')) }}
                                                                 </span>
                                                                 <div class="min-w-0">
                                                                     <div class="flex flex-wrap items-center gap-2">
                                                                         <h6 class="text-xs font-bold text-slate-800 dark:text-white truncate">{{ $doc->title ?: $doc->original_name }}</h6>
-                                                                        @if($doc->isApproved())
-                                                                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
-                                                                        @elseif($doc->isRejected())
+                                                                         @if($doc->isApproved())
+                                                                             <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                                                         @elseif($doc->isDraft())
+                                                                            <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
+                                                                         @elseif($doc->isRejected())
                                                                             <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
                                                                         @else
                                                                             <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
                                                                         @endif
                                                                     </div>
-                                                                    <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->original_name }} · {{ $doc->formattedFileSize() }} · Tải lên: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
+                                                                    @if($doc->isUrlSource())
+                                                                        <p class="text-[11px] text-slate-400 mt-0.5">Nguồn tài liệu: Liên kết · Nộp: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
+                                                                    @else
+                                                                        <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->original_name }} · {{ $doc->formattedFileSize() }} · Tải lên: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
+                                                                    @endif
                                                                     @if($doc->isRejected() && $doc->rejection_reason)
                                                                         <p class="text-[11px] font-semibold text-rose-600 mt-1">Lý do từ chối: {{ $doc->rejection_reason }}</p>
                                                                     @endif
@@ -654,9 +869,21 @@
 
                                                             <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
                                                                 <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">
-                                                                    Xem tệp
+                                                                    {{ $doc->isUrlSource() ? 'Xem tài liệu' : ($doc->isVideo() ? 'Xem video' : 'Xem tệp') }}
                                                                 </a>
-                                                                @unless($doc->isApproved())
+                                                                @if($doc->isUrlSource() && $doc->isDraft())
+                                                                    <button type="button" @click="editingDocumentId = {{ $doc->id }}; editingDocumentUrl = @js($doc->document_url); editUrlModal = true" class="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">Sửa link</button>
+                                                                @endif
+                                                                @if($doc->isDraft() && ! $doc->isUrlSource())
+                                                                    <form method="POST" action="{{ route('instructor.profile.documents.replace', $doc) }}" enctype="multipart/form-data" class="flex items-center gap-1">
+                                                                        @csrf
+                                                                        @method('PATCH')
+                                                                        <input type="file" name="file" class="max-w-28 text-[10px]">
+                                                                        <input type="text" name="title" value="{{ $doc->title }}" class="max-w-28 rounded border border-slate-200 px-1.5 py-1 text-[10px]" aria-label="Tiêu đề tài liệu">
+                                                                        <button type="submit" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] hover:bg-blue-100">Cập nhật</button>
+                                                                    </form>
+                                                                @endif
+                                                                @if($doc->isDraft())
                                                                     <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
                                                                         @csrf
                                                                         @method('DELETE')
@@ -664,7 +891,9 @@
                                                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                                                         </button>
                                                                     </form>
-                                                                @endunless
+                                                                @elseif($doc->isRejected() && $teachingField->acceptsDocumentUploads())
+                                                                    <button type="button" @click="activeTeachingFieldId = {{ $teachingField->id }}; activeRequirementId = {{ $doc->requirement_id }}; activeRequirementTitle = @js($req->document_title.' ('.$teachingField->category->name.')'); activeDocType = '{{ $doc->document_type }}'; submissionSource = 'file'; uploadError = ''; uploading = false; uploadModal = true" class="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#0056D2] hover:bg-blue-100">Tải file thay thế</button>
+                                                                @endif
                                                             </div>
                                                         </div>
                                                     @endforeach
@@ -692,7 +921,7 @@
                     </p>
                 </div>
                 <button type="button"
-                        @click="activeRequirementId = null; activeRequirementTitle = 'Tài liệu minh chứng bổ sung khác (Tự do)'; activeDocType = 'other'; uploadModal = true"
+                        @click="activeTeachingFieldId = null; activeRequirementId = null; activeRequirementTitle = 'Tài liệu minh chứng bổ sung khác (Tự do)'; activeDocType = 'other'; submissionSource = 'file'; uploadError = ''; uploading = false; uploadModal = true"
                         class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     <span>Tải lên tài liệu bổ sung</span>
@@ -704,8 +933,8 @@
                     @foreach($requirementData['unassigned_certificates'] as $doc)
                         <div class="flex flex-col gap-2 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between border border-slate-100 dark:border-slate-700">
                             <div class="flex items-center gap-3.5 min-w-0">
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ $doc->isPdf() ? 'bg-rose-100 text-rose-600 font-black text-xs' : 'bg-blue-100 text-blue-600 text-xs' }}">
-                                    {{ $doc->isPdf() ? 'PDF' : 'IMG' }}
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ $doc->isUrlSource() ? 'bg-violet-100 text-violet-600 text-xs' : ($doc->isPdf() ? 'bg-rose-100 text-rose-600 font-black text-xs' : 'bg-blue-100 text-blue-600 text-xs') }}">
+                                    {{ $doc->isUrlSource() ? 'URL' : ($doc->isVideo() ? 'VIDEO' : ($doc->isPdf() ? 'PDF' : 'IMG')) }}
                                 </span>
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
@@ -713,15 +942,17 @@
                                         <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
                                             {{ $doc->documentTypeLabel() }}
                                         </span>
-                                        @if($doc->isApproved())
-                                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
-                                        @elseif($doc->isRejected())
+                                         @if($doc->isApproved())
+                                             <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
+                                         @elseif($doc->isDraft())
+                                            <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
+                                         @elseif($doc->isRejected())
                                             <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
                                         @else
                                             <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
                                         @endif
                                     </div>
-                                    <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->original_name }} · {{ $doc->formattedFileSize() }} · Tải lên: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : 'N/A' }}</p>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">{{ $doc->isUrlSource() ? 'Nguồn tài liệu: Liên kết' : $doc->original_name.' · '.$doc->formattedFileSize() }} · {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : 'N/A' }}</p>
                                     @if($doc->isRejected() && $doc->rejection_reason)
                                         <p class="text-[11px] font-semibold text-rose-600 mt-1">Lý do từ chối: {{ $doc->rejection_reason }}</p>
                                     @endif
@@ -730,9 +961,21 @@
 
                             <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
                                 <a href="{{ route('instructor.profile.documents.view', $doc) }}" target="_blank" class="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">
-                                    Xem tệp
+                                    {{ $doc->isUrlSource() ? 'Xem tài liệu' : ($doc->isVideo() ? 'Xem video' : 'Xem tệp') }}
                                 </a>
-                                @unless($doc->isApproved())
+                                @if($doc->isUrlSource() && $doc->isDraft())
+                                    <button type="button" @click="editingDocumentId = {{ $doc->id }}; editingDocumentUrl = @js($doc->document_url); editUrlModal = true" class="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200">Sửa link</button>
+                                @endif
+                                @if($doc->isDraft() && ! $doc->isUrlSource())
+                                    <form method="POST" action="{{ route('instructor.profile.documents.replace', $doc) }}" enctype="multipart/form-data" class="flex items-center gap-1">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="file" name="file" class="max-w-28 text-[10px]">
+                                        <input type="text" name="title" value="{{ $doc->title }}" class="max-w-28 rounded border border-slate-200 px-1.5 py-1 text-[10px]" aria-label="Tiêu đề tài liệu">
+                                        <button type="submit" class="rounded-xl bg-blue-50 px-2 py-1.5 text-xs font-bold text-[#0056D2] hover:bg-blue-100">Cập nhật</button>
+                                    </form>
+                                @endif
+                                @if($doc->isDraft())
                                     <form method="POST" action="{{ route('instructor.profile.documents.delete', $doc) }}" onsubmit="return confirm('Xác nhận xóa tài liệu này?')">
                                         @csrf
                                         @method('DELETE')
@@ -740,7 +983,7 @@
                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         </button>
                                     </form>
-                                @endunless
+                                @endif
                             </div>
                         </div>
                     @endforeach
@@ -763,9 +1006,22 @@
                     <button type="button" @click="uploadModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
                 </div>
 
-                <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-5 space-y-4">
+                <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-5 space-y-4" @submit="uploading = true">
                     @csrf
                     <input type="hidden" name="requirement_id" :value="activeRequirementId">
+                    <input type="hidden" name="instructor_teaching_field_id" :value="activeTeachingFieldId">
+
+                    <div>
+                        <span class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Phương thức nộp *</span>
+                        <div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+                            <label class="cursor-pointer rounded-lg px-3 py-2 text-center text-xs font-bold transition" :class="submissionSource === 'file' ? 'bg-white text-[#0056D2] shadow-sm dark:bg-slate-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'">
+                                <input type="radio" name="source_type" value="file" x-model="submissionSource" class="sr-only"> Tải file lên
+                            </label>
+                            <label class="cursor-pointer rounded-lg px-3 py-2 text-center text-xs font-bold transition" :class="submissionSource === 'url' ? 'bg-white text-[#0056D2] shadow-sm dark:bg-slate-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'">
+                                <input type="radio" name="source_type" value="url" x-model="submissionSource" class="sr-only"> Nhập link tài liệu
+                            </label>
+                        </div>
+                    </div>
 
                     {{-- Chọn loại tài liệu khi upload tự do --}}
                     <div x-show="!activeRequirementId">
@@ -777,7 +1033,7 @@
                             <option value="certificate">Chứng chỉ / Bằng khen chuyên môn khác</option>
                             <option value="employment_confirmation">Giấy xác nhận công tác / Giấy khen</option>
                             <option value="portfolio">Hồ sơ năng lực / Dự án thực tế (Portfolio)</option>
-                            <option value="work_contract">Hợp đồng lao động</option>
+                            <option value="employment_contract">Hợp đồng lao động</option>
                             <option value="degree">Văn bằng phụ</option>
                             <option value="other" selected>Tài liệu minh chứng khác</option>
                         </select>
@@ -789,23 +1045,47 @@
                                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                     </div>
 
-                    <div>
-                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Chọn tệp (PDF, JPG, PNG, WEBP, DOCX - Tối đa 10MB) *</label>
-                        <input type="file" name="files[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" required
+                    <div x-show="submissionSource === 'file'">
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Chọn ảnh, video hoặc tài liệu (PDF, JPG, PNG, WEBP, DOCX, MP4, MOV, WEBM - Tối đa 50MB/tệp) *</label>
+                        <input type="file" name="files[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.mp4,.mov,.webm" :required="submissionSource === 'file'" :disabled="submissionSource !== 'file'"
+                               @change="validateEvidenceFiles($event)"
                                class="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0056D2] file:px-3.5 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-[#00419e] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        <p x-show="uploadError" x-cloak x-text="uploadError" class="mt-1 text-xs font-semibold text-rose-600"></p>
+                    </div>
+
+                    <div x-show="submissionSource === 'url'" x-cloak>
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">URL tài liệu *</label>
+                        <input type="url" name="document_url" placeholder="https://example.com/certificate.pdf" :required="submissionSource === 'url'" :disabled="submissionSource !== 'url'"
+                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                        <p class="mt-1 text-[11px] text-slate-500">Chỉ chấp nhận liên kết HTTP hoặc HTTPS; hệ thống không tải tài liệu về máy chủ.</p>
                     </div>
 
                     <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <button type="button" @click="uploadModal = false" class="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300">
+                        <button type="button" @click="uploadModal = false" :disabled="uploading" class="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-300">
                             Hủy
                         </button>
-                        <button type="submit" class="rounded-xl bg-[#0056D2] px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-[#00419e]">
-                            Tải lên
+                        <button type="submit" :disabled="uploading || !!uploadError" class="rounded-xl bg-[#0056D2] px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-[#00419e] disabled:cursor-not-allowed disabled:opacity-60">
+                            <span x-show="!uploading">Lưu tài liệu</span>
+                            <span x-show="uploading" x-cloak>Đang tải lên...</span>
                         </button>
                     </div>
                 </form>
             </div>
         </div>
+
+        <div x-show="editUrlModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900" @click.away="editUrlModal = false">
+                <h3 class="text-base font-black text-slate-900 dark:text-white">Sửa liên kết tài liệu</h3>
+                <form method="POST" :action="'{{ url('/instructor/profile/documents') }}/' + editingDocumentId + '/url'" class="mt-5 space-y-4">
+                    @csrf
+                    @method('PUT')
+                    <input type="url" name="document_url" x-model="editingDocumentUrl" required class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    <p class="text-[11px] text-slate-500">Liên kết cập nhật sẽ được đưa về trạng thái chờ duyệt.</p>
+                    <div class="flex justify-end gap-3"><button type="button" @click="editUrlModal = false" class="rounded-xl px-4 py-2 text-xs font-bold text-slate-600">Hủy</button><button type="submit" class="rounded-xl bg-[#0056D2] px-5 py-2 text-xs font-bold text-white">Lưu liên kết</button></div>
+                </form>
+            </div>
+        </div>
+        </fieldset>
     </div>
 
     {{-- ========================================================================= --}}

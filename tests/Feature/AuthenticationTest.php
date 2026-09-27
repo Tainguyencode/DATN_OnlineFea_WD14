@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\VerifyEmailCodeNotification;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -53,7 +55,8 @@ class AuthenticationTest extends TestCase
             ->assertDontSee('data-student-terms-modal', false)
             ->assertDontSee('name="avatar"', false)
             ->assertDontSee('Avatar preview', false)
-            ->assertDontSee('PNG, JPG', false);
+            ->assertDontSee('PNG, JPG', false)
+            ->assertDontSee('name="certificates[]"', false);
     }
 
     public function test_instructor_registration_ignores_avatar_upload(): void
@@ -125,10 +128,12 @@ class AuthenticationTest extends TestCase
     public function test_instructor_registration_succeeds(): void
     {
         Notification::fake();
+        $category = Category::create(['name' => 'Registration category', 'slug' => 'registration-category', 'status' => true]);
 
         $response = $this->postRegister('instructor', [
             'email' => 'new-instructor@example.com',
             'name' => 'Giảng viên Mới',
+            'category_id' => $category->id,
         ]);
 
         $response->assertRedirect(route('verification.notice'));
@@ -136,7 +141,46 @@ class AuthenticationTest extends TestCase
 
         $user = User::query()->where('email', 'new-instructor@example.com')->firstOrFail();
         $this->assertSame('instructor', $user->role);
+        $this->assertSame('pending', $user->instructor_status);
+        $this->assertNull($user->submitted_for_review_at);
+        $this->assertFalse($user->needs_admin_review);
+        $this->assertNull($user->instructorApplication);
+        $this->assertSame('draft', $user->instructorProfile?->teachingFields()->first()?->approval_status);
         $this->assertTrue($this->userHasPrimaryRolePivot($user, 'instructor'));
+    }
+
+    public function test_instructor_registration_allows_no_certificates(): void
+    {
+        Notification::fake();
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-no-certificates@example.com',
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-no-certificates@example.com')->firstOrFail();
+
+        $this->assertSame(0, $user->instructorCertificates()->count());
+        $this->assertNull($user->instructorApplication);
+        $this->assertNull($user->instructorApplication?->certificate_path);
+    }
+
+    public function test_instructor_registration_keeps_cv_but_never_creates_certificates(): void
+    {
+        Notification::fake();
+        Storage::fake('public');
+
+        $this->postRegister('instructor', [
+            'email' => 'instructor-cv-only@example.com',
+            'cv' => UploadedFile::fake()->create('cv.pdf', 200, 'application/pdf'),
+            // An obsolete client payload must not recreate the registration upload flow.
+            'certificates' => [UploadedFile::fake()->create('obsolete-certificate.pdf', 100, 'application/pdf')],
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::query()->where('email', 'instructor-cv-only@example.com')->firstOrFail();
+        $this->assertSame(0, $user->instructorCertificates()->count());
+        $this->assertNull($user->instructorApplication?->certificate_path);
+        $this->assertFalse($user->needs_admin_review);
+        Storage::disk('public')->assertExists($user->instructorProfile?->cv);
     }
 
     public function test_duplicate_email_registration_is_rejected(): void
@@ -244,12 +288,9 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->postLogin('login-email@example.com', 'password')
-            ->assertRedirect(route('student.dashboard'));
+            ->assertRedirect(route('verification.notice'));
 
         $this->assertAuthenticatedAs($user);
-
-        $this->get(route('student.dashboard'))
-            ->assertRedirect(route('verification.notice'));
     }
 
     public function test_login_with_username_succeeds(): void
@@ -262,9 +303,26 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->postLogin('loginuser', 'password')
-            ->assertRedirect(route('student.dashboard'));
+            ->assertRedirect(route('verification.notice'));
 
         $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_email_verification_is_required_before_two_factor_challenge(): void
+    {
+        $user = User::factory()->unverified()->create([
+            'email' => 'unverified-2fa@example.com',
+            'password' => Hash::make('password'),
+            'role' => 'student',
+            'two_factor_enabled' => true,
+        ]);
+
+        $this->postLogin($user->email, 'password')
+            ->assertRedirect(route('verification.notice'));
+
+        $this->assertDatabaseMissing('two_factor_codes', [
+            'user_id' => $user->id,
+        ]);
     }
 
     public function test_login_with_wrong_password_is_rejected(): void
@@ -278,6 +336,21 @@ class AuthenticationTest extends TestCase
             ->assertSessionHasErrors('identifier');
 
         $this->assertGuest();
+    }
+
+    public function test_invalid_stored_hash_is_rejected_without_500_or_plaintext_fallback(): void
+    {
+        $user = User::factory()->create(['email' => 'invalid-hash@example.com']);
+        // Simulate an import or direct SQL write bypassing User's hashed cast.
+        DB::table('users')->where('id', $user->id)->update(['password' => 'plain-secret']);
+
+        $this->from(route('login'));
+        $response = $this->postLogin($user->email, 'plain-secret');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('identifier');
+        $this->assertGuest();
+        $this->assertSame('plain-secret', $user->fresh()->getRawOriginal('password'));
     }
 
     public function test_inactive_user_cannot_login(): void
@@ -472,7 +545,6 @@ class AuthenticationTest extends TestCase
                 'specialty' => 'Công nghệ thông tin',
                 'experience' => '5 năm kinh nghiệm lập trình',
                 'bio' => 'Giới thiệu bản thân ngắn gọn.',
-                'certificate' => UploadedFile::fake()->create('certificate.pdf', 100, 'application/pdf'),
                 'agree_information' => '1',
                 'agree_terms' => '1',
             ]);

@@ -74,6 +74,7 @@
                     @endif
                 </div>
                 <h2 class="mt-2 text-2xl font-bold text-slate-950">{{ $course->title }}</h2>
+                <a href="{{ route('admin.courses.versions.index', $course) }}" class="mt-2 inline-block text-sm font-bold text-indigo-700 hover:underline">Lịch sử phiên bản</a>
                 <p class="mt-2 text-sm text-slate-500">Giảng viên: {{ $course->instructor?->name }} · {{ $course->instructor?->email }}</p>
                 <p class="mt-4 text-sm leading-6 text-slate-600">{{ $course->short_description ?: 'Chưa có mô tả ngắn.' }}</p>
 
@@ -128,6 +129,61 @@
             </div>
         </div>
     </section>
+
+    @if($reviewUpdateDiffs->isNotEmpty())
+        <section id="pending-update-diffs" class="overflow-hidden rounded-lg border border-indigo-200 bg-white shadow-sm">
+            <div class="border-b border-indigo-100 bg-indigo-50 px-5 py-4 sm:px-6">
+                <p class="text-sm font-semibold uppercase tracking-wide text-indigo-700">Các thay đổi trong lần gửi này</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-950">{{ $reviewUpdateDiffs->count() }} cập nhật đang chờ duyệt</h3>
+                <p class="mt-1 text-sm text-slate-600">Mọi thay đổi bên dưới sẽ được duyệt hoặc từ chối cùng quyết định của khóa học.</p>
+            </div>
+
+            <div class="divide-y divide-slate-200">
+                @foreach($reviewUpdateDiffs as $reviewItem)
+                    @php
+                        $update = $reviewItem['update'];
+                        $updateDiff = $reviewItem['diff'];
+                        $versions = data_get($updateDiff, 'metadata.versions', []);
+                    @endphp
+                    <article class="p-5 sm:p-6" data-content-update-id="{{ $update->id }}">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-indigo-700">{{ $updateDiff['entity_label'] }} · {{ $updateDiff['action_label'] }}</p>
+                                <h4 class="mt-1 font-bold text-slate-950">{{ $updateDiff['label'] }}</h4>
+                                @if(($versions['current'] ?? null) !== null || ($versions['proposed'] ?? null) !== null)
+                                    <p class="mt-1 text-xs text-slate-500">
+                                        V{{ $versions['current'] ?? '—' }} → V{{ $versions['proposed'] ?? '—' }}
+                                    </p>
+                                @endif
+                            </div>
+                            <a href="{{ route('admin.content-updates.show', $update) }}" class="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-indigo-200 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">Xem chi tiết</a>
+                        </div>
+
+                        @foreach($updateDiff['warnings'] as $warning)
+                            <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{{ $warning }}</p>
+                        @endforeach
+
+                        <dl class="mt-4 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                            @forelse($updateDiff['fields'] as $field)
+                                <div class="grid gap-3 p-4 md:grid-cols-[180px_minmax(0,1fr)_24px_minmax(0,1fr)] md:items-start">
+                                    <dt class="text-sm font-bold text-slate-700">{{ $field['label'] }}</dt>
+                                    <dd class="break-words rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ is_array($field['old']) ? json_encode($field['old'], JSON_UNESCAPED_UNICODE) : ($field['old'] ?? '—') }}</dd>
+                                    <span class="hidden pt-2 text-center text-slate-400 md:block" aria-hidden="true">→</span>
+                                    <dd class="break-words rounded-md bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-950">{{ is_array($field['new']) ? json_encode($field['new'], JSON_UNESCAPED_UNICODE) : ($field['new'] ?? '—') }}</dd>
+                                </div>
+                            @empty
+                                <div class="p-4 text-sm text-slate-500">Không có trường dữ liệu thay đổi để hiển thị.</div>
+                            @endforelse
+                        </dl>
+
+                        @if(isset($updateDiff['quiz_questions']))
+                            <p class="mt-3 text-sm text-slate-700">Câu hỏi Quiz: {{ $updateDiff['quiz_questions']['current_count'] }} → {{ $updateDiff['quiz_questions']['proposed_count'] }} · Thêm {{ count($updateDiff['quiz_questions']['added']) }} · Xóa {{ count($updateDiff['quiz_questions']['removed']) }} · Sửa {{ count($updateDiff['quiz_questions']['changed']) }}</p>
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     {{-- ========================================================================= --}}
     {{-- THÔNG TIN GIẢNG VIÊN TẠO KHÓA HỌC                                        --}}
@@ -226,25 +282,25 @@
         </section>
     </div>
 
-    @if($course->preview_video)
+    @if($reviewPreviewVideoUrl)
         <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h3 class="text-lg font-bold text-slate-950">Video giới thiệu</h3>
-                <a href="{{ $course->preview_video }}" target="_blank" class="text-sm font-bold text-indigo-600 hover:underline">Mở trong tab mới</a>
+                <a href="{{ $reviewPreviewVideoUrl }}" target="_blank" class="text-sm font-bold text-indigo-600 hover:underline">Mở trong tab mới</a>
             </div>
             <div class="mt-4 aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-                @if(str_contains($course->preview_video, 'youtube.com') || str_contains($course->preview_video, 'youtu.be'))
+                @if(str_contains((string) $reviewPreviewVideo, 'youtube.com') || str_contains((string) $reviewPreviewVideo, 'youtu.be'))
                     @php
-                        preg_match('/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/', $course->preview_video, $matches);
+                        preg_match('/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/', $reviewPreviewVideo, $matches);
                         $youtubeId = $matches[1] ?? null;
                     @endphp
                     @if($youtubeId)
                         <iframe src="https://www.youtube.com/embed/{{ $youtubeId }}" class="h-full w-full" allowfullscreen></iframe>
                     @else
-                        <a href="{{ $course->preview_video }}" target="_blank" class="flex h-full items-center justify-center text-sm font-bold text-white">Xem video giới thiệu</a>
+                        <a href="{{ $reviewPreviewVideoUrl }}" target="_blank" class="flex h-full items-center justify-center text-sm font-bold text-white">Xem video giới thiệu</a>
                     @endif
                 @else
-                    <video src="{{ $course->preview_video }}" controls class="h-full w-full"></video>
+                    <video src="{{ $reviewPreviewVideoUrl }}" controls playsinline preload="metadata" class="h-full w-full object-contain"></video>
                 @endif
             </div>
         </section>
@@ -437,10 +493,10 @@
                                                                         @endphp
                                                                         <li class="flex items-start gap-2 px-3 py-2 hover:bg-amber-50 transition-colors">
                                                                             {{-- Nút seek --}}
-                                                                            @if($lesson->video_path)
+                                                                            @if($hasVideo && !$effectiveVideoUrl)
                                                                                 <button
                                                                                     type="button"
-                                                                                    class="admin-seek-btn flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
+                                                                                    class="admin-seek-btn flex-shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors cursor-pointer"
                                                                                     data-video-id="admin-video-{{ $videoLessonKey }}"
                                                                                     data-timestamp="{{ $tsSeconds }}"
                                                                                     title="Nhảy đến {{ $vf['timestamp'] }} và phát video"
@@ -462,6 +518,71 @@
                                                                         </li>
                                                                     @endforeach
                                                                     </ul>
+                                                                </div>
+                                                            @endif
+
+                                                            {{-- Bổ sung: AI kiểm tra phù hợp danh mục --}}
+                                                            @php
+                                                                $catMatch = method_exists($mod, 'categoryMatch') ? $mod->categoryMatch() : ($mod->details['category_match'] ?? null);
+                                                                $catBadge = method_exists($mod, 'categoryMatchBadge') ? $mod->categoryMatchBadge() : null;
+                                                                $courseCategoryName = $course->category?->name ?? 'Không xác định';
+                                                                if ($course->category?->parent) {
+                                                                    $courseCategoryName = $course->category->parent->name . ' → ' . $courseCategoryName;
+                                                                }
+                                                            @endphp
+
+                                                            @if($catMatch)
+                                                                @php
+                                                                    $catStatus = $catMatch['status'] ?? 'Cần Admin kiểm tra';
+                                                                    $catBadgeClass = match($catStatus) {
+                                                                        'Phù hợp' => 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                                                                        'Không phù hợp' => 'bg-rose-100 text-rose-800 border-rose-300',
+                                                                        default => 'bg-amber-100 text-amber-800 border-amber-300',
+                                                                    };
+                                                                    $catEmoji = match($catStatus) {
+                                                                        'Phù hợp' => '🟢',
+                                                                        'Không phù hợp' => '🔴',
+                                                                        default => '🟡',
+                                                                    };
+                                                                @endphp
+                                                                <div class="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 p-3.5 shadow-2xs">
+                                                                    <div class="flex items-center justify-between gap-2 mb-2">
+                                                                        <div class="flex items-center gap-1.5">
+                                                                            <span class="text-base">🎓</span>
+                                                                            <h6 class="font-bold text-indigo-950 text-xs sm:text-sm">AI kiểm tra phù hợp danh mục</h6>
+                                                                        </div>
+                                                                        <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold {{ $catBadgeClass }}">
+                                                                            <span>{{ $catEmoji }}</span>
+                                                                            {{ $catStatus }}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div class="space-y-1.5 text-xs">
+                                                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                                            <span class="text-slate-500 font-medium">Danh mục yêu cầu:</span>
+                                                                            <span class="font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{{ $courseCategoryName }}</span>
+                                                                            @if(isset($catMatch['confidence']))
+                                                                                <span class="text-slate-400">·</span>
+                                                                                <span class="text-slate-500 font-medium">Độ tin cậy:</span>
+                                                                                <span class="font-bold text-indigo-700">{{ round(((float)$catMatch['confidence']) <= 1.0 ? ((float)$catMatch['confidence'] * 100) : (float)$catMatch['confidence']) }}%</span>
+                                                                            @endif
+                                                                        </div>
+
+                                                                        @if(!empty($catMatch['detected_topics']) && is_array($catMatch['detected_topics']))
+                                                                            <div class="flex flex-wrap items-center gap-1 pt-1">
+                                                                                <span class="text-slate-500 font-medium mr-1">Chủ đề phát hiện:</span>
+                                                                                @foreach($catMatch['detected_topics'] as $topic)
+                                                                                    <span class="inline-block rounded bg-white border border-indigo-200 px-2 py-0.5 text-indigo-800 font-semibold text-[11px]">{{ $topic }}</span>
+                                                                                @endforeach
+                                                                            </div>
+                                                                        @endif
+
+                                                                        @if(!empty($catMatch['reason']))
+                                                                            <div class="mt-2 text-slate-700 bg-white p-2.5 rounded-lg border border-indigo-100/80 leading-relaxed text-xs">
+                                                                                <span class="font-semibold text-slate-800">AI nhận xét về chuyên ngành:</span> {{ $catMatch['reason'] }}
+                                                                            </div>
+                                                                        @endif
+                                                                    </div>
                                                                 </div>
                                                             @endif
 
@@ -1010,17 +1131,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function adminSeekAndPlay(video, seconds) {
         seconds = Math.max(0, parseFloat(seconds) || 0);
 
-        var seekableInfo = 'none';
-        if (video.seekable && video.seekable.length > 0) {
-            seekableInfo = video.seekable.start(0) + 's – ' + video.seekable.end(0) + 's';
-        }
-        console.log('[AdminSeek] target=' + seconds + 's | readyState=' + video.readyState
-            + ' | duration=' + video.duration + ' | seekable=' + seekableInfo);
-
         function doSeek() {
             video.pause();
             video.currentTime = seconds;
-            console.log('[AdminSeek] currentTime sau set:', video.currentTime);
 
             var done = false;
 
@@ -1036,7 +1149,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 done = true;
                 clearTimeout(fallback);
                 video.removeEventListener('seeked', onSeeked);
-                console.log('[AdminSeek] seeked OK @ ' + video.currentTime);
                 video.play().catch(function () {});
             }, { once: true });
         }
@@ -1214,12 +1326,32 @@ document.addEventListener('DOMContentLoaded', function () {
             );
         }
 
+        // Bước 2b: Kiểm tra độ phù hợp danh mục khóa học
+        onProgress({ phase: 'category_match', frameIndex: total, frameTotal: total });
+        var categoryMatchData = null;
+        try {
+            var catRes = await fetch('/admin/ai-moderation/' + lessonId + '/category-match', {
+                method: 'POST',
+                headers: aiFetchHeaders(),
+                body: JSON.stringify({ frames: frames }),
+            });
+            var catJson = await parseJsonResponse(catRes);
+            if (catRes.ok && catJson && catJson.status) {
+                categoryMatchData = catJson;
+            }
+        } catch (e) {
+            console.warn('[AI Moderation] Category match check error:', e);
+        }
+
         onProgress({ phase: 'save', frameIndex: total, frameTotal: total });
 
         var saveRes = await fetch('/admin/ai-moderation/' + lessonId + '/save', {
             method: 'POST',
             headers: aiFetchHeaders(),
-            body: JSON.stringify({ results: aiResults }),
+            body: JSON.stringify({
+                results: aiResults,
+                category_match: categoryMatchData,
+            }),
         });
 
         var saveData = await parseJsonResponse(saveRes);
@@ -1253,8 +1385,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         statusText.innerText = 'Đang cắt frame (mỗi 300s)...';
                         progressBar.style.width = '10%';
                     } else if (state.phase === 'analyze') {
-                        statusText.innerText = 'Đang phân tích ' + state.frameIndex + '/' + state.frameTotal + ' frame...';
-                        progressBar.style.width = (10 + (90 * state.frameIndex / state.frameTotal)) + '%';
+                        statusText.innerText = 'Đang phân tích dấu hiệu ' + state.frameIndex + '/' + state.frameTotal + ' frame...';
+                        progressBar.style.width = (10 + (70 * state.frameIndex / state.frameTotal)) + '%';
+                    } else if (state.phase === 'category_match') {
+                        statusText.innerText = 'Đang kiểm tra độ phù hợp danh mục...';
+                        progressBar.style.width = '88%';
                     } else if (state.phase === 'save') {
                         statusText.innerText = 'Đang lưu kết quả...';
                         progressBar.style.width = '98%';

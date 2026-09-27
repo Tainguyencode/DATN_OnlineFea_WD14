@@ -59,7 +59,6 @@ class TestHlsPipelineCommand extends Command
                 // Kiểm tra kết quả output
                 $hlsLocalDir = Storage::disk('local')->path('lesson-hls/' . $lesson->id);
                 $playlistPath = $hlsLocalDir . DIRECTORY_SEPARATOR . 'playlist.m3u8';
-                $masterPath = $hlsLocalDir . DIRECTORY_SEPARATOR . 'master.m3u8';
 
                 if (file_exists($playlistPath) && filesize($playlistPath) > 0) {
                     $segmentFiles = File::glob($hlsLocalDir . DIRECTORY_SEPARATOR . 'segment_*.ts');

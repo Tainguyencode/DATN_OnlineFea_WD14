@@ -12,10 +12,16 @@ use Illuminate\Validation\ValidationException;
 
 class QuizService
 {
-    public function buildAttemptReview(QuizAttempt $attempt): array
+    public function buildAttemptReview(QuizAttempt $attempt, array $policy): array
     {
+        $reviewMode = $policy['review_mode'] ?? QuizAttemptService::REVIEW_MODE_RESTRICTED;
+        abort_unless(in_array($reviewMode, [
+            QuizAttemptService::REVIEW_MODE_RESTRICTED,
+            QuizAttemptService::REVIEW_MODE_FULL,
+        ], true), 500, 'Invalid quiz review mode.');
+
         $attempt->loadMissing([
-            'quiz.questions.options',
+            'quiz',
             'quizVersion.questionMappings.question',
             'quizVersion.questionMappings.questionVersion.options',
             'attemptAnswers',
@@ -26,9 +32,9 @@ class QuizService
         ]);
 
         $quiz = $attempt->quiz;
-        if ($quiz && $attempt->quizVersion && (int) $attempt->quizVersion->quiz_id === (int) $quiz->id) {
-            $quiz = app(QuizAttemptService::class)->projectQuiz($attempt);
-        }
+        abort_unless($quiz && $attempt->quizVersion, 409, 'Quiz attempt does not have a bound quiz version.');
+        abort_unless((int) $attempt->quizVersion->quiz_id === (int) $quiz->id, 409, 'Quiz attempt has an invalid quiz version.');
+        $quiz = app(QuizAttemptService::class)->projectQuiz($attempt);
         $attemptAnswersGrouped = $attempt->attemptAnswers->groupBy('question_id');
         $rawSavedAnswers = is_array($attempt->answers) ? $attempt->answers : [];
 
@@ -71,37 +77,55 @@ class QuizService
                     $correctQuestionsCount++;
                 }
 
-                $optionsReview = $question->options->map(function ($option) use ($selectedIds, $correctIds) {
+                $optionsReview = $question->options->map(function ($option) use ($selectedIds, $correctIds, $reviewMode) {
                     $optionId = (int) $option->id;
                     $isSelected = in_array($optionId, $selectedIds, true);
                     $isCorrectOption = in_array($optionId, $correctIds, true);
 
-                    return [
+                    $review = [
                         'id' => $optionId,
                         'option_text' => $option->option_text,
                         'is_selected' => $isSelected,
-                        'is_correct' => $isCorrectOption,
                     ];
+
+                    if ($reviewMode === QuizAttemptService::REVIEW_MODE_FULL) {
+                        $review['is_correct'] = $isCorrectOption;
+                    } elseif ($isSelected) {
+                        $review['selected_correct'] = $isCorrectOption;
+                    }
+
+                    return $review;
                 })->values()->all();
 
-                $questionsReview[] = [
+                $questionReview = [
                     'id' => $question->id,
                     'question_number' => $index + 1,
                     'question' => $question->question,
                     'type' => $question->type,
                     'form_type' => $question->form_type,
                     'points' => (int) $question->points,
-                    'explanation' => $question->explanation,
                     'is_correct' => $isCorrect,
+                    'is_unanswered' => $selectedIds === [],
                     'selected_ids' => $selectedIds,
-                    'correct_ids' => $correctIds,
                     'options' => $optionsReview,
                 ];
+
+                if ($reviewMode === QuizAttemptService::REVIEW_MODE_FULL) {
+                    $questionReview['correct_ids'] = $correctIds;
+                    $questionReview['explanation'] = $question->explanation;
+                }
+
+                $questionsReview[] = $questionReview;
             }
         }
 
         $allAttempts = $quiz ? QuizAttempt::where('quiz_id', $quiz->id)
             ->where('user_id', $attempt->user_id)
+            ->whereIn('status', [
+                QuizAttempt::STATUS_COMPLETED,
+                QuizAttempt::STATUS_TERMINATED,
+                QuizAttempt::STATUS_EXPIRED,
+            ])
             ->orderBy('id', 'asc')
             ->get()
             ->values()
@@ -125,11 +149,15 @@ class QuizService
         $course = $quiz?->lesson?->course
             ?? $quiz?->lesson?->section?->course
             ?? $quiz?->lesson?->chapter?->course;
+        $quizForView = clone $quiz;
+        $quizForView->setRelations([]);
+        $attemptForView = clone $attempt;
+        $attemptForView->setRelations([]);
 
         return [
-            'attempt' => $attempt,
+            'attempt' => $attemptForView,
             'attempt_number' => $attemptNumber,
-            'quiz' => $quiz,
+            'quiz' => $quizForView,
             'user' => $attempt->user,
             'course' => $course,
             'lesson' => $quiz?->lesson,
@@ -137,6 +165,60 @@ class QuizService
             'total_questions' => $totalQuestions,
             'correct_questions_count' => $correctQuestionsCount,
             'all_attempts' => $allAttempts,
+            'review_mode' => $reviewMode,
+            'review_restriction_reason' => $policy['review_restriction_reason'] ?? null,
+            'has_remaining_attempts' => (bool) ($policy['has_remaining_attempts'] ?? false),
+            'max_attempts' => $policy['max_attempts'] ?? null,
+            'attempts_used' => $policy['attempts_used'] ?? null,
+            'remaining_attempts' => $policy['remaining_attempts'] ?? null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function submissionFeedback(array $graded, string $reviewMode): array
+    {
+        abort_unless(in_array($reviewMode, [
+            QuizAttemptService::REVIEW_MODE_RESTRICTED,
+            QuizAttemptService::REVIEW_MODE_FULL,
+        ], true), 500, 'Invalid quiz review mode.');
+
+        if ($reviewMode === QuizAttemptService::REVIEW_MODE_FULL) {
+            if (isset($graded['questions'])) {
+                $graded['questions'] = array_values($graded['questions']);
+            }
+
+            return $graded;
+        }
+
+        $questions = collect($graded['questions'] ?? [])->map(function (array $result, $questionId): array {
+            $selectedIds = collect($result['selected_ids'] ?? [])
+                ->map(fn ($id): int => (int) $id)
+                ->values()
+                ->all();
+            $correctIds = collect($result['correct_ids'] ?? [])
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            return [
+                'question_id' => (int) $questionId,
+                'selected_ids' => $selectedIds,
+                'selected_options' => collect($selectedIds)->map(fn (int $optionId): array => [
+                    'id' => $optionId,
+                    'selected_correct' => in_array($optionId, $correctIds, true),
+                ])->values()->all(),
+                'is_correct' => (bool) ($result['is_correct'] ?? false),
+                'is_unanswered' => $selectedIds === [],
+                'is_excluded' => (bool) ($result['is_excluded'] ?? false),
+            ];
+        })->values()->all();
+
+        return [
+            'score' => $graded['score'] ?? 0,
+            'total_score' => $graded['total_score'] ?? 0,
+            'percent' => $graded['percent'] ?? 0,
+            'passed' => (bool) ($graded['passed'] ?? false),
+            'answers' => $graded['answers'] ?? [],
+            'questions' => $questions,
         ];
     }
 

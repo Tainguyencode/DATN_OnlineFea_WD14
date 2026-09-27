@@ -228,4 +228,59 @@ class VideoModeration extends Model
 
         return $labels;
     }
+
+    /**
+     * Lấy thông tin kết quả kiểm tra phù hợp danh mục từ details.
+     *
+     * @return array{status: string, confidence: float, reason: string, detected_topics: list<string>}|null
+     */
+    public function categoryMatch(): ?array
+    {
+        if (isset($this->details['category_match']) && is_array($this->details['category_match'])) {
+            return $this->details['category_match'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Badge cấu hình giao diện cho kết quả kiểm tra phù hợp danh mục.
+     *
+     * @return array{status: string, tone: string, badge_class: string, emoji: string}
+     */
+    public function categoryMatchBadge(): array
+    {
+        $match = $this->categoryMatch();
+        if (! $match) {
+            return [
+                'status' => 'Chưa quét',
+                'tone' => 'gray',
+                'badge_class' => 'bg-slate-100 text-slate-700 border-slate-200',
+                'emoji' => '⚪',
+            ];
+        }
+
+        $status = $match['status'] ?? 'Cần Admin kiểm tra';
+
+        return match ($status) {
+            'Phù hợp' => [
+                'status' => 'Phù hợp',
+                'tone' => 'green',
+                'badge_class' => 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                'emoji' => '🟢',
+            ],
+            'Không phù hợp' => [
+                'status' => 'Không phù hợp',
+                'tone' => 'red',
+                'badge_class' => 'bg-rose-100 text-rose-800 border-rose-300',
+                'emoji' => '🔴',
+            ],
+            default => [
+                'status' => 'Cần Admin kiểm tra',
+                'tone' => 'yellow',
+                'badge_class' => 'bg-amber-100 text-amber-800 border-amber-300',
+                'emoji' => '🟡',
+            ],
+        };
+    }
 }

@@ -14,7 +14,7 @@ class CourseDiscussionMessageBroadcasted implements ShouldBroadcastNow
     public function __construct(
         public int $discussionId,
         public string $action,
-        public array $message,
+        public string $messageKey,
     ) {}
 
     public function broadcastOn(): array

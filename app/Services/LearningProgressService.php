@@ -49,6 +49,11 @@ class LearningProgressService
                 ->first();
 
             $previousWatched = (int) ($existing?->watched_seconds ?? 0);
+            if ($lesson->type === Lesson::TYPE_DOCUMENT && $forceCompleted && ! $existing?->is_completed) {
+                $startedAt = \Illuminate\Support\Facades\Cache::get('reading-start:'.$userId.':'.$lesson->id);
+                abort_unless(is_numeric($startedAt) && now()->timestamp - (int) $startedAt >= 30,
+                    422, 'Vui lòng mở bài đọc ít nhất 30 giây trước khi hoàn thành.');
+            }
             $watchedSeconds = max($previousWatched, min($watchedSeconds, $durationSeconds > 0 ? $durationSeconds : $watchedSeconds));
 
             if ($lesson->type === Lesson::TYPE_QUIZ) {
@@ -164,36 +169,12 @@ class LearningProgressService
                 ->lockForUpdate()
                 ->first();
 
-            $durationSeconds = $this->durationSeconds($lesson, $payload);
-
-            if (! empty($payload['completed'])) {
-                $completedAt = $existing?->completed_at ?? now();
-                $watchedSeconds = $durationSeconds > 0 ? $durationSeconds : (int) ($existing?->watched_seconds ?? 0);
-
-                $progress = LessonProgress::updateOrCreate(
-                    ['user_id' => $userId, 'lesson_id' => $lesson->id],
-                    [
-                        'course_id' => $course->id,
-                        'watched_seconds' => $watchedSeconds,
-                        'duration_seconds' => $durationSeconds,
-                        'last_position_seconds' => $watchedSeconds,
-                        'furthest_position_seconds' => max($watchedSeconds, (int) ($existing?->furthest_position_seconds ?? 0)),
-                        'progress_percent' => 100,
-                        'is_completed' => true,
-                        'last_watched_at' => now(),
-                        'last_client_updated_at' => now(),
-                        'completed_at' => $completedAt,
-                    ]
-                );
-
-                if (! ($existing?->is_completed ?? false)) {
-                    app(PointService::class)->awardLessonCompletionPoints($userId, $lesson->id);
-                }
-
-                return $this->refreshCourseProgress($enrollment, $userId, $course, $progress);
-            }
+            $durationSeconds = $this->durationSeconds($lesson);
 
             $clientUpdatedAt = $this->clientUpdatedAt($payload['client_updated_at'] ?? null);
+            if ($clientUpdatedAt?->isFuture()) {
+                $clientUpdatedAt = now();
+            }
             if (
                 $existing?->last_client_updated_at
                 && $clientUpdatedAt
@@ -210,14 +191,10 @@ class LearningProgressService
             $previousFurthest = (int) ($existing?->furthest_position_seconds ?? $existing?->watched_seconds ?? 0);
             $previousCompleted = (bool) ($existing?->is_completed ?? false);
 
-            $serverElapsed = $this->serverElapsedSeconds($existing, $clientUpdatedAt);
-            $trustedPlayedSeconds = min($playedSeconds, $serverElapsed + 5);
+            $serverElapsed = $this->serverElapsedSeconds($existing);
+            $trustedPlayedSeconds = min($playedSeconds, $serverElapsed);
 
             $watchedSeconds = $this->normalizeSeconds($previousWatched + $trustedPlayedSeconds, $durationSeconds);
-
-            if (! empty($payload['completed']) || ($durationSeconds > 0 && $lastPosition >= max(1, $durationSeconds - 2))) {
-                $watchedSeconds = $durationSeconds;
-            }
 
             $safeFurthestLimit = $durationSeconds > 0
                 ? min($durationSeconds, max($previousFurthest, $previousFurthest + $trustedPlayedSeconds + 5))
@@ -231,9 +208,6 @@ class LearningProgressService
             $threshold = $course->requiredVideoPercent();
             // Đảm bảo học viên xem đủ thời lượng hoặc khi video kết thúc
             $completed = $previousCompleted || $progressPercent >= $threshold;
-            if (! $completed && (! empty($payload['completed']) || ($durationSeconds > 0 && $watchedSeconds >= max(1, $durationSeconds - 2)))) {
-                $completed = true;
-            }
             if ($completed) {
                 $progressPercent = 100;
                 $watchedSeconds = max($watchedSeconds, $durationSeconds);
@@ -471,21 +445,10 @@ class LearningProgressService
         }
     }
 
-    private function durationSeconds(Lesson $lesson, array $payload): int
+    private function durationSeconds(Lesson $lesson): int
     {
-        $clientDuration = (int) floor((float) ($payload['video_duration_seconds'] ?? $payload['duration_seconds'] ?? 0));
-        $storedDuration = (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0);
-
-        if ($clientDuration > 0 && ($storedDuration <= 0 || abs($storedDuration - $clientDuration) > 3)) {
-            $lesson->update([
-                'duration_seconds' => $clientDuration,
-                'duration' => $clientDuration,
-            ]);
-
-            return $clientDuration;
-        }
-
-        return max(0, $storedDuration > 0 ? $storedDuration : $clientDuration);
+        // Media metadata belongs to the transcoding pipeline, never the viewer.
+        return max(0, (int) ($lesson->duration_seconds ?: $lesson->duration ?: 0));
     }
 
     private function normalizeSeconds(int $seconds, int $durationSeconds): int
@@ -495,14 +458,14 @@ class LearningProgressService
         return $durationSeconds > 0 ? min($seconds, $durationSeconds) : $seconds;
     }
 
-    private function serverElapsedSeconds(?LessonProgress $existing, ?Carbon $clientUpdatedAt): int
+    private function serverElapsedSeconds(?LessonProgress $existing): int
     {
         if (! $existing?->last_watched_at) {
-            return 15;
+            return 0;
         }
 
-        $reference = $clientUpdatedAt ?? now();
+        $reference = now();
 
-        return max(0, min(86400, $existing->last_watched_at->diffInSeconds($reference, false)));
+        return max(0, min(30, (int) $existing->last_watched_at->diffInSeconds($reference, false)));
     }
 }

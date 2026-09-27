@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Web\Instructor;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Discussion;
+use App\Services\DiscussionChatService;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 
 class DiscussionController extends Controller
 {
+    public function __construct(private readonly DiscussionChatService $chat) {}
+
     /**
      * Display a listing of student discussions for the instructor's courses.
      */
@@ -53,33 +55,31 @@ class DiscussionController extends Controller
             });
         }
 
-        // Load relations
-        $allDiscussions = (clone $baseQuery)->with(['user', 'course', 'lesson', 'replies.user', 'replies.lesson'])->latest()->get();
+        $totalCount = (clone $baseQuery)->count();
+        $pendingConstraint = fn ($query) => $query
+            ->whereNull('last_message_user_id')
+            ->orWhere('last_message_user_id', '!=', $user->id);
+        $pendingCount = (clone $baseQuery)->where($pendingConstraint)->count();
+        $answeredCount = (clone $baseQuery)->where('last_message_user_id', $user->id)->count();
 
-        // Compute counts
-        $totalCount = $allDiscussions->count();
-        $pendingCount = $allDiscussions->filter(fn (Discussion $d) => $d->needsReply())->count();
-        $answeredCount = $allDiscussions->filter(fn (Discussion $d) => $d->isAnswered())->count();
-
-        // Filter by status in memory / collection or query
         $status = $request->string('status')->toString();
-        $filteredCollection = $allDiscussions;
         if ($status === 'pending') {
-            $filteredCollection = $allDiscussions->filter(fn (Discussion $d) => $d->needsReply());
+            $baseQuery->where($pendingConstraint);
         } elseif ($status === 'answered') {
-            $filteredCollection = $allDiscussions->filter(fn (Discussion $d) => $d->isAnswered());
+            $baseQuery->where('last_message_user_id', $user->id);
         }
 
-        // Manual pagination from filtered collection
-        $page = request()->integer('page', 1);
-        $perPage = 15;
-        $paginated = new LengthAwarePaginator(
-            $filteredCollection->forPage($page, $perPage)->values(),
-            $filteredCollection->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
+        $paginated = $baseQuery
+            ->with(['user', 'course', 'lesson.course', 'lastReply.user', 'lastReply.lesson'])
+            ->withCount('replies')
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->paginate(15)
+            ->withQueryString();
+        $unreadCounts = $this->chat->unreadCountsFor($paginated->getCollection()->pluck('id'), $user);
+        $paginated->getCollection()->each(function (Discussion $discussion) use ($unreadCounts): void {
+            $discussion->setAttribute('chat_unread_count', $unreadCounts[$discussion->id] ?? 0);
+        });
 
         return view('instructor.discussions.index', [
             'discussions' => $paginated,
@@ -102,16 +102,12 @@ class DiscussionController extends Controller
      */
     public function show(Discussion $discussion): View
     {
-        $user = auth()->user();
-        $course = $discussion->course ?: $discussion->lesson?->course;
-
-        // Check if instructor owns the course
-        abort_unless($course && (int) $course->instructor_id === (int) $user->id, 403);
-
-        $discussion->load(['user', 'course', 'lesson', 'replies.user', 'replies.lesson', 'replies.replyTo.user']);
+        $this->authorize('view', $discussion);
+        $discussion->load(['user', 'course', 'course.instructor', 'lesson']);
 
         return view('instructor.discussions.show', [
             'discussion' => $discussion,
+            'chatContext' => $this->chat->context($discussion, request()->user()),
         ]);
     }
 }

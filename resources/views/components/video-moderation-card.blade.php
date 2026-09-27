@@ -323,6 +323,63 @@
                 </div>
             @endif
 
+            {{-- Bổ sung: AI kiểm tra phù hợp danh mục --}}
+            @php
+                $catMatch = method_exists($moderation, 'categoryMatch') ? $moderation->categoryMatch() : ($moderation->details['category_match'] ?? null);
+            @endphp
+
+            @if($catMatch)
+                @php
+                    $catStatus = $catMatch['status'] ?? 'Cần Admin kiểm tra';
+                    $catBadgeClass = match($catStatus) {
+                        'Phù hợp' => 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                        'Không phù hợp' => 'bg-rose-100 text-rose-800 border-rose-300',
+                        default => 'bg-amber-100 text-amber-800 border-amber-300',
+                    };
+                    $catEmoji = match($catStatus) {
+                        'Phù hợp' => '🟢',
+                        'Không phù hợp' => '🔴',
+                        default => '🟡',
+                    };
+                @endphp
+                <div class="rounded-lg border border-indigo-200 bg-indigo-50/70 p-3.5 shadow-2xs">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-base">🎓</span>
+                            <h6 class="font-bold text-indigo-950 text-xs sm:text-sm">AI kiểm tra phù hợp danh mục</h6>
+                        </div>
+                        <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold {{ $catBadgeClass }}">
+                            <span>{{ $catEmoji }}</span>
+                            {{ $catStatus }}
+                        </span>
+                    </div>
+
+                    <div class="space-y-1.5 text-xs">
+                        @if(isset($catMatch['confidence']))
+                            <div class="flex items-center gap-2">
+                                <span class="text-slate-500 font-medium">Độ tin cậy:</span>
+                                <span class="font-bold text-indigo-700">{{ round(((float)$catMatch['confidence']) <= 1.0 ? ((float)$catMatch['confidence'] * 100) : (float)$catMatch['confidence']) }}%</span>
+                            </div>
+                        @endif
+
+                        @if(!empty($catMatch['detected_topics']) && is_array($catMatch['detected_topics']))
+                            <div class="flex flex-wrap items-center gap-1 pt-0.5">
+                                <span class="text-slate-500 font-medium mr-1">Chủ đề phát hiện:</span>
+                                @foreach($catMatch['detected_topics'] as $topic)
+                                    <span class="inline-block rounded bg-white border border-indigo-200 px-2 py-0.5 text-indigo-800 font-semibold text-[11px]">{{ $topic }}</span>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        @if(!empty($catMatch['reason']))
+                            <div class="mt-2 text-slate-700 bg-white p-2.5 rounded-lg border border-indigo-100/80 leading-relaxed text-xs">
+                                <span class="font-semibold text-slate-800">AI nhận xét về chuyên ngành:</span> {{ $catMatch['reason'] }}
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
+
             {{-- Khuyến nghị cho giảng viên --}}
             @if ($hasAnySign)
                 <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">

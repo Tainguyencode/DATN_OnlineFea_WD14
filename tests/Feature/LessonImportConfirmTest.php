@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\LessonImportBatch;
 use App\Models\User;
@@ -38,7 +40,7 @@ class LessonImportConfirmTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_confirm_imports_all_supported_types_in_order_as_draft_non_preview_shells(): void
+    public function test_confirm_imports_all_supported_types_in_order_as_ready_non_preview_shells(): void
     {
         Queue::fake();
         $instructor = $this->signInInstructor();
@@ -98,7 +100,7 @@ class LessonImportConfirmTest extends TestCase
         foreach ($imported as $lesson) {
             $this->assertSame($course->id, $lesson->course_id);
             $this->assertSame($section->id, $lesson->section_id);
-            $this->assertSame(Lesson::STATUS_DRAFT, $lesson->status);
+            $this->assertSame(Lesson::STATUS_PUBLISHED, $lesson->status);
             $this->assertFalse($lesson->is_preview);
         }
 
@@ -424,6 +426,14 @@ class LessonImportConfirmTest extends TestCase
         $category = Category::create([
             'name' => 'Confirm category '.uniqid(),
             'slug' => 'confirm-category-'.uniqid(),
+            'status' => true,
+        ]);
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->syncWithoutDetaching([
+            $category->id => [
+                'is_primary' => ! $profile->teachingCategories()->exists(),
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ],
         ]);
         $course = Course::create([
             'instructor_id' => $instructor->id,

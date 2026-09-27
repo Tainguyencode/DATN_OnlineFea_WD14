@@ -15,9 +15,11 @@
     ];
     $ratingOptions = [
         '' => 'Tất cả đánh giá',
-        '4.5' => '★ 4.5 sao trở lên',
-        '4.0' => '★ 4.0 sao trở lên',
-        '3.0' => '★ 3.0 sao trở lên',
+        '1' => '★ 1.0 đến dưới 2.0 sao',
+        '2' => '★ 2.0 đến dưới 3.0 sao',
+        '3' => '★ 3.0 đến dưới 4.0 sao',
+        '4' => '★ 4.0 đến dưới 5.0 sao',
+        '5' => '★ 5.0 sao',
     ];
     $categoryCount = $categories->sum(fn ($parent) => $parent->children->count());
     $overviewSections = $showCourseOverview ? [

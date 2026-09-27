@@ -15,6 +15,8 @@ use App\Models\Certificate;
 use App\Models\Chapter;
 use App\Models\ContentUpdate;
 use App\Models\Course;
+use App\Models\CourseSection;
+use App\Models\CourseVersion;
 use App\Models\Enrollment;
 use App\Models\Lesson;
 use App\Models\LessonProgress;
@@ -23,12 +25,17 @@ use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\Submission;
 use App\Models\User;
+use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use App\Services\CourseSubmissionValidator;
+use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
+use App\Services\InstructorCourseCategoryAccess;
 use App\Services\NotificationService;
+use App\Services\QuizAttemptService;
 use App\Services\QuizService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +48,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CourseController extends Controller
 {
+    public function __construct(private readonly InstructorCourseCategoryAccess $courseCategoryAccess) {}
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search'));
@@ -69,7 +78,7 @@ class CourseController extends Controller
 
     public function create(): View
     {
-        $categories = $this->categoryGroups();
+        $categories = $this->courseCategoryAccess->selectableCategories(auth()->user());
 
         return view('instructor.courses.create', compact('categories'));
     }
@@ -96,6 +105,39 @@ class CourseController extends Controller
             ->with('success', 'Tạo khóa học thành công. Khóa học đang được lưu ở trạng thái nháp.');
     }
 
+    public function show(Course $course): View
+    {
+        $this->ensureOwned($course);
+
+        $course->load([
+            'category.parent',
+            'courseSections.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'chapters.lessons' => fn ($query) => $query->orderBy('sort_order'),
+            'courseReviews',
+            'instructor:id,name,email,avatar',
+        ]);
+        $course->loadCount(['lessons', 'enrollments', 'reviews']);
+
+        $curriculumSections = $course->courseSections->isNotEmpty()
+            ? $course->courseSections
+            : $course->chapters;
+
+        $totalLessons = $course->lessons_count ?: $curriculumSections->sum(fn ($section) => $section->lessons->count());
+
+        $courseIncome = (float) OrderItem::query()
+            ->where('course_id', $course->id)
+            ->whereHas('order', fn (Builder $q) => $q->where('status', 'paid'))
+            ->sum('instructor_earning');
+
+        $studentCount = Enrollment::query()
+            ->where('course_id', $course->id)
+            ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED])
+            ->distinct()
+            ->count('user_id');
+
+        return view('instructor.courses.show', compact('course', 'curriculumSections', 'totalLessons', 'courseIncome', 'studentCount'));
+    }
+
     public function edit(Course $course): View
     {
         $this->ensureOwned($course);
@@ -107,12 +149,44 @@ class CourseController extends Controller
             'courseReviews',
             'courseReviews.reviewer:id,name,email',
         ]);
-        $categories = $this->categoryGroups();
+        $categories = $this->courseCategoryAccess->selectableCategories(auth()->user());
         $statusOptions = $this->statusOptions();
         $submissionCheck = $course->submissionCheck();
         $courseReviews = $course->courseReviews;
+        $contentUpdates = app(ContentUpdateService::class);
+        $reviewState = $contentUpdates->instructorReviewState($course, auth()->user());
+        $activeCourseUpdate = $contentUpdates->activeCourseMetadataUpdate($course, auth()->user());
+        $formCourse = clone $course;
+        $activeCourseVersionContext = ['current' => $course->publishedVersion?->version_number, 'proposed' => null];
 
-        return view('instructor.courses.edit', compact('course', 'categories', 'statusOptions', 'submissionCheck', 'courseReviews'));
+        if ($activeCourseUpdate) {
+            $candidate = CourseVersion::query()
+                ->where('content_update_id', $activeCourseUpdate->id)
+                ->where('course_id', $course->id)
+                ->first();
+            $proposal = $candidate
+                ? $candidate->only(['title', 'short_description', 'description', 'objectives', 'category_id', 'level', 'language', 'price', 'discount_price', 'sale_price', 'thumbnail', 'preview_video'])
+                : ($activeCourseUpdate->payload ?? []);
+            $formCourse->forceFill($proposal);
+            if (array_key_exists('category_id', $proposal)) {
+                $formCourse->setRelation('category', Category::with('parent')->find($proposal['category_id']));
+            }
+            $activeCourseVersionContext = app(ContentUpdateDiffService::class)->versionContext($activeCourseUpdate);
+        }
+        $formReadOnly = $activeCourseUpdate?->isPending() ?? false;
+
+        return view('instructor.courses.edit', compact(
+            'course',
+            'formCourse',
+            'categories',
+            'statusOptions',
+            'submissionCheck',
+            'courseReviews',
+            'reviewState',
+            'activeCourseUpdate',
+            'activeCourseVersionContext',
+            'formReadOnly',
+        ));
     }
 
     public function update(StoreCourseRequest $request, Course $course): RedirectResponse
@@ -121,24 +195,43 @@ class CourseController extends Controller
 
         $validated = $request->validated();
 
-        if ($request->hasFile('thumbnail')) {
-            if (! $course->isPublished()) {
-                $this->deleteThumbnail($course);
-            }
-            $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
-        }
-
         if ($course->isPublished()) {
-            app(ContentUpdateService::class)->recordPendingUpdate(
-                ContentUpdate::TYPE_COURSE,
-                ContentUpdate::ACTION_UPDATE,
-                $course->id,
-                $course->id,
+            $pendingCourseUpdate = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_COURSE)
+                ->where('action', ContentUpdate::ACTION_UPDATE)
+                ->where('entity_id', $course->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->exists();
+            if ($pendingCourseUpdate) {
+                return back()->with('error', 'Phiên bản này đang chờ Admin duyệt.');
+            }
+
+            if ($request->hasFile('thumbnail')) {
+                $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
+            }
+
+            $result = app(ContentUpdateService::class)->saveCourseMetadataDraft(
+                $course,
                 array_merge($validated, ['sale_price' => $validated['discount_price'] ?? null]),
-                $request->user()
+                $request->user(),
             );
 
+            if (! $result['changed']) {
+                return back()->with(
+                    $result['reverted'] ? 'success' : 'info',
+                    $result['reverted']
+                        ? 'Đã bỏ bản nháp vì thông tin đề xuất trùng với bản đang xuất bản.'
+                        : 'Không có thay đổi mới để lưu.',
+                );
+            }
+
             return back()->with('success', 'Đã lưu bản cập nhật thông tin khóa học. Bản cập nhật sẽ được hiển thị sau khi Admin duyệt.');
+        }
+
+        if ($request->hasFile('thumbnail')) {
+            $this->deleteThumbnail($course);
+            $validated['thumbnail'] = $request->file('thumbnail')->store('course-thumbnails', 'public');
         }
 
         $course->update([
@@ -204,6 +297,19 @@ class CourseController extends Controller
         $this->ensureOwned($course);
         $validated = $request->validated();
 
+        if ($course->isPublished()) {
+            app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_CHAPTER,
+                ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, ['sort_order' => $course->courseSections()->count()]),
+                $request->user(),
+            );
+
+            return back()->with('success', 'Đã lưu bản cập nhật chương học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
+        }
+
         Chapter::create([
             'course_id' => $course->id,
             'title' => $validated['title'],
@@ -213,11 +319,52 @@ class CourseController extends Controller
         return back()->with('success', 'Đã thêm chương mới.');
     }
 
-    public function addLesson(StoreLessonRequest $request, Chapter $chapter): RedirectResponse
+    public function addLesson(StoreLessonRequest $request, Chapter $chapter, CurriculumLessonService $lessonService): RedirectResponse
     {
         $this->ensureOwned($chapter->course);
 
         $validated = $request->validated();
+        $course = $chapter->course;
+
+        if ($course->isPublished()) {
+            $sectionId = Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('chapter_id', $chapter->id)
+                ->whereNotNull('section_id')
+                ->value('section_id');
+            $section = $sectionId
+                ? CourseSection::query()
+                    ->where('course_id', $course->id)
+                    ->find($sectionId)
+                : CourseSection::query()
+                    ->where('course_id', $course->id)
+                    ->where('title', $chapter->title)
+                    ->where('sort_order', $chapter->sort_order)
+                    ->first();
+
+            $sortOrder = Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('chapter_id', $chapter->id)
+                ->count();
+
+            app(ContentUpdateService::class)->recordPendingUpdate(
+                ContentUpdate::TYPE_LESSON,
+                ContentUpdate::ACTION_CREATE,
+                $course->id,
+                null,
+                array_merge($validated, [
+                    'section_id' => $section?->id,
+                    'chapter_id' => $chapter->id,
+                    'sort_order' => $sortOrder,
+                    'is_preview' => $request->boolean('is_preview'),
+                    'status' => $validated['status'] ?? 'draft',
+                ]),
+                $request->user(),
+                ContentUpdate::STATUS_DRAFT,
+            );
+
+            return back()->with('success', 'Đã lưu bản cập nhật bài học. Thay đổi sẽ áp dụng sau khi Admin duyệt.');
+        }
 
         Lesson::create([
             ...$validated,
@@ -235,14 +382,28 @@ class CourseController extends Controller
     {
         $this->ensureOwned($course);
 
-        // Nếu khóa học đã được gửi duyệt thành công trước đó (pending_review / pending_update), chuyển hướng êm đẹp về danh sách
+        // Repeated submission is idempotent at the controller boundary.
         if (in_array($course->status, [Course::STATUS_PENDING, Course::STATUS_PENDING_UPDATE, 'under_review'], true)) {
             return redirect()
-                ->route('instructor.courses.index')
-                ->with('success', 'Khóa học đã được gửi và đang trong quá trình chờ Admin duyệt.');
+                ->to($request->headers->get('referer') ?: route('instructor.courses.index'))
+                ->with('info', 'Cập nhật này đã được gửi duyệt.');
         }
 
         abort_unless($course->isEditable(), 403, 'Khóa học không ở trạng thái cho phép gửi duyệt.');
+
+        $reviewState = app(ContentUpdateService::class)->instructorReviewState($course, $request->user());
+        $hasPublishedContent = (bool) $course->is_published || in_array($course->status, [
+            Course::STATUS_APPROVED,
+            Course::STATUS_PUBLISHED,
+            Course::STATUS_PENDING_UPDATE,
+            Course::STATUS_REJECTED_UPDATE,
+        ], true);
+        if ($hasPublishedContent && ! $reviewState['hasDraftUpdates']) {
+            return back()->with('error', 'Không có thay đổi mới để gửi duyệt.');
+        }
+        if ($reviewState['hasPendingUpdates']) {
+            return back()->with('error', 'Đang có một lượt duyệt chưa được xử lý.');
+        }
 
         if (! $course->copyright_agreed) {
             $request->validate([
@@ -263,11 +424,17 @@ class CourseController extends Controller
                 ->withErrors(['submission' => $submissionCheck->errorMessages()]);
         }
 
-        $reviewService->submitForReview($course, auth()->user());
+        $submittedCount = $reviewState['draftCount'];
+        $reviewService->submitForReview($course, $request->user());
 
         return redirect()
-            ->route('instructor.courses.index')
-            ->with('success', 'Đã gửi khóa học để admin duyệt.');
+            ->to($request->headers->get('referer') ?: route('instructor.courses.index'))
+            ->with(
+                'success',
+                $submittedCount > 0
+                    ? "Đã gửi {$submittedCount} thay đổi để Admin duyệt."
+                    : 'Đã gửi khóa học để Admin duyệt.',
+            );
     }
 
     public function submitPage(Course $course): RedirectResponse
@@ -597,13 +764,14 @@ class CourseController extends Controller
         );
         abort_unless($belongsToCourse, 404, 'Bài quiz không thuộc khóa học này.');
 
-        $review = $quizService->buildAttemptReview($attempt);
+        $policy = app(QuizAttemptService::class)->reviewPolicy($attempt, auth()->user());
+        $review = $quizService->buildAttemptReview($attempt, $policy);
 
         return view('instructor.courses.student_quiz_review', [
             'course' => $course,
             'student' => $student,
             'quiz' => $quiz,
-            'attempt' => $attempt,
+            'attempt' => $review['attempt'],
             'review' => $review,
         ]);
     }
@@ -774,7 +942,11 @@ class CourseController extends Controller
 
     protected function ensureOwned(Course $course): void
     {
-        abort_unless($course->isOwnedBy(auth()->user()), 403);
+        abort_unless(
+            $this->courseCategoryAccess->canManageCourse(auth()->user(), $course),
+            403,
+            'Bạn không có quyền chỉnh sửa nội dung khóa học này.'
+        );
     }
 
     private function enrollmentQuery(Course $course, Request $request)
@@ -921,6 +1093,9 @@ class CourseController extends Controller
 
     private function deleteThumbnail(Course $course): void
     {
+        if ($course->versions()->whereIn('status', ['published', 'superseded'])->where('thumbnail', $course->thumbnail)->exists()) {
+            return;
+        }
         if ($course->thumbnail) {
             Storage::disk('public')->delete($course->thumbnail);
         }
@@ -952,21 +1127,5 @@ class CourseController extends Controller
     private function statusOptions(): array
     {
         return Course::STATUS_LABELS;
-    }
-
-    private function categoryGroups()
-    {
-        return Category::query()
-            ->active()
-            ->parent()
-            ->with([
-                'children' => fn ($query) => $query
-                    ->active()
-                    ->orderBy('sort_order')
-                    ->orderBy('name'),
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get(['id', 'name', 'sort_order']);
     }
 }

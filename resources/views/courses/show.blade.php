@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $course->title . ' - Website học online FEA')
+@section('title', $course->title . ' - Khóa học trực tuyến FEA Learning')
 
 @section('content')
 @php
@@ -46,10 +46,14 @@
 
             <div class="mt-6 flex flex-wrap items-center gap-4 text-sm text-slate-300">
                 <div class="flex items-center gap-2">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-extrabold text-white">
-                        {{ strtoupper(substr($course->instructor?->name ?? 'F', 0, 1)) }}
+                    <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-indigo-500 text-sm font-extrabold text-white">
+                        @if($course->instructor && method_exists($course->instructor, 'avatarUrl'))
+                            <img src="{{ $course->instructor->avatarUrl() }}" alt="{{ $course->instructor->name }}" class="h-full w-full object-cover">
+                        @else
+                            {{ strtoupper(substr($course->instructor?->name ?? 'F', 0, 1)) }}
+                        @endif
                     </div>
-                    <span>Giảng viên <strong class="text-white">{{ $course->instructor?->name ?? 'Fea Instructor' }}</strong></span>
+                    <span>Giảng viên <a href="{{ $course->instructor ? route('instructors.show', $course->instructor) : '#' }}" class="font-bold text-white hover:underline">{{ $course->instructor?->name ?? 'Fea Instructor' }}</a></span>
                 </div>
                 <span class="hidden text-slate-600 sm:inline">•</span>
                 <span>{{ $totalSections }} chương</span>
@@ -58,6 +62,25 @@
                 <span class="hidden text-slate-600 sm:inline">•</span>
                 <span>{{ $previewLessons }} bài xem thử</span>
             </div>
+
+            @if($previewVideoUrl)
+                @php
+                    $previewVideoValue = (string) $course->preview_video;
+                    $previewIsYoutube = str_contains($previewVideoValue, 'youtube.com') || str_contains($previewVideoValue, 'youtu.be');
+                @endphp
+                <div class="mt-6 max-w-xl">
+                    <p class="mb-2 text-sm font-bold text-slate-200">Video xem thử</p>
+                    <div class="overflow-hidden rounded-2xl border-2 border-slate-700/80 bg-slate-900/80 p-1.5 shadow-2xl ring-1 ring-white/15">
+                        <div class="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                            @if($previewIsYoutube)
+                                <iframe src="{{ $previewVideoUrl }}" title="Video giới thiệu khóa học" class="h-full w-full border-0 bg-black" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
+                            @else
+                                <video src="{{ $previewVideoUrl }}" controls playsinline preload="metadata" class="h-full w-full bg-black object-contain"></video>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <aside class="lg:row-span-2">
@@ -67,15 +90,6 @@
                         <img src="{{ asset('storage/'.$course->thumbnail) }}" alt="{{ $course->title }}" class="h-full w-full object-cover">
                     @else
                         <div class="flex h-full w-full items-center justify-center text-4xl font-extrabold text-white/80">Fea</div>
-                    @endif
-
-                    @if($course->preview_video)
-                        <a href="{{ $course->preview_video }}" target="_blank"
-                           class="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-white transition hover:bg-slate-950/45">
-                            <span class="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 text-indigo-700 shadow-xl">
-                                <svg class="ml-1 h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                            </span>
-                        </a>
                     @endif
                 </div>
 
@@ -324,16 +338,67 @@
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#161615]">
                 <h3 class="text-lg font-extrabold text-slate-950 dark:text-white">Giảng viên</h3>
                 <div class="mt-4 flex items-center gap-4">
-                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xl font-extrabold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
-                        {{ strtoupper(substr($course->instructor?->name ?? 'F', 0, 1)) }}
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-indigo-100 text-xl font-extrabold text-indigo-700 dark:border-slate-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+                        @if($course->instructor && method_exists($course->instructor, 'avatarUrl'))
+                            <img src="{{ $course->instructor->avatarUrl() }}" alt="{{ $course->instructor->name }}" class="h-full w-full object-cover">
+                        @else
+                            {{ strtoupper(substr($course->instructor?->name ?? 'F', 0, 1)) }}
+                        @endif
                     </div>
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex-1">
                         <div class="font-bold text-slate-950 dark:text-white">{{ $course->instructor?->name ?? 'Fea Instructor' }}</div>
-                        <div class="text-sm text-slate-500 dark:text-slate-400">Instructor</div>
+                        <div class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                            {{ $course->instructor?->instructorProfile?->position ?? ($course->instructor?->instructorProfile?->headline ?? 'Giảng viên') }}
+                        </div>
+                        @if($course->instructor?->instructorProfile?->specialty || $course->instructor?->instructorProfile?->teaching_field)
+                            <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                {{ $course->instructor?->instructorProfile?->specialty ?? $course->instructor?->instructorProfile?->teaching_field }}
+                            </div>
+                        @endif
                     </div>
                 </div>
-                @if($course->instructor?->bio)
-                    <p class="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $course->instructor->bio }}</p>
+
+                @if($course->instructor?->instructorProfile?->experience)
+                    <div class="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                        <svg class="h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        <span>Kinh nghiệm: <strong>{{ $course->instructor->instructorProfile->experience }}</strong></span>
+                    </div>
+                @endif
+
+                @php
+                    $instructorBio = $course->instructor?->instructorProfile?->bio ?: $course->instructor?->bio;
+                @endphp
+                @if($instructorBio)
+                    <p class="mt-3 text-sm leading-6 text-slate-600 line-clamp-3 dark:text-slate-300">{{ $instructorBio }}</p>
+                @endif
+
+                @if(isset($instructorStats))
+                    <div class="mt-4 grid grid-cols-3 gap-2 border-y border-slate-100 py-3 text-center dark:border-slate-800">
+                        <div>
+                            <div class="text-sm font-extrabold text-slate-900 dark:text-white">{{ $instructorStats['total_courses'] }}</div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400">Khóa học</div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-extrabold text-slate-900 dark:text-white">{{ number_format($instructorStats['total_students']) }}</div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400">Học viên</div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-center gap-0.5 text-sm font-extrabold text-amber-500">
+                                {{ $instructorStats['avg_rating'] > 0 ? number_format($instructorStats['avg_rating'], 1) : '—' }}
+                                <span class="text-xs">★</span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400">Đánh giá</div>
+                        </div>
+                    </div>
+                @endif
+
+                @if($course->instructor)
+                    <div class="mt-4">
+                        <a href="{{ route('instructors.show', $course->instructor) }}" class="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/50 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100/70 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            Xem chi tiết giảng viên
+                        </a>
+                    </div>
                 @endif
 
                 @auth

@@ -8,12 +8,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CourseSection extends Model
 {
+    protected static function booted(): void
+    {
+        static::addGlobalScope('not_archived', fn ($query) => $query->whereNull('archived_at'));
+    }
+
     protected $fillable = [
         'course_id',
         'title',
         'description',
         'sort_order',
     ];
+
+    protected function casts(): array
+    {
+        return ['archived_at' => 'datetime'];
+    }
 
     public function course(): BelongsTo
     {
@@ -23,6 +33,21 @@ class CourseSection extends Model
     public function lessons(): HasMany
     {
         return $this->hasMany(Lesson::class, 'section_id')->orderBy('sort_order');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(CourseSectionVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseSectionVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseSectionVersion::class, 'draft_version_id');
     }
 
     public static function descriptionContainsMarkup(mixed $description): bool

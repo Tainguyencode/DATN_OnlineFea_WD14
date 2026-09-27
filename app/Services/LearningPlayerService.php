@@ -20,7 +20,7 @@ class LearningPlayerService
         bool $canBypassVisibility,
     ): array {
         $course->loadMissing([
-            'instructor:id,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
+            'instructor:id,role,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
             'category:id,name,slug',
             'courseSections' => fn ($q) => $q->orderBy('sort_order'),
             'courseSections.lessons' => fn ($q) => $q->orderBy('sort_order'),
@@ -360,17 +360,27 @@ class LearningPlayerService
         $attempt = $user?->isStudent() && $isEnrolled
             ? $attemptService->findInProgress($course, $lesson, $user)
             : null;
+        $availability = $user?->isStudent() && $isEnrolled
+            ? $attemptService->attemptAvailability($quiz, $user)
+            : null;
         $quiz = $attempt
             ? $attemptService->projectQuiz($attempt)
             : $versioning->projectVersion($quiz, $versioning->currentPublished($quiz));
 
-        $attemptsCount = $user
-            ? $attemptService->completedAttemptsCount($quiz, $user)
-            : 0;
+        $attemptsCount = $availability['attempts_used'] ?? 0;
+        $maxAttempts = $availability['effective_max_attempts'] ?? $availability['max_attempts'] ?? $quiz->max_attempts;
 
-        $attemptLimitReached = $quiz->max_attempts !== null && $attemptsCount >= $quiz->max_attempts;
+        $attemptLimitReached = $availability ? ! $availability['has_remaining_attempts'] : false;
         $bestAttempt = $user
-            ? $quiz->attempts()->where('user_id', $user->id)->orderByDesc('percent')->first()
+            ? $quiz->attempts()
+                ->where('user_id', $user->id)
+                ->whereIn('status', [
+                    QuizAttempt::STATUS_COMPLETED,
+                    QuizAttempt::STATUS_TERMINATED,
+                    QuizAttempt::STATUS_EXPIRED,
+                ])
+                ->orderByDesc('percent')
+                ->first()
             : null;
 
         $questions = $quiz->questions->map(fn ($question) => [
@@ -389,7 +399,15 @@ class LearningPlayerService
         ])->values()->all();
 
         $userAttempts = $user
-            ? $quiz->attempts()->where('user_id', $user->id)->orderBy('id', 'asc')->get()
+            ? $quiz->attempts()
+                ->where('user_id', $user->id)
+                ->whereIn('status', [
+                    QuizAttempt::STATUS_COMPLETED,
+                    QuizAttempt::STATUS_TERMINATED,
+                    QuizAttempt::STATUS_EXPIRED,
+                ])
+                ->orderBy('id', 'asc')
+                ->get()
             : collect();
 
         $previousAttempts = $userAttempts->values()->map(function ($att, $idx) use ($course, $lesson) {
@@ -401,7 +419,7 @@ class LearningPlayerService
                 'percent' => (float) $att->percent,
                 'passed' => (bool) $att->passed,
                 'completed_at' => $att->completed_at?->format('d/m/Y H:i') ?? $att->created_at?->format('d/m/Y H:i'),
-                'review_url' => route('courses.lessons.quiz.attempts.show', [$course, $lesson, $att]),
+                'review_url' => route('learn.lessons.quiz.attempts.show', [$course->slug, $lesson, $att]),
             ];
         })->all();
 
@@ -409,16 +427,37 @@ class LearningPlayerService
             ? $quiz->attempts()->where('user_id', $user->id)->where('status', QuizAttempt::STATUS_TERMINATED)->orderByDesc('id')->first()
             : null;
 
+        $latestAttemptRequest = $user ? $attemptService->latestAttemptRequest($quiz, $user) : null;
+        $hasPendingRequest = $latestAttemptRequest ? $latestAttemptRequest->isPending() : false;
+        $previousRequestsCount = $user ? \App\Models\QuizAttemptRequest::query()->where('quiz_id', $quiz->id)->where('user_id', $user->id)->count() : 0;
+
         return [
             'id' => $quiz->id,
             'title' => $quiz->title,
             'description' => $quiz->description,
             'pass_score' => (int) $quiz->pass_score,
             'time_limit_minutes' => $quiz->time_limit_minutes,
-            'max_attempts' => $quiz->max_attempts,
+            'max_attempts' => $maxAttempts,
+            'extra_attempts' => $availability['extra_attempts'] ?? 0,
             'attempts_count' => $attemptsCount,
             'attempt_limit_reached' => $attemptLimitReached,
-            'can_take' => $user?->isStudent() && $isEnrolled && ! $attemptLimitReached,
+            'can_take' => $user?->isStudent()
+                && $isEnrolled
+                && ($availability['has_remaining_attempts'] ?? false),
+            'has_pending_request' => $hasPendingRequest,
+            'can_request_attempt' => $attemptLimitReached && ! $hasPendingRequest,
+            'next_request_number' => $previousRequestsCount + 1,
+            'previous_requests_count' => $previousRequestsCount,
+            'request_attempt_url' => route('courses.lessons.quiz.request-attempt', [$course, $lesson]),
+            'latest_attempt_request' => $latestAttemptRequest ? [
+                'id' => $latestAttemptRequest->id,
+                'status' => $latestAttemptRequest->status,
+                'status_label' => $latestAttemptRequest->getStatusLabel(),
+                'reason' => $latestAttemptRequest->reason,
+                'rejection_reason' => $latestAttemptRequest->rejection_reason,
+                'extra_attempts_granted' => $latestAttemptRequest->extra_attempts_granted,
+                'created_at' => $latestAttemptRequest->created_at?->format('d/m/Y H:i'),
+            ] : null,
             'quiz_status' => $quizStatus,
             'attempt_id' => $attempt?->id,
             'focus_violation_url' => $attempt ? route('courses.lessons.quiz.focus-violation', [$course, $lesson, $attempt]) : null,
@@ -428,6 +467,7 @@ class LearningPlayerService
             'remaining_seconds' => $attempt ? $attemptService->remainingTime($attempt) : null,
             'saved_answers' => $attempt?->answers ?? [],
             'start_url' => route('courses.lessons.quiz.start', [$course, $lesson]),
+            'standalone_url' => route('learn.lessons.quiz.show', [$course->slug, $lesson]),
             'submit_url' => route('courses.lessons.quiz.submit', [$course, $lesson]),
             'save_progress_url' => route('courses.lessons.quiz.save-progress', [$course, $lesson]),
             'terminate_url' => route('courses.lessons.quiz.terminate', [$course, $lesson]),
@@ -439,9 +479,7 @@ class LearningPlayerService
             'questions' => $questions,
             'best_percent' => $bestAttempt ? (float) $bestAttempt->percent : null,
             'previous_attempts' => $previousAttempts,
-            'remaining_attempts' => $quiz->max_attempts !== null
-                ? max(0, $quiz->max_attempts - $attemptsCount)
-                : null,
+            'remaining_attempts' => $availability['remaining_attempts'] ?? null,
             'user_info' => $user ? [
                 'id' => $user->id,
                 'name' => $user->name,

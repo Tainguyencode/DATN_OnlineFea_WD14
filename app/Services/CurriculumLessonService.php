@@ -69,6 +69,7 @@ class CurriculumLessonService
 
         try {
             $lesson = DB::transaction(function () use ($course, $lessonData, $data): Lesson {
+                app(CourseReleaseLock::class)->course($course->id);
                 $lesson = Lesson::create([
                     ...$lessonData,
                     'course_id' => $course->id,
@@ -150,15 +151,19 @@ class CurriculumLessonService
         );
 
         try {
-            $contentUpdate = $this->contentUpdates->recordPendingUpdate(
-                ContentUpdate::TYPE_LESSON,
-                ContentUpdate::ACTION_CREATE,
-                $course->id,
-                null,
-                $payload,
-                $actor,
-                ContentUpdate::STATUS_DRAFT,
-            );
+            $contentUpdate = DB::transaction(function () use ($course, $payload, $actor): ContentUpdate {
+                app(CourseReleaseLock::class)->course($course->id);
+
+                return $this->contentUpdates->recordPendingUpdate(
+                    ContentUpdate::TYPE_LESSON,
+                    ContentUpdate::ACTION_CREATE,
+                    $course->id,
+                    null,
+                    $payload,
+                    $actor,
+                    ContentUpdate::STATUS_DRAFT,
+                );
+            });
         } catch (Throwable $exception) {
             $this->cleanupStoredFiles($storedFiles);
 
@@ -166,7 +171,11 @@ class CurriculumLessonService
         }
 
         if ($shouldDispatchHls) {
-            ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+            ConvertContentUpdateVideoToHLS::dispatch(
+                $contentUpdate,
+                data_get($contentUpdate->payload, 'original_video_key'),
+                data_get($contentUpdate->payload, 'video_path'),
+            );
         }
 
         return $contentUpdate;
@@ -254,6 +263,11 @@ class CurriculumLessonService
                 'processing_status' => 'pending',
             ]);
             $storedFiles[] = ['disk' => 'local', 'path' => $path];
+        } elseif ($type === Lesson::TYPE_VIDEO) {
+            // The approved-course create flow persists first, then starts the
+            // browser's existing background multipart upload with this lesson ID.
+            $data['upload_status'] = 'pending';
+            $data['processing_status'] = 'pending';
         }
 
         $data = array_merge($data, [

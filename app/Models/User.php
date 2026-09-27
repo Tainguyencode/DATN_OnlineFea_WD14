@@ -10,6 +10,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -287,6 +288,43 @@ class User extends Authenticatable implements MustVerifyEmail
         return $query->where('needs_admin_review', true);
     }
 
+    public function scopePendingInstructorReview(Builder $query): Builder
+    {
+        return $query
+            ->where('role', 'instructor')
+            ->where('instructor_status', 'pending')
+            ->whereNotNull('submitted_for_review_at');
+    }
+
+    public function isGlobalReviewPending(): bool
+    {
+        return $this->role === 'instructor'
+            && $this->instructor_status === 'pending'
+            && $this->submitted_for_review_at !== null;
+    }
+
+    public function canEditGlobalReviewPackage(): bool
+    {
+        return $this->role === 'instructor' && ! $this->isGlobalReviewPending();
+    }
+
+    public function canSubmitInitialInstructorReview(): bool
+    {
+        return $this->role === 'instructor'
+            && $this->instructor_status === 'pending'
+            && $this->submitted_for_review_at === null;
+    }
+
+    public function canResubmitInstructorReview(): bool
+    {
+        return $this->role === 'instructor' && $this->instructor_status === 'rejected';
+    }
+
+    public function isApprovedInstructor(): bool
+    {
+        return $this->role === 'instructor' && $this->instructor_status === 'approved';
+    }
+
     public function markNeedsAdminReview(): bool
     {
         return $this->update([
@@ -435,7 +473,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function dashboardUrl(): string
     {
         if ($this->role === 'instructor') {
-            if ($this->isLocked()) {
+            if ($this->isLocked() || ! $this->isApprovedInstructor()) {
                 return route('instructor.profile');
             }
 
@@ -540,7 +578,31 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getAvailableBalanceAttribute(): float
     {
-        return max(0, $this->total_earnings - $this->total_withdrawn - $this->pending_withdrawal);
+        return max(0, $this->total_earnings - $this->refund_reserve - $this->total_withdrawn - $this->pending_withdrawal);
+    }
+
+    public function getRefundReserveAttribute(): float
+    {
+        return (float) DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->join('courses', 'courses.id', '=', 'order_items.course_id')
+            ->where('courses.instructor_id', $this->id)
+            ->where('orders.status', 'paid')
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('refunds')
+                ->whereColumn('refunds.order_id', 'orders.id')
+                ->whereIn('refunds.status', ['pending', 'processing']))
+            ->sum('order_items.instructor_earning');
+    }
+
+    /** Amount already paid to the instructor exceeding current earned revenue after refunds. */
+    public function getSettlementDeficitAttribute(): float
+    {
+        return max(0, $this->total_withdrawn - $this->total_earnings);
+    }
+
+    public function canSettlePendingWithdrawals(): bool
+    {
+        return round($this->total_earnings - $this->refund_reserve - $this->total_withdrawn - $this->pending_withdrawal, 2) >= 0;
     }
 
     /**
@@ -555,7 +617,11 @@ class User extends Authenticatable implements MustVerifyEmail
             return new Collection;
         }
 
-        $categories = $profile->teachingCategories()->get();
+        $categories = $this->instructor_status === 'approved'
+            ? $profile->approvedTeachingCategories()->get()
+            : ($profile->relationLoaded('teachingCategories')
+                ? $profile->teachingCategories
+                : $profile->teachingCategories()->get());
         if ($categories->isNotEmpty()) {
             return $categories;
         }
@@ -569,6 +635,29 @@ class User extends Authenticatable implements MustVerifyEmail
         return new Collection;
     }
 
+    /** Categories that grant an approved instructor course-authoring rights. */
+    public function getApprovedTeachingCategories(): Collection
+    {
+        $profile = $this->relationLoaded('instructorProfile') ? $this->instructorProfile : $this->instructorProfile()->first();
+        if (! $profile) {
+            return new Collection;
+        }
+
+        $approved = $profile->approvedTeachingCategories()->get();
+        if ($approved->isNotEmpty()) {
+            return $approved;
+        }
+
+        // Legacy profiles without a pivot continue to use their legacy primary category.
+        if (! $profile->teachingCategories()->exists()) {
+            $legacy = $this->getTeachingCategory();
+
+            return $legacy ? new Collection([$legacy]) : new Collection;
+        }
+
+        return new Collection;
+    }
+
     public function getTeachingCategory(): ?Category
     {
         $profile = $this->relationLoaded('instructorProfile') ? $this->instructorProfile : $this->instructorProfile()->first();
@@ -577,12 +666,16 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         // Ưu tiên lấy category có is_primary = true từ pivot
-        $primary = $profile->teachingCategories()->wherePivot('is_primary', true)->first();
+        $teachingCategories = $profile->relationLoaded('teachingCategories')
+            ? $profile->teachingCategories
+            : $profile->teachingCategories()->get();
+
+        $primary = $teachingCategories->first(fn (Category $category) => (bool) $category->pivot?->is_primary);
         if ($primary) {
             return $primary;
         }
 
-        $first = $profile->teachingCategories()->first();
+        $first = $teachingCategories->first();
         if ($first) {
             return $first;
         }

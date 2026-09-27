@@ -1,4 +1,4 @@
-<x-instructor-layout title="Tạo khóa học" page-title="Tạo khóa học" page-title-class="text-lg sm:text-xl font-bold leading-tight text-slate-900 truncate" breadcrumb="Tạo nội dung chất lượng và chia sẻ kiến thức của bạn">
+<x-instructor-layout title="Tạo khóa học" page-title="Tạo khóa học" page-title-class="text-lg sm:text-xl font-bold leading-tight text-slate-900 truncate" breadcrumb="Tạo nội dung chất lượng và chia sẻ kiến thức của bạn" :back-url="route('instructor.courses.index')">
 
 <div class="w-full min-w-0 xl:mx-auto xl:max-w-[1700px]">
     <div class="mb-5 flex justify-end">

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Coupon extends Model
@@ -41,6 +42,35 @@ class Coupon extends Model
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Chỉ lấy các mã còn khả dụng và chưa từng được học viên sử dụng.
+     */
+    public function scopeAvailableToUser(Builder $query, int $userId): Builder
+    {
+        return $query
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($userId): void {
+                $query->where('is_private', false)
+                    ->orWhereHas('userCoupons', fn (Builder $grant) => $grant
+                        ->where('user_id', $userId)->whereNull('used_at'));
+            })
+            ->whereDoesntHave('userCoupons', function (Builder $query) use ($userId): void {
+                $query->where('user_id', $userId)->whereNotNull('used_at');
+            })
+            ->whereDoesntHave('orders', function (Builder $query) use ($userId): void {
+                $query->where('user_id', $userId)->where('status', 'paid');
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses');
+            });
     }
 
     public function isInstructorCoupon(): bool
@@ -112,6 +142,14 @@ class Coupon extends Model
         }
 
         return true;
+    }
+
+    public function canBeUsedBy(int $userId): bool
+    {
+        return $this->isValid()
+            && ! $this->isUsedByUser($userId)
+            && (! $this->is_private || $this->userCoupons()
+                ->where('user_id', $userId)->whereNull('used_at')->exists());
     }
 
     /**

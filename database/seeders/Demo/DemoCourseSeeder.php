@@ -13,8 +13,6 @@ use App\Models\QuizOption;
 use App\Models\QuizQuestion;
 use App\Models\QuizVersion;
 use App\Models\QuizVersionQuestion;
-use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class DemoCourseSeeder
@@ -27,14 +25,14 @@ class DemoCourseSeeder
                 [
                     'title' => 'Khóa học Laravel 11 & Vue.js Fullstack E-Commerce Toàn Diện',
                     'slug' => 'demo-laravel-11-vuejs-fullstack-ecommerce',
-                    'description' => 'Xây dựng website bán hàng hiện đại chuẩn Micro-Frontend với Laravel 11 API, Inertia.js Vue 3, Tailwind CSS, thanh toán trực tuyến PayOS và VNPay.',
+                    'description' => 'Xây dựng website bán hàng hiện đại chuẩn Micro-Frontend với Laravel 11 API, Inertia.js Vue 3, Tailwind CSS, thanh toán trực tuyến PayOS và SePay.',
                     'level' => 'intermediate',
                     'price' => 1290000,
                     'sale_price' => 890000,
                     'is_featured' => true,
                     'thumbnail' => 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600',
                     'tags' => ['laravel', 'vuejs', 'ecommerce', 'fullstack', 'api'],
-                    'objectives' => ['Xây dựng RESTful API chuyên nghiệp với Laravel 11', 'Tích hợp cổng thanh toán PayOS và VNPay tự động', 'Quản lý state với Pinia và Inertia.js'],
+                    'objectives' => ['Xây dựng RESTful API chuyên nghiệp với Laravel 11', 'Tích hợp cổng thanh toán PayOS và SePay tự động', 'Quản lý state với Pinia và Inertia.js'],
                     'requirements' => ['Đã biết lập trình PHP cơ bản', 'Có kiến thức cơ bản về HTML/CSS/JS'],
                     'target_audience' => ['Lập trình viên muốn trở thành Fullstack Web Developer', 'Sinh viên ngành CNTT'],
                 ],
@@ -777,7 +775,6 @@ class DemoCourseSeeder
                     [
                         'question_version_id' => $questionVersion->id,
                         'is_correct' => $opt['is_correct'],
-                        'explanation' => $opt['is_correct'] ? 'Chính xác!' : 'Sai rồi.',
                     ]
                 );
             }

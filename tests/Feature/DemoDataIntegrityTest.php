@@ -10,15 +10,26 @@ use App\Models\InstructorApplication;
 use App\Models\InstructorProfile;
 use App\Models\LearningPath;
 use App\Models\Lesson;
-use App\Models\LessonProgress;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use Database\Seeders\CategorySeeder;
+use Database\Seeders\Demo\DemoDataMasterSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DemoDataIntegrityTest extends TestCase
 {
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(CategorySeeder::class);
+        $this->seed(DemoDataMasterSeeder::class);
+    }
+
     public function test_demo_users_count_and_roles(): void
     {
         $superAdmins = User::where('email', 'superadmin@onlinefea.test')->count();
@@ -127,7 +138,7 @@ class DemoDataIntegrityTest extends TestCase
 
         // Run HLS conversion job
         $job = new ConvertVideoToHLS($lesson);
-        $job->handle();
+        app()->call([$job, 'handle']);
 
         $lesson->refresh();
         $this->assertEquals('completed', $lesson->processing_status);

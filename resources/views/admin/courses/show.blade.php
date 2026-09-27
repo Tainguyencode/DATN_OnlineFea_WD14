@@ -6,6 +6,7 @@
     $levelLabels = ['beginner' => 'Cơ bản', 'intermediate' => 'Trung cấp', 'advanced' => 'Nâng cao'];
     $typeLabels = ['video' => 'Video', 'text' => 'Bài đọc', 'document' => 'Tài liệu', 'quiz' => 'Quiz', 'assignment' => 'Bài tập'];
     $statusClass = $statusBadgeClasses[$course->status] ?? 'bg-slate-50 text-slate-700 ring-1 ring-slate-200';
+    $previewIsYoutube = str_contains((string) $course->preview_video, 'youtube.com') || str_contains((string) $course->preview_video, 'youtu.be');
 @endphp
 
 <div class="space-y-6">
@@ -39,6 +40,7 @@
             <div class="flex flex-col gap-2">
                 <a href="{{ route('admin.courses.index') }}" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">Quay lại danh sách</a>
                 <a href="{{ route('admin.courses.students', $course) }}" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 cursor-pointer">Xem học viên</a>
+                <a href="{{ route('admin.courses.versions.index', $course) }}" class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer">Lịch sử phiên bản</a>
 
                 @if($course->status === \App\Models\Course::STATUS_PENDING)
                     <form method="POST" action="{{ route('admin.courses.approve', $course) }}" onsubmit="return confirm('Duyệt khóa học này?')">
@@ -76,7 +78,7 @@
     <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Học viên</span>
-            <strong class="mt-2 block text-2xl font-bold text-slate-950">{{ number_format((int) $course->active_enrollments_count) }}</strong>
+            <strong class="mt-2 block text-2xl font-bold text-slate-950">{{ number_format((int) $studentCount) }}</strong>
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Chương</span>
@@ -121,6 +123,10 @@
                     <dd class="mt-1 font-semibold text-slate-900">{{ $course->created_at?->format('d/m/Y H:i') }}</dd>
                 </div>
                 <div class="rounded-lg bg-slate-50 p-3">
+                    <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Ngày cập nhật</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">{{ $course->updated_at?->format('d/m/Y H:i') }}</dd>
+                </div>
+                <div class="rounded-lg bg-slate-50 p-3">
                     <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Ngày xuất bản</dt>
                     <dd class="mt-1 font-semibold text-slate-900">{{ $course->published_at?->format('d/m/Y H:i') ?? 'Chưa xuất bản' }}</dd>
                 </div>
@@ -135,8 +141,12 @@
         <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h3 class="text-lg font-bold text-slate-950">Giảng viên sở hữu</h3>
             <div class="mt-4 flex items-start gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-bold text-rose-700">
-                    {{ strtoupper(substr($course->instructor?->name ?? 'G', 0, 1)) }}
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-rose-100 text-sm font-bold text-rose-700">
+                    @if($course->instructor && method_exists($course->instructor, 'avatarUrl'))
+                        <img src="{{ $course->instructor->avatarUrl() }}" alt="{{ $course->instructor->name }}" class="h-full w-full object-cover">
+                    @else
+                        {{ strtoupper(substr($course->instructor?->name ?? 'G', 0, 1)) }}
+                    @endif
                 </div>
                 <div class="min-w-0">
                     <div class="truncate font-bold text-slate-950">{{ $course->instructor?->name ?? 'Chưa gán giảng viên' }}</div>
@@ -162,10 +172,20 @@
                 <p class="text-sm font-bold uppercase tracking-wide text-rose-600">Nội dung kiểm duyệt</p>
                 <h3 class="mt-1 text-lg font-bold text-slate-950">Chương và bài học</h3>
             </div>
-            @if($course->preview_video)
-                <a href="{{ $course->preview_video }}" target="_blank" class="inline-flex h-9 items-center rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 cursor-pointer">Mở video giới thiệu</a>
+            @if($previewVideoUrl)
+                <a href="{{ $previewVideoUrl }}" target="_blank" class="inline-flex h-9 items-center rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700 transition-colors duration-200 hover:bg-indigo-100 cursor-pointer">Mở video giới thiệu</a>
             @endif
         </div>
+
+        @if($previewVideoUrl)
+            <div class="mt-4 aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+                @if($previewIsYoutube)
+                    <iframe src="{{ $previewVideoUrl }}" title="Video giới thiệu khóa học" class="h-full w-full border-0" allowfullscreen></iframe>
+                @else
+                    <video src="{{ $previewVideoUrl }}" controls playsinline preload="metadata" class="h-full w-full object-contain"></video>
+                @endif
+            </div>
+        @endif
 
         <div class="mt-5 space-y-4">
             @forelse($curriculumSections as $section)

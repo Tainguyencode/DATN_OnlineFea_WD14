@@ -9,16 +9,20 @@ use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
+use Illuminate\Database\Eloquent\Builder;
 use App\Models\CourseReview;
 use App\Models\CourseReviewItem;
+use App\Models\CourseVersion;
 use App\Models\Enrollment;
 use App\Models\HomepageSetting;
 use App\Models\Lesson;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Review;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\ContentUpdateDiffService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseReviewService;
 use Illuminate\Http\RedirectResponse;
@@ -127,8 +131,13 @@ class ManageController extends Controller
             'courseSections as sections_count',
             'chapters as chapters_count',
             'lessons',
-            'enrollments as active_enrollments_count' => fn ($query) => $query->where('status', 'active'),
         ]);
+
+        $studentCount = Enrollment::query()
+            ->where('course_id', $course->id)
+            ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED])
+            ->distinct()
+            ->count('user_id');
 
         $curriculumSections = $course->courseSections->isNotEmpty()
             ? $course->courseSections
@@ -142,21 +151,24 @@ class ManageController extends Controller
 
         $instructorCourseCount = Course::where('instructor_id', $course->instructor_id)->count();
         $instructorStudentCount = Enrollment::query()
-            ->where('status', 'active')
+            ->whereIn('status', [Enrollment::STATUS_ACTIVE, Enrollment::STATUS_COMPLETED])
             ->whereHas('course', fn ($query) => $query->where('instructor_id', $course->instructor_id))
             ->distinct('user_id')
             ->count('user_id');
+        $previewVideoUrl = $course->previewVideoUrl();
 
         return view('admin.courses.show', [
             'course' => $course,
             'curriculumSections' => $curriculumSections,
             'totalLessons' => $totalLessons,
             'previewLessons' => $previewLessons,
+            'studentCount' => $studentCount,
             'instructorCourseCount' => $instructorCourseCount,
             'instructorStudentCount' => $instructorStudentCount,
             'courseRevenue' => $this->courseRevenue($course),
             'statusLabels' => $this->statusLabels(),
             'statusBadgeClasses' => $this->statusBadgeClasses(),
+            'previewVideoUrl' => $previewVideoUrl,
         ]);
     }
 
@@ -177,7 +189,12 @@ class ManageController extends Controller
 
         $instructorTotalCoursesCount = Course::where('instructor_id', $course->instructor_id)->count();
 
-        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
+        // The Admin review is a frozen view of the submitted batch. Drafts
+        // created afterwards belong to the next batch and must not leak here.
+        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates(
+            $course,
+            [ContentUpdate::STATUS_PENDING],
+        );
 
         $allLessons = $curriculumSections->flatMap(fn ($section) => $section->lessons);
         $totalLessons = $allLessons->count();
@@ -185,9 +202,17 @@ class ManageController extends Controller
         $totalVideoDurationMinutes = $course->totalVideoDurationMinutes();
 
         $videoLessons = $allLessons
-            ->filter(fn ($lesson) => $lesson->type === 'video' && filled($lesson->video_path))
+            ->filter(function ($lesson) {
+                if ($lesson->type !== 'video') {
+                    return false;
+                }
+                $source = $lesson->draft_update?->payload ?? $lesson;
+
+                return filled(data_get($source, 'original_video_key'))
+                    || filled(data_get($source, 'video_path'));
+            })
             ->map(fn ($lesson) => [
-                'id' => $lesson->id,
+                'id' => $lesson->draft_update ? 'update_les_'.$lesson->draft_update->id : $lesson->id,
                 'title' => $lesson->title,
             ])
             ->values();
@@ -229,6 +254,35 @@ class ManageController extends Controller
             })
             ->values();
 
+        $reviewUpdateDiffs = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('status', ContentUpdate::STATUS_PENDING)
+            ->orderByRaw("CASE type WHEN 'course' THEN 1 WHEN 'chapter' THEN 2 WHEN 'lesson' THEN 3 WHEN 'assignment' THEN 4 WHEN 'quiz' THEN 5 ELSE 6 END")
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ContentUpdate $update): array => [
+                'update' => $update,
+                'diff' => app(ContentUpdateDiffService::class)->build($update),
+            ]);
+
+        $reviewPreviewVideo = $course->preview_video;
+        $pendingCourseUpdate = ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('type', ContentUpdate::TYPE_COURSE)
+            ->where('action', ContentUpdate::ACTION_UPDATE)
+            ->where('status', ContentUpdate::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+        if ($pendingCourseUpdate) {
+            $candidate = CourseVersion::query()
+                ->where('course_id', $course->id)
+                ->where('content_update_id', $pendingCourseUpdate->id)
+                ->first();
+            $reviewPreviewVideo = $candidate?->preview_video
+                ?? data_get($pendingCourseUpdate->payload, 'preview_video', $reviewPreviewVideo);
+        }
+        $reviewPreviewVideoUrl = $course->previewVideoUrl($reviewPreviewVideo);
+
         return view('admin.courses.review', [
             'course' => $course,
             'curriculumSections' => $curriculumSections,
@@ -237,10 +291,13 @@ class ManageController extends Controller
             'totalVideoDurationMinutes' => $totalVideoDurationMinutes,
             'attachments' => $attachments,
             'videoLessons' => $videoLessons,
+            'reviewUpdateDiffs' => $reviewUpdateDiffs,
             'checklistKeys' => CourseReviewItem::ADMIN_CHECKLIST_KEYS,
             'checklistLabels' => CourseReviewItem::ITEM_LABELS,
             'instructorPendingCoursesCount' => $instructorPendingCoursesCount,
             'instructorTotalCoursesCount' => $instructorTotalCoursesCount,
+            'reviewPreviewVideo' => $reviewPreviewVideo,
+            'reviewPreviewVideoUrl' => $reviewPreviewVideoUrl,
         ]);
     }
 
@@ -363,59 +420,68 @@ class ManageController extends Controller
             $update = null;
             if (str_starts_with((string) $lessonId, 'update_les_')) {
                 $updateId = str_replace('update_les_', '', $lessonId);
-                $update = ContentUpdate::find($updateId);
+                $update = ContentUpdate::query()
+                    ->whereKey($updateId)
+                    ->where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_LESSON)
+                    ->first();
             } else {
                 $update = ContentUpdate::where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_LESSON)
                     ->where('entity_id', $lessonId)
                     ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
                     ->first();
 
                 if (! $update) {
-                    $lesson = Lesson::find($lessonId);
+                    $lesson = Lesson::query()
+                        ->whereKey($lessonId)
+                        ->where('course_id', $course->id)
+                        ->first();
                     if ($lesson) {
-                        $update = ContentUpdate::create([
-                            'course_id' => $course->id,
-                            'created_by' => $course->instructor_id ?? $course->user_id ?? 1,
-                            'type' => ContentUpdate::TYPE_LESSON,
-                            'action' => ContentUpdate::ACTION_UPDATE,
-                            'entity_id' => $lesson->id,
-                            'status' => ContentUpdate::STATUS_PENDING,
-                            'payload' => [
+                        $update = app(ContentUpdateService::class)->recordPendingUpdate(
+                            ContentUpdate::TYPE_LESSON,
+                            ContentUpdate::ACTION_UPDATE,
+                            $course->id,
+                            $lesson->id,
+                            [
                                 'title' => $lesson->title,
                                 'type' => $lesson->type,
                                 'video_path' => $lesson->video_path,
                                 'video_url' => $lesson->video_url,
                             ],
-                        ]);
+                            $request->user(),
+                            ContentUpdate::STATUS_PENDING,
+                        );
                     }
                 }
             }
 
             if ($update) {
+                // Reviewed updates are terminal history and cannot be
+                // rewritten by the legacy review form.
+                if ($update->isApproved() || $update->isRejected()) {
+                    continue;
+                }
+
+                if (! $update->isPending()) {
+                    continue;
+                }
+
                 $payload = $update->payload ?? [];
                 $payload['admin_note'] = $adminNote;
                 $payload['require_reupload'] = $requireReupload;
                 $payload['review_status'] = $lessonStatus;
-                $update->payload = $payload;
+                $update->update(['payload' => $payload]);
 
-                if ($action === CourseReview::ACTION_REJECTED || $action === CourseReview::ACTION_NEED_REVISION) {
-                    if ($lessonStatus === 'fail' || $lessonStatus === 'need_revision') {
-                        $update->status = ContentUpdate::STATUS_REJECTED;
-                        $update->rejection_reason = $adminNote ?: $comment;
-                        $update->reviewed_by = $request->user()?->id ?? auth()->id();
-                        $update->reviewed_at = now();
-                    } elseif ($lessonStatus === 'pass') {
-                        $update->status = ContentUpdate::STATUS_PENDING;
-                        $update->rejection_reason = null;
-                    }
-                } elseif ($action === CourseReview::ACTION_APPROVED) {
-                    if ($lessonStatus === 'pass') {
-                        $update->status = ContentUpdate::STATUS_APPROVED;
-                        $update->rejection_reason = null;
-                    }
+                // PASS leaves the update pending for the canonical course
+                // approval. A failed lesson uses the guarded rejection path.
+                if ($lessonStatus === 'fail' || $lessonStatus === 'need_revision') {
+                    app(ContentUpdateService::class)->rejectUpdate(
+                        $update,
+                        $request->user(),
+                        $adminNote ?: $comment,
+                    );
                 }
-
-                $update->save();
             }
         }
 
@@ -458,60 +524,87 @@ class ManageController extends Controller
         $update = null;
         if (str_starts_with((string) $lessonId, 'update_les_')) {
             $updateId = str_replace('update_les_', '', $lessonId);
-            $update = ContentUpdate::find($updateId);
+            $update = ContentUpdate::query()
+                ->whereKey($updateId)
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_LESSON)
+                ->first();
         } else {
             // First check if lessonId matches a ContentUpdate primary key directly
             $update = ContentUpdate::where('course_id', $course->id)
                 ->where('id', $lessonId)
+                ->where('type', ContentUpdate::TYPE_LESSON)
                 ->first();
 
             if (! $update) {
                 $update = ContentUpdate::where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_LESSON)
                     ->where('entity_id', $lessonId)
                     ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING, ContentUpdate::STATUS_REJECTED])
                     ->first();
             }
 
             if (! $update) {
-                $lesson = Lesson::find($lessonId);
+                $lesson = Lesson::query()
+                    ->whereKey($lessonId)
+                    ->where('course_id', $course->id)
+                    ->first();
                 if ($lesson) {
-                    $update = ContentUpdate::create([
-                        'course_id' => $course->id,
-                        'created_by' => $course->instructor_id ?? $course->user_id ?? 1,
-                        'type' => ContentUpdate::TYPE_LESSON,
-                        'action' => ContentUpdate::ACTION_UPDATE,
-                        'entity_id' => $lesson->id,
-                        'status' => ContentUpdate::STATUS_PENDING,
-                        'payload' => [
+                    $update = app(ContentUpdateService::class)->recordPendingUpdate(
+                        ContentUpdate::TYPE_LESSON,
+                        ContentUpdate::ACTION_UPDATE,
+                        $course->id,
+                        $lesson->id,
+                        [
                             'title' => $lesson->title,
                             'type' => $lesson->type,
                             'video_path' => $lesson->video_path,
                             'video_url' => $lesson->video_url,
                         ],
-                    ]);
+                        $request->user(),
+                        ContentUpdate::STATUS_PENDING,
+                    );
                 }
             }
         }
 
         if ($update) {
+            if ($update->isApproved() || $update->isRejected()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Thay đổi đã ở trạng thái kết thúc và không thể chỉnh sửa.',
+                ], 422);
+            }
+
+            if (! $update->isPending()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chỉ thay đổi đang chờ duyệt mới có thể được kiểm duyệt.',
+                ], 422);
+            }
+
             $payload = $update->payload ?? [];
             $payload['admin_note'] = $adminNote;
             $payload['require_reupload'] = $requireReupload;
             $payload['review_status'] = $reviewStatus;
             $update->payload = $payload;
 
-            if ($reviewStatus === 'pass') {
-                $update->status = ContentUpdate::STATUS_APPROVED;
-                $update->rejection_reason = null;
+            if ($reviewStatus !== 'pass') {
+                $update->save();
+                app(ContentUpdateService::class)->rejectUpdate(
+                    $update,
+                    $request->user(),
+                    $adminNote
+                );
             } else {
-                $update->status = ContentUpdate::STATUS_REJECTED;
-                $update->rejection_reason = $adminNote;
+                // A pass only records review metadata. Canonical course approval
+                // performs the actual pending -> approved transition atomically.
+                $update->save();
             }
 
-            $update->reviewed_by = $request->user()?->id ?? auth()->id();
-            $update->reviewed_at = now();
-
-            $update->save();
+            if ($reviewStatus === 'pass') {
+                $update->refresh();
+            }
         }
 
         return response()->json([
@@ -545,6 +638,13 @@ class ManageController extends Controller
         if ($course->status !== Course::STATUS_APPROVED) {
             return back()->with('error', 'Chỉ khóa học đã duyệt mới có thể xuất bản.');
         }
+
+        $instructor = $course->relationLoaded('instructor') ? $course->instructor : $course->instructor()->first();
+        abort_unless(
+            $instructor && app(\App\Services\InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $course),
+            422,
+            'Ngành của giảng viên chưa được duyệt.'
+        );
 
         $course->update([
             'status' => Course::STATUS_PUBLISHED,
@@ -800,25 +900,10 @@ class ManageController extends Controller
 
     private function courseRevenue(Course $course): float
     {
-        if (Schema::hasTable('order_items')) {
-            $revenue = (float) DB::table('order_items')
-                ->join('orders', 'orders.id', '=', 'order_items.order_id')
-                ->where('orders.status', 'paid')
-                ->where('order_items.course_id', $course->id)
-                ->sum('order_items.price');
-
-            if ($revenue > 0 || ! Schema::hasColumn('orders', 'items')) {
-                return $revenue;
-            }
-        }
-
-        return (float) Order::where('status', 'paid')
-            ->get(['items'])
-            ->sum(function (Order $order) use ($course) {
-                return collect($order->items ?? [])
-                    ->where('course_id', $course->id)
-                    ->sum(fn ($item) => (float) ($item['price'] ?? 0));
-            });
+        return (float) OrderItem::query()
+            ->where('course_id', $course->id)
+            ->whereHas('order', fn (Builder $q) => $q->where('status', 'paid'))
+            ->sum('price');
     }
 
     public function toggleHideReply(Review $review): RedirectResponse

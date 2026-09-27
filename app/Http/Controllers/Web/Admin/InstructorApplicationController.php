@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\InstructorCertificate;
+use App\Models\InstructorTeachingField;
 use App\Models\User;
 use App\Notifications\InstructorApprovedNotification;
 use App\Notifications\InstructorRejectedNotification;
@@ -14,25 +15,79 @@ use App\Services\InstructorRequirementService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class InstructorApplicationController extends Controller
 {
+    public function supplements(Request $request): View
+    {
+        $documents = InstructorCertificate::query()
+            ->where('status', 'pending')
+            ->whereHas('user', fn ($query) => $query->where('instructor_status', 'approved'))
+            ->whereHas('teachingField', fn ($query) => $query->where('approval_status', InstructorTeachingField::STATUS_APPROVED))
+            ->with(['user:id,name,email,username,instructor_status', 'teachingField.category.parent', 'requirement'])
+            ->latest('uploaded_at')
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('admin.instructors.supplements.index', compact('documents'));
+    }
+
     public function index(Request $request): View
     {
-        $status = $request->query('status', 'all');
+        $status = $request->query('status', '');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+        $categoryId = $request->query('category_id');
 
-        $query = User::where('role', 'instructor')
-            ->with(['instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
+        $request->validate([
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+        ]);
+
+        if ($dateFrom && $dateTo && Carbon::parse($dateFrom)->gt(Carbon::parse($dateTo))) {
+            throw ValidationException::withMessages([
+                'date_from' => 'Ngày bắt đầu không được lớn hơn ngày kết thúc.',
+            ]);
+        }
+
+        $query = User::where('users.role', 'instructor')
+            ->with(['instructorProfile.category', 'instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
 
         // 1. Lọc theo trạng thái ứng tuyển (từ Filter Tabs hoặc Dropdown)
         if ($status === 'new_updates') {
-            $query->where('needs_admin_review', true);
-        } elseif (in_array($status, ['pending', 'approved', 'rejected'], true)) {
-            $query->where('instructor_status', $status);
+            $query->pendingInstructorReview()->where('users.needs_admin_review', true);
+        } elseif ($status === 'pending') {
+            $query->pendingInstructorReview();
+        } elseif (in_array($status, ['approved', 'rejected'], true)) {
+            $query->where('users.instructor_status', $status);
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('users.created_at', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('users.created_at', '<=', $dateTo);
+        }
+
+        if ($categoryId) {
+            $cat = Category::with('children')->find($categoryId);
+            $categoryIds = $cat ? array_merge([$cat->id], $cat->children->pluck('id')->all()) : [(int) $categoryId];
+
+            $query->whereHas('instructorProfile', function ($q) use ($categoryIds) {
+                $q->whereIn('category_id', $categoryIds)
+                    ->orWhereHas('teachingCategories', function ($tq) use ($categoryIds) {
+                        $tq->whereIn('categories.id', $categoryIds);
+                    });
+            });
         }
 
         // 2. Bộ lọc: Tìm kiếm theo tên, email, sđt (users và instructor_profiles)
@@ -40,46 +95,55 @@ class InstructorApplicationController extends Controller
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhereHas('instructorProfile', function ($qp) use ($search) {
-                      $qp->where('phone', 'like', "%{$search}%");
-                  });
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhereHas('instructorProfile', function ($qp) use ($search) {
+                        $qp->where('phone', 'like', "%{$search}%");
+                    });
             });
         }
 
-        // 3. Bộ lọc: Lọc theo chuyên ngành giảng dạy
-        if ($request->filled('category_id')) {
-            $categoryId = $request->query('category_id');
-            $query->whereHas('instructorProfile.teachingCategories', function ($q) use ($categoryId) {
-                $q->where('categories.id', $categoryId);
-            });
-        }
-
-        // 4. Bộ lọc: Lọc theo ngày đăng ký (users.created_at)
+        // Backward compatibility for older bookmarked links using a single registration date.
         if ($request->filled('date')) {
             $date = $request->query('date');
             $query->whereDate('created_at', $date);
         }
 
         $applications = $query
-            ->orderByDesc('needs_admin_review')
-            ->orderByRaw("CASE WHEN instructor_status = 'pending' THEN 1 ELSE 2 END")
-            ->orderByDesc('updated_at')
+            ->orderByDesc('users.needs_admin_review')
+            ->orderByRaw("CASE WHEN users.instructor_status = 'pending' THEN 1 ELSE 2 END")
+            ->orderByDesc('users.updated_at')
             ->paginate(15)
             ->withQueryString();
 
-        // Thống kê tổng quan hệ thống (Phương án A - không thay đổi khi sử dụng bộ lọc)
+        $requirementService = app(InstructorRequirementService::class);
+        $applications->getCollection()->each(function (User $application) use ($requirementService): void {
+            $summary = $requirementService->getRequirementsForInstructor($application)['summary'];
+            $requiredCount = $summary['required_count'];
+            $completedCount = $summary['required_submitted_count'];
+
+            $application->setAttribute('certificate_progress', [
+                'required_count' => $requiredCount,
+                'completed_count' => $completedCount,
+                'percentage' => $requiredCount > 0 ? (int) round(($completedCount / $requiredCount) * 100) : null,
+            ]);
+        });
+
+        // Thống kê được hiển thị trên trang statistics riêng.
+        $categories = Category::query()
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($q) => $q->orderBy('name')])
+            ->orderBy('name')
+            ->get();
+
+        // Counts remain necessary for the management-page status tabs only.
         $counts = [
             'all' => User::where('role', 'instructor')->count(),
-            'new_updates' => User::where('role', 'instructor')->where('needs_admin_review', true)->count(),
-            'pending' => User::where('role', 'instructor')->where('instructor_status', 'pending')->count(),
+            'new_updates' => User::query()->pendingInstructorReview()->where('needs_admin_review', true)->count(),
+            'pending' => User::query()->pendingInstructorReview()->count(),
             'approved' => User::where('role', 'instructor')->where('instructor_status', 'approved')->count(),
             'rejected' => User::where('role', 'instructor')->where('instructor_status', 'rejected')->count(),
         ];
-
-        // Lấy danh sách các chuyên ngành đang hoạt động để làm dữ liệu cho dropdown lọc
-        $categories = Category::where('status', true)->orderBy('name')->get();
 
         return view('admin.instructors.applications.index', [
             'applications' => $applications,
@@ -87,9 +151,87 @@ class InstructorApplicationController extends Controller
             'counts' => $counts,
             'categories' => $categories,
             'search' => $request->query('search'),
-            'categoryId' => $request->query('category_id'),
+            'categoryId' => $categoryId,
             'date' => $request->query('date'),
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
         ]);
+    }
+
+    public function statistics(Request $request): View
+    {
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+        $month = $request->query('month');
+        $week = $request->query('week');
+
+        $request->validate([
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'month' => ['nullable', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+            'week' => ['nullable', 'regex:/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/'],
+        ]);
+
+        if ($dateFrom && $dateTo && Carbon::parse($dateFrom)->gt(Carbon::parse($dateTo))) {
+            throw ValidationException::withMessages([
+                'date_from' => 'Ngày bắt đầu không được lớn hơn ngày kết thúc.',
+            ]);
+        }
+
+        if ($month && $week) {
+            throw ValidationException::withMessages([
+                'month' => 'Vui lòng chọn một trong hai bộ lọc tháng hoặc tuần.',
+            ]);
+        }
+
+        $statisticsQuery = User::query()->where('role', 'instructor');
+        if ($dateFrom) {
+            $statisticsQuery->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $statisticsQuery->whereDate('created_at', '<=', $dateTo);
+        }
+        if ($month) {
+            $monthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $statisticsQuery->whereBetween('created_at', [$monthStart, $monthStart->copy()->endOfMonth()]);
+        }
+        if ($week) {
+            [$weekYear, $weekNumber] = sscanf($week, '%d-W%d');
+            $weekStart = Carbon::now()->setISODate($weekYear, $weekNumber)->startOfWeek();
+            $statisticsQuery->whereBetween('created_at', [$weekStart, $weekStart->copy()->endOfWeek()]);
+        }
+
+        $counts = [
+            'all' => (clone $statisticsQuery)->count(),
+            'new_updates' => (clone $statisticsQuery)->pendingInstructorReview()->where('needs_admin_review', true)->count(),
+            'pending' => (clone $statisticsQuery)->pendingInstructorReview()->count(),
+            'approved' => (clone $statisticsQuery)->where('instructor_status', 'approved')->count(),
+            'rejected' => (clone $statisticsQuery)->where('instructor_status', 'rejected')->count(),
+        ];
+
+        $growthUsers = (clone $statisticsQuery)->get(['created_at', 'approved_at']);
+        $firstGrowthYear = (int) ($growthUsers->min(fn (User $user) => $user->created_at?->year) ?: now()->year);
+        $growthYears = collect(range($firstGrowthYear, now()->year))->sortDesc()->values();
+        $growthYear = $growthYears->contains($request->integer('growth_year'))
+            ? $request->integer('growth_year')
+            : now()->year;
+        $growthData = collect(range(1, 12))->map(function (int $month) use ($growthUsers, $growthYear): array {
+            $start = now()->setYear($growthYear)->startOfYear()->addMonths($month - 1);
+            $end = $start->copy()->endOfMonth();
+
+            return [
+                'label' => 'T'.$start->month,
+                'full_label' => $start->format('m/Y'),
+                'registered' => $growthUsers->filter(fn (User $user) => $user->created_at?->between($start, $end))->count(),
+                'approved' => $growthUsers->filter(fn (User $user) => $user->approved_at?->between($start, $end))->count(),
+                'cumulative' => $growthUsers->filter(fn (User $user) => $user->created_at?->lte($end))->count(),
+            ];
+        })->values();
+        $yearRegistered = (int) $growthData->sum('registered');
+        $previousYearRegistered = $growthUsers->filter(fn (User $user) => $user->created_at?->year === $growthYear - 1)->count();
+        $growthRate = $previousYearRegistered > 0 ? round((($yearRegistered - $previousYearRegistered) / $previousYearRegistered) * 100, 1) : ($yearRegistered > 0 ? 100 : 0);
+
+        return view('admin.instructors.statistics', compact('counts', 'growthData', 'growthRate', 'growthYear', 'growthYears', 'yearRegistered', 'dateFrom', 'dateTo', 'month', 'week'));
     }
 
     public function show(User $user): View|RedirectResponse
@@ -107,7 +249,11 @@ class InstructorApplicationController extends Controller
 
         $user->load(['instructorProfile.category', 'instructorApplication', 'instructorCertificates.reviewer', 'instructorCertificates.requirement', 'approver']);
 
-        $requirementData = app(InstructorRequirementService::class)->getRequirementsForInstructor($user);
+        $requirementService = app(InstructorRequirementService::class);
+        $requirementData = $requirementService->getRequirementsForInstructor($user);
+        $approvalEligibility = $requirementService->getAdminApprovalEligibility($user);
+        $requirementData['summary']['can_approve'] = $approvalEligibility['can_submit'];
+        $requirementData['summary']['missing_titles'] = $approvalEligibility['missing_titles'];
 
         return view('admin.instructors.applications.show', [
             'application' => $user,
@@ -160,10 +306,16 @@ class InstructorApplicationController extends Controller
         abort(404, 'Tệp chứng chỉ không tồn tại trên hệ thống.');
     }
 
-    public function viewCertificateItem(Request $request, InstructorCertificate $certificate): BinaryFileResponse
+    public function viewCertificateItem(Request $request, InstructorCertificate $certificate): BinaryFileResponse|RedirectResponse
     {
         if (! $request->user()?->isAdmin() && $request->user()?->id !== $certificate->user_id) {
             abort(403, 'Bạn không có quyền truy cập tài liệu này.');
+        }
+
+        if ($certificate->isUrlSource()) {
+            abort_unless(filled($certificate->document_url), 404, 'URL tài liệu không tồn tại.');
+
+            return redirect()->away($certificate->document_url);
         }
 
         $relativePath = $certificate->file_path;
@@ -197,39 +349,99 @@ class InstructorApplicationController extends Controller
             return back()->with('error', 'Người dùng không phải giảng viên.');
         }
 
-        // Kiểm tra xem giảng viên đã nộp đầy đủ toàn bộ tài liệu bắt buộc của ngành chưa
-        $completeness = app(InstructorRequirementService::class)->checkCanApproveInstructor($user);
-        if (! $completeness['can_approve']) {
-            $missingList = implode(', ', $completeness['missing_titles']);
-
-            return back()->with('error', "Không thể duyệt hồ sơ. Giảng viên còn thiếu tài liệu bắt buộc của ngành: {$missingList}.");
-        }
-
         $adminId = $request->user()->id;
+        $requirements = app(InstructorRequirementService::class);
+        $approval = DB::transaction(function () use ($user, $adminId, $requirements): array {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            abort_unless($lockedUser->role === 'instructor', 422, 'Người dùng không phải giảng viên.');
+            if (! $lockedUser->isGlobalReviewPending()) {
+                return ['approved' => false, 'error' => 'Hồ sơ không còn ở hàng đợi chờ duyệt.'];
+            }
 
-        $user->update([
-            'instructor_status' => 'approved',
-            'needs_admin_review' => false,
-            'admin_last_reviewed_at' => now(),
-            'approved_at' => now(),
-            'approved_by' => $adminId,
-            'rejected_reason' => null,
-        ]);
+            $profile = $lockedUser->instructorProfile()->lockForUpdate()->first();
+            $fields = $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get() ?? collect();
+            $lockedCertificates = $lockedUser->instructorCertificates()->orderBy('id')->lockForUpdate()->get();
+            $application = $lockedUser->instructorApplication()->lockForUpdate()->first();
+            if (! $application || ! $application->isPending()) {
+                return ['approved' => false, 'error' => 'Đơn xét duyệt không còn ở trạng thái chờ duyệt.'];
+            }
 
-        // Mark all pending certificates as approved
-        $user->instructorCertificates()->where('status', 'pending')->update([
-            'status' => 'approved',
-            'reviewed_at' => now(),
-            'reviewed_by' => $adminId,
-        ]);
+            if ($profile) {
+                $profile->unsetRelation('teachingCategories');
+            }
+            $lockedUser->setRelation('instructorProfile', $profile);
+            $lockedUser->setRelation('instructorCertificates', $lockedCertificates);
+            $lockedUser->setRelation('instructorApplication', $application);
 
-        if ($user->instructorApplication) {
-            $user->instructorApplication->update([
+            // Re-check under the same locks used by upload/submit/review so an
+            // application cannot be approved from stale requirement state.
+            $completeness = $requirements->checkCanApproveInstructor($lockedUser);
+            if (! $completeness['can_approve']) {
+                return ['approved' => false, 'missing_titles' => $completeness['missing_titles'], 'error' => null];
+            }
+
+            $lockedUser->update([
+                'instructor_status' => 'approved',
+                'needs_admin_review' => false,
+                'admin_last_reviewed_at' => now(),
+                'approved_at' => now(),
+                'approved_by' => $adminId,
+                'rejected_reason' => null,
+            ]);
+
+            // This is the initial, whole-profile approval path. It promotes the
+            // instructor's existing initial fields only; later field requests are
+            // reviewed individually.
+            if ($profile) {
+                $initialFields = $fields->where('approval_status', InstructorTeachingField::STATUS_DRAFT);
+                foreach ($initialFields as $field) {
+                    $field->update([
+                        'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+                        'reviewed_at' => now(),
+                        'reviewed_by' => $adminId,
+                        'rejection_reason' => null,
+                    ]);
+                }
+
+                if (! $fields->contains(fn (InstructorTeachingField $field) => $field->isApproved() && $field->is_primary)) {
+                    $primary = $initialFields->firstWhere('category_id', $profile->category_id) ?? $initialFields->first();
+                    if ($primary) {
+                        $primary->update(['is_primary' => true]);
+                        $profile->update(['category_id' => $primary->category_id]);
+                    }
+                }
+            }
+
+            $requirementIds = $requirements->getCurrentRequirementIds($lockedUser);
+            $lockedUser->instructorCertificates()
+                ->where('status', 'pending')
+                ->whereIn('requirement_id', $requirementIds)
+                ->update([
+                    'status' => 'approved',
+                    'reviewed_at' => now(),
+                    'reviewed_by' => $adminId,
+                ]);
+
+            $application->update([
                 'status' => 'approved',
                 'reviewed_at' => now(),
                 'reviewed_by' => $adminId,
             ]);
+
+            return ['approved' => true];
+        }, 3);
+
+        if (! $approval['approved']) {
+            if ($approval['error'] ?? null) {
+                return back()->with('error', $approval['error']);
+            }
+
+            $missingList = implode(', ', $approval['missing_titles'] ?? []);
+
+            return back()->with('error', "Không thể duyệt hồ sơ. Giảng viên còn thiếu tài liệu bắt buộc của ngành: {$missingList}.");
         }
+
+        $user->refresh();
 
         try {
             $user->notify(new InstructorApprovedNotification);
@@ -276,20 +488,44 @@ class InstructorApplicationController extends Controller
         $reason = $request->input('rejected_reason');
         $adminId = $request->user()->id;
 
-        $user->update([
-            'instructor_status' => 'rejected',
-            'needs_admin_review' => false,
-            'admin_last_reviewed_at' => now(),
-            'rejected_reason' => $reason,
-        ]);
+        $rejected = DB::transaction(function () use ($user, $reason, $adminId): bool {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            if (! $lockedUser->isGlobalReviewPending()) {
+                return false;
+            }
 
-        if ($user->instructorApplication) {
-            $user->instructorApplication->update([
+            $profile = $lockedUser->instructorProfile()->lockForUpdate()->first();
+            $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get();
+            $certificates = $lockedUser->instructorCertificates()->orderBy('id')->lockForUpdate()->get();
+            $application = $lockedUser->instructorApplication()->lockForUpdate()->first();
+            if (! $application || ! $application->isPending()) {
+                return false;
+            }
+
+            $lockedUser->update([
+                'instructor_status' => 'rejected',
+                'needs_admin_review' => false,
+                'admin_last_reviewed_at' => now(),
+                'rejected_reason' => $reason,
+            ]);
+            InstructorCertificate::query()->whereKey($certificates->where('status', 'pending')->pluck('id'))->update([
+                'status' => 'rejected',
+                'rejection_reason' => $reason,
+                'reviewed_at' => now(),
+                'reviewed_by' => $adminId,
+            ]);
+            $application->update([
                 'status' => 'rejected',
                 'admin_notes' => $reason,
                 'reviewed_at' => now(),
                 'reviewed_by' => $adminId,
             ]);
+
+            return true;
+        }, 3);
+
+        if (! $rejected) {
+            return back()->with('error', 'Hồ sơ không còn ở hàng đợi chờ duyệt.');
         }
 
         try {
@@ -318,6 +554,9 @@ class InstructorApplicationController extends Controller
         if ($certificate->user_id !== $user->id) {
             abort(404, 'Tài liệu không thuộc về giảng viên này.');
         }
+        if (! $certificate->isPending()) {
+            abort(422, 'Chỉ có thể xét duyệt tài liệu đã gửi.');
+        }
 
         $request->validate([
             'status' => ['required', 'in:approved,rejected'],
@@ -331,12 +570,22 @@ class InstructorApplicationController extends Controller
         $reason = $request->input('rejection_reason');
         $adminId = $request->user()->id;
 
-        $certificate->update([
-            'status' => $status,
-            'rejection_reason' => $status === 'rejected' ? $reason : null,
-            'reviewed_at' => now(),
-            'reviewed_by' => $adminId,
-        ]);
+        DB::transaction(function () use ($user, $certificate, $status, $reason, $adminId): void {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            $profile = $lockedUser->instructorProfile()->lockForUpdate()->first();
+            $profile?->teachingFields()->orderBy('id')->lockForUpdate()->get();
+            $certificates = $lockedUser->instructorCertificates()->orderBy('id')->lockForUpdate()->get();
+            $locked = $certificates->firstWhere('id', $certificate->id);
+            abort_unless($locked, 404);
+            abort_unless((int) $locked->user_id === (int) $user->id, 404, 'Tài liệu không thuộc về giảng viên này.');
+            abort_unless($locked->isPending(), 422, 'Chỉ có thể xét duyệt tài liệu đã gửi.');
+            $locked->update([
+                'status' => $status,
+                'rejection_reason' => $status === 'rejected' ? $reason : null,
+                'reviewed_at' => now(),
+                'reviewed_by' => $adminId,
+            ]);
+        });
 
         ActivityLogService::log($adminId, 'review_instructor_document', InstructorCertificate::class, $certificate->id, [
             'status' => $status,

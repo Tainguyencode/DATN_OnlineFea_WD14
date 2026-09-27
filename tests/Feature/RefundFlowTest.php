@@ -90,6 +90,34 @@ class RefundFlowTest extends TestCase
         ]);
     }
 
+    public function test_notification_failure_rolls_back_refund_and_retry_notifies_once(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $order = Order::create([
+            'order_code' => 'REFUND-ATOMIC', 'user_id' => $student->id,
+            'subtotal' => 50000, 'total_amount' => 50000, 'status' => 'paid',
+        ]);
+        $payload = ['reason' => 'Không còn nhu cầu học.', 'bank_code' => 'VCB',
+            'bank_account_number' => '0123456789', 'bank_account_name' => 'TEST STUDENT'];
+        $this->mock(\App\Services\NotificationService::class)->shouldReceive('notifyAdmins')->once()
+            ->andThrow(new \RuntimeException('Notification failed'));
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($student)->post(route('student.orders.refund', $order), $payload);
+            $this->fail('Expected notification failure');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Notification failed', $e->getMessage());
+        }
+        $this->assertDatabaseMissing('refunds', ['order_id' => $order->id]);
+        $this->app->forgetInstance(\App\Services\NotificationService::class);
+        $this->actingAs($student)->post(route('student.orders.refund', $order), $payload)->assertSessionHas('success');
+        $refund = Refund::where('order_id', $order->id)->sole();
+        $this->assertDatabaseHas('push_notifications', ['user_id' => $admin->id, 'url' => route('admin.refunds.show', $refund)]);
+        $this->actingAs($student)->post(route('student.orders.refund', $order), $payload)->assertSessionHas('error');
+        $this->assertSame(1, \App\Models\PushNotification::where('user_id', $admin->id)->where('url', route('admin.refunds.show', $refund))->count());
+    }
+
     public function test_student_cannot_request_refund_if_order_older_than_7_days(): void
     {
         $student = User::factory()->create(['role' => 'student', 'email_verified_at' => now()]);

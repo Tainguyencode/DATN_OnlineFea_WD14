@@ -18,20 +18,35 @@ use App\Services\LearningProgressService;
 use App\Services\RoleSyncService;
 use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CertificateEligibilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    private string $localStorageRoot;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->localStorageRoot = storage_path('framework/testing/certificate-eligibility/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
         session()->start();
         $this->withHeader('X-CSRF-TOKEN', session()->token());
         app(RoleSyncService::class)->ensurePrimaryRolesExist();
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory($this->localStorageRoot);
+
+        parent::tearDown();
     }
 
     public function test_certificate_is_not_issued_if_videos_or_quizzes_are_incomplete(): void
@@ -202,7 +217,6 @@ class CertificateEligibilityTest extends TestCase
 
         // 2. Làm Quiz nhưng trượt -> Vẫn chưa có chứng chỉ
         Notification::fake();
-        Storage::fake('local');
 
         QuizAttempt::create([
             'user_id' => $student->id,
@@ -263,7 +277,7 @@ class CertificateEligibilityTest extends TestCase
 
         $this->assertNotNull($certificate);
         $this->assertNotEmpty($certificate->file_path);
-        Storage::disk('local')->assertExists($certificate->file_path);
+        $this->assertTrue(Storage::disk('local')->exists($certificate->file_path));
 
         Notification::assertSentTo(
             $student,
@@ -274,7 +288,6 @@ class CertificateEligibilityTest extends TestCase
     public function test_certificate_is_not_issued_when_certificate_disabled(): void
     {
         Notification::fake();
-        Storage::fake('local');
 
         [$student, $course, $enrollment, $video, $quizLesson, $quiz] = $this->makeCompletableCourse(certificateEnabled: false);
 
@@ -316,7 +329,6 @@ class CertificateEligibilityTest extends TestCase
 
     public function test_email_failure_does_not_prevent_certificate_issue(): void
     {
-        Storage::fake('local');
 
         [$student, $course, $enrollment, $video, $quizLesson, $quiz] = $this->makeCompletableCourse();
 
@@ -365,13 +377,12 @@ class CertificateEligibilityTest extends TestCase
 
         $this->assertNotNull($certificate);
         $this->assertNotEmpty($certificate->file_path);
-        Storage::disk('local')->assertExists($certificate->file_path);
+        $this->assertTrue(Storage::disk('local')->exists($certificate->file_path));
     }
 
     public function test_duplicate_completion_does_not_create_second_certificate(): void
     {
         Notification::fake();
-        Storage::fake('local');
 
         [$student, $course, $enrollment, $video, $quizLesson, $quiz] = $this->makeCompletableCourse();
 
@@ -450,7 +461,6 @@ class CertificateEligibilityTest extends TestCase
 
     public function test_student_can_view_certificate_pdf(): void
     {
-        Storage::fake('local');
 
         $student = User::factory()->create(['role' => 'student']);
         $instructor = User::factory()->create(['role' => 'instructor']);
@@ -490,7 +500,7 @@ class CertificateEligibilityTest extends TestCase
 
         $certificate->refresh();
         $this->assertNotEmpty($certificate->file_path);
-        Storage::disk('local')->assertExists($certificate->file_path);
+        $this->assertTrue(Storage::disk('local')->exists($certificate->file_path));
     }
 
     public function test_student_can_re_enroll_completed_course(): void

@@ -18,6 +18,7 @@ class FullCourseImportConfirmService
         private readonly FullCourseImportValidator $validator,
         private readonly CurriculumLessonService $lessons,
         private readonly QuizContentService $quizContent,
+        private readonly InstructorCourseCategoryAccess $courseCategoryAccess,
     ) {}
 
     /** @return array{batch: FullCourseImportBatch, course: Course, idempotent: bool} */
@@ -66,6 +67,9 @@ class FullCourseImportConfirmService
                 ->first();
             if (! $category) {
                 throw new LessonImportException('invalid_category_slug', 'Danh mục đã không còn khả dụng. Vui lòng xem trước lại workbook.');
+            }
+            if (! $this->courseCategoryAccess->canTeachCategory($actor, (int) $category->id)) {
+                throw new LessonImportException('category_forbidden', 'Bạn không có quyền tạo khóa học thuộc ngành này.', null, 403);
             }
 
             $course = $this->createCourse($payload['course'], $category, $actor);
@@ -149,7 +153,7 @@ class FullCourseImportConfirmService
                 'assignment_max_score' => $row['assignment_max_score'],
                 'assignment_passing_score' => $row['assignment_passing_score'],
                 'sort_order' => max(0, (int) $row['order'] - 1),
-                'status' => Lesson::STATUS_DRAFT,
+                'status' => Lesson::STATUS_PUBLISHED,
                 'is_preview' => false,
             ]);
         }

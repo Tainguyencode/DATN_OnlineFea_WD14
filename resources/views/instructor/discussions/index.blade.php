@@ -79,10 +79,14 @@
         <div class="space-y-3">
             @forelse($discussions as $disc)
                 @php
-                    $isPending = $disc->needsReply();
-                    $lastReply = $disc->replies->sortByDesc('created_at')->first();
+                    $isPending = (int) $disc->last_message_user_id !== (int) auth()->id();
+                    $lastReply = $disc->lastReply;
                     $lastSenderName = $lastReply ? ($lastReply->is_instructor_answer ? 'Bạn (Giảng viên)' : ($lastReply->user?->name ?? 'Học viên')) : ($disc->user?->name ?? 'Học viên');
-                    $timeDisplay = $disc->created_at->isToday() ? $disc->created_at->format('H:i') : $disc->created_at->format('d/m/Y H:i');
+                    $lastMessageAt = $disc->last_message_at ?: ($lastReply?->created_at ?: $disc->created_at);
+                    $timeDisplay = $lastMessageAt->isToday() ? $lastMessageAt->format('H:i') : $lastMessageAt->format('d/m/Y H:i');
+                    $lastMessageContent = $lastReply?->is_recalled
+                        ? 'Tin nhắn đã được thu hồi'
+                        : ($lastReply?->content ?: ($disc->is_recalled ? 'Tin nhắn đã được thu hồi' : ($disc->content ?: '[Tệp đính kèm]')));
                 @endphp
                 <article class="rounded-2xl border {{ $isPending ? 'border-amber-300 bg-amber-50/30 dark:border-amber-900/50' : 'border-slate-200 bg-white dark:border-slate-800' }} p-5 shadow-sm dark:bg-slate-900 transition hover:shadow-md group">
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -107,6 +111,11 @@
                                     <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 truncate">
                                         {{ $disc->course?->title ?? $disc->lesson?->course?->title }}
                                     </span>
+                                    @if($disc->chat_unread_count > 0)
+                                        <span class="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                                            {{ $disc->chat_unread_count > 99 ? '99+' : $disc->chat_unread_count }}
+                                        </span>
+                                    @endif
                                     @if($disc->lesson)
                                         <span class="text-slate-400 text-xs">&bull;</span>
                                         <span class="text-xs text-slate-500 dark:text-slate-400 truncate">
@@ -120,13 +129,13 @@
                                 </h3>
 
                                 <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-relaxed">
-                                    {{ $disc->content }}
+                                    <span class="font-semibold">{{ $lastSenderName }}:</span> {{ $lastMessageContent }}
                                 </p>
 
                                 <div class="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-slate-400">
                                     <span>🕒 Gửi lúc: {{ $timeDisplay }} ({{ $disc->created_at->diffForHumans() }})</span>
                                     <span>&bull;</span>
-                                    <span>💬 {{ $disc->replies->count() }} lượt trao đổi</span>
+                                    <span>💬 {{ $disc->replies_count }} lượt trao đổi</span>
                                     @if($disc->attachment_path)
                                         <span>&bull;</span>
                                         <span class="text-blue-600 dark:text-blue-400 font-semibold">📎 Có tệp đính kèm</span>

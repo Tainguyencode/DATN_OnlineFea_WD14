@@ -10,8 +10,8 @@ use App\Models\Submission;
 use App\Services\LearningProgressService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -57,13 +57,11 @@ class AssignmentController extends Controller
     /**
      * Tải tài liệu bài tập về máy và kích hoạt thời gian làm bài (6 giờ) cho lần làm hiện tại.
      *
-     * @param  Request  $request
-     * @param  Course  $course
-     * @param  Lesson  $lesson
      * @return mixed
      */
     public function download(Request $request, Course $course, Lesson $lesson)
     {
+        $this->assertAssignmentBelongsToCourse($course, $lesson);
         // 1. Kiểm tra học viên đã ghi danh vào khóa học chưa
         $isEnrolled = $course->enrollments()
             ->where('user_id', $request->user()->id)
@@ -74,14 +72,7 @@ class AssignmentController extends Controller
 
         // 2. Đảm bảo có bản ghi Assignment
         $assignment = $lesson->assignment;
-        if (! $assignment) {
-            $assignment = Assignment::create([
-                'course_id' => $course->id,
-                'lesson_id' => $lesson->id,
-                'title' => $lesson->title ?? 'Bài tập thực hành',
-                'description' => 'Hãy thực hiện yêu cầu của bài tập thực hành dưới đây.',
-            ]);
-        }
+        abort_unless($assignment && (int) $assignment->course_id === (int) $course->id, 404);
 
         // 3. Lấy attempt mới nhất của học viên hoặc tạo attempt 1
         $submission = Submission::query()
@@ -93,6 +84,7 @@ class AssignmentController extends Controller
         if (! $submission) {
             $submission = Submission::create([
                 'assignment_id' => $assignment->id,
+                'assignment_version_id' => $assignment->published_version_id,
                 'user_id' => $request->user()->id,
                 'attempt_number' => 1,
                 'allowed_attempts' => 2,
@@ -111,7 +103,7 @@ class AssignmentController extends Controller
         // 4. Trả về file tải nếu có
         if ($lesson->document_file && Storage::disk('public')->exists($lesson->document_file)) {
             $ext = strtolower(pathinfo($lesson->document_file, PATHINFO_EXTENSION));
-            $downloadName = \Illuminate\Support\Str::slug($lesson->title ?: 'bai-tap-thuc-hanh').($ext ? '.'.$ext : '');
+            $downloadName = Str::slug($lesson->title ?: 'bai-tap-thuc-hanh').($ext ? '.'.$ext : '');
 
             return Storage::disk('public')->download($lesson->document_file, $downloadName);
         }
@@ -129,6 +121,7 @@ class AssignmentController extends Controller
      */
     public function retry(Request $request, Course $course, Lesson $lesson): RedirectResponse
     {
+        $this->assertAssignmentBelongsToCourse($course, $lesson);
         $isEnrolled = $course->enrollments()
             ->where('user_id', $request->user()->id)
             ->whereIn('status', ['active', 'completed'])
@@ -137,7 +130,7 @@ class AssignmentController extends Controller
         abort_unless($isEnrolled, 403, 'Bạn cần đăng ký khóa học để thực hiện hành động này.');
 
         $assignment = $lesson->assignment;
-        abort_unless($assignment, 404, 'Không tìm thấy bài tập thực hành.');
+        abort_unless($assignment && (int) $assignment->course_id === (int) $course->id, 404, 'Không tìm thấy bài tập thực hành.');
 
         $latestSubmission = Submission::query()
             ->where('assignment_id', $assignment->id)
@@ -175,6 +168,7 @@ class AssignmentController extends Controller
 
         Submission::create([
             'assignment_id' => $assignment->id,
+            'assignment_version_id' => $assignment->published_version_id,
             'user_id' => $request->user()->id,
             'attempt_number' => $nextAttemptNumber,
             'allowed_attempts' => $allowedAttempts,
@@ -225,20 +219,20 @@ class AssignmentController extends Controller
             return back()->with('error', 'Bạn cần bấm "Tải tài liệu về" để bắt đầu thời gian làm bài trước khi nộp bài.');
         }
 
+        // A replay must never mutate a submitted or graded attempt, even after its deadline.
+        if (in_array($submission->status, ['submitted', 'graded'], true)) {
+            return back()->with('error', 'Bạn đã nộp bài cho lần làm này rồi.');
+        }
+
         // 3.2 Kiểm tra deadline 6 giờ kể từ thời điểm bắt đầu tải tài liệu của lần làm này
         $deadline = $submission->getDeadline();
         if (($deadline && now()->gt($deadline)) || $submission->status === 'expired') {
-            $submission->update([
+            Submission::whereKey($submission->id)->whereNotIn('status', ['submitted', 'graded'])->update([
                 'status' => 'expired',
                 'result' => 'fail',
             ]);
 
             return back()->with('error', 'Đã hết thời gian làm bài (quá 6 giờ). Bạn không thể nộp bài và lần làm này được tính là FAIL.');
-        }
-
-        // 3.3 Tránh nộp đè khi bài đang chờ chấm hoặc đã chấm
-        if (in_array($submission->status, ['submitted', 'graded'])) {
-            return back()->with('error', 'Bạn đã nộp bài cho lần làm này rồi.');
         }
 
         // 4. Validate dữ liệu đầu vào: bắt buộc phải có 1 trong 2 (Nội dung văn bản HOẶC File đính kèm)
@@ -270,7 +264,8 @@ class AssignmentController extends Controller
         }
 
         // 6. Lưu hoặc Cập nhật Bài nộp vào CSDL cho attempt hiện tại
-        $submission->update([
+        $saved = Submission::whereKey($submission->id)
+            ->whereNotIn('status', ['submitted', 'graded', 'expired'])->update([
             'file_path' => $filePath,
             'content' => $request->input('content'),
             'code_language' => $validated['code_language'] ?? 'plaintext',
@@ -281,6 +276,14 @@ class AssignmentController extends Controller
             'feedback' => null,
             'graded_at' => null,
         ]);
+        if (! $saved) {
+            if ($request->hasFile('file') && $filePath) {
+                Storage::disk('public')->delete($filePath);
+            }
+
+            return back()->with('error', 'Bài làm đã được xử lý bởi một yêu cầu khác. Vui lòng tải lại trang.');
+        }
+        $submission->refresh();
 
         // 7. Cập nhật tiến độ hoàn thành bài học (chưa đạt cho tới khi giảng viên chấm PASS)
         $progressService->recordLessonProgress(
@@ -294,5 +297,13 @@ class AssignmentController extends Controller
         );
 
         return back()->with('success', "Đã nộp bài tập thực hành (Lần {$submission->attempt_number}) thành công! Vui lòng chờ giảng viên đánh giá.");
+    }
+
+    private function assertAssignmentBelongsToCourse(Course $course, Lesson $lesson): void
+    {
+        abort_unless((int) $lesson->course_id === (int) $course->id
+            || $lesson->section()->where('course_id', $course->id)->exists()
+            || $lesson->chapter()->where('course_id', $course->id)->exists(), 404);
+        abort_unless($lesson->type === Lesson::TYPE_ASSIGNMENT, 404);
     }
 }

@@ -8,9 +8,13 @@ use App\Models\Category;
 use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\User;
 use App\Services\AwsS3UploadService;
+use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use App\Services\HlsVideoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -23,6 +27,25 @@ use Tests\TestCase;
 class S3MultipartUploadTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $localStorageRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->localStorageRoot = storage_path('framework/testing/s3-multipart/'.Str::uuid());
+        config(['filesystems.disks.local.root' => $this->localStorageRoot]);
+        Storage::forgetDisk('local');
+    }
+
+    protected function tearDown(): void
+    {
+        Storage::forgetDisk('local');
+        File::deleteDirectory(dirname($this->localStorageRoot));
+
+        parent::tearDown();
+    }
 
     public function test_guest_cannot_access_s3_multipart_routes(): void
     {
@@ -65,15 +88,20 @@ class S3MultipartUploadTest extends TestCase
         $response = $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
             'filename' => 'lecture_1.mp4',
             'content_type' => 'video/mp4',
-            'file_size' => 150000000, // 150MB
+            'file_size' => 5368709120, // Exactly 5 GiB; metadata only, no real upload.
         ]);
 
         $response->assertOk()
             ->assertJson([
                 'uploadId' => 'test-upload-id-12345',
                 'key' => "originals/courses/{$course->id}/lessons/new/test-uuid.mp4",
-                'bucket' => 'test-bucket',
             ]);
+
+        $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
+            'filename' => 'too-large.mp4',
+            'content_type' => 'video/mp4',
+            'file_size' => 5368709121,
+        ])->assertUnprocessable()->assertJsonValidationErrors('file_size');
     }
 
     public function test_multipart_initialization_rejects_video_over_configured_limit(): void
@@ -122,13 +150,45 @@ class S3MultipartUploadTest extends TestCase
             ]);
     }
 
-    public function test_store_lesson_with_s3_key_does_not_dispatch_hls_while_uploading(): void
+    public function test_instructor_can_batch_sign_s3_parts(): void
+    {
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $key = "originals/courses/{$course->id}/lessons/1/uuid.mp4";
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($key) {
+            foreach ([1, 2] as $partNumber) {
+                $mock->shouldReceive('createPresignedPartUrl')
+                    ->with($key, 'upload-123', $partNumber)
+                    ->once()
+                    ->andReturn("https://example.test/part-{$partNumber}");
+            }
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.batch-sign', $course), [
+            'key' => $key,
+            'uploadId' => 'upload-123',
+            'partNumbers' => [1, 2],
+        ])->assertOk()->assertJson([
+            'urls' => [1 => 'https://example.test/part-1', 2 => 'https://example.test/part-2'],
+        ]);
+    }
+
+    public function test_store_lesson_with_completed_s3_key_dispatches_hls_job(): void
     {
         Queue::fake();
+        Storage::fake('s3');
 
         $instructor = $this->signInInstructor();
         [$course, $section] = $this->courseWithSection($instructor);
         $s3Key = "originals/courses/{$course->id}/lessons/new/test-video.mp4";
+        Storage::disk('s3')->put($s3Key, 'completed multipart video');
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($s3Key): void {
+            $mock->shouldReceive('doesObjectExist')
+                ->once()
+                ->with($s3Key)
+                ->andReturnTrue();
+        });
 
         $response = $this->post(route('instructor.courses.sections.lessons.store', [$course, $section]), [
             'title' => 'Bài học tải lên từ S3',
@@ -152,13 +212,15 @@ class S3MultipartUploadTest extends TestCase
             'original_video_key' => $s3Key,
             'video_original_name' => 'bai_giang_1.mp4',
             'video_size' => 143654912,
-            'upload_status' => 'pending',
+            'upload_status' => 'uploaded',
             'processing_status' => 'pending',
             'duration_seconds' => 1200,
         ]);
 
-        // Tuyệt đối không dispatch HLS khi upload chưa complete
-        Queue::assertNotPushed(ConvertVideoToHLS::class);
+        Queue::assertPushed(ConvertVideoToHLS::class, function (ConvertVideoToHLS $job) use ($course): bool {
+            return $job->lesson->course_id === $course->id
+                && $job->lesson->original_video_key === "originals/courses/{$course->id}/lessons/new/test-video.mp4";
+        });
     }
 
     public function test_s3_multipart_complete_dispatches_hls_job_for_lesson(): void
@@ -208,9 +270,84 @@ class S3MultipartUploadTest extends TestCase
         });
     }
 
+    public function test_course_preview_multipart_uses_its_own_key_prefix_without_touching_lessons(): void
+    {
+        Queue::fake();
+
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $key = "previews/courses/{$course->id}/preview-uuid.mp4";
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($course, $key): void {
+            $mock->shouldReceive('generateCoursePreviewObjectKey')
+                ->once()
+                ->with($course->id, 'gioi-thieu.mp4')
+                ->andReturn($key);
+            $mock->shouldReceive('createMultipartUpload')
+                ->once()
+                ->with($key, 'video/mp4')
+                ->andReturn('preview-upload-id');
+            $mock->shouldReceive('getBucket')
+                ->once()
+                ->andReturn('test-bucket');
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.create', $course), [
+            'media_type' => 'course_preview',
+            'filename' => 'gioi-thieu.mp4',
+            'content_type' => 'video/mp4',
+            'file_size' => 10 * 1024 * 1024,
+        ])->assertOk()
+            ->assertJsonPath('key', $key)
+            ->assertJsonPath('mediaType', 'course_preview');
+
+        $this->assertDatabaseCount('lessons', 0);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_course_preview_multipart_complete_does_not_save_a_lesson_or_dispatch_hls(): void
+    {
+        Queue::fake();
+
+        $instructor = $this->signInInstructor();
+        [$course] = $this->courseWithSection($instructor);
+        $key = "previews/courses/{$course->id}/preview-uuid.mp4";
+
+        $this->mock(AwsS3UploadService::class, function (MockInterface $mock) use ($course, $key): void {
+            $mock->shouldReceive('isCoursePreviewObjectKeyForCourse')
+                ->once()
+                ->with($course->id, $key)
+                ->andReturnTrue();
+            $mock->shouldReceive('completeMultipartUpload')
+                ->once()
+                ->with($key, 'preview-upload-id', [
+                    ['PartNumber' => 1, 'ETag' => '"preview-etag"'],
+                ])
+                ->andReturn([
+                    'location' => "https://s3.amazonaws.com/test-bucket/{$key}",
+                    'key' => $key,
+                ]);
+        });
+
+        $this->postJson(route('instructor.courses.s3.multipart.complete', $course), [
+            'media_type' => 'course_preview',
+            'key' => $key,
+            'uploadId' => 'preview-upload-id',
+            'duration' => 120,
+            'parts' => [
+                ['PartNumber' => 1, 'ETag' => '"preview-etag"'],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('key', $key)
+            ->assertJsonPath('mediaType', 'course_preview');
+
+        $this->assertDatabaseCount('lessons', 0);
+        Queue::assertNotPushed(ConvertVideoToHLS::class);
+        Queue::assertNotPushed(ConvertContentUpdateVideoToHLS::class);
+    }
+
     public function test_legacy_video_player_falls_back_to_local_disk_when_s3_key_is_null(): void
     {
-        Storage::fake('local');
         Storage::fake('s3');
         $instructor = $this->signInInstructor();
         [$course, $section] = $this->courseWithSection($instructor);
@@ -220,9 +357,12 @@ class S3MultipartUploadTest extends TestCase
             'section_id' => $section->id,
             'title' => 'Bài học cũ',
             'type' => 'video',
-            'video_path' => 'lesson-hls/100/playlist.m3u8',
             'is_preview' => true,
+            'upload_status' => 'uploaded',
+            'processing_status' => 'completed',
         ]);
+
+        $lesson->update(['video_path' => 'lesson-hls/'.$lesson->id.'/playlist.m3u8']);
 
         Storage::disk('local')->put('lesson-hls/'.$lesson->id.'/playlist.m3u8', "#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n");
 
@@ -350,7 +490,6 @@ class S3MultipartUploadTest extends TestCase
 
     public function test_hls_publication_replaces_local_output_without_leaving_stale_segments(): void
     {
-        Storage::fake('local');
         config()->set('filesystems.disks.s3.key');
         config()->set('filesystems.disks.s3.secret');
         config()->set('filesystems.disks.s3.bucket');
@@ -419,7 +558,10 @@ class S3MultipartUploadTest extends TestCase
             ],
         ]);
 
-        (new ConvertContentUpdateVideoToHLS($contentUpdate))->handle(app(HlsVideoService::class));
+        (new ConvertContentUpdateVideoToHLS($contentUpdate))->handle(
+            app(ContentUpdateService::class),
+            app(ContentVersionService::class),
+        );
 
         $payload = $contentUpdate->fresh()->payload;
         $this->assertSame('failed', $payload['processing_status']);
@@ -447,6 +589,13 @@ class S3MultipartUploadTest extends TestCase
         $category = Category::create([
             'name' => 'Danh mục '.uniqid(),
             'slug' => 'category-'.uniqid(),
+        ]);
+        $profile = InstructorProfile::firstOrCreate(['user_id' => $instructor->id]);
+        $profile->teachingCategories()->syncWithoutDetaching([
+            $category->id => [
+                'is_primary' => ! $profile->teachingCategories()->exists(),
+                'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+            ],
         ]);
 
         $course = Course::create([

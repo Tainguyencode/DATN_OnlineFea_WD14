@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Data\CourseSubmissionCheckResult;
 use App\Enums\CourseStatus;
+use App\Services\AwsS3UploadService;
 use App\Services\ContentUpdateService;
 use App\Services\CourseSubmissionValidator;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Model Quản lý Khóa học Trực tuyến (Course Model)
@@ -60,6 +63,21 @@ class Course extends Model
         'pending_update',
         'rejected_update',
     ];
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(CourseVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(CourseVersion::class, 'draft_version_id');
+    }
 
     /** Nhãn tiếng Việt cho từng trạng thái */
     public const STATUS_LABELS = [
@@ -258,6 +276,55 @@ class Course extends Model
     }
 
     /**
+     * A course preview stores a durable S3 key, never an expiring signed URL.
+     * Legacy HTTP(S) preview links remain playable while courses are migrated.
+     */
+    public function previewVideoUrl(?string $previewVideo = null): ?string
+    {
+        $value = trim((string) ($previewVideo ?? $this->preview_video));
+        if ($value === '') {
+            return null;
+        }
+
+        if ($this->isCoursePreviewObjectKey($value)) {
+            try {
+                return app(AwsS3UploadService::class)->createPresignedViewUrl($value, 10);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+        if (! in_array($scheme, ['http', 'https'], true) || ! filter_var($value, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $host = strtolower((string) parse_url($value, PHP_URL_HOST));
+        $host = preg_replace('/^www\./', '', $host) ?: '';
+        $path = (string) parse_url($value, PHP_URL_PATH);
+        $videoId = null;
+        if ($host === 'youtube.com') {
+            parse_str((string) parse_url($value, PHP_URL_QUERY), $query);
+            $videoId = $query['v'] ?? (str_starts_with($path, '/embed/') ? basename($path) : null);
+        } elseif ($host === 'youtu.be') {
+            $videoId = trim($path, '/');
+        }
+
+        return is_string($videoId) && preg_match('/^[a-zA-Z0-9_-]+$/', $videoId)
+            ? 'https://www.youtube.com/embed/'.rawurlencode($videoId)
+            : $value;
+    }
+
+    public function isCoursePreviewObjectKey(?string $key = null): bool
+    {
+        $value = trim((string) ($key ?? $this->preview_video));
+
+        return $this->exists
+            && Str::startsWith($value, "previews/courses/{$this->getKey()}/")
+            && str_ends_with(strtolower($value), '.mp4');
+    }
+
+    /**
      * Kiểm tra xem Giảng viên này có phải là người sở hữu khóa học hay không.
      */
     public function isOwnedBy(User $user): bool
@@ -306,7 +373,8 @@ class Course extends Model
             return false;
         }
 
-        $isInstructorApproved = $instructor->instructor_status === 'approved';
+        $isInstructorApproved = $instructor->instructor_status === 'approved'
+            && app(\App\Services\InstructorCourseCategoryAccess::class)->canManageCourse($instructor, $this);
         $isInstructorActive = (bool) $instructor->is_active && ! $instructor->isLocked();
 
         return $isInstructorApproved && $isInstructorActive;
@@ -490,6 +558,15 @@ class Course extends Model
         $sections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($this);
         $blockers = [];
         $checkedLessonIds = [];
+        $activeLessonUpdates = ContentUpdate::query()
+            ->where('course_id', $this->id)
+            ->where('type', ContentUpdate::TYPE_LESSON)
+            ->whereIn('action', [ContentUpdate::ACTION_CREATE, ContentUpdate::ACTION_UPDATE])
+            ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+            ->whereNotNull('entity_id')
+            ->orderBy('id')
+            ->get()
+            ->keyBy(fn (ContentUpdate $update): int => (int) $update->entity_id);
 
         foreach ($sections as $section) {
             foreach ($section->lessons as $lesson) {
@@ -501,11 +578,16 @@ class Course extends Model
                     continue;
                 }
 
-                if (! empty($lesson->id) && empty($lesson->is_draft_create)) {
-                    $checkedLessonIds[] = $lesson->id;
+                // A persisted draft-create lesson is already represented by its
+                // ContentUpdate projection. Excluding it here makes the fallback
+                // query read the unprojected lessons row and report a false blocker.
+                if ($lesson->exists && ! empty($lesson->id)) {
+                    $checkedLessonIds[] = (int) $lesson->id;
                 }
 
-                $blocker = $this->videoReadinessBlockerFor($lesson);
+                $draftUpdate = $lesson->draft_update
+                    ?? $activeLessonUpdates->get((int) $lesson->id);
+                $blocker = $this->videoReadinessBlockerFor($lesson, $draftUpdate);
                 if ($blocker) {
                     $blockers[] = $blocker;
                 }
@@ -517,7 +599,10 @@ class Course extends Model
             ->whereNotIn('id', $checkedLessonIds)
             ->get();
         foreach ($orphanedLessons as $lesson) {
-            $blocker = $this->videoReadinessBlockerFor($lesson);
+            $blocker = $this->videoReadinessBlockerFor(
+                $lesson,
+                $activeLessonUpdates->get((int) $lesson->id),
+            );
             if ($blocker) {
                 $blockers[] = $blocker;
             }
@@ -526,8 +611,12 @@ class Course extends Model
         return $blockers;
     }
 
-    private function videoReadinessBlockerFor(Lesson $lesson): ?array
+    private function videoReadinessBlockerFor(Lesson $lesson, ?ContentUpdate $draftUpdate = null): ?array
     {
+        if ($draftUpdate) {
+            return $this->draftVideoReadinessBlockerFor($lesson, $draftUpdate);
+        }
+
         if (! $lesson->hasVideoSource()) {
             return ['title' => $lesson->title, 'state' => 'missing_source'];
         }
@@ -538,7 +627,9 @@ class Course extends Model
         if (filled($lesson->video_url)
             && blank($lesson->original_video_key)
             && blank($lesson->video_path)
-            && blank($lesson->hls_manifest_key)) {
+            && blank($lesson->hls_manifest_key)
+            && blank($lesson->hls_playlist)
+            && blank($lesson->hls_path)) {
             return null;
         }
 
@@ -553,6 +644,47 @@ class Course extends Model
         return [
             'title' => $lesson->title,
             'state' => $lesson->upload_status === 'pending' ? 'uploading' : 'processing',
+        ];
+    }
+
+    /**
+     * Check the exact video revision carried by an active ContentUpdate.
+     * Published lesson media must not make a newer draft video look ready.
+     */
+    private function draftVideoReadinessBlockerFor(Lesson $lesson, ContentUpdate $update): ?array
+    {
+        $payload = $update->payload ?? [];
+        $title = (string) ($payload['title'] ?? $lesson->title);
+        $processingStatus = $payload['processing_status'] ?? null;
+        $uploadStatus = $payload['upload_status'] ?? null;
+        $manifestKey = $payload['hls_manifest_key'] ?? null;
+        $hasInternalSource = filled($payload['original_video_key'] ?? null)
+            || filled($payload['video_path'] ?? null)
+            || filled($manifestKey);
+        $hasExternalSource = filled($payload['video_url'] ?? null) && ! $hasInternalSource;
+
+        if (! $hasInternalSource && ! $hasExternalSource) {
+            return ['title' => $title, 'state' => 'missing_source'];
+        }
+
+        if ($hasExternalSource) {
+            return null;
+        }
+
+        // Both fields are committed together by the ContentUpdate HLS job for
+        // the current source revision. Neither an old manifest nor a completed
+        // flag on its own is sufficient.
+        if ($processingStatus === 'completed' && filled($manifestKey)) {
+            return null;
+        }
+
+        if ($processingStatus === 'failed') {
+            return ['title' => $title, 'state' => 'failed'];
+        }
+
+        return [
+            'title' => $title,
+            'state' => $uploadStatus === 'pending' ? 'uploading' : 'processing',
         ];
     }
 

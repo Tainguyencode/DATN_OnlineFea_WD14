@@ -12,29 +12,38 @@ use App\Models\ContentUpdate;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\User;
 use App\Services\ContentUpdateService;
+use App\Services\ContentVersionService;
 use App\Services\CurriculumLessonService;
 use App\Services\HistoricalQuizDeletionGuard;
+use App\Services\InstructorCourseCategoryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class CurriculumController extends Controller
 {
+    public function __construct(private readonly InstructorCourseCategoryAccess $courseCategoryAccess) {}
+
     public function index(Course $course): View
     {
         $this->authorizeCourse($course);
 
-        $curriculumSections = app(ContentUpdateService::class)->mergeCurriculumWithUpdates($course);
+        $contentUpdates = app(ContentUpdateService::class);
+        $curriculumSections = $contentUpdates->mergeCurriculumWithUpdates($course);
+        $reviewState = $contentUpdates->instructorReviewState($course, auth()->user());
 
         return view('instructor.courses.curriculum', [
             'course' => $course,
             'submissionCheck' => $course->submissionCheck(),
             'curriculumSections' => $curriculumSections,
+            'reviewState' => $reviewState,
             'lessonTypes' => $this->lessonTypes(),
             'lessonStatuses' => $this->lessonStatuses(),
         ]);
@@ -70,7 +79,10 @@ class CurriculumController extends Controller
 
     public function updateSection(StoreChapterRequest $request, Course $course, $section): RedirectResponse
     {
-        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
+        abort_unless(! $section instanceof CourseSection || (int) $section->course_id === (int) $course->id, 404);
+        $sectionModel = $section instanceof CourseSection
+            ? $section
+            : CourseSection::query()->whereKey($section)->where('course_id', $course->id)->first();
         $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
 
         if ($sectionModel) {
@@ -79,16 +91,64 @@ class CurriculumController extends Controller
             $this->authorizeCourse($course);
         }
 
+        $syntheticSectionUpdate = ! $sectionModel
+            ? ContentUpdate::query()
+                ->whereKey($sectionId)
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_CHAPTER)
+                ->where('action', ContentUpdate::ACTION_CREATE)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+                ->first()
+            : null;
+        if (! $sectionModel && ! $syntheticSectionUpdate) {
+            return back()->withErrors(['section' => 'Chương học không tồn tại trong khóa học này.']);
+        }
+
         $validated = $request->validated();
 
         if ($course->isPublished()) {
-            $contentUpdate = ContentUpdate::find($sectionId);
-            if ($contentUpdate && $contentUpdate->type === ContentUpdate::TYPE_CHAPTER) {
-                $contentUpdate->update([
-                    'payload' => array_merge($contentUpdate->payload ?? [], $validated),
-                ]);
+            $pendingContentUpdate = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_CHAPTER)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->when(
+                    $sectionModel,
+                    fn ($query) => $query->where('entity_id', $sectionId),
+                    fn ($query) => $query->whereKey($sectionId)->where('action', ContentUpdate::ACTION_CREATE),
+                )
+                ->exists();
+
+            if ($pendingContentUpdate) {
+                return back()->withErrors(['section' => 'Chương học đang chờ Admin duyệt và không thể chỉnh sửa.']);
+            }
+
+            $contentUpdate = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_CHAPTER)
+                ->where('status', ContentUpdate::STATUS_DRAFT)
+                ->when(
+                    $sectionModel,
+                    fn ($query) => $query->where('entity_id', $sectionId)->where('action', ContentUpdate::ACTION_UPDATE),
+                    fn ($query) => $query->whereKey($sectionId)->where('action', ContentUpdate::ACTION_CREATE),
+                )
+                ->latest('id')
+                ->first();
+
+            if ($contentUpdate) {
+                $changes = $validated;
+                $legacyChapterId = $this->legacyChapterIdForSection($course, $sectionModel);
+                if ($legacyChapterId) {
+                    $changes['legacy_chapter_id'] = $legacyChapterId;
+                }
+                app(ContentUpdateService::class)->updateDraft($contentUpdate, $changes);
 
                 return back()->with('success', 'Đã cập nhật bản nháp chương học.');
+            }
+
+            $payload = $validated;
+            $legacyChapterId = $this->legacyChapterIdForSection($course, $sectionModel);
+            if ($legacyChapterId) {
+                $payload['legacy_chapter_id'] = $legacyChapterId;
             }
 
             app(ContentUpdateService::class)->recordPendingUpdate(
@@ -96,7 +156,7 @@ class CurriculumController extends Controller
                 ContentUpdate::ACTION_UPDATE,
                 $course->id,
                 $sectionId,
-                $validated,
+                $payload,
                 $request->user()
             );
 
@@ -112,7 +172,10 @@ class CurriculumController extends Controller
 
     public function destroySection(Course $course, $section): RedirectResponse
     {
-        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
+        abort_unless(! $section instanceof CourseSection || (int) $section->course_id === (int) $course->id, 404);
+        $sectionModel = $section instanceof CourseSection
+            ? $section
+            : CourseSection::query()->whereKey($section)->where('course_id', $course->id)->first();
         $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
 
         if ($sectionModel) {
@@ -121,9 +184,52 @@ class CurriculumController extends Controller
             $this->authorizeCourse($course);
         }
 
+        $syntheticSectionUpdate = ! $sectionModel
+            ? ContentUpdate::query()
+                ->whereKey($sectionId)
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_CHAPTER)
+                ->where('action', ContentUpdate::ACTION_CREATE)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+                ->first()
+            : null;
+        if (! $sectionModel && ! $syntheticSectionUpdate) {
+            return back()->withErrors(['section' => 'Chương học không tồn tại trong khóa học này.']);
+        }
+
         if ($course->isPublished()) {
-            $contentUpdate = ContentUpdate::find($sectionId);
-            if ($contentUpdate && $contentUpdate->type === ContentUpdate::TYPE_CHAPTER) {
+            $pendingContentUpdate = $sectionModel
+                ? ContentUpdate::query()
+                    ->where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_CHAPTER)
+                    ->where('entity_id', $sectionId)
+                    ->where('status', ContentUpdate::STATUS_PENDING)
+                    ->exists()
+                : ContentUpdate::query()
+                    ->whereKey($sectionId)
+                    ->where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_CHAPTER)
+                    ->where('action', ContentUpdate::ACTION_CREATE)
+                    ->where('status', ContentUpdate::STATUS_PENDING)
+                    ->exists();
+
+            if ($pendingContentUpdate) {
+                return back()->withErrors(['section' => 'Chương học đang chờ Admin duyệt và không thể chỉnh sửa hoặc xóa.']);
+            }
+
+            // Only a draft create record represents an uncommitted section.
+            // Never delete an arbitrary ContentUpdate by primary-key collision.
+            $contentUpdate = ! $sectionModel
+                ? ContentUpdate::query()
+                    ->whereKey($sectionId)
+                    ->where('course_id', $course->id)
+                    ->where('type', ContentUpdate::TYPE_CHAPTER)
+                    ->where('action', ContentUpdate::ACTION_CREATE)
+                    ->where('status', ContentUpdate::STATUS_DRAFT)
+                    ->first()
+                : null;
+
+            if ($contentUpdate) {
                 // Kiểm tra nếu có bài học nháp thuộc chương này
                 $hasDraftLessons = ContentUpdate::where('course_id', $course->id)
                     ->where('type', ContentUpdate::TYPE_LESSON)
@@ -135,7 +241,7 @@ class CurriculumController extends Controller
                     return back()->with('error', 'Chương học này đang có bài học. Vui lòng xóa hết bài học trong chương trước khi xóa chương.');
                 }
 
-                $contentUpdate->delete();
+                app(ContentUpdateService::class)->deleteDraft($contentUpdate);
 
                 return back()->with('success', 'Đã xóa bản nháp chương học.');
             }
@@ -144,12 +250,18 @@ class CurriculumController extends Controller
                 return back()->with('error', 'Chương học này đang có bài học. Vui lòng xóa hết bài học trong chương trước khi xóa chương.');
             }
 
+            $payload = [];
+            $legacyChapterId = $this->legacyChapterIdForSection($course, $sectionModel);
+            if ($legacyChapterId) {
+                $payload['legacy_chapter_id'] = $legacyChapterId;
+            }
+
             app(ContentUpdateService::class)->recordPendingUpdate(
                 ContentUpdate::TYPE_CHAPTER,
                 ContentUpdate::ACTION_DELETE,
                 $course->id,
                 $sectionId,
-                [],
+                $payload,
                 auth()->user()
             );
 
@@ -185,13 +297,42 @@ class CurriculumController extends Controller
         $section,
         CurriculumLessonService $lessonService
     ): RedirectResponse|JsonResponse {
-        $sectionModel = $section instanceof CourseSection ? $section : CourseSection::find($section);
+        abort_unless(! $section instanceof CourseSection || (int) $section->course_id === (int) $course->id, 404);
+        $sectionModel = $section instanceof CourseSection
+            ? $section
+            : CourseSection::query()->whereKey($section)->where('course_id', $course->id)->first();
         $sectionId = $sectionModel ? $sectionModel->id : (int) (is_object($section) ? ($section->id ?? 0) : $section);
 
         if ($sectionModel) {
             $this->authorizeSection($course, $sectionModel);
         } else {
             $this->authorizeCourse($course);
+        }
+
+        $syntheticSectionUpdate = ! $sectionModel
+            ? ContentUpdate::query()
+                ->whereKey($sectionId)
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_CHAPTER)
+                ->where('action', ContentUpdate::ACTION_CREATE)
+                ->whereIn('status', [ContentUpdate::STATUS_DRAFT, ContentUpdate::STATUS_PENDING])
+                ->first()
+            : null;
+        if (! $sectionModel && ! $syntheticSectionUpdate) {
+            $message = 'Chương học không tồn tại trong khóa học này.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $message], 422);
+            }
+
+            return back()->withErrors(['section' => $message]);
+        }
+        if ($syntheticSectionUpdate?->isPending()) {
+            $message = 'Chương học đang chờ Admin duyệt và không thể chỉnh sửa.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $message], 422);
+            }
+
+            return back()->withErrors(['section' => $message]);
         }
 
         abort_unless($lessonService->canCreateForManual($course), 403);
@@ -207,11 +348,52 @@ class CurriculumController extends Controller
             Log::info('[UPLOAD TRACE] RETURN RESPONSE (ContentUpdate)');
 
             if ($request->wantsJson() || $request->ajax()) {
+                $lesson = $result->entity_id
+                    ? Lesson::query()->where('course_id', $course->id)->find($result->entity_id)
+                    : null;
+                if (! $lesson) {
+                    $payload = $result->payload ?? [];
+                    $lesson = new Lesson([
+                        'course_id' => $course->id,
+                        'section_id' => $sectionId,
+                        'title' => $payload['title'] ?? 'Bài học mới',
+                        'type' => $payload['type'] ?? Lesson::TYPE_VIDEO,
+                        'sort_order' => $payload['sort_order'] ?? 0,
+                        'status' => Lesson::STATUS_DRAFT,
+                        'upload_status' => $payload['upload_status'] ?? 'pending',
+                        'processing_status' => $payload['processing_status'] ?? 'pending',
+                    ]);
+                    $lesson->id = $result->id;
+                }
+                $lesson->draft_update = $result;
+                $lesson->update_status = $result->status;
+                $lesson->is_draft_create = true;
+                $lessonHtml = view('instructor.courses.partials.lesson-item', [
+                    'course' => $course,
+                    'section' => $sectionModel,
+                    'lesson' => $lesson,
+                    'lessonTypes' => $this->lessonTypes(),
+                    'lessonStatuses' => $this->lessonStatuses(),
+                ])->render();
+
                 return response()->json([
                     'success' => true,
-                    'lesson_id' => $result->id,
-                    'title' => $result->payload['title'] ?? 'Bài học',
+                    'lesson_id' => $lesson->id,
+                    'content_update_id' => $result->id,
+                    'title' => $lesson->title,
+                    'lesson' => [
+                        'id' => $lesson->id,
+                        'section_id' => $lesson->section_id,
+                        'title' => $lesson->title,
+                        'type' => $lesson->type,
+                        'sort_order' => $lesson->sort_order,
+                        'status' => $lesson->status,
+                        'upload_status' => $lesson->upload_status,
+                        'processing_status' => $lesson->processing_status,
+                    ],
+                    'html' => $lessonHtml,
                     'message' => 'Đã lưu bản nháp bài học mới.',
+                    ...$this->reviewStateResponseData($course, $request->user()),
                 ]);
             }
 
@@ -261,6 +443,7 @@ class CurriculumController extends Controller
                 'html' => $lessonHtml,
                 'title' => $lesson->title,
                 'message' => 'Đã thêm bài học.',
+                ...$this->reviewStateResponseData($course, $request->user()),
             ]);
         }
 
@@ -283,12 +466,37 @@ class CurriculumController extends Controller
     {
         $this->authorizeLesson($course, $lesson);
 
+        if ($course->isPublished() && ContentUpdate::query()
+            ->where('course_id', $course->id)
+            ->where('type', ContentUpdate::TYPE_LESSON)
+            ->where('entity_id', $lesson->id)
+            ->where('status', ContentUpdate::STATUS_PENDING)
+            ->exists()) {
+            $message = 'Bài học đang có thay đổi chờ Admin duyệt và không thể chỉnh sửa.';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $message], 422);
+            }
+
+            return back()->withErrors(['lesson' => $message]);
+        }
+
         $validated = $request->validated();
+        $contentUpdate = null;
+        if ($course->isPublished()) {
+            // Establish the canonical ContentUpdate + LessonVersion before any
+            // new media is staged. The live published lesson remains untouched.
+            $contentUpdate = app(ContentUpdateService::class)
+                ->ensureLessonUpdateDraft($course, $lesson, $request->user());
+        }
         $lessonData = $this->lessonData($validated);
-        $lessonData = $this->storeLessonDocument($request, $lessonData, $lesson);
+        // Published edits stage new files; they must not delete the live V1
+        // document/video before the ContentUpdate is approved.
+        $liveLessonForStorage = $course->isPublished() ? null : $lesson;
+        $lessonData = $this->storeLessonDocument($request, $lessonData, $liveLessonForStorage);
 
         Log::info('[UPLOAD TRACE] START STORE FILE (Update)');
-        $lessonData = $this->storeLessonVideo($request, $lessonData, $lesson);
+        $lessonData = $this->storeLessonVideo($request, $lessonData, $liveLessonForStorage);
         Log::info('[UPLOAD TRACE] STORE FILE DONE (Update)', ['video_path' => $lessonData['video_path'] ?? null, 'original_video_key' => $lessonData['original_video_key'] ?? null]);
 
         if ($course->isPublished()) {
@@ -303,15 +511,9 @@ class CurriculumController extends Controller
                 'status' => $lessonData['status'] ?? Lesson::STATUS_DRAFT,
             ]);
 
-            Log::info('[UPLOAD TRACE] SAVE DATABASE (ContentUpdate Record)');
-            $contentUpdate = app(ContentUpdateService::class)->recordPendingUpdate(
-                ContentUpdate::TYPE_LESSON,
-                ContentUpdate::ACTION_UPDATE,
-                $course->id,
-                $lesson->id,
-                $payload,
-                $request->user()
-            );
+            Log::info('[UPLOAD TRACE] SAVE DATABASE (ContentUpdate Draft)');
+            $contentUpdate = app(ContentUpdateService::class)->updateDraft($contentUpdate, $payload);
+            $candidate = app(ContentVersionService::class)->prepareDraftCandidate($contentUpdate, $request->user());
 
             if (($lessonData['type'] ?? null) === Lesson::TYPE_VIDEO) {
                 $hasReadyS3Upload = filled($payload['original_video_key'] ?? null)
@@ -323,7 +525,11 @@ class CurriculumController extends Controller
                         'content_update_id' => $contentUpdate->id,
                         'source' => $request->hasFile('video_file') ? 'local' : 's3',
                     ]);
-                    ConvertContentUpdateVideoToHLS::dispatch($contentUpdate);
+                    ConvertContentUpdateVideoToHLS::dispatch(
+                        $contentUpdate,
+                        data_get($contentUpdate->payload, 'original_video_key'),
+                        data_get($contentUpdate->payload, 'video_path'),
+                    );
                 }
             }
 
@@ -333,9 +539,11 @@ class CurriculumController extends Controller
                 return response()->json([
                     'success' => true,
                     'content_update_id' => $contentUpdate->id,
+                    'version_number' => $candidate?->version_number,
                     'lesson_id' => $lesson->id,
                     'title' => $payload['title'] ?? $lesson->title,
                     'message' => 'Đã lưu bản cập nhật nội dung bài học.',
+                    ...$this->reviewStateResponseData($course, $request->user()),
                 ]);
             }
 
@@ -374,14 +582,38 @@ class CurriculumController extends Controller
                 ->with('success', 'Đã cập nhật bài quiz. Bạn có thể quản lý câu hỏi tại đây.');
         }
 
-        Log::info('[UPLOAD TRACE] RETURN RESPONSE (Update Success)');
-
         if ($request->wantsJson() || $request->ajax()) {
+            $lessonHtml = view('instructor.courses.partials.lesson-item', [
+                'course' => $course,
+                'section' => $lesson->section,
+                'lesson' => $lesson,
+                'lessonTypes' => $this->lessonTypes(),
+                'lessonStatuses' => $this->lessonStatuses(),
+            ])->render();
+
             return response()->json([
                 'success' => true,
                 'lesson_id' => $lesson->id,
+                'lesson' => [
+                    'id' => $lesson->id,
+                    'section_id' => $lesson->section_id,
+                    'title' => $lesson->title,
+                    'type' => $lesson->type,
+                    'sort_order' => $lesson->sort_order,
+                    'duration' => (int) ($lesson->duration ?? $lesson->duration_seconds ?? 0),
+                    'duration_formatted' => $this->formatDuration((int) ($lesson->duration ?? $lesson->duration_seconds ?? 0)),
+                    'is_preview' => (bool) $lesson->is_preview,
+                    'status' => $lesson->status,
+                    'original_video_key' => $lesson->original_video_key,
+                    'upload_status' => $lesson->upload_status,
+                    'processing_status' => $lesson->processing_status,
+                    'content' => $lesson->content,
+                    'destroy_url' => route('instructor.courses.lessons.destroy', [$course, $lesson->id]),
+                ],
+                'html' => $lessonHtml,
                 'title' => $lesson->title,
                 'message' => 'Đã cập nhật bài học.',
+                ...$this->reviewStateResponseData($course, $request->user()),
             ]);
         }
 
@@ -393,6 +625,17 @@ class CurriculumController extends Controller
         $this->authorizeLesson($course, $lesson);
 
         if ($course->isPublished()) {
+            $pendingUpdate = ContentUpdate::query()
+                ->where('course_id', $course->id)
+                ->where('type', ContentUpdate::TYPE_LESSON)
+                ->where('entity_id', $lesson->id)
+                ->where('status', ContentUpdate::STATUS_PENDING)
+                ->exists();
+
+            if ($pendingUpdate) {
+                return back()->withErrors(['lesson' => 'Bài học đang có thay đổi chờ Admin duyệt và không thể chỉnh sửa hoặc xóa.']);
+            }
+
             app(ContentUpdateService::class)->recordPendingUpdate(
                 ContentUpdate::TYPE_LESSON,
                 ContentUpdate::ACTION_DELETE,
@@ -422,21 +665,24 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
         abort_unless((int) $contentUpdate->course_id === (int) $course->id, 404);
 
-        $payload = $contentUpdate->payload ?? [];
-        $newPayload = array_merge($payload, $request->except(['_token', '_method']));
+        $changes = $request->except(['_token', '_method']);
 
         // Forms submit the canonical duration field, while lesson payloads retain
         // duration_seconds for compatibility with persisted lessons/imports.
         if ($request->exists('duration')) {
-            $newPayload['duration_seconds'] = (int) $request->input('duration', 0);
+            $changes['duration_seconds'] = (int) $request->input('duration', 0);
         }
 
-        $contentUpdate->update(['payload' => $newPayload]);
+        app(ContentUpdateService::class)->updateDraft(
+            $contentUpdate,
+            $changes,
+        );
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => 'Đã lưu bản nháp.',
+                ...$this->reviewStateResponseData($course, $request->user()),
             ]);
         }
 
@@ -448,7 +694,19 @@ class CurriculumController extends Controller
         $this->authorizeCourse($course);
         abort_unless((int) $contentUpdate->course_id === (int) $course->id, 404);
 
-        $payload = $contentUpdate->payload ?? [];
+        $draftLesson = $contentUpdate->type === ContentUpdate::TYPE_LESSON
+            && $contentUpdate->action === ContentUpdate::ACTION_CREATE
+            && $contentUpdate->entity_id
+            ? Lesson::query()
+                ->where('course_id', $course->id)
+                ->where('status', Lesson::STATUS_DRAFT)
+                ->find($contentUpdate->entity_id)
+            : null;
+        $payload = app(ContentUpdateService::class)->deleteDraft($contentUpdate);
+        if ($draftLesson) {
+            $this->deleteLessonFiles($draftLesson);
+            $draftLesson->delete();
+        }
         if (! empty($payload['video_path'])) {
             Storage::disk('local')->delete($payload['video_path']);
         }
@@ -456,14 +714,51 @@ class CurriculumController extends Controller
             Storage::disk('public')->delete($payload['document_file']);
         }
 
-        $contentUpdate->delete();
-
         return back()->with('success', 'Đã xóa bản cập nhật.');
+    }
+
+    public function reviseRejectedContentUpdate(Course $course, ContentUpdate $contentUpdate): RedirectResponse
+    {
+        $this->authorizeCourse($course);
+        abort_unless((int) $contentUpdate->course_id === (int) $course->id, 404);
+
+        try {
+            $revision = app(ContentUpdateService::class)->createRevisionFromRejected($contentUpdate, auth()->user());
+        } catch (ValidationException $exception) {
+            return back()->withErrors(['content_update' => $exception->validator->errors()->first()]);
+        }
+
+        return back()->with('success', "Đã tạo bản chỉnh sửa mới #{$revision->id}. Bạn có thể cập nhật bản nháp trước khi gửi duyệt.");
     }
 
     private function authorizeCourse(Course $course): void
     {
-        abort_unless($course->isOwnedBy(auth()->user()), 403);
+        abort_unless(
+            $this->courseCategoryAccess->canManageCourse(auth()->user(), $course),
+            403,
+            'Bạn không có quyền chỉnh sửa nội dung khóa học này.'
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function reviewStateResponseData(Course $course, User $instructor): array
+    {
+        $course->refresh();
+        $state = app(ContentUpdateService::class)->instructorReviewState($course, $instructor);
+
+        return [
+            'reviewState' => collect($state)->except('updates', 'activeUpdates', 'actionableRejectedUpdates')->all(),
+            'draftCount' => $state['draftCount'],
+            'pendingCount' => $state['pendingCount'],
+            'canSubmit' => $state['canSubmitCourse'],
+            'blockedReason' => $state['submissionBlockedReason'],
+            'publishedVersionLabel' => $state['publishedVersionLabel'],
+            'draftVersionLabels' => $state['draftVersionLabels'],
+            'reviewStateHtml' => view('instructor.courses.partials.curriculum-review-state', [
+                'course' => $course,
+                'reviewState' => $state,
+            ])->render(),
+        ];
     }
 
     private function authorizeSection(Course $course, CourseSection $section): void
@@ -478,8 +773,35 @@ class CurriculumController extends Controller
         abort_unless((int) $lesson->course_id === (int) $course->id, 403);
     }
 
+    private function legacyChapterIdForSection(Course $course, ?CourseSection $section): ?int
+    {
+        if (! $section) {
+            return null;
+        }
+
+        $chapterId = Lesson::query()
+            ->where('course_id', $course->id)
+            ->where('section_id', $section->id)
+            ->whereNotNull('chapter_id')
+            ->value('chapter_id');
+
+        if ($chapterId) {
+            return (int) $chapterId;
+        }
+
+        $chapterId = $course->chapters()
+            ->where('title', $section->title)
+            ->where('sort_order', $section->sort_order)
+            ->value('id');
+
+        return $chapterId ? (int) $chapterId : null;
+    }
+
     private function deleteLessonDocument(Lesson $lesson): void
     {
+        if ($lesson->versions()->whereIn('status', ['published', 'superseded'])->exists()) {
+            return; // Historical release assets must remain available.
+        }
         if ($lesson->document_file) {
             Storage::disk('public')->delete($lesson->document_file);
         }
@@ -599,6 +921,9 @@ class CurriculumController extends Controller
 
     private function deleteLessonVideo(Lesson $lesson): void
     {
+        if ($lesson->versions()->whereIn('status', ['published', 'superseded'])->exists()) {
+            return; // Historical release assets must remain available.
+        }
         if ($lesson->video_path) {
             Storage::disk('local')->delete($lesson->video_path);
         }
@@ -806,6 +1131,7 @@ class CurriculumController extends Controller
             'submission_message' => $submissionCheck->summaryMessage(),
             'common_state' => $commonState,
             'common_message' => $commonMessage,
+            ...$this->reviewStateResponseData($course, auth()->user()),
         ]);
     }
 }

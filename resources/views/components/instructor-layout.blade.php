@@ -3,23 +3,22 @@
     'pageTitle' => 'Instructor Dashboard',
     'pageTitleClass' => 'text-base sm:text-lg font-semibold leading-tight text-slate-900 truncate',
     'breadcrumb' => null,
+    'backUrl' => null,
 ])
 
 @php
     $currentUser = auth()->user();
     $instructorDiscussionsPendingCount = 0;
-    if ($currentUser && $currentUser->isInstructor()) {
-        $instructorCourseIds = \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
-        if ($instructorCourseIds->isNotEmpty()) {
-            $discussions = \App\Models\Discussion::where(function ($q) use ($instructorCourseIds) {
-                $q->whereIn('course_id', $instructorCourseIds)
-                  ->orWhereHas('lesson', function ($lq) use ($instructorCourseIds) {
-                      $lq->whereIn('course_id', $instructorCourseIds);
-                  });
-            })->with('replies')->get();
-
-            $instructorDiscussionsPendingCount = $discussions->filter(fn ($d) => $d->needsReply())->count();
-        }
+    $instructorQuizAttemptRequestsPendingCount = 0;
+    if ($currentUser && ($currentUser->isInstructor() || $currentUser->isAdmin())) {
+        $instructorDiscussionsPendingCount = app(\App\Services\DiscussionChatService::class)
+            ->pendingInstructorCount($currentUser);
+        $cIds = $currentUser->isAdmin()
+            ? \App\Models\Course::pluck('id')
+            : \App\Models\Course::where('instructor_id', $currentUser->id)->pluck('id');
+        $instructorQuizAttemptRequestsPendingCount = \App\Models\QuizAttemptRequest::whereIn('course_id', $cIds)
+            ->where('status', \App\Models\QuizAttemptRequest::STATUS_PENDING)
+            ->count();
     }
 
     $menu = [
@@ -100,6 +99,14 @@
                     'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>',
                 ],
                 [
+                    'route' => 'instructor.quiz-attempt-requests.index',
+                    'active' => ['instructor.quiz-attempt-requests.*'],
+                    'label' => 'Yêu cầu làm lại Quiz',
+                    'badge' => $instructorQuizAttemptRequestsPendingCount > 0 ? $instructorQuizAttemptRequestsPendingCount : null,
+                    'badge_color' => 'bg-amber-500',
+                    'icon' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>',
+                ],
+                [
                     'route' => 'study-groups.index',
                     'active' => ['study-groups.*'],
                     'label' => 'Nhóm học tập',
@@ -154,12 +161,13 @@
 <x-layouts.dashboard
     role="instructor"
     roleLabel="Giảng viên"
-    accent="emerald"
+    accent="blue"
     :menu="$menu"
     :title="$title"
     :pageTitle="$pageTitle"
     :pageTitleClass="$pageTitleClass"
     :breadcrumb="$breadcrumb"
+    :backUrl="$backUrl"
 >
     @if(config('auth.email_verification_enabled', true) && auth()->check() && ! auth()->user()->hasVerifiedEmail())
         <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
@@ -230,4 +238,6 @@
     @endif
 
     {{ $slot }}
+
+    <x-messenger.floating />
 </x-layouts.dashboard>

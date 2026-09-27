@@ -10,6 +10,7 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\ContentVersionService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -50,6 +51,9 @@ class CartCheckoutTest extends TestCase
             'slug' => 'cong-nghe-thong-tin',
         ]);
 
+        $profile = $this->instructor->instructorProfile()->create([]);
+        $profile->teachingFields()->create(['category_id' => $this->category->id, 'approval_status' => 'approved']);
+
         // Tạo khóa học mẫu đã xuất bản
         $this->course = Course::create([
             'instructor_id' => $this->instructor->id,
@@ -62,6 +66,7 @@ class CartCheckoutTest extends TestCase
             'status' => Course::STATUS_PUBLISHED,
             'is_published' => true,
         ]);
+        app(ContentVersionService::class)->createInitialCourseVersion($this->course, $this->instructor);
     }
 
     /**
@@ -589,6 +594,55 @@ class CartCheckoutTest extends TestCase
 
         $responseCheckout->assertRedirect();
         $responseCheckout->assertSessionHas('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
+    }
+
+    public function test_used_coupon_is_hidden_from_the_students_next_payment_page(): void
+    {
+        $usedCoupon = Coupon::create([
+            'code' => 'USED-ONCE',
+            'type' => 'fixed',
+            'value' => 20000,
+            'min_order_amount' => 0,
+            'is_active' => true,
+        ]);
+        $availableCoupon = Coupon::create([
+            'code' => 'STILL-AVAILABLE',
+            'type' => 'fixed',
+            'value' => 10000,
+            'min_order_amount' => 0,
+            'is_active' => true,
+        ]);
+
+        Order::create([
+            'order_code' => 'ORD-USED-COUPON',
+            'user_id' => $this->student->id,
+            'coupon_id' => $usedCoupon->id,
+            'subtotal' => 100000,
+            'discount_amount' => 20000,
+            'total_amount' => 80000,
+            'status' => 'paid',
+            'payment_method' => 'bank_transfer',
+        ]);
+        $pendingOrder = Order::create([
+            'order_code' => 'ORD-NEXT-PAYMENT',
+            'user_id' => $this->student->id,
+            'subtotal' => 100000,
+            'discount_amount' => 0,
+            'total_amount' => 100000,
+            'status' => 'pending',
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response = $this->actingAs($this->student)
+            ->get(route('student.checkout.pay', $pendingOrder->order_code));
+
+        $response->assertOk()
+            ->assertViewHas('activeCoupons', function ($coupons) use ($usedCoupon, $availableCoupon): bool {
+                return ! $coupons->contains('id', $usedCoupon->id)
+                    && $coupons->contains('id', $availableCoupon->id);
+            })
+            ->assertDontSee('USED-ONCE')
+            ->assertSee('STILL-AVAILABLE');
     }
 
     /**

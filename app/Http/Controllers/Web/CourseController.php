@@ -18,9 +18,13 @@ use App\Models\ReviewHelpful;
 use App\Models\Submission;
 use App\Models\User;
 use App\Services\CourseRecommendationService;
+use App\Services\CourseReleaseLock;
+use App\Services\DiscussionChatService;
 use App\Services\EngagementService;
+use App\Services\EnrollmentVersionService;
 use App\Services\LearningPlayerService;
 use App\Services\LearningProgressService;
+use App\Services\LessonVideoSourceService;
 use App\Services\RecentlyViewedCourseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -80,9 +84,13 @@ class CourseController extends Controller
             && auth()->user()->isInstructor()
             && $course->isOwnedBy(auth()->user());
         $canAccessFullCourse = $isEnrolled || $canManageCourse || $canBypassCourseVisibility;
+        $previewVideoUrl = ($isPublished || $canManageCourse || $canBypassCourseVisibility)
+            ? $course->previewVideoUrl()
+            : null;
 
         $course->load([
-            'instructor:id,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
+            'instructor:id,role,name,avatar,bio,instructor_status,is_active,account_status,locked_at',
+            'instructor.instructorProfile',
             'category:id,parent_id,name,slug',
             'category.parent:id,name,slug',
             'courseSections.lessons' => fn ($q) => $q
@@ -180,6 +188,22 @@ class CourseController extends Controller
             ->limit(10)
             ->get();
 
+        $instructorStats = [
+            'total_courses' => Course::published()->where('instructor_id', $course->instructor_id)->count(),
+            'total_students' => Enrollment::whereHas('course', fn ($q) => $q->published()->where('instructor_id', $course->instructor_id))->distinct('user_id')->count('user_id'),
+            'avg_rating' => 0.0,
+            'total_reviews' => 0,
+        ];
+        $instructorRatingData = Course::published()
+            ->where('instructor_id', $course->instructor_id)
+            ->whereNotNull('rating_avg')
+            ->selectRaw('AVG(rating_avg) as avg_rating, SUM(rating_count) as total_reviews')
+            ->first();
+        if ($instructorRatingData) {
+            $instructorStats['avg_rating'] = round((float) ($instructorRatingData->avg_rating ?? 0), 1);
+            $instructorStats['total_reviews'] = (int) ($instructorRatingData->total_reviews ?? 0);
+        }
+
         return view('courses.show', compact(
             'course',
             'curriculumSections',
@@ -206,6 +230,8 @@ class CourseController extends Controller
             'recommendationTitle',
             'recommendationSubtitle',
             'topStudents',
+            'previewVideoUrl',
+            'instructorStats',
         ));
     }
 
@@ -213,7 +239,8 @@ class CourseController extends Controller
         Course $course,
         Lesson $lesson,
         LearningPlayerService $playerService,
-        RecentlyViewedCourseService $recentlyViewedCourseService
+        RecentlyViewedCourseService $recentlyViewedCourseService,
+        DiscussionChatService $discussionChat,
     ): View {
         abort_unless($this->lessonBelongsToCourse($course, $lesson), 404);
 
@@ -223,9 +250,11 @@ class CourseController extends Controller
         $user = auth()->user();
         $player = $playerService->buildPlayerContext($course, $lesson, $user, $canBypassCourseVisibility);
 
+        $videoLesson = $lesson;
         $videoSource = null;
         if ($player['canAccessLesson'] && $lesson->type === 'video') {
-            if ($lesson->video_path && Str::endsWith($lesson->video_path, '.mp4')) {
+            $videoLesson = app(LessonVideoSourceService::class)->forViewer($lesson, $user?->id);
+            if (! $videoLesson->relationLoaded('playbackVersion') && $videoLesson->video_path && Str::endsWith($videoLesson->video_path, '.mp4')) {
                 // Sử dụng Cache để tránh gọi Job nhiều lần vì status DB không hỗ trợ 'processing'
                 $cacheKey = 'video_processing_'.$lesson->id;
                 if (! Cache::has($cacheKey)) {
@@ -233,15 +262,21 @@ class CourseController extends Controller
                     ConvertVideoToHLS::dispatch($lesson);
                 }
             } else {
-                $videoSource = $lesson->video_path
-                    ? Storage::disk('public')->url($lesson->video_path)
-                    : $lesson->video_url;
+                $videoSource = $videoLesson->video_url ?: ($videoLesson->video_path
+                    ? Storage::disk('public')->url($videoLesson->video_path)
+                    : null);
             }
         }
 
         $progressUrl = $player['isEnrolled']
             ? route('courses.lessons.progress', [$course, $lesson])
             : null;
+
+        if ($progressUrl && $lesson->type === 'document') {
+            Cache::add(
+                'reading-start:'.$user->id.':'.$lesson->id, now()->timestamp, now()->addHour()
+            );
+        }
 
         $canUseLessonAi = (bool) $user && (
             $player['isEnrolled']
@@ -291,13 +326,6 @@ class CourseController extends Controller
             if ($user->isStudent()) {
                 $courseDiscussion = Discussion::where('course_id', $course->id)
                     ->where('user_id', $user->id)
-                    ->with([
-                        'user',
-                        'lesson',
-                        'replies' => function ($q) {
-                            $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
-                        },
-                    ])
                     ->first();
 
                 if ($courseDiscussion) {
@@ -308,37 +336,15 @@ class CourseController extends Controller
                 if ($discussionId > 0) {
                     $courseDiscussion = Discussion::where('id', $discussionId)
                         ->where('course_id', $course->id)
-                        ->with([
-                            'user',
-                            'lesson',
-                            'replies' => function ($q) {
-                                $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
-                            },
-                        ])
                         ->first();
                 }
-                $discussions = Discussion::where('course_id', $course->id)
-                    ->with(['user', 'replies.user'])
-                    ->latest()
-                    ->get();
             } elseif ($user->isAdmin()) {
                 $discussionId = request()->integer('discussion_id');
                 if ($discussionId > 0) {
                     $courseDiscussion = Discussion::where('id', $discussionId)
                         ->where('course_id', $course->id)
-                        ->with([
-                            'user',
-                            'lesson',
-                            'replies' => function ($q) {
-                                $q->with(['user', 'lesson', 'replyTo.user'])->oldest();
-                            },
-                        ])
                         ->first();
                 }
-                $discussions = Discussion::where('course_id', $course->id)
-                    ->with(['user', 'replies.user'])
-                    ->latest()
-                    ->get();
             }
         }
 
@@ -411,6 +417,7 @@ class CourseController extends Controller
             'lessonNotesIndexUrl' => $lessonNotesIndexUrl,
             'lessonNotesStoreUrl' => $lessonNotesStoreUrl,
             'videoSource' => $videoSource,
+            'videoLesson' => $videoLesson,
             'progressUrl' => $progressUrl,
             'sectionTitle' => $sectionTitle,
             'courseProgress' => $player['courseProgress'],
@@ -425,6 +432,9 @@ class CourseController extends Controller
             'discussions' => $discussions,
             'activeDiscussion' => $activeDiscussion,
             'courseDiscussion' => $courseDiscussion,
+            'chatContext' => $courseDiscussion && $user
+                ? $discussionChat->context($courseDiscussion, $user)
+                : null,
             'lessonComments' => $lessonComments,
         ]);
     }
@@ -446,10 +456,7 @@ class CourseController extends Controller
             ->first();
 
         if (! $enrollment && $canBypass) {
-            $enrollment = Enrollment::firstOrCreate([
-                'user_id' => $user->id,
-                'course_id' => $course->id,
-            ], [
+            $enrollment = app(EnrollmentVersionService::class)->firstOrCreate($course, $user->id, [
                 'status' => Enrollment::STATUS_ACTIVE,
                 'progress_percent' => 0,
                 'enrolled_at' => now(),
@@ -518,6 +525,7 @@ class CourseController extends Controller
         $reEnrolled = false;
 
         DB::transaction(function () use ($course, $user, &$created, &$reEnrolled) {
+            $course = app(CourseReleaseLock::class)->course($course->id);
             $enrollment = Enrollment::where('user_id', $user->id)
                 ->where('course_id', $course->id)
                 ->first();
@@ -538,9 +546,7 @@ class CourseController extends Controller
                     $reEnrolled = true;
                 }
             } else {
-                Enrollment::create([
-                    'user_id' => $user->id,
-                    'course_id' => $course->id,
+                app(EnrollmentVersionService::class)->firstOrCreate($course, $user->id, [
                     'status' => Enrollment::STATUS_ACTIVE,
                     'progress_percent' => 0,
                     'enrolled_at' => now(),
@@ -607,7 +613,14 @@ class CourseController extends Controller
             ->when($pricing === 'above_2tr', fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) > 2000000'))
             ->when($minPrice !== null, fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) >= ?', [$minPrice]))
             ->when($maxPrice !== null, fn ($query) => $query->whereRaw('COALESCE(discount_price, sale_price, price) <= ?', [$maxPrice]))
-            ->when(is_numeric($rating), fn ($query) => $query->where('rating_avg', '>=', (float) $rating))
+            ->when(in_array((string) $rating, ['1', '2', '3', '4', '5'], true), function ($query) use ($rating) {
+                $star = (int) $rating;
+                $query->where('rating_avg', '>=', $star);
+
+                if ($star < 5) {
+                    $query->where('rating_avg', '<', $star + 1);
+                }
+            })
             ->orderByDesc('published_at')
             ->orderByDesc('created_at')
             ->paginate(12)

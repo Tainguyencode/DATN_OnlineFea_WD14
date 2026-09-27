@@ -72,9 +72,9 @@
                         <tr class="transition-colors duration-150 hover:bg-slate-50/80">
                             <td class="px-4 py-3 align-middle font-mono font-bold text-slate-950">
                                 <div class="flex items-center gap-1.5">
-                                    <span class="bg-slate-100 border border-slate-200 text-slate-800 px-2 py-1 rounded text-xs">
+                                    <a href="{{ route('admin.coupons.show', $coupon) }}" class="bg-slate-100 border border-slate-200 text-indigo-700 hover:text-indigo-900 hover:border-indigo-300 px-2 py-1 rounded text-xs transition">
                                         {{ $coupon->code }}
-                                    </span>
+                                    </a>
                                     @if($coupon->is_private)
                                         <span class="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200" title="Voucher riêng tư dành cho học viên">
                                             🔒 Riêng tư
@@ -143,6 +143,12 @@
                             </td>
                             <td class="px-4 py-3 align-middle whitespace-nowrap">
                                 <div class="flex flex-row flex-nowrap items-center justify-end gap-2">
+                                    <a href="{{ route('admin.coupons.show', $coupon) }}" title="Xem chi tiết" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-indigo-700 transition-colors duration-200 hover:bg-indigo-50">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        </svg>
+                                    </a>
                                     <a href="{{ route('admin.coupons.edit', $coupon) }}" title="Sửa" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-colors duration-200 hover:bg-slate-50">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>

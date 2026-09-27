@@ -24,12 +24,18 @@ class S3MultipartUploader {
     constructor(options = {}) {
         this.courseId = options.courseId;
         this.lessonId = options.lessonId || null;
+        this.contentUpdateId = options.contentUpdateId || null;
+        this.draftVersionNumber = options.draftVersionNumber || null;
         this.createUrl = options.createUrl;
         this.signPartUrl = options.signPartUrl;
         this.batchSignUrl = options.batchSignUrl;
         this.completeUrl = options.completeUrl;
         this.abortUrl = options.abortUrl;
-        this.maxVideoBytes = Number(options.maxVideoBytes) || (200 * 1024 * 1024);
+        this.maxVideoBytes = Number(options.maxVideoBytes) || (5 * 1024 * 1024 * 1024);
+        this.mediaType = typeof options.mediaType === 'string' && options.mediaType !== ''
+            ? options.mediaType
+            : null;
+        this.maxDurationSeconds = Number(options.maxDurationSeconds) || 0;
         this.csrfToken = options.csrfToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         // Số luồng upload song song (4 luồng giúp tận dụng tối đa băng thông quốc tế)
@@ -86,9 +92,22 @@ class S3MultipartUploader {
 
         // 1. Lấy thời lượng video từ metadata
         let duration = await this.getVideoDuration(file).catch(() => 0);
+        if (this.maxDurationSeconds > 0 && duration > this.maxDurationSeconds) {
+            throw createS3UploadUserError(
+                `Video không được dài quá ${Math.floor(this.maxDurationSeconds / 60)} phút.`
+            );
+        }
 
         try {
             // 2. Khởi tạo Multipart Upload trên S3 qua Laravel
+            const initPayload = {
+                filename: file.name,
+                content_type: file.type || 'video/mp4',
+                file_size: file.size,
+                lesson_id: this.lessonId,
+                content_update_id: this.contentUpdateId,
+            };
+            if (this.mediaType) initPayload.media_type = this.mediaType;
             const initResponse = await fetch(this.createUrl, {
                 method: 'POST',
                 headers: {
@@ -96,12 +115,7 @@ class S3MultipartUploader {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
-                body: JSON.stringify({
-                    filename: file.name,
-                    content_type: file.type || 'video/mp4',
-                    file_size: file.size,
-                    lesson_id: this.lessonId,
-                }),
+                body: JSON.stringify(initPayload),
             });
 
             if (!initResponse.ok) {
@@ -116,6 +130,9 @@ class S3MultipartUploader {
             const initData = await initResponse.json();
             this.uploadId = initData.uploadId;
             this.s3Key = initData.key;
+            this.lessonId = initData.lessonId || this.lessonId;
+            this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
+            this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
 
             if (typeof this.onInit === 'function') {
                 this.onInit(initData);
@@ -148,6 +165,18 @@ class S3MultipartUploader {
             // 5. Hoàn tất Multipart Upload trên S3
             this.onStatusChange('completing', 'Đang xác thực và ghép file hoàn chỉnh trên S3...');
 
+            const completePayload = {
+                key: this.s3Key,
+                uploadId: this.uploadId,
+                parts: completedParts.map(p => ({
+                    PartNumber: p.partNumber,
+                    ETag: p.eTag,
+                })),
+                duration: duration,
+                lesson_id: this.lessonId || null,
+                content_update_id: this.contentUpdateId || null,
+            };
+            if (this.mediaType) completePayload.media_type = this.mediaType;
             const completeResponse = await fetch(this.completeUrl, {
                 method: 'POST',
                 headers: {
@@ -155,16 +184,7 @@ class S3MultipartUploader {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
-                body: JSON.stringify({
-                    key: this.s3Key,
-                    uploadId: this.uploadId,
-                    parts: completedParts.map(p => ({
-                        PartNumber: p.partNumber,
-                        ETag: p.eTag,
-                    })),
-                    duration: duration,
-                    lesson_id: this.lessonId || null,
-                }),
+                body: JSON.stringify(completePayload),
             });
 
             if (!completeResponse.ok) {
@@ -187,6 +207,8 @@ class S3MultipartUploader {
                 mime: file.type || 'video/mp4',
                 duration: duration,
                 location: completeData.location,
+                contentUpdateId: completeData.contentUpdateId || this.contentUpdateId,
+                versionNumber: completeData.versionNumber || this.draftVersionNumber,
             });
 
         } catch (error) {
@@ -240,6 +262,7 @@ class S3MultipartUploader {
                     key: this.s3Key,
                     uploadId: this.uploadId,
                     partNumber: part.partNumber,
+                    ...(this.mediaType ? { media_type: this.mediaType } : {}),
                 }),
             });
 
@@ -373,6 +396,7 @@ class S3MultipartUploader {
                 body: JSON.stringify({
                     key: this.s3Key,
                     uploadId: this.uploadId,
+                    ...(this.mediaType ? { media_type: this.mediaType } : {}),
                 }),
             });
         } catch (e) {
@@ -499,6 +523,8 @@ class CourseUploadQueueManager {
         const uploader = new S3MultipartUploader({
             courseId: next.config.courseId,
             lessonId: next.config.lessonId,
+            contentUpdateId: next.config.contentUpdateId,
+            draftVersionNumber: next.config.draftVersionNumber,
             createUrl: next.config.createUrl,
             signPartUrl: next.config.signPartUrl,
             completeUrl: next.config.completeUrl,
@@ -508,6 +534,9 @@ class CourseUploadQueueManager {
             onInit: (initData) => {
                 next.key = initData.key;
                 next.uploadId = initData.uploadId;
+                next.config.lessonId = initData.lessonId || next.config.lessonId;
+                next.config.contentUpdateId = initData.contentUpdateId || next.config.contentUpdateId;
+                next.config.draftVersionNumber = initData.versionNumber || next.config.draftVersionNumber;
                 if (typeof next.config.onInit === 'function') {
                     next.config.onInit(initData);
                 }
@@ -677,12 +706,70 @@ function createLessonFormState(config) {
         videoPath: config.videoPath || '',
         courseId: config.courseId,
         lessonId: config.lessonId || null,
+        contentUpdateId: config.contentUpdateId || null,
+        draftVersionNumber: config.draftVersionNumber || null,
         createUrl: config.createUrl,
         signPartUrl: config.signPartUrl,
         completeUrl: config.completeUrl,
         abortUrl: config.abortUrl,
-        maxVideoBytes: Number(config.maxVideoBytes) || (200 * 1024 * 1024),
+        maxVideoBytes: Number(config.maxVideoBytes) || (5 * 1024 * 1024 * 1024),
         currentQueueId: null,
+        pendingVideoFile: null,
+        pendingVideoForm: null,
+        formBaseline: null,
+        isDirty: false,
+        isSaving: false,
+
+        init() {
+            this.$nextTick(() => {
+                const form = this.$root;
+                if (!(form instanceof HTMLFormElement)) return;
+
+                this.formBaseline = this.serializeForm(form);
+                const updateDirtyState = () => this.updateDirtyState(form);
+                form.addEventListener('input', updateDirtyState);
+                form.addEventListener('change', updateDirtyState);
+                this.updateDirtyState(form);
+            });
+        },
+
+        serializeForm(form) {
+            const entries = [];
+            for (const [name, value] of new FormData(form).entries()) {
+                if (['_token', '_method'].includes(name)) continue;
+
+                const serializedValue = typeof File !== 'undefined' && value instanceof File
+                    ? [value.name, value.size, value.lastModified]
+                    : String(value);
+                entries.push([name, serializedValue]);
+            }
+
+            return JSON.stringify(entries);
+        },
+
+        updateDirtyState(form = this.$root) {
+            this.$nextTick(() => {
+                if (!(form instanceof HTMLFormElement) || this.formBaseline === null) return;
+
+                this.isDirty = this.serializeForm(form) !== this.formBaseline;
+                form.dataset.dirty = this.isDirty ? 'true' : 'false';
+                const submitButton = form.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = this.isSaving || !this.isDirty;
+                }
+            });
+        },
+
+        markFormSaved(form = this.$root) {
+            this.$nextTick(() => {
+                if (!(form instanceof HTMLFormElement) || !form.isConnected) return;
+
+                this.formBaseline = this.serializeForm(form);
+                this.isDirty = false;
+                form.dataset.dirty = 'false';
+                this.updateDirtyState(form);
+            });
+        },
 
         generateS3Key(filename) {
             const ext = (filename.split('.').pop() || 'mp4').toLowerCase();
@@ -705,9 +792,24 @@ function createLessonFormState(config) {
                 return;
             }
 
-            const formElement = event.target.closest('form');
+            const formElement = event.target.closest?.('form') || this.pendingVideoForm || null;
             const titleInput = formElement ? formElement.querySelector("input[name='title']") : null;
             const lessonTitle = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : file.name;
+
+            // A new lesson in an approved course has no server identity until
+            // Save is pressed. Keep the file locally, persist the lesson first,
+            // then queue this exact file with the returned lesson_id.
+            if (!this.lessonId) {
+                this.pendingVideoFile = file;
+                this.pendingVideoForm = formElement;
+                this.videoOriginalName = file.name;
+                this.videoSize = file.size;
+                this.videoMime = file.type || 'video/mp4';
+                this.uploadStatus = 'pending_save';
+                this.uploadStatusMessage = 'Video sẽ được tải lên nền ngay sau khi lưu bài học.';
+                this.updateDirtyState(formElement);
+                return;
+            }
 
             const preKey = this.generateS3Key(file.name);
             this.videoOriginalName = file.name;
@@ -746,6 +848,8 @@ function createLessonFormState(config) {
                 key: preKey,
                 courseId: this.courseId,
                 lessonId: this.lessonId,
+                contentUpdateId: this.contentUpdateId,
+                draftVersionNumber: this.draftVersionNumber,
                 createUrl: this.createUrl,
                 signPartUrl: this.signPartUrl,
                 completeUrl: this.completeUrl,
@@ -754,6 +858,9 @@ function createLessonFormState(config) {
                 onInit: (initData) => {
                     if (this.currentQueueId === queueItem.id) {
                         this.s3Key = initData.key;
+                        this.lessonId = initData.lessonId || this.lessonId;
+                        this.contentUpdateId = initData.contentUpdateId || this.contentUpdateId;
+                        this.draftVersionNumber = initData.versionNumber || this.draftVersionNumber;
                     }
                 },
                 onProgress: (prog) => {
@@ -774,6 +881,8 @@ function createLessonFormState(config) {
                         this.videoOriginalName = data.filename;
                         this.videoSize = data.size;
                         this.videoMime = data.mime;
+                        this.contentUpdateId = data.contentUpdateId || this.contentUpdateId;
+                        this.draftVersionNumber = data.versionNumber || this.draftVersionNumber;
 
                         if (data.duration && data.duration > 0 && formElement) {
                             const durationInput = formElement.querySelector("input[name='duration']");
@@ -804,6 +913,13 @@ function createLessonFormState(config) {
             const form = event.target;
             const isCreateForm = !this.lessonId;
 
+            if (!this.isDirty) {
+                event.preventDefault();
+                this.updateDirtyState(form);
+
+                return;
+            }
+
             if (this.selectedType === 'video' && this.uploadStatus === 'error') {
                 event.preventDefault();
                 if (window.showCurriculumToast) {
@@ -832,6 +948,7 @@ function createLessonFormState(config) {
 
                 const submitBtn = form.querySelector('button[type="submit"]');
                 const origBtnText = submitBtn ? submitBtn.innerHTML : '';
+                this.isSaving = true;
                 if (submitBtn) {
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = '<span class="flex items-center gap-1.5"><svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Đang lưu...</span></span>';
@@ -865,6 +982,10 @@ function createLessonFormState(config) {
                         const resData = await response.json();
                         const lessonId = resData.lesson_id || (resData.lesson ? resData.lesson.id : this.lessonId);
                         const lessonTitle = resData.title || (resData.lesson ? resData.lesson.title : '');
+                        this.contentUpdateId = resData.content_update_id || this.contentUpdateId;
+                        this.draftVersionNumber = resData.version_number || this.draftVersionNumber;
+
+                        refreshCurriculumReviewState(resData);
 
                         // 1. Đồng bộ và duy trì hàng chờ CourseUploadQueue cho cả Tạo mới và Sửa bài học
                         if (this.currentQueueId) {
@@ -891,6 +1012,7 @@ function createLessonFormState(config) {
                         }
 
                         if (isCreateForm) {
+                            const pendingVideoFile = this.pendingVideoFile;
                             // 2. Render ngay lập tức bài học vào danh sách Curriculum DOM
                             if (resData.lesson || resData.html) {
                                 appendLessonToCurriculumDOM(resData);
@@ -919,32 +1041,59 @@ function createLessonFormState(config) {
                             this.uploadStatusMessage = '';
                             this.currentQueueId = null;
 
+                            // Start the existing multipart queue only after the
+                            // server has returned the persisted Lesson identity.
+                            if (pendingVideoFile && lessonId) {
+                                this.lessonId = lessonId;
+                                this.pendingVideoFile = null;
+                                this.startS3Upload({
+                                    target: {
+                                        files: [pendingVideoFile],
+                                        closest: () => form,
+                                    },
+                                });
+                            }
+
                             // 4. Đóng accordion "+ Thêm bài học" để sẵn sàng cho bài tiếp theo
                             const parentDetails = form.closest('details');
                             if (parentDetails) {
                                 parentDetails.removeAttribute('open');
                             }
                         } else {
-                            // Khi sửa bài học thành công, đóng modal sửa bài học
-                            const modal = form.closest('[id^="edit-lesson-modal-"]') || form.closest('.fixed');
-                            if (modal) {
-                                modal.classList.add('hidden');
+                            // Khi sửa bài học thành công, cập nhật ngay lập tức DOM bài học
+                            if (lessonId && resData.html) {
+                                const existingItem = document.getElementById(`lesson-item-${lessonId}`);
+                                if (existingItem) {
+                                    const tempDiv = document.createElement('div');
+                                    tempDiv.innerHTML = resData.html.trim();
+                                    const newEl = tempDiv.firstElementChild;
+                                    if (newEl) {
+                                        existingItem.replaceWith(newEl);
+                                        if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                                            window.Alpine.initTree(newEl);
+                                        }
+                                    }
+                                }
+                            } else {
+                                const modal = form.closest('[id^="edit-lesson-modal-"]') || form.closest('.fixed');
+                                if (modal) {
+                                    modal.classList.add('hidden');
+                                }
+                                if (lessonId && lessonTitle) {
+                                    const titleEl = document.querySelector(`#lesson-item-${lessonId} h4`)
+                                        || document.querySelector(`[data-lesson-title-key="lesson_${lessonId}"]`);
+                                    if (titleEl) {
+                                        titleEl.textContent = lessonTitle;
+                                    }
+                                }
                             }
+
                             const parentDetails = form.closest('details');
                             if (parentDetails) {
                                 parentDetails.removeAttribute('open');
                             }
 
                             this.currentQueueId = null;
-
-                            // Cập nhật tiêu đề bài học ngoài DOM
-                            if (lessonId && lessonTitle) {
-                                const titleEl = document.querySelector(`#lesson-item-${lessonId} h4`)
-                                    || document.querySelector(`[data-lesson-title-key="lesson_${lessonId}"]`);
-                                if (titleEl) {
-                                    titleEl.textContent = lessonTitle;
-                                }
-                            }
 
                             // Nếu video vẫn đang tải dở, hiển thị trạng thái chờ tải ở bài học ngoài danh sách
                             if (this.isUploading && lessonId) {
@@ -957,9 +1106,19 @@ function createLessonFormState(config) {
                             }
                         }
 
+                        if (!isCreateForm && lessonId) {
+                            try {
+                                await refreshCurriculumLesson(lessonId);
+                            } catch (refreshError) {
+                                window.showCurriculumToast?.('Bài học đã lưu nhưng chưa cập nhật được danh sách. Vui lòng tải lại trang.', true);
+                            }
+                        }
+
                         if (window.triggerHlsPolling) {
                             window.triggerHlsPolling();
                         }
+
+                        this.markFormSaved(form);
 
                         // Hiển thị thông báo thành công
                         if (window.showCurriculumToast) {
@@ -987,10 +1146,11 @@ function createLessonFormState(config) {
                         window.showCurriculumToast('Không thể kết nối máy chủ để lưu bài học. Vui lòng thử lại.', true);
                     }
                 } finally {
+                    this.isSaving = false;
                     if (submitBtn) {
-                        submitBtn.disabled = false;
                         submitBtn.innerHTML = origBtnText;
                     }
+                    this.updateDirtyState(form);
                 }
             }
         },
@@ -1016,8 +1176,18 @@ function createLessonFormState(config) {
             this.videoMime = '';
             this.uploadStatus = 'idle';
             this.uploadStatusMessage = '';
+            this.updateDirtyState();
         }
     };
+}
+
+function refreshCurriculumReviewState(data) {
+    if (!data?.reviewStateHtml) return;
+
+    const reviewStateRoot = document.getElementById('curriculum-review-state-root');
+    if (reviewStateRoot) {
+        reviewStateRoot.outerHTML = data.reviewStateHtml;
+    }
 }
 
 function showCurriculumToast(message, isError = false) {
@@ -1068,8 +1238,14 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             const data = await response.json();
             const commonState = data.common_state || 'completed'; // 'completed' | 'processing' | 'failed'
             const commonMessage = data.common_message || '';
-            const canSubmit = !!data.can_submit;
-            const submissionMessage = data.submission_message || 'Khóa học chưa đủ điều kiện để gửi duyệt.';
+            const canSubmit = data.reviewState
+                ? !!data.reviewState.canSubmitCourse
+                : !!data.can_submit;
+            const submissionMessage = data.reviewState?.submissionBlockedReason
+                || data.submission_message
+                || 'Khóa học chưa đủ điều kiện để gửi duyệt.';
+
+            refreshCurriculumReviewState(data);
 
             // 1. CẬP NHẬT BANNER HLS CHUNG TỔNG THỂ
             const bannerWrapper = document.getElementById('common-hls-banner-wrapper');
@@ -1084,14 +1260,14 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
                     messageEl.textContent = commonMessage;
 
                     if (commonState === 'completed') {
-                        bannerWrapper.className = 'rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900 shadow-xs transition-all duration-300';
+                        bannerWrapper.className = 'rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 shadow-sm transition-all duration-300 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200';
                         if (iconEl) iconEl.textContent = '✅';
                     } else if (commonState === 'failed') {
-                        bannerWrapper.className = 'rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-rose-900 shadow-xs transition-all duration-300';
+                        bannerWrapper.className = 'rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-900 shadow-sm transition-all duration-300 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200';
                         if (iconEl) iconEl.textContent = '⚠️';
                     } else {
                         // processing
-                        bannerWrapper.className = 'rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-xs transition-all duration-300';
+                        bannerWrapper.className = 'rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm transition-all duration-300 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200';
                         if (iconEl) iconEl.textContent = '⏳';
                     }
                 }
@@ -1145,13 +1321,13 @@ function initCurriculumHlsPolling(hlsStatusUrl) {
             submitButtons.forEach(btn => {
                 if (canSubmit) {
                     btn.removeAttribute('disabled');
-                    btn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-                    btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
+                    btn.classList.remove('bg-slate-200', 'bg-slate-300', 'text-slate-400', 'text-slate-500', 'cursor-not-allowed', 'bg-emerald-600', 'hover:bg-emerald-700', 'dark:bg-slate-800', 'dark:text-slate-600');
+                    btn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white', 'cursor-pointer', 'shadow-lg', 'shadow-blue-500/20');
                     btn.removeAttribute('title');
                 } else {
                     btn.setAttribute('disabled', 'disabled');
-                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
-                    btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+                    btn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer', 'shadow-lg', 'shadow-blue-500/20');
+                    btn.classList.add('bg-slate-200', 'text-slate-400', 'cursor-not-allowed', 'dark:bg-slate-800', 'dark:text-slate-600');
                     btn.setAttribute('title', submissionMessage);
                 }
             });
@@ -1187,6 +1363,22 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+async function refreshCurriculumLesson(lessonId) {
+    const current = document.getElementById(`lesson-item-${lessonId}`);
+    if (!current) throw new Error('Lesson row not found');
+    const response = await fetch(window.location.href, {
+        credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'text/html' },
+    });
+    if (!response.ok || response.redirected) throw new Error('Could not refresh lesson');
+    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const fresh = page.getElementById(current.id);
+    if (!fresh) throw new Error('Updated lesson row not found');
+    // Only replace this lesson, preserving other open forms and active upload queues.
+    window.Alpine?.destroyTree?.(current);
+    current.replaceWith(document.importNode(fresh, true));
+    // Alpine's mutation observer initializes the inserted subtree automatically.
 }
 
 function appendLessonToCurriculumDOM(data) {
@@ -1297,4 +1489,14 @@ if (typeof window !== 'undefined') {
     window.initCurriculumHlsPolling = initCurriculumHlsPolling;
     window.showCurriculumToast = showCurriculumToast;
     window.appendLessonToCurriculumDOM = appendLessonToCurriculumDOM;
+
+    document.addEventListener('submit', (event) => {
+        if (event.target?.id !== 'curriculumSubmitForm') return;
+
+        const button = event.target.querySelector('button[type="submit"]');
+        if (!button || button.disabled) return;
+
+        button.disabled = true;
+        button.textContent = 'Đang gửi...';
+    });
 }

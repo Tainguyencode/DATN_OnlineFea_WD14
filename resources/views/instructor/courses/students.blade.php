@@ -1,4 +1,4 @@
-<x-instructor-layout :title="$course->title" page-title="Danh sách học viên" :breadcrumb="$course->title">
+<x-instructor-layout :title="$course->title" page-title="Danh sách học viên" :breadcrumb="$course->title" :back-url="route('instructor.courses.index')">
 
     <div x-data="{
         showStudentModal: false,

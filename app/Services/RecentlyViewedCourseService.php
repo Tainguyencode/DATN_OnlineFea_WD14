@@ -72,7 +72,7 @@ class RecentlyViewedCourseService
         return $query->with([
             'course' => fn ($courseQuery) => $courseQuery
                 ->with([
-                    'instructor:id,name,avatar,instructor_status,is_active,account_status,locked_at',
+                    'instructor:id,role,name,avatar,instructor_status,is_active,account_status,locked_at',
                     'category:id,parent_id,name,slug',
                     'category.parent:id,name,slug',
                     'lessons:id,course_id,sort_order',

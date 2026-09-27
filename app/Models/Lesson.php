@@ -12,6 +12,8 @@ class Lesson extends Model
 {
     protected static function booted(): void
     {
+        static::addGlobalScope('not_archived', fn ($query) => $query->whereNull('archived_at'));
+
         static::deleting(function (Lesson $lesson) {
             $quiz = $lesson->quiz()->first();
             if ($quiz) {
@@ -77,6 +79,7 @@ class Lesson extends Model
             'content_version' => 'integer',
             'attachments' => 'array',
             'subtitles' => 'array',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -103,6 +106,21 @@ class Lesson extends Model
     public function assignment(): HasOne
     {
         return $this->hasOne(Assignment::class);
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(LessonVersion::class);
+    }
+
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(LessonVersion::class, 'published_version_id');
+    }
+
+    public function draftVersion(): BelongsTo
+    {
+        return $this->belongsTo(LessonVersion::class, 'draft_version_id');
     }
 
     public function discussions(): HasMany

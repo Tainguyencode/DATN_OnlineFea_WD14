@@ -1,4 +1,4 @@
-<x-instructor-layout title="Tạo Lộ trình học tập mới - FEA Instructor">
+<x-instructor-layout title="Tạo Lộ trình học tập mới - FEA Instructor" page-title="Tạo lộ trình học tập" :back-url="route('instructor.learning-paths.index')">
     <div class="w-full space-y-6">
 
         <div class="flex items-center justify-between">

@@ -1,4 +1,4 @@
-<x-instructor-layout>
+<x-instructor-layout title="Chi tiết Bình luận" page-title="Chi tiết bình luận" :back-url="route('instructor.comments.index')">
     <x-slot:title>Chi tiết Bình luận Bài học</x-slot:title>
 
     <div class="max-w-4xl space-y-6">

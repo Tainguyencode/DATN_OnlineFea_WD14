@@ -6,7 +6,7 @@
     'totalLessons' => 0,
 ])
 
-<header class="learning-header sticky top-0 z-50 flex h-14 items-center gap-3 border-b border-[#2d2f31] bg-[#1c1d1f] px-3 text-white sm:h-16 sm:px-4">
+<header class="learning-header sticky top-14 z-40 flex h-14 items-center gap-3 border-b border-[#2d2f31] bg-[#1c1d1f] px-3 text-white sm:h-16 sm:px-4">
     <a href="{{ route('courses.show', $course->slug) }}" class="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-white/90 transition hover:text-white" aria-label="Quay lại khóa học">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         <span class="hidden sm:inline">Quay lại</span>

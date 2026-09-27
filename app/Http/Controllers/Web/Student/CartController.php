@@ -10,7 +10,11 @@ use App\Models\Enrollment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\User;
 use App\Models\Wishlist;
+use App\Services\CourseReleaseLock;
+use App\Services\EnrollmentVersionService;
+use App\Services\MomoService;
 use App\Services\NotificationService;
 use App\Services\PaymentGatewayService;
 use Illuminate\Http\JsonResponse;
@@ -67,13 +71,10 @@ class CartController extends Controller
             $courses->loadMissing('instructor');
         }
 
-        $existingEnrollments = $shouldEnroll
-            ? Enrollment::query()
-                ->where('user_id', auth()->id())
-                ->whereIn('course_id', $courses->pluck('id'))
-                ->get()
-                ->keyBy('course_id')
-            : collect();
+        $courses = $courses->sortBy('id');
+        if ($shouldEnroll) {
+            app(CourseReleaseLock::class)->courses($courses->pluck('id')->all());
+        }
 
         $orderItemRows = [];
         $timestamp = now();
@@ -98,9 +99,8 @@ class CartController extends Controller
             ];
 
             if ($shouldEnroll) {
-                $enrollment = $existingEnrollments->get($course->id)
-                    ?? new Enrollment(['user_id' => auth()->id(), 'course_id' => $course->id]);
-                $shouldActivate = ! $enrollment->exists || $enrollment->status === 'cancelled';
+                $enrollment = app(EnrollmentVersionService::class)->firstOrCreate($course, auth()->id(), ['order_id' => $order->id]);
+                $shouldActivate = $enrollment->wasRecentlyCreated || $enrollment->status === 'cancelled';
 
                 if ($shouldActivate) {
                     $enrollment->fill([
@@ -156,22 +156,8 @@ class CartController extends Controller
             ->first();
 
         // Lấy danh sách mã giảm giá khả dụng để hiển thị trên UI
-        $activeCoupons = Coupon::where('is_active', true)
-            ->whereDoesntHave('userCoupons', function ($query) {
-                $query->where('user_id', auth()->id())->whereNotNull('used_at');
-            })
-            ->whereDoesntHave('orders', function ($query) {
-                $query->where('user_id', auth()->id())->where('status', 'paid');
-            })
-            ->where(function ($q) {
-                $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-            })
-            ->where(function ($q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
-            })
-            ->where(function ($q) {
-                $q->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses');
-            })
+        $activeCoupons = Coupon::query()
+            ->availableToUser((int) auth()->id())
             ->get();
 
         // Khóa học gợi ý mua kèm (bỏ các khóa đã có trong giỏ hoặc đã đăng ký)
@@ -233,11 +219,11 @@ class CartController extends Controller
     /**
      * Xử lý quy trình checkout và tạo đơn hàng chờ thanh toán.
      */
-    public function checkout(Request $request, PaymentGatewayService $paymentService): RedirectResponse
+    public function checkout(Request $request, PaymentGatewayService $paymentService, MomoService $momoService): RedirectResponse
     {
         $validated = $request->validate([
             'idempotency_key' => ['nullable', 'uuid'],
-            'payment_method' => 'required|in:payos,bank_transfer',
+            'payment_method' => 'required|in:payos,bank_transfer,momo',
             'coupon_code' => 'nullable|string',
             'course_ids' => 'required|array',
             'course_ids.*' => 'required|integer|exists:courses,id',
@@ -250,9 +236,26 @@ class CartController extends Controller
                 ->first()
             : null;
         if ($existingOrder) {
-            return $existingOrder->status === 'paid'
-                ? redirect()->route('student.checkout.success', $existingOrder->order_code)
-                : redirect($paymentService->getPaymentUrl($existingOrder));
+            if ($existingOrder->status === 'paid') {
+                return redirect()->route('student.checkout.success', $existingOrder->order_code);
+            }
+
+            try {
+                $existingPaymentUrl = $existingOrder->payment_method === 'momo'
+                    ? $momoService->createPaymentUrl($existingOrder)
+                    : $paymentService->getPaymentUrl($existingOrder);
+
+                return redirect($existingPaymentUrl);
+            } catch (\RuntimeException $exception) {
+                Log::warning('Existing order payment-link recovery failed', [
+                    'order_id' => $existingOrder->id,
+                    'payment_method' => $existingOrder->payment_method,
+                    'exception_class' => $exception::class,
+                ]);
+
+                return redirect()->route('student.checkout.pay', $existingOrder->order_code)
+                    ->with('error', $exception->getMessage());
+            }
         }
 
         $selectedCourseIds = $validated['course_ids'];
@@ -272,13 +275,13 @@ class CartController extends Controller
 
         if (! empty($validated['coupon_code'])) {
             $coupon = Coupon::where('code', $validated['coupon_code'])->first();
-            if (! $coupon || ! $coupon->isValid()) {
-                return back()->with('error', 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
-            }
-            if ($coupon->isUsedByUser(auth()->id())) {
+            if ($coupon?->isUsedByUser(auth()->id())) {
                 return back()->with('error', 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.');
             }
 
+            if (! $coupon || ! $coupon->canBeUsedBy((int) auth()->id())) {
+                return back()->with('error', 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+            }
             $eligibleCourses = $cart->courses->filter(fn ($c) => $coupon->isEligibleForCourse($c));
             if ($eligibleCourses->isEmpty()) {
                 return back()->with('error', 'Mã giảm giá này không áp dụng cho các khóa học trong giỏ hàng của bạn.');
@@ -306,11 +309,13 @@ class CartController extends Controller
         // Nếu tổng tiền là 0 (Ví dụ coupon giảm 100%), thực hiện hoàn tất thanh toán ngay lập tức
         if ($total <= 0) {
             $completed = DB::transaction(function () use ($cart, $subtotal, $discount, $coupon, $validated, $orderCode, $itemsSnapshot, $selectedCourseIds, $eligibleSubtotal): bool {
+                // Match payment finance locks before taking coupon/course locks.
+                User::whereIn('id', $cart->courses->pluck('instructor_id'))->orderBy('id')->lockForUpdate()->get();
                 $lockedCoupon = null;
                 if ($coupon) {
                     $lockedCoupon = Coupon::query()->lockForUpdate()->find($coupon->id);
 
-                    if (! $lockedCoupon || ! $lockedCoupon->isValid() || $lockedCoupon->isUsedByUser(auth()->id())) {
+                    if (! $lockedCoupon || ! $lockedCoupon->canBeUsedBy((int) auth()->id())) {
                         return false;
                     }
                 }
@@ -331,7 +336,7 @@ class CartController extends Controller
 
                 Payment::create([
                     'order_id' => $order->id,
-                    'gateway' => $validated['payment_method'],
+                    'gateway' => $validated['payment_method'] === 'payos' ? 'bank_transfer' : $validated['payment_method'],
                     'transaction_id' => $order->transaction_id,
                     'amount' => 0,
                     'status' => 'success',
@@ -378,7 +383,7 @@ class CartController extends Controller
 
             Payment::create([
                 'order_id' => $order->id,
-                'gateway' => $validated['payment_method'],
+                'gateway' => $validated['payment_method'] === 'payos' ? 'bank_transfer' : $validated['payment_method'],
                 'amount' => $total,
                 'status' => 'pending',
             ]);
@@ -390,7 +395,9 @@ class CartController extends Controller
 
         // Lấy URL thanh toán tương ứng và chuyển hướng người dùng tới trang quét mã QR (PayOS / VietQR)
         try {
-            $paymentUrl = $paymentService->getPaymentUrl($order);
+            $paymentUrl = $order->payment_method === 'momo'
+                ? $momoService->createPaymentUrl($order)
+                : $paymentService->getPaymentUrl($order);
         } catch (\RuntimeException $exception) {
             Log::warning('Student payment-link creation failed', [
                 'order_id' => $order->id,
@@ -428,17 +435,17 @@ class CartController extends Controller
             ]);
         }
 
-        if (! $coupon->isValid()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Mã giảm giá đã hết hạn hoặc hết lượt sử dụng.',
-            ]);
-        }
-
-        if ($coupon->isUsedByUser(auth()->id())) {
+        if ($coupon?->isUsedByUser(auth()->id())) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.',
+            ]);
+        }
+
+        if (! $coupon->canBeUsedBy((int) auth()->id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mã giảm giá đã hết hạn hoặc hết lượt sử dụng.',
             ]);
         }
 
@@ -509,16 +516,8 @@ class CartController extends Controller
 
         $order->load(['items.course', 'coupon']);
 
-        $activeCoupons = Coupon::where('is_active', true)
-            ->where(function ($q) {
-                $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-            })
-            ->where(function ($q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
-            })
-            ->where(function ($q) {
-                $q->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses');
-            })
+        $activeCoupons = Coupon::query()
+            ->availableToUser((int) auth()->id())
             ->get();
 
         return view('student.cart.pay', compact('order', 'activeCoupons'));
@@ -541,12 +540,12 @@ class CartController extends Controller
         $couponCode = $validated['coupon_code'];
         $coupon = Coupon::where('code', $couponCode)->first();
 
-        if (! $coupon || ! $coupon->isValid()) {
-            return response()->json(['success' => false, 'message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.']);
+        if ($coupon?->isUsedByUser(auth()->id())) {
+            return response()->json(['success' => false, 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.']);
         }
 
-        if ($coupon->isUsedByUser(auth()->id())) {
-            return response()->json(['success' => false, 'message' => 'Bạn đã sử dụng mã giảm giá này cho một đơn hàng trước đó.']);
+        if (! $coupon || ! $coupon->canBeUsedBy((int) auth()->id())) {
+            return response()->json(['success' => false, 'message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.']);
         }
 
         $orderItems = $order->items()->with('course')->get();
@@ -571,6 +570,8 @@ class CartController extends Controller
         $total = max(0, $subtotal - $discount);
 
         DB::transaction(function () use ($order, $coupon, $discount, $total, $orderItems, $eligibleSubtotal) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $order->assertPaymentEditable();
             $order->update([
                 'coupon_id' => $coupon->id,
                 'discount_amount' => $discount,
@@ -641,6 +642,8 @@ class CartController extends Controller
         $subtotal = (float) $order->subtotal;
 
         DB::transaction(function () use ($order, $subtotal) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $order->assertPaymentEditable();
             $order->update([
                 'coupon_id' => null,
                 'discount_amount' => 0,
@@ -687,10 +690,10 @@ class CartController extends Controller
     /**
      * Xử lý lựa chọn thanh toán PayOS/VietQR.
      */
-    public function processPayment(Request $request, string $orderCode, PaymentGatewayService $paymentService): RedirectResponse
+    public function processPayment(Request $request, string $orderCode, PaymentGatewayService $paymentService, MomoService $momoService): RedirectResponse
     {
         $validated = $request->validate([
-            'payment_method' => 'required|in:payos,bank_transfer',
+            'payment_method' => 'required|in:payos,bank_transfer,momo',
         ]);
 
         $order = Order::where('order_code', $orderCode)
@@ -707,24 +710,14 @@ class CartController extends Controller
 
         $paymentMethod = $validated['payment_method'];
 
-        $dbGateway = ($paymentMethod === 'payos') ? 'bank_transfer' : $paymentMethod;
-
-        // Cập nhật phương thức thanh toán cho đơn hàng
-        $order->update(['payment_method' => $paymentMethod]);
-
-        if ($order->payment) {
-            $order->payment->update(['gateway' => $dbGateway]);
-        } else {
-            Payment::create([
-                'order_id' => $order->id,
-                'gateway' => $dbGateway,
-                'amount' => $order->total_amount,
-                'status' => 'pending',
-            ]);
-        }
+        // The gateway service reserves its immutable reference under the order lock.
+        // Do not overwrite a payment that may already have an in-flight callback.
+        $order->payment_method = $paymentMethod;
 
         try {
-            $paymentUrl = $paymentService->getPaymentUrl($order);
+            $paymentUrl = $paymentMethod === 'momo'
+                ? $momoService->createPaymentUrl($order)
+                : $paymentService->getPaymentUrl($order);
         } catch (\RuntimeException $exception) {
             Log::warning('Student payment-link creation failed', [
                 'order_id' => $order->id,
@@ -732,8 +725,11 @@ class CartController extends Controller
                 'exception_class' => $exception::class,
             ]);
 
-            return redirect()->route('student.checkout.pay', $orderCode)
-                ->with('error', 'Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại sau.');
+            $message = str_contains($exception->getMessage(), 'Thông tin tài khoản không hợp lệ')
+                ? $exception->getMessage()
+                : 'Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại sau.';
+
+            return redirect()->route('student.checkout.pay', $orderCode)->with('error', $message);
         }
 
         return redirect($paymentUrl);
@@ -829,12 +825,46 @@ class CartController extends Controller
      *
      * @return View|RedirectResponse
      */
-    public function failedPage(string $orderCode)
+    public function failedPage(string $orderCode, PaymentGatewayService $paymentService, Request $request)
     {
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
+        // PayOS may redirect to its cancellation URL while the webhook or local
+        // finalization is still catching up. A verified PAID state always wins.
+        if ($order->status !== 'paid' && $order->payment?->gateway === 'bank_transfer') {
+            $paymentService->reconcilePayOSCancelReturn($order);
+            $order->refresh();
+        }
+        if ($order->status === 'paid') {
+            return redirect()->route('student.checkout.success', $orderCode);
+        }
+        // PayOS adds these query parameters to the signed cancellation URL.
+        // Only the signed reference authorizes local cancellation, never status/cancel alone.
+        if ($order->status === 'pending' && $request->hasValidSignatureWhileIgnoring(['code', 'id', 'cancel', 'status', 'orderCode'])) {
+            DB::transaction(function () use ($order, $request): void {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                $payment = $lockedOrder->payment()->lockForUpdate()->first();
+                if ($lockedOrder->status === 'pending' && $payment?->status === 'pending'
+                    && $payment->gateway === 'bank_transfer'
+                    && (string) $payment->gateway_order_code === (string) $request->query('cancel_reference')) {
+                    $lockedOrder->update(['status' => 'cancelled']);
+                    $payment->update(['status' => 'failed']);
+                }
+            });
+            $order->refresh();
+        }
+        if ($order->status === 'paid') {
+            return redirect()->route('student.checkout.success', $orderCode);
+        }
+        if ($order->status === 'cancelled') {
+            return view('student.cart.cancelled', compact('order'));
+        }
+        if ($order->status === 'pending') {
+            return redirect()->route('student.checkout.pay', $orderCode)
+                ->with('error', 'Chưa thể hủy đơn từ liên kết này. Bạn có thể hủy trong chi tiết đơn hàng.');
+        }
         if ($order->status !== 'failed') {
             return redirect()->route('student.dashboard')->with('error', 'Đơn hàng này không ở trạng thái thanh toán thất bại.');
         }
@@ -936,7 +966,7 @@ class CartController extends Controller
     /**
      * Endpoint Polling kiểm tra trạng thái đơn hàng real-time.
      */
-    public function checkStatus(string $orderCode, PaymentGatewayService $paymentService): JsonResponse
+    public function checkStatus(string $orderCode, PaymentGatewayService $paymentService, MomoService $momoService): JsonResponse
     {
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', auth()->id())
@@ -947,7 +977,18 @@ class CartController extends Controller
         }
 
         if ($order->status !== 'paid') {
-            $paymentService->checkAndUpdatePayOSStatus($order);
+            if ($order->payment?->gateway === 'momo') {
+                $result = $momoService->query($order->payment);
+                if (is_array($result)
+                    && (string) ($result['orderId'] ?? '') === (string) $order->payment->gateway_order_code
+                    && (int) ($result['amount'] ?? -1) === (int) round((float) $order->total_amount)
+                    && (int) ($result['resultCode'] ?? -1) === 0
+                    && filled($result['transId'] ?? null)) {
+                    $paymentService->completeMomoPayment($order, (string) $result['transId'], $momoService->sanitize($result));
+                }
+            } else {
+                $paymentService->checkAndUpdatePayOSStatus($order);
+            }
             $order->refresh();
         }
 

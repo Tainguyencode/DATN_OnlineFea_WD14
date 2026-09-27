@@ -58,12 +58,17 @@
                 <button
                     type="button"
                     role="tab"
+                    data-tab-name="{{ $key }}"
                     class="shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition"
                     :class="tab === '{{ $key }}' ? 'border-[#1c1d1f] text-[#1c1d1f]' : 'border-transparent text-[#6a6f73] hover:text-[#1c1d1f]'"
                     x-on:click="tab = '{{ $key }}'"
                     :aria-selected="tab === '{{ $key }}'"
                 >
-                    {{ $label }}
+                    @if($key === 'comments')
+                        <span id="tab-comments-button-text">{{ $label }}</span>
+                    @else
+                        {{ $label }}
+                    @endif
                 </button>
             @endforeach
         </div>
@@ -537,15 +542,6 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            @if($isEnrolled && $canAccessLesson && $lessonState !== 'completed' && ($lesson->type === 'document' || $lesson->type === 'video'))
-                <button type="button" 
-                        data-mark-lesson-complete 
-                        @if($lesson->type === 'video') style="display: none;" @endif
-                        class="inline-flex h-10 items-center rounded bg-[#0056D2] px-4 text-sm font-bold text-white hover:bg-[#0046B8]">
-                    Đánh dấu hoàn thành
-                </button>
-            @endif
-
             @if($navigation['next'])
                 <a href="{{ $navigation['next']['url'] }}" class="inline-flex h-10 items-center rounded bg-[#1c1d1f] px-4 text-sm font-bold text-white hover:bg-black">
                     Bài tiếp theo →

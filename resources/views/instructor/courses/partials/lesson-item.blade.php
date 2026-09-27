@@ -39,7 +39,7 @@
     $statusClass = $statusStyles[$lesson->status] ?? $statusStyles['draft'];
 @endphp
 
-<div class="p-5" id="lesson-item-{{ $lesson->id }}">
+<div class="curriculum-lesson bg-white p-5 dark:bg-slate-900" id="lesson-item-{{ $lesson->id }}">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
@@ -48,7 +48,10 @@
                     $lessonUpdate = $lesson->draft_update ?? null;
                     if (!$lessonUpdate && isset($lesson->id)) {
                         $lessonUpdate = \App\Models\ContentUpdate::where('course_id', $course->id)
+                            ->where('type', \App\Models\ContentUpdate::TYPE_LESSON)
+                            ->where('action', \App\Models\ContentUpdate::ACTION_UPDATE)
                             ->where('entity_id', $lesson->id)
+                            ->whereIn('status', [\App\Models\ContentUpdate::STATUS_DRAFT, \App\Models\ContentUpdate::STATUS_PENDING])
                             ->latest()
                             ->first();
                     }
@@ -59,7 +62,9 @@
                         elseif ($lesson->update_status === 'approved') $effectiveReviewStatus = 'pass';
                     }
                 @endphp
-                @if($effectiveReviewStatus === 'pass')
+                @if($lessonUpdate?->isPending())
+                    <span class="rounded-full border border-blue-300 bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">Thay đổi đang chờ Admin duyệt và không thể chỉnh sửa.</span>
+                @elseif($effectiveReviewStatus === 'pass')
                     <span class="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">Đạt</span>
                 @elseif($effectiveReviewStatus === 'need_revision')
                     <span class="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">Cần chỉnh sửa</span>
@@ -73,6 +78,19 @@
                     @endif
                 @else
                     <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $statusClass }}">{{ $lessonStatuses[$lesson->status] ?? $lesson->status }}</span>
+                @endif
+                @php
+                    $lessonVersionContext = $lessonUpdate
+                        ? app(\App\Services\ContentUpdateDiffService::class)->versionContext($lessonUpdate)
+                        : ['current' => $lesson->publishedVersion?->version_number, 'proposed' => null];
+                @endphp
+                @if(($lessonVersionContext['current'] ?? null) !== null)
+                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">Đang xuất bản: V{{ $lessonVersionContext['current'] }}</span>
+                @endif
+                @if(($lessonVersionContext['proposed'] ?? null) !== null)
+                    <span class="rounded-full border {{ $lessonUpdate?->isRejected() ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200 bg-blue-50 text-blue-800' }} px-2.5 py-0.5 text-xs font-bold">
+                        {{ $lessonUpdate?->isRejected() ? 'V'.$lessonVersionContext['proposed'].' — Bị từ chối' : ($lessonUpdate?->isPending() ? 'V'.$lessonVersionContext['proposed'].' — Chờ duyệt' : 'Đang chỉnh sửa bản nháp V'.$lessonVersionContext['proposed']) }}
+                    </span>
                 @endif
                 @if($lesson->is_preview)
                     <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Xem thử</span>
@@ -91,8 +109,8 @@
                     ? 'update_' . $lesson->draft_update->id 
                     : 'lesson_' . $lesson->id;
             @endphp
-            <h4 class="mt-2 font-bold text-slate-950">{{ $lesson->title }}</h4>
-            <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+            <h4 class="mt-2 font-bold text-slate-950 dark:text-white">{{ $lesson->title }}</h4>
+            <div class="mt-1 flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400">
                 <span data-lesson-duration-key="{{ $hlsKey }}">Thời lượng: {{ $formatDuration($lesson->duration ?? $lesson->duration_seconds) }}</span>
                 <span>Bài {{ $lesson->sort_order }}</span>
                 @if($lesson->type === 'video' && ($lesson->original_video_key || $lesson->hls_manifest_key || $lesson->video_path))
@@ -120,7 +138,7 @@
                 @endif
             </div>
             @if($lesson->content && $lesson->type !== 'quiz')
-                <p class="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{{ $lesson->content }}</p>
+                <p class="mt-3 line-clamp-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $lesson->content }}</p>
             @endif
 
             {{-- Ghi chú kiểm duyệt của Admin dành riêng cho bài học này --}}
@@ -195,6 +213,9 @@
 
         @php
             $isDraftCreate = !empty($lesson->is_draft_create) && isset($lesson->draft_update);
+            $isPendingUpdate = $lessonUpdate?->isPending() ?? false;
+            $isDraftCreateReadOnly = $isDraftCreate && $lessonUpdate && ! $lessonUpdate->isDraft();
+            $isReadOnly = $isPendingUpdate || $isDraftCreateReadOnly;
             $updateActionUrl = $isDraftCreate
                 ? route('instructor.courses.content-updates.update', [$course, $lesson->draft_update])
                 : route('instructor.courses.lessons.update', [$course, $lesson->id]);
@@ -205,46 +226,54 @@
         @endphp
 
         <div class="flex shrink-0 flex-wrap gap-2">
-            @if($lesson->type === 'quiz' && ! $isDraftCreate)
+            @if($lesson->type === 'quiz' && ! $isDraftCreate && ! $isPendingUpdate)
                 <a href="{{ route('instructor.courses.lessons.quiz.show', [$course, $lesson]) }}"
-                   class="inline-flex min-h-10 items-center justify-center rounded-lg border border-violet-200 px-4 py-2 text-sm font-bold text-violet-700 transition-colors duration-200 hover:bg-violet-50 cursor-pointer">
+                   class="inline-flex min-h-9 items-center justify-center rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 transition-colors duration-200 hover:bg-violet-50 cursor-pointer dark:border-violet-500/30 dark:text-violet-300">
                     Quản lý câu hỏi
                 </a>
             @endif
 
+            @if($isReadOnly)
+                <span class="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-800">
+                    {{ $isPendingUpdate ? 'Thay đổi đang chờ Admin duyệt và không thể chỉnh sửa.' : 'Không thể chỉnh sửa' }}
+                </span>
+            @else
+
             {{-- Nút Sửa bài học --}}
             <button type="button"
                 onclick="document.getElementById('edit-lesson-modal-{{ $lesson->id }}').classList.remove('hidden')"
-                class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors duration-200 hover:bg-slate-50 cursor-pointer">
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition-colors duration-200 hover:bg-blue-50 cursor-pointer dark:border-slate-600 dark:bg-slate-800 dark:text-blue-300">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                 </svg>
-                Sửa bài học
+                Sửa
             </button>
 
             {{-- Nút Xóa --}}
             <form method="POST" action="{{ $destroyActionUrl }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa bài học này?')">
                 @csrf
                 @method('DELETE')
-                <button type="submit" class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-50 cursor-pointer">
+                <button type="submit" class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 transition-colors duration-200 hover:bg-rose-50 cursor-pointer dark:border-rose-500/30 dark:bg-slate-800 dark:text-rose-300">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                     </svg>
                     Xóa
                 </button>
             </form>
+            @endif
         </div>
 
         {{-- Modal Sửa bài học --}}
+        @unless($isReadOnly)
         <div id="edit-lesson-modal-{{ $lesson->id }}"
              class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 {{ isset($errors) && $errors->hasBag($errorBagKey) ? '' : 'hidden' }}"
              onclick="if(event.target===this) this.classList.add('hidden')">
-            <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
                  onclick="event.stopPropagation()">
                 {{-- Header modal --}}
-                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-900">
                     <div>
-                        <h3 class="text-base font-bold text-slate-950">Sửa bài học</h3>
+                        <h3 class="text-base font-bold text-slate-950 dark:text-white">Sửa bài học</h3>
                         <p class="mt-0.5 text-xs text-slate-500 truncate max-w-xs">{{ $lesson->title }}</p>
                     </div>
                     <button type="button"
@@ -266,10 +295,12 @@
                         'errorBag' => $errorBagKey,
                         'lessonTypes' => $lessonTypes,
                         'lessonStatuses' => $lessonStatuses,
+                        'lessonUpdate' => $lessonUpdate,
                         'submitLabel' => 'Lưu thay đổi',
                     ])
                 </div>
             </div>
         </div>
+        @endunless
     </div>
 </div>

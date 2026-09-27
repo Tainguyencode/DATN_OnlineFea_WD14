@@ -8,6 +8,8 @@
     data-learning-player
     data-course-progress="{{ $courseProgress }}"
     data-progress-url="{{ $progressUrl }}"
+    data-lesson-type="{{ $lesson->type }}"
+    @if($lesson->type === 'document') data-refresh-on-history @endif
 >
     <x-learning.header
         :course="$course"
@@ -49,7 +51,7 @@
             @elseif($lesson->type === 'video')
                 <x-learning.video-player
                     :video-source="$videoSource"
-                    :lesson="$lesson"
+                    :lesson="$videoLesson ?? $lesson"
                     :progress-url="$progressUrl"
                     :lesson-progress="$lessonProgress"
                     :required-video-percent="$requiredVideoPercent"
@@ -520,6 +522,7 @@
             :lesson="$lesson"
             :is-enrolled="$isEnrolled"
             :course-discussion="$courseDiscussion ?? $activeDiscussion"
+            :chat-context="$chatContext"
         />
     </div>
 </div>

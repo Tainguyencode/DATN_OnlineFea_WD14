@@ -1,6 +1,12 @@
 
 <x-instructor-layout title="Ví tiền & Rút tiền" page-title="Ví tiền & Quản lý rút tiền">
 
+    @if($user->refund_reserve > 0)
+        <p class="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Thu nhập tạm giữ do yêu cầu hoàn tiền: <strong>{{ number_format($user->refund_reserve, 0, ',', '.') }}đ</strong>. Khoản này không được tính vào số dư khả dụng.</p>
+    @endif
+    @if($user->settlement_deficit > 0)
+        <p class="mb-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">Khoản cần đối soát sau hoàn tiền: <strong>{{ number_format($user->settlement_deficit, 0, ',', '.') }}đ</strong>. Khoản đã chi vượt thu nhập hiện tại sẽ được bù trừ bằng thu nhập tiếp theo; vui lòng liên hệ Admin để đối soát.</p>
+    @endif
     @php
         $canWithdraw = $user->bank_account_number
             && $user->bank_name

@@ -6,6 +6,8 @@ use App\Models\Category;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
+use App\Models\InstructorProfile;
+use App\Models\InstructorTeachingField;
 use App\Models\Lesson;
 use App\Models\QuestionVersion;
 use App\Models\Quiz;
@@ -60,6 +62,7 @@ class QuizAttemptPresentationTest extends TestCase
 
         $projected = app(QuizAttemptService::class)->projectQuiz($attempt);
         $projectedQuestionIds = $projected->questions->map(fn ($question): int => (int) $question->authoringVersion->id)->all();
+        $projectedIdentityQuestionIds = $projected->questions->map(fn ($question): int => (int) $question->id)->all();
         $projectedOptionIds = $projected->questions->map(fn ($question): array => $question->options->pluck('id')->map(fn ($id): int => (int) $id)->all())->all();
         $this->assertSame(
             collect($snapshot['questions'])->pluck('question_version_id')->map(fn ($id): int => (int) $id)->all(),
@@ -70,9 +73,9 @@ class QuizAttemptPresentationTest extends TestCase
             $projectedOptionIds,
         );
 
-        $player = app(LearningPlayerService::class)->buildPlayerContext($course->fresh(), $lesson->fresh(), $student, false);
+        $player = app(LearningPlayerService::class)->buildPlayerContext($course->fresh(), $lesson->fresh(), $student, true);
         $contextQuestions = collect($player['quizContext']['questions']);
-        $this->assertSame($projected->questions->pluck('id')->map(fn ($id): int => (int) $id)->all(), $contextQuestions->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertSame($projectedIdentityQuestionIds, $contextQuestions->pluck('id')->map(fn ($id): int => (int) $id)->all());
         $this->assertSame(
             $projectedOptionIds,
             $contextQuestions->map(fn (array $question): array => collect($question['options'])->pluck('id')->map(fn ($id): int => (int) $id)->all())->all(),
@@ -200,6 +203,11 @@ class QuizAttemptPresentationTest extends TestCase
     {
         $instructor = User::factory()->create(['role' => 'instructor', 'instructor_status' => 'approved']);
         $category = Category::create(['name' => 'Presentation category '.uniqid(), 'slug' => 'presentation-'.uniqid(), 'status' => true]);
+        $profile = InstructorProfile::create(['user_id' => $instructor->id, 'category_id' => $category->id]);
+        $profile->teachingCategories()->attach($category->id, [
+            'is_primary' => true,
+            'approval_status' => InstructorTeachingField::STATUS_APPROVED,
+        ]);
         $course = Course::create([
             'instructor_id' => $instructor->id,
             'category_id' => $category->id,

@@ -8,10 +8,12 @@ use App\Http\Requests\Instructor\ConfirmLessonImportRequest;
 use App\Http\Requests\Instructor\PreviewLessonImportRequest;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\User;
 use App\Services\CurriculumLessonService;
 use App\Services\LessonImportPreviewService;
 use App\Services\LessonImportService;
 use App\Services\LessonImportTemplateService;
+use App\Services\InstructorCourseCategoryAccess;
 use App\Support\LessonImportWorkbookSchema;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,12 +23,14 @@ use Throwable;
 
 class LessonImportController extends Controller
 {
+    public function __construct(private readonly InstructorCourseCategoryAccess $courseCategoryAccess) {}
+
     public function downloadTemplate(
         Request $request,
         Course $course,
         LessonImportTemplateService $templateService,
     ): StreamedResponse {
-        abort_unless($course->isOwnedBy($request->user()), 403);
+        $this->authorizeCourse($course, $request->user());
 
         $requestedVersion = $request->query('version');
         $version = $requestedVersion === null
@@ -55,6 +59,8 @@ class LessonImportController extends Controller
         CurriculumLessonService $lessonService,
         LessonImportPreviewService $previewService,
     ): JsonResponse {
+        $this->authorizeCourse($course, $request->user());
+
         $sectionModel = $section instanceof CourseSection ? $section : CourseSection::where('course_id', $course->id)->find($section);
         if (! $sectionModel) {
             return response()->json([
@@ -145,6 +151,8 @@ class LessonImportController extends Controller
         $section,
         LessonImportService $importService,
     ): JsonResponse {
+        $this->authorizeCourse($course, $request->user());
+
         $sectionModel = $section instanceof CourseSection ? $section : CourseSection::where('course_id', $course->id)->find($section);
         if (! $sectionModel) {
             return response()->json([
@@ -204,5 +212,14 @@ class LessonImportController extends Controller
             ],
             'redirect_url' => route('instructor.courses.curriculum', $course),
         ]);
+    }
+
+    private function authorizeCourse(Course $course, User $user): void
+    {
+        abort_unless(
+            $this->courseCategoryAccess->canManageCourse($user, $course),
+            403,
+            'Bạn không có quyền chỉnh sửa nội dung khóa học này.'
+        );
     }
 }

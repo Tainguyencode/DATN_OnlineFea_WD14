@@ -2,9 +2,16 @@
 
 return [
     'upload' => [
-        // Keep direct-to-S3 uploads aligned with StoreLessonRequest (200 MB).
-        'max_bytes' => (int) env('VIDEO_UPLOAD_MAX_BYTES', 200 * 1024 * 1024),
+        // Shared limit for direct S3 uploads and lesson request validation (5 GiB).
+        'max_bytes' => (int) env('VIDEO_UPLOAD_MAX_BYTES', 5 * 1024 * 1024 * 1024),
         'allowed_extensions' => ['mp4', 'm4v', 'mov', 'avi', 'webm', 'mkv'],
+    ],
+
+    // Isolated from the lesson-upload limit and HLS configuration.
+    'course_preview' => [
+        'max_bytes' => (int) env('COURSE_PREVIEW_MAX_BYTES', 250 * 1024 * 1024),
+        'max_duration_seconds' => (int) env('COURSE_PREVIEW_MAX_DURATION_SECONDS', 180),
+        'allowed_extensions' => ['mp4'],
     ],
 
     'ffmpeg' => [
@@ -16,8 +23,8 @@ return [
     ],
 
     'hls' => [
-        // Encoding speed/quality trade-off. "veryfast" is suitable for web uploads.
-        'preset' => env('HLS_FFMPEG_PRESET', 'veryfast'),
+        // Favor shorter processing time; superfast produces larger files than veryfast.
+        'preset' => env('HLS_FFMPEG_PRESET', 'superfast'),
         'crf' => (int) env('HLS_FFMPEG_CRF', 23),
         'segment_seconds' => (int) env('HLS_SEGMENT_SECONDS', 10),
 
