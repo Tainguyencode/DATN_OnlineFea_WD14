@@ -10,6 +10,7 @@
             ['label' => 'Chứng chỉ', 'route' => 'student.certificates', 'active' => ['student.certificates*'], 'icon' => 'award'],
         ],
         'Cá nhân' => [
+            ['label' => 'Thông báo', 'route' => 'notifications.index', 'active' => ['notifications.*'], 'icon' => 'bell'],
             ['label' => 'Yêu thích', 'route' => 'student.wishlist', 'active' => ['student.wishlist*', 'favorites.*'], 'icon' => 'heart'],
             ['label' => 'Hồ sơ cá nhân', 'route' => 'student.profile', 'active' => ['student.profile'], 'icon' => 'user'],
             ['label' => 'Bảo mật', 'route' => 'student.profile.security', 'active' => ['student.profile.security'], 'icon' => 'shield'],
