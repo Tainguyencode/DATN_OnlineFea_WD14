@@ -94,8 +94,14 @@
                         @else
                             <p class="mb-2 text-xs font-bold text-amber-800 dark:text-amber-300">{{ $submitEligibility['reason'] }}</p>
                         @endif
-                        <form method="POST" action="{{ route('instructor.profile.submit-review') }}">
+                        <form method="POST" action="{{ route('instructor.profile.submit-review') }}" class="space-y-2">
                             @csrf
+                            <label class="flex items-start justify-end gap-2 text-left cursor-pointer max-w-sm ml-auto">
+                                <input type="checkbox" name="commitment_agreed" value="1" required class="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500">
+                                <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Tôi cam đoan mọi văn bằng, chứng chỉ và giấy tờ định danh cung cấp là thật và chính chủ, hoàn toàn chịu trách nhiệm trước pháp luật nếu có gian lận.
+                                </span>
+                            </label>
                             <button type="{{ $submitEligibility['can_submit'] ? 'submit' : 'button' }}" @disabled(! $submitEligibility['can_submit']) class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md transition {{ $submitEligibility['can_submit'] ? 'bg-amber-600 text-white hover:bg-amber-700' : 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-70 dark:bg-slate-700 dark:text-slate-400' }}">
                                 <span>Gửi hồ sơ xét duyệt ngay</span>
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
@@ -120,8 +126,14 @@
                     @else
                         <p class="mb-2 text-xs font-bold text-rose-700 dark:text-rose-300">{{ $submitEligibility['reason'] }}</p>
                     @endif
-                    <form method="POST" action="{{ route('instructor.profile.submit-review') }}">
+                    <form method="POST" action="{{ route('instructor.profile.submit-review') }}" class="space-y-2">
                         @csrf
+                        <label class="flex items-start justify-end gap-2 text-left cursor-pointer max-w-sm ml-auto">
+                            <input type="checkbox" name="commitment_agreed" value="1" required class="mt-0.5 rounded border-rose-400 text-rose-600 focus:ring-rose-500">
+                            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                Tôi cam đoan mọi văn bằng, chứng chỉ và giấy tờ định danh cung cấp là thật và chính chủ, hoàn toàn chịu trách nhiệm trước pháp luật nếu có gian lận.
+                            </span>
+                        </label>
                         <button type="{{ $submitEligibility['can_submit'] ? 'submit' : 'button' }}" @disabled(! $submitEligibility['can_submit']) class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md transition {{ $submitEligibility['can_submit'] ? 'bg-rose-600 text-white hover:bg-rose-700' : 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-70 dark:bg-slate-700 dark:text-slate-400' }}">
                             <span>Gửi lại hồ sơ xét duyệt</span>
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -549,28 +561,166 @@
     {{-- ========================================================================= --}}
     {{-- TAB 2: HỒ SƠ MINH CHỨNG & CHỨNG CHỈ THEO NGÀNH                           --}}
     {{-- ========================================================================= --}}
-    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="{
-        uploadModal: false,
-        editUrlModal: false,
-        activeRequirementId: null,
-        activeTeachingFieldId: null,
-        activeRequirementTitle: '',
-        activeDocType: 'certificate',
-        submissionSource: 'file',
-        editingDocumentId: null,
-        editingDocumentUrl: '',
-        uploadError: '',
-        uploading: false,
-        validateEvidenceFiles(event) {
-            this.uploadError = '';
-            const oversizedFile = Array.from(event.target.files).find(file => file.size > 50 * 1024 * 1024);
+    <script>
+    function instructorDocumentsManager() {
+        return {
+            uploadModal: false,
+            editUrlModal: false,
+            activeRequirementId: null,
+            activeTeachingFieldId: null,
+            activeRequirementTitle: '',
+            activeDocType: 'certificate',
+            submissionSource: 'file',
+            degreeOption: 'lookup',
+            certOption: 'international',
+            domesticOption: 'lookup',
+            domesticProofType: 'capstone_project',
+            experienceProofType: 'contract',
+            supplementaryProofType: 'notarized',
+            editingDocumentId: null,
+            editingDocumentUrl: '',
+            uploadError: '',
+            urlError: '',
+            formError: '',
+            uploading: false,
+            isDegreeType() {
+                if (this.activeDocType === 'degree') return true;
+                if (this.activeDocType === 'certificate') return false;
+                const title = (this.activeRequirementTitle || '').toLowerCase();
+                return title.includes('bằng') || title.includes('đại học') || title.includes('cao đẳng');
+            },
+            isCertType() {
+                if (this.activeDocType === 'certificate') return true;
+                if (this.activeDocType === 'degree') return false;
+                const title = (this.activeRequirementTitle || '').toLowerCase();
+                return title.includes('chứng chỉ');
+            },
+            isExpType() {
+                const title = (this.activeRequirementTitle || '').toLowerCase();
+                return this.activeDocType === 'employment_confirmation' || this.activeDocType === 'employment_contract' || title.includes('kinh nghiệm') || title.includes('công tác');
+            },
+            validateEvidenceFiles(event) {
+                this.uploadError = '';
+                const files = event.target.files;
+                if (!files || files.length === 0) {
+                    this.uploadError = 'Vui lòng chọn ít nhất một tệp tài liệu chính (bản scan / ảnh gốc).';
+                    return;
+                }
+                const oversizedFile = Array.from(files).find(file => file.size > 50 * 1024 * 1024);
 
-            if (oversizedFile) {
-                this.uploadError = `Tệp “${oversizedFile.name}” vượt quá giới hạn 50MB.`;
-                event.target.value = '';
+                if (oversizedFile) {
+                    this.uploadError = 'Tệp "' + oversizedFile.name + '" vượt quá giới hạn 50MB.';
+                    event.target.value = '';
+                }
+            },
+            handleUploadSubmit(event) {
+                this.uploadError = '';
+                this.urlError = '';
+                this.formError = '';
+                const form = event.target;
+
+                // 1. Kiểm tra tài liệu chính
+                if (this.submissionSource === 'file') {
+                    const fileInput = form.querySelector('input[name="files[]"]');
+                    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                        this.uploadError = 'Vui lòng chọn tệp tài liệu chính (bản scan / ảnh gốc).';
+                        fileInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                    const oversizedFile = Array.from(fileInput.files).find(file => file.size > 50 * 1024 * 1024);
+                    if (oversizedFile) {
+                        this.uploadError = 'Tệp "' + oversizedFile.name + '" vượt quá giới hạn 50MB.';
+                        fileInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                } else if (this.submissionSource === 'url') {
+                    const urlInput = form.querySelector('input[name="document_url"]');
+                    const val = urlInput ? urlInput.value.trim() : '';
+                    if (!val) {
+                        this.urlError = 'Vui lòng nhập đường link tài liệu chính.';
+                        urlInput?.focus();
+                        return;
+                    }
+                    if (!/^https?:\/\//i.test(val)) {
+                        this.urlError = 'Đường link tài liệu phải bắt đầu bằng http:// hoặc https://';
+                        urlInput?.focus();
+                        return;
+                    }
+                }
+
+                // 2. Kiểm tra xác thực chống làm giả cho Bằng ĐH/CĐ
+                if (this.isDegreeType()) {
+                    if (this.degreeOption === 'lookup') {
+                        const diplomaNum = form.querySelector('input[name="diploma_number"]')?.value.trim();
+                        const bookRegNum = form.querySelector('input[name="book_reg_number"]')?.value.trim();
+                        if (!diplomaNum || !bookRegNum) {
+                            this.formError = 'Ở Cách 1, bạn chỉ cần nhập "Số hiệu văn bằng" và "Số vào sổ cấp bằng" (Nhập đường link tra cứu của trường nếu có). Nếu không muốn nhập 2 số này, bạn có thể bấm chuyển sang "Cách 2: Đính kèm giấy tờ" ở nút bên cạnh.';
+                            return;
+                        }
+                    } else if (this.degreeOption === 'supplementary') {
+                        const suppFileInput = form.querySelector('div[x-show="degreeOption === \'supplementary\'"] input[name="supplementary_file"]') || form.querySelector('input[name="supplementary_file"]');
+                        if (!suppFileInput || !suppFileInput.files || suppFileInput.files.length === 0) {
+                            this.formError = 'Bạn đang ở "Cách 2: Đính kèm giấy tờ": Vui lòng bấm chọn tệp minh chứng phụ (Bản công chứng / Bảng điểm / App trường). Hoặc bấm chuyển về "Cách 1: Tra cứu trực tuyến" nếu bạn muốn nhập số hiệu tra cứu.';
+                            return;
+                        }
+                    }
+                }
+
+                // 3. Kiểm tra xác thực chống làm giả cho Chứng chỉ chuyên môn
+                if (this.isCertType()) {
+                    if (this.certOption === 'international') {
+                        const credUrl = form.querySelector('input[name="credential_url"]')?.value.trim();
+                        if (!credUrl) {
+                            this.formError = 'Bạn đang ở "Chứng chỉ Quốc tế": Vui lòng nhập Đường link xác thực công khai (Credential URL từ Credly, Coursera, AWS...). Nếu là chứng chỉ trung tâm đào tạo trong nước, hãy bấm chọn nút "Chứng chỉ Trong nước" ở ngay bên cạnh.';
+                            return;
+                        }
+                    } else if (this.certOption === 'domestic') {
+                        if (this.domesticOption === 'lookup') {
+                            const certCode = form.querySelector('input[name="center_cert_code"]')?.value.trim();
+                            const centerUrl = form.querySelector('input[name="center_lookup_url"]')?.value.trim();
+                            if (!certCode && !centerUrl) {
+                                this.formError = 'Chứng chỉ trong nước (Cách 1): Vui lòng nhập Mã số chứng chỉ hoặc Link tra cứu web trung tâm, HOẶC bấm chuyển sang "Cách 2: Sản phẩm / Minh chứng" để cung cấp link Github / Bảng điểm tốt nghiệp.';
+                                return;
+                            }
+                        } else if (this.domesticOption === 'proof') {
+                            if (this.domesticProofType === 'capstone_project') {
+                                const capstoneUrl = form.querySelector('input[name="capstone_project_url"]')?.value.trim();
+                                if (!capstoneUrl) {
+                                    this.formError = 'Chứng chỉ trong nước (Cách 2): Vui lòng nhập Đường link Github / Website demo sản phẩm thực tế.';
+                                    return;
+                                }
+                            } else {
+                                const suppFileInput = form.querySelector('div[x-show="domesticProofType !== \'capstone_project\'"] input[name="supplementary_file"]') || form.querySelector('input[name="supplementary_file"]');
+                                if (!suppFileInput || !suppFileInput.files || suppFileInput.files.length === 0) {
+                                    this.formError = 'Chứng chỉ trong nước (Cách 2): Vui lòng đính kèm tệp minh chứng phụ (Bảng điểm / Email chúc mừng / Hóa đơn học phí).';
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                this.uploading = true;
+                form.submit();
             }
-        }
-    }">
+        };
+    }
+    </script>
+
+    <div x-show="activeTab === 'documents'" x-cloak class="space-y-6" x-data="instructorDocumentsManager()">
+
+        @if(session('error'))
+            <div class="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-xs font-bold text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200 flex items-center gap-2">
+                <svg class="h-5 w-5 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>{{ session('error') }}</span>
+            </div>
+        @endif
+        @if($errors->has('anti_forgery'))
+            <div class="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-xs font-bold text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200 flex items-center gap-2">
+                <svg class="h-5 w-5 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>{{ $errors->first('anti_forgery') }}</span>
+            </div>
+        @endif
 
         @if($user->isGlobalReviewPending())
             <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
@@ -579,6 +729,100 @@
         @endif
 
         <fieldset @disabled($user->isGlobalReviewPending()) class="contents">
+
+        {{-- 1. XÁC MINH DANH TÍNH CÁ NHÂN (CCCD & ẢNH CHÂN DUNG SELFIE) --}}
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-5 dark:border-slate-800">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0056D2] text-xs font-black text-white">ID</span>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white">Xác minh danh tính cá nhân (CCCD & Ảnh chân dung)</h3>
+                        @if($profile?->hasUploadedIdentity())
+                            <span class="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                ✔ Đã nộp định danh
+                            </span>
+                        @else
+                            <span class="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                ⚠️ Bắt buộc hoàn thành
+                            </span>
+                        @endif
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Hệ thống đối chiếu trực tiếp họ tên trên CCCD với các bằng cấp/chứng chỉ tải lên nhằm phòng chống giả mạo bằng AI/Photoshop.
+                    </p>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ route('instructor.profile.identity.update') }}" enctype="multipart/form-data" class="space-y-5">
+                @csrf
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Số CCCD / CMND gắn chip *
+                        </label>
+                        <input type="text" name="id_card_number" value="{{ old('id_card_number', $profile?->id_card_number) }}" required
+                               placeholder="Ví dụ: 001202012345 (12 chữ số)"
+                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Họ và tên trên CCCD * (Phải khớp với tên trên bằng cấp)
+                        </label>
+                        <input type="text" name="id_card_name" value="{{ old('id_card_name', $profile?->id_card_name ?: $user->name) }}" required
+                               placeholder="Ví dụ: NGUYỄN VĂN A"
+                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-900 uppercase focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-3">
+                    {{-- Mặt trước CCCD --}}
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black uppercase text-slate-700 dark:text-slate-200">Mặt trước CCCD *</span>
+                            @if($profile?->id_card_front_path)
+                                <a href="{{ route('instructor.profile.identity.view', 'front') }}" target="_blank" class="text-[11px] font-bold text-[#0056D2] hover:underline">Xem tệp hiện tại ↗</a>
+                            @endif
+                        </div>
+                        <p class="text-[11px] text-slate-400">Chụp rõ nét số CCCD, họ tên, quốc huy.</p>
+                        <input type="file" name="id_card_front" accept=".jpg,.jpeg,.png,.webp,.pdf" {{ $profile?->id_card_front_path ? '' : 'required' }}
+                               class="w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] hover:file:bg-blue-100 dark:text-slate-300">
+                    </div>
+
+                    {{-- Mặt sau CCCD --}}
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black uppercase text-slate-700 dark:text-slate-200">Mặt sau CCCD *</span>
+                            @if($profile?->id_card_back_path)
+                                <a href="{{ route('instructor.profile.identity.view', 'back') }}" target="_blank" class="text-[11px] font-bold text-[#0056D2] hover:underline">Xem tệp hiện tại ↗</a>
+                            @endif
+                        </div>
+                        <p class="text-[11px] text-slate-400">Chụp rõ chip điện tử, nơi cấp, ngày cấp.</p>
+                        <input type="file" name="id_card_back" accept=".jpg,.jpeg,.png,.webp,.pdf" {{ $profile?->id_card_back_path ? '' : 'required' }}
+                               class="w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] hover:file:bg-blue-100 dark:text-slate-300">
+                    </div>
+
+                    {{-- Ảnh chân dung Selfie --}}
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black uppercase text-slate-700 dark:text-slate-200">Ảnh chân dung (Selfie) *</span>
+                            @if($profile?->portrait_image_path)
+                                <a href="{{ route('instructor.profile.identity.view', 'portrait') }}" target="_blank" class="text-[11px] font-bold text-[#0056D2] hover:underline">Xem tệp hiện tại ↗</a>
+                            @endif
+                        </div>
+                        <p class="text-[11px] text-slate-400">Ảnh chụp khuôn mặt chính diện, rõ nét.</p>
+                        <input type="file" name="portrait_image" accept=".jpg,.jpeg,.png,.webp" {{ $profile?->portrait_image_path ? '' : 'required' }}
+                               class="w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0056D2] hover:file:bg-blue-100 dark:text-slate-300">
+                    </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-[#0056D2] px-6 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#00419e]">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>Lưu thông tin định danh CCCD</span>
+                    </button>
+                </div>
+            </form>
+        </div>
 
         {{-- BANNER TÓM TẮT TIẾN ĐỘ HỒ SƠ THEO NGÀNH --}}
         <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -849,13 +1093,20 @@
                                                                          @if($doc->isApproved())
                                                                              <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">✔ Đã duyệt</span>
                                                                          @elseif($doc->isDraft())
-                                                                            <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
+                                                                            @if(! $doc->hasAntiForgeryVerification())
+                                                                                <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-700">⚠️ Chưa có xác thực chống giả</span>
+                                                                            @else
+                                                                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">Chưa gửi</span>
+                                                                            @endif
                                                                          @elseif($doc->isRejected())
                                                                             <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">✖ Bị từ chối</span>
                                                                         @else
                                                                             <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">⏳ Chờ duyệt</span>
                                                                         @endif
                                                                     </div>
+                                                                    @if($doc->isDraft() && ! $doc->hasAntiForgeryVerification())
+                                                                        <p class="text-[11px] font-bold text-rose-600 mt-1">⚠️ Tài liệu này chưa có dữ liệu chống làm giả. Vui lòng bấm biểu tượng thùng rác để xóa và tải lại có thông tin xác thực để gửi xét duyệt.</p>
+                                                                    @endif
                                                                     @if($doc->isUrlSource())
                                                                         <p class="text-[11px] text-slate-400 mt-0.5">Nguồn tài liệu: Liên kết · Nộp: {{ $doc->uploaded_at ? $doc->uploaded_at->format('d/m/Y H:i') : '' }}</p>
                                                                     @else
@@ -997,28 +1248,28 @@
 
         {{-- MODAL TẢI LÊN TÀI LIỆU --}}
         <div x-show="uploadModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <div class="w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800" @click.away="uploadModal = false">
+            <div class="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 sm:p-8 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800" @click.away="uploadModal = false; uploadError = ''; urlError = ''; formError = ''">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
                     <div>
                         <h3 class="text-base font-black text-slate-900 dark:text-white">Tải lên tài liệu minh chứng</h3>
                         <p class="text-xs text-blue-600 dark:text-blue-400 font-bold mt-0.5" x-text="activeRequirementTitle"></p>
                     </div>
-                    <button type="button" @click="uploadModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                    <button type="button" @click="uploadModal = false; uploadError = ''; urlError = ''; formError = ''" class="text-slate-400 hover:text-slate-600">✕</button>
                 </div>
 
-                <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-5 space-y-4" @submit="uploading = true">
+                <form method="POST" action="{{ route('instructor.profile.documents.upload') }}" enctype="multipart/form-data" class="mt-5 space-y-4" @submit.prevent="handleUploadSubmit($event)">
                     @csrf
                     <input type="hidden" name="requirement_id" :value="activeRequirementId">
                     <input type="hidden" name="instructor_teaching_field_id" :value="activeTeachingFieldId">
 
                     <div>
-                        <span class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Phương thức nộp *</span>
+                        <span class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Phương thức nộp tài liệu chính *</span>
                         <div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
                             <label class="cursor-pointer rounded-lg px-3 py-2 text-center text-xs font-bold transition" :class="submissionSource === 'file' ? 'bg-white text-[#0056D2] shadow-sm dark:bg-slate-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'">
-                                <input type="radio" name="source_type" value="file" x-model="submissionSource" class="sr-only"> Tải file lên
+                                <input type="radio" name="source_type" value="file" x-model="submissionSource" @change="uploadError = ''; urlError = ''" class="sr-only"> Tải file lên
                             </label>
                             <label class="cursor-pointer rounded-lg px-3 py-2 text-center text-xs font-bold transition" :class="submissionSource === 'url' ? 'bg-white text-[#0056D2] shadow-sm dark:bg-slate-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'">
-                                <input type="radio" name="source_type" value="url" x-model="submissionSource" class="sr-only"> Nhập link tài liệu
+                                <input type="radio" name="source_type" value="url" x-model="submissionSource" @change="uploadError = ''; urlError = ''" class="sr-only"> Nhập link tài liệu
                             </label>
                         </div>
                     </div>
@@ -1028,7 +1279,7 @@
                         <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                             Loại tài liệu bổ sung *
                         </label>
-                        <select name="document_type" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                        <select name="document_type" x-model="activeDocType" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                             <option value="transcript">Bảng điểm (Transcript)</option>
                             <option value="certificate">Chứng chỉ / Bằng khen chuyên môn khác</option>
                             <option value="employment_confirmation">Giấy xác nhận công tác / Giấy khen</option>
@@ -1041,30 +1292,223 @@
 
                     <div>
                         <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Tiêu đề tài liệu</label>
-                        <input type="text" name="title" placeholder="Ví dụ: Bảng điểm tốt nghiệp ĐH, Bằng khen xuất sắc 2025..."
+                        <input type="text" name="title" placeholder="Ví dụ: Bằng tốt nghiệp ĐH, Chứng chỉ AWS Developer..."
                                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                     </div>
 
                     <div x-show="submissionSource === 'file'">
-                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Chọn ảnh, video hoặc tài liệu (PDF, JPG, PNG, WEBP, DOCX, MP4, MOV, WEBM - Tối đa 50MB/tệp) *</label>
-                        <input type="file" name="files[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.mp4,.mov,.webm" :required="submissionSource === 'file'" :disabled="submissionSource !== 'file'"
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Chọn bản scan / ảnh gốc (PDF, JPG, PNG, WEBP - Tối đa 50MB) <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="file" name="files[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.mp4,.mov,.webm" :disabled="submissionSource !== 'file'"
                                @change="validateEvidenceFiles($event)"
-                               class="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0056D2] file:px-3.5 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-[#00419e] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        <p x-show="uploadError" x-cloak x-text="uploadError" class="mt-1 text-xs font-semibold text-rose-600"></p>
+                               :class="uploadError ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'"
+                               class="w-full rounded-xl border p-2.5 text-sm text-slate-700 transition file:mr-3 file:rounded-lg file:border-0 file:bg-[#0056D2] file:px-3.5 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-[#00419e] dark:text-slate-300">
+                        <div x-show="uploadError" x-cloak class="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                            <svg class="h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span x-text="uploadError"></span>
+                        </div>
                     </div>
 
                     <div x-show="submissionSource === 'url'" x-cloak>
-                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">URL tài liệu *</label>
-                        <input type="url" name="document_url" placeholder="https://example.com/certificate.pdf" :required="submissionSource === 'url'" :disabled="submissionSource !== 'url'"
-                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-[#0056D2] focus:ring-[#0056D2] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                        <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            URL tài liệu <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="url" name="document_url" placeholder="https://example.com/certificate.pdf" :disabled="submissionSource !== 'url'"
+                               @input="urlError = ''"
+                               :class="urlError ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'"
+                               class="w-full rounded-xl border px-4 py-2.5 text-sm text-slate-900 transition focus:border-[#0056D2] focus:ring-[#0056D2] dark:text-white">
+                        <div x-show="urlError" x-cloak class="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                            <svg class="h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span x-text="urlError"></span>
+                        </div>
                         <p class="mt-1 text-[11px] text-slate-500">Chỉ chấp nhận liên kết HTTP hoặc HTTPS; hệ thống không tải tài liệu về máy chủ.</p>
                     </div>
 
+                    {{-- ======================================================== --}}
+                    {{-- 🛡️ PHẦN XÁC THỰC BỔ SUNG PHÒNG CHỐNG PHOTOSHOP / AI     --}}
+                    {{-- ======================================================== --}}
+
+                    {{-- 1. ĐỐI VỚI BẰNG ĐẠI HỌC / CAO ĐẲNG --}}
+                    <div x-show="isDegreeType()" class="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900/50 dark:bg-blue-950/20 space-y-3">
+                        <div class="flex items-center gap-2 text-xs font-black text-[#0056D2] dark:text-blue-300 uppercase tracking-wider">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            <span>Xác thực văn bằng ĐH / CĐ (Chống làm giả)</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 rounded-xl bg-white p-1 border border-blue-100 dark:bg-slate-800 dark:border-slate-700">
+                            <label @click="formError = ''" class="cursor-pointer rounded-lg px-2.5 py-1.5 text-center text-xs font-bold transition" :class="degreeOption === 'lookup' ? 'bg-blue-100 text-[#0056D2] dark:bg-blue-900/60 dark:text-blue-200' : 'text-slate-500'">
+                                <input type="radio" value="lookup" x-model="degreeOption" class="sr-only"> Cách 1: Tra cứu trực tuyến
+                            </label>
+                            <label @click="formError = ''" class="cursor-pointer rounded-lg px-2.5 py-1.5 text-center text-xs font-bold transition" :class="degreeOption === 'supplementary' ? 'bg-blue-100 text-[#0056D2] dark:bg-blue-900/60 dark:text-blue-200' : 'text-slate-500'">
+                                <input type="radio" value="supplementary" x-model="degreeOption" class="sr-only"> Cách 2: Đính kèm giấy tờ
+                            </label>
+                        </div>
+
+                        {{-- Cách 1: Tra cứu số --}}
+                        <div x-show="degreeOption === 'lookup'" class="space-y-2.5">
+                            <input type="hidden" name="verification_method" value="lookup" :disabled="!isDegreeType() || degreeOption !== 'lookup'">
+                            <div class="grid gap-2 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Số hiệu văn bằng <span class="text-rose-500">*</span></label>
+                                    <input type="text" name="diploma_number" placeholder="Ví dụ: B1234567"
+                                           class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Số vào sổ cấp bằng <span class="text-rose-500">*</span></label>
+                                    <input type="text" name="book_reg_number" placeholder="Ví dụ: 105/2022/KTPM"
+                                           class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Đường link cổng tra cứu của trường (Không bắt buộc)</label>
+                                <input type="url" name="lookup_url" placeholder="https://tracuuvb.hust.edu.vn..."
+                                       class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                <p class="mt-0.5 text-[10px] text-slate-500">Nếu trường có web tra cứu văn bằng tốt nghiệp, bạn có thể dán link vào đây để Admin đối soát nhanh.</p>
+                            </div>
+                        </div>
+
+                        {{-- Cách 2: Giấy tờ hỗ trợ --}}
+                        <div x-show="degreeOption === 'supplementary'" class="space-y-2.5">
+                            <input type="hidden" name="verification_method" value="supplementary" :disabled="!isDegreeType() || degreeOption !== 'supplementary'">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Loại minh chứng hỗ trợ</label>
+                                <select name="supplementary_proof_type" :disabled="!isDegreeType() || degreeOption !== 'supplementary'"
+                                        class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                    <option value="notarized">Bản sao công chứng</option>
+                                    <option value="transcript">Bảng điểm tốt nghiệp toàn khóa</option>
+                                    <option value="student_portal">Ảnh chụp cổng thông tin sinh viên / App trường</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Chọn tệp minh chứng phụ (Ảnh hoặc PDF)</label>
+                                <input type="file" name="supplementary_file" accept=".pdf,.jpg,.jpeg,.png,.webp" :disabled="!isDegreeType() || degreeOption !== 'supplementary'"
+                                       class="mt-0.5 w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-100 file:px-2.5 file:py-1 file:text-xs file:font-bold file:text-[#0056D2]">
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- 2. ĐỐI VỚI CHỨNG CHỈ NGHỀ / CHUYÊN MÔN --}}
+                    <div x-show="isCertType()" class="rounded-2xl border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-950/20 space-y-3">
+                        <div class="flex items-center gap-2 text-xs font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                            <span>Xác thực chứng chỉ chuyên môn (Chống làm giả)</span>
+                        </div>
+
+                        {{-- Chọn loại nguồn cấp chứng chỉ --}}
+                        <div class="grid grid-cols-2 gap-2 rounded-xl bg-white p-1 border border-purple-100 dark:bg-slate-800 dark:border-slate-700">
+                            <label @click="formError = ''" class="cursor-pointer rounded-lg px-2.5 py-1.5 text-center text-xs font-bold transition" :class="certOption === 'international' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-200' : 'text-slate-500'">
+                                <input type="radio" value="international" x-model="certOption" class="sr-only"> 🌐 Chứng chỉ Quốc tế
+                            </label>
+                            <label @click="formError = ''" class="cursor-pointer rounded-lg px-2.5 py-1.5 text-center text-xs font-bold transition" :class="certOption === 'domestic' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-200' : 'text-slate-500'">
+                                <input type="radio" value="domestic" x-model="certOption" class="sr-only"> 🏫 Chứng chỉ Trong nước
+                            </label>
+                        </div>
+
+                        {{-- TH1: Chứng chỉ Quốc tế --}}
+                        <div x-show="certOption === 'international'" class="space-y-2">
+                            <input type="hidden" name="verification_method" value="credential_url" :disabled="!isCertType() || certOption !== 'international'">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Đường link xác thực công khai (Credential URL)</label>
+                                <input type="url" name="credential_url" placeholder="https://www.credly.com/badges/... hoặc https://coursera.org/verify/..."
+                                       :disabled="!isCertType() || certOption !== 'international'"
+                                       class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                <p class="mt-1 text-[10px] text-slate-500">Áp dụng cho AWS, Cisco, Meta, Google, Coursera... Admin chỉ mất 15 giây truy cập link để kiểm tra đối soát trực tiếp.</p>
+                            </div>
+                        </div>
+
+                        {{-- TH2: Chứng chỉ Trung tâm Trong nước (FPT Aptech, Techmaster, MindX, Cybersoft...) --}}
+                        <div x-show="certOption === 'domestic'" class="space-y-3">
+                            <div class="grid grid-cols-2 gap-2 rounded-lg bg-purple-100/60 p-1 text-[11px] font-bold">
+                                <label @click="formError = ''" class="cursor-pointer rounded-md px-2 py-1 text-center transition" :class="domesticOption === 'lookup' ? 'bg-white text-purple-800 shadow-xs' : 'text-purple-600'">
+                                    <input type="radio" value="lookup" x-model="domesticOption" class="sr-only"> Cách 1: Mã / Link tra cứu
+                                </label>
+                                <label @click="formError = ''" class="cursor-pointer rounded-md px-2 py-1 text-center transition" :class="domesticOption === 'proof' ? 'bg-white text-purple-800 shadow-xs' : 'text-purple-600'">
+                                    <input type="radio" value="proof" x-model="domesticOption" class="sr-only"> Cách 2: Sản phẩm / Minh chứng
+                                </label>
+                            </div>
+
+                            {{-- Cách 1 của trong nước: Tra cứu web trung tâm --}}
+                            <div x-show="domesticOption === 'lookup'" class="space-y-2">
+                                <input type="hidden" name="verification_method" value="domestic_center_lookup" :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'lookup'">
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Mã / Số hiệu chứng chỉ</label>
+                                        <input type="text" name="center_cert_code" placeholder="Ví dụ: TM-2023-890, CS-FE-12..."
+                                               :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'lookup'"
+                                               class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Đường link tra cứu web trung tâm (nếu có)</label>
+                                        <input type="url" name="center_lookup_url" placeholder="https://techmaster.vn/certificate/..."
+                                               :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'lookup'"
+                                               class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                    </div>
+                                </div>
+                                <p class="text-[10px] text-slate-500">Dành cho trung tâm có cổng tra cứu trực tuyến học viên (Cybersoft, Techmaster, MindX...).</p>
+                            </div>
+
+                            {{-- Cách 2 của trong nước: Minh chứng sản phẩm / học tập thực tế --}}
+                            <div x-show="domesticOption === 'proof'" class="space-y-2.5">
+                                <input type="hidden" name="verification_method" value="domestic_center_proof" :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'proof'">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Hình thức minh chứng bổ sung</label>
+                                    <select name="domestic_proof_type" x-model="domesticProofType"
+                                            :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'proof'"
+                                            class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                        <option value="capstone_project">Link Github / Demo sản phẩm tốt nghiệp (Capstone Project)</option>
+                                        <option value="center_transcript">Bảng điểm đánh giá xếp loại cuối khóa của trung tâm</option>
+                                        <option value="completion_email_or_receipt">Email chúc mừng tốt nghiệp / Hóa đơn học phí</option>
+                                    </select>
+                                </div>
+
+                                <div x-show="domesticProofType === 'capstone_project'">
+                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Đường link Github / Website sản phẩm thực tế</label>
+                                    <input type="url" name="capstone_project_url" placeholder="https://github.com/username/project hoặc https://myproject.demo..."
+                                           :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'proof' || domesticProofType !== 'capstone_project'"
+                                           class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                    <p class="mt-0.5 text-[10px] text-slate-500">Minh chứng sản phẩm thực tế của bạn chứng minh năng lực thực tế, không thể làm giả bằng ảnh.</p>
+                                </div>
+
+                                <div x-show="domesticProofType !== 'capstone_project'">
+                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Chọn tệp minh chứng phụ (Bảng điểm / Ảnh Email / Hóa đơn)</label>
+                                    <input type="file" name="supplementary_file" accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                           :disabled="!isCertType() || certOption !== 'domestic' || domesticOption !== 'proof' || domesticProofType === 'capstone_project'"
+                                           class="mt-0.5 w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-purple-100 file:px-2.5 file:py-1 file:text-xs file:font-bold file:text-purple-700">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- 3. ĐỐI VỚI GIẤY XÁC NHẬN KINH NGHIỆM --}}
+                    <div x-show="isExpType()" class="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20 space-y-2.5">
+                        <div class="flex items-center gap-2 text-xs font-black text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            <span>Loại giấy xác nhận kinh nghiệm</span>
+                        </div>
+                        <input type="hidden" name="verification_method" value="experience_proof" :disabled="!isExpType()">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Loại hồ sơ minh chứng</label>
+                            <select name="supplementary_proof_type" :disabled="!isExpType()"
+                                    class="mt-0.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                <option value="contract">Hợp đồng lao động</option>
+                                <option value="appointment">Quyết định bổ nhiệm / tuyển dụng</option>
+                                <option value="vssid">Mã số / Ảnh chụp quá trình đóng BHXH (VssID)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {{-- Báo lỗi validation chống làm giả trên Modal --}}
+                    <div x-show="formError" x-cloak class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300 flex items-center gap-2">
+                        <svg class="h-4 w-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span x-text="formError"></span>
+                    </div>
+
                     <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <button type="button" @click="uploadModal = false" :disabled="uploading" class="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-300">
+                        <button type="button" @click="uploadModal = false; uploadError = ''; urlError = ''; formError = ''" :disabled="uploading" class="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-300">
                             Hủy
                         </button>
-                        <button type="submit" :disabled="uploading || !!uploadError" class="rounded-xl bg-[#0056D2] px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-[#00419e] disabled:cursor-not-allowed disabled:opacity-60">
+                        <button type="submit" :disabled="uploading" class="rounded-xl bg-[#0056D2] px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-[#00419e] disabled:cursor-not-allowed disabled:opacity-60">
                             <span x-show="!uploading">Lưu tài liệu</span>
                             <span x-show="uploading" x-cloak>Đang tải lên...</span>
                         </button>

@@ -56,12 +56,27 @@
                 </button>
             </div>
 
-            <form data-course-chat-send action="{{ $resolvedSendUrl }}" method="POST" enctype="multipart/form-data" class="space-y-2">
+            <form data-course-chat-send action="{{ $resolvedSendUrl }}" method="POST" enctype="multipart/form-data" class="relative space-y-2">
                 @csrf
                 <input type="hidden" name="reply_to_key" data-chat-reply-input>
                 @if($lessonId)
                     <input type="hidden" name="lesson_id" value="{{ $lessonId }}">
                 @endif
+
+                {{-- Popup gợi ý hashtag khi gõ # --}}
+                <div data-chat-hashtag-popup class="hidden absolute bottom-full left-0 right-0 mb-2 z-40 max-h-52 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-2xl backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
+                    <div class="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span class="flex items-center gap-1.5">
+                            <span>🏷️</span>
+                            <span>Khóa học đã mua</span>
+                        </span>
+                        <button type="button" data-chat-hashtag-close class="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" title="Đóng gợi ý">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div data-chat-hashtag-list class="mt-1 space-y-0.5"></div>
+                </div>
+
                 <label for="{{ $instance }}-content" class="sr-only">Nội dung tin nhắn</label>
                 <textarea id="{{ $instance }}-content" name="content" rows="2" data-chat-content class="w-full resize-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white" placeholder="{{ $composerPlaceholder }}"></textarea>
                 <div class="flex items-center justify-between gap-2">

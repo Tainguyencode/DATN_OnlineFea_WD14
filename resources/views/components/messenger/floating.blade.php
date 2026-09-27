@@ -4,9 +4,9 @@
             data-floating-messenger
             data-conversations-url="{{ route('messenger.conversations.index') }}"
             data-user-id="{{ auth()->id() }}"
-            class="fixed bottom-5 right-4 z-40 sm:bottom-6 sm:right-6"
+            class="z-50"
         >
-            <section data-messenger-panel class="mb-3 hidden h-[min(620px,calc(100vh-7rem))] w-[calc(100vw-2rem)] max-w-[390px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="false" aria-label="Messenger">
+            <section data-messenger-panel class="fixed bottom-5 sm:bottom-6 right-4 sm:right-24 z-50 hidden h-[min(560px,calc(100vh-5.5rem))] w-[calc(100vw-2rem)] max-w-[390px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="false" aria-label="Messenger">
                 <div data-messenger-list-view class="flex h-full flex-col">
                     <header class="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
                         <div>
@@ -43,7 +43,7 @@
                 </div>
             </section>
 
-            <button type="button" data-messenger-toggle class="relative ml-auto inline-flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" aria-label="Mở Messenger" aria-expanded="false">
+            <button type="button" data-messenger-toggle class="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-50 inline-flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-blue-600 text-white shadow-xl shadow-blue-600/30 transition-transform hover:bg-blue-700 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" aria-label="Mở Messenger" aria-expanded="false">
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.4-4 8-9 8a10 10 0 0 1-4.3-.95L3 20l1.4-3.7A7.2 7.2 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8Z"/></svg>
                 <span data-messenger-badge class="absolute -right-1 -top-1 hidden min-w-5 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-black leading-4 text-white"></span>
             </button>

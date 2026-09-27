@@ -213,36 +213,63 @@ class DiscussionController extends Controller
             }
         }
 
+        $studentId = $discussion->user_id;
+        $instructorId = $discussion->course?->instructor_id ?: $discussion->lesson?->course?->instructor_id;
+
+        $allowedDiscussionIds = Discussion::query()
+            ->where('user_id', $studentId)
+            ->when($instructorId, function ($q) use ($instructorId) {
+                $q->whereHas('course', fn ($c) => $c->where('instructor_id', $instructorId));
+            })
+            ->pluck('id');
+
+        if ($allowedDiscussionIds->isEmpty()) {
+            $allowedDiscussionIds = collect([$discussion->id]);
+        }
+
         $replyToMessageId = $request->validated('reply_to_message_id');
         $replyToDiscussionId = null;
         $replyToKey = $request->validated('reply_to_key');
+
         if ($replyToKey && str_starts_with($replyToKey, 'discussion:')) {
             $candidateId = (int) Str::after($replyToKey, 'discussion:');
-            if ($candidateId !== (int) $discussion->id) {
+            if (! $allowedDiscussionIds->contains($candidateId)) {
                 return $this->invalidReplyTarget();
             }
-            $replyToDiscussionId = $discussion->id;
+            $replyToDiscussionId = $candidateId;
             $replyToMessageId = null;
+            $targetDiscussion = Discussion::find($candidateId);
+            if ($targetDiscussion) {
+                $discussion = $targetDiscussion;
+            }
         } elseif ($replyToKey && str_starts_with($replyToKey, 'reply:')) {
             $replyToMessageId = (int) Str::after($replyToKey, 'reply:');
         }
+
         $replyToReply = null;
         if ($replyToMessageId) {
             $replyToReply = DiscussionReply::where('id', $replyToMessageId)
-                ->where('discussion_id', $discussion->id)
+                ->whereIn('discussion_id', $allowedDiscussionIds)
                 ->first();
 
             if (! $replyToReply) {
                 return $this->invalidReplyTarget();
             }
+
+            // Gán discussion theo discussion của tin nhắn được reply để đồng bộ ngữ cảnh
+            if ($replyToReply->discussion) {
+                $discussion = $replyToReply->discussion;
+            }
         }
 
         $course = $discussion->course ?: $discussion->lesson?->course;
         $isInstructor = $course && (int) $course->instructor_id === (int) auth()->id();
-        $lessonId = $request->validated('lesson_id') ?: $discussion->lesson_id;
+        $lessonId = $request->has('lesson_id') ? $request->validated('lesson_id') : ($replyToReply?->lesson_id ?? null);
         if ($lessonId) {
-            $replyLesson = Lesson::findOrFail($lessonId);
-            abort_unless($course && $this->lessonAccess->lessonBelongsToCourse($course, $replyLesson), 404);
+            $replyLesson = Lesson::find($lessonId);
+            if (! ($replyLesson && $course && $this->lessonAccess->lessonBelongsToCourse($course, $replyLesson))) {
+                $lessonId = null;
+            }
         }
 
         $reply = DiscussionReply::create([

@@ -72,7 +72,7 @@
                     <p class="mb-5 text-sm font-semibold text-slate-500">
                         <span x-text="totalCount">{{ $items->total() }}</span> khóa học đã lưu
                     </p>
-                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 sm:gap-5">
                         @foreach($items as $item)
                             @continue(! $item->course)
                             @php

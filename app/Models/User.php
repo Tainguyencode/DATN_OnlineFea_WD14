@@ -296,6 +296,55 @@ class User extends Authenticatable implements MustVerifyEmail
             ->whereNotNull('submitted_for_review_at');
     }
 
+    public function scopeInstructorHasUpdates(Builder $query): Builder
+    {
+        return $query->where('role', 'instructor')->where(function ($q) {
+            $q->where(function ($pendingQ) {
+                $pendingQ->where('instructor_status', 'pending')
+                    ->whereNotNull('submitted_for_review_at')
+                    ->where('needs_admin_review', true);
+            })->orWhere(function ($approvedQ) {
+                $approvedQ->where('instructor_status', 'approved')
+                    ->where(function ($subQ) {
+                        $subQ->where('needs_admin_review', true)
+                            ->orWhereHas('instructorCertificates', fn ($c) => $c->where('status', 'pending'))
+                            ->orWhereHas('instructorProfile.teachingFields', fn ($tf) => $tf->where('approval_status', 'pending'));
+                    });
+            });
+        });
+    }
+
+    public function hasInstructorUpdates(): bool
+    {
+        if ($this->role !== 'instructor') {
+            return false;
+        }
+
+        if ($this->needs_admin_review) {
+            return true;
+        }
+
+        if ($this->instructor_status === 'approved') {
+            if ($this->relationLoaded('instructorCertificates')) {
+                if ($this->instructorCertificates->contains(fn ($c) => $c->status === 'pending')) {
+                    return true;
+                }
+            } elseif ($this->instructorCertificates()->where('status', 'pending')->exists()) {
+                return true;
+            }
+
+            if ($this->relationLoaded('instructorProfile') && $this->instructorProfile?->relationLoaded('teachingFields')) {
+                if ($this->instructorProfile->teachingFields->contains(fn ($tf) => $tf->approval_status === InstructorTeachingField::STATUS_PENDING)) {
+                    return true;
+                }
+            } elseif ($this->instructorProfile?->teachingFields()->where('approval_status', InstructorTeachingField::STATUS_PENDING)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isGlobalReviewPending(): bool
     {
         return $this->role === 'instructor'

@@ -59,11 +59,18 @@ class InstructorApplicationController extends Controller
         }
 
         $query = User::where('users.role', 'instructor')
-            ->with(['instructorProfile.category', 'instructorProfile.teachingCategories', 'instructorApplication', 'instructorCertificates', 'approver']);
+            ->with([
+                'instructorProfile.category',
+                'instructorProfile.teachingCategories',
+                'instructorProfile.teachingFields',
+                'instructorApplication',
+                'instructorCertificates',
+                'approver',
+            ]);
 
         // 1. Lọc theo trạng thái ứng tuyển (từ Filter Tabs hoặc Dropdown)
         if ($status === 'new_updates') {
-            $query->pendingInstructorReview()->where('users.needs_admin_review', true);
+            $query->instructorHasUpdates();
         } elseif ($status === 'pending') {
             $query->pendingInstructorReview();
         } elseif (in_array($status, ['approved', 'rejected'], true)) {
@@ -110,8 +117,28 @@ class InstructorApplicationController extends Controller
         }
 
         $applications = $query
-            ->orderByDesc('users.needs_admin_review')
-            ->orderByRaw("CASE WHEN users.instructor_status = 'pending' THEN 1 ELSE 2 END")
+            ->orderByRaw("
+                CASE 
+                    WHEN (
+                        users.needs_admin_review = 1
+                        OR EXISTS (
+                            SELECT 1 FROM instructor_certificates 
+                            WHERE instructor_certificates.user_id = users.id 
+                            AND instructor_certificates.status = 'pending'
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM instructor_profile_teaching_fields 
+                            INNER JOIN instructor_profiles ON instructor_profiles.id = instructor_profile_teaching_fields.instructor_profile_id 
+                            WHERE instructor_profiles.user_id = users.id 
+                            AND instructor_profile_teaching_fields.approval_status = 'pending'
+                        )
+                    ) THEN 1
+                    WHEN users.instructor_status = 'pending' AND users.submitted_for_review_at IS NOT NULL THEN 2
+                    WHEN users.instructor_status = 'approved' THEN 3
+                    WHEN users.instructor_status = 'pending' AND users.submitted_for_review_at IS NULL THEN 4
+                    ELSE 5
+                END ASC
+            ")
             ->orderByDesc('users.updated_at')
             ->paginate(15)
             ->withQueryString();
@@ -139,7 +166,7 @@ class InstructorApplicationController extends Controller
         // Counts remain necessary for the management-page status tabs only.
         $counts = [
             'all' => User::where('role', 'instructor')->count(),
-            'new_updates' => User::query()->pendingInstructorReview()->where('needs_admin_review', true)->count(),
+            'new_updates' => User::query()->instructorHasUpdates()->count(),
             'pending' => User::query()->pendingInstructorReview()->count(),
             'approved' => User::where('role', 'instructor')->where('instructor_status', 'approved')->count(),
             'rejected' => User::where('role', 'instructor')->where('instructor_status', 'rejected')->count(),
@@ -203,7 +230,7 @@ class InstructorApplicationController extends Controller
 
         $counts = [
             'all' => (clone $statisticsQuery)->count(),
-            'new_updates' => (clone $statisticsQuery)->pendingInstructorReview()->where('needs_admin_review', true)->count(),
+            'new_updates' => (clone $statisticsQuery)->instructorHasUpdates()->count(),
             'pending' => (clone $statisticsQuery)->pendingInstructorReview()->count(),
             'approved' => (clone $statisticsQuery)->where('instructor_status', 'approved')->count(),
             'rejected' => (clone $statisticsQuery)->where('instructor_status', 'rejected')->count(),
@@ -678,5 +705,86 @@ class InstructorApplicationController extends Controller
         }
 
         return back()->with('success', 'Đã từ chối yêu cầu cấp lại quyền giảng viên cho "'.$user->name.'".');
+    }
+
+    public function toggleLock(Request $request, User $user): RedirectResponse
+    {
+        $adminId = $request->user()->id;
+
+        if ($user->isLocked()) {
+            $user->unlockAccount('active', $user->instructor_status === 'approved' ? 'approved' : 'pending');
+
+            ActivityLogService::log($adminId, 'unlock_instructor_account', User::class, $user->id, [], $request);
+
+            try {
+                app(NotificationService::class)->send(
+                    $user,
+                    'Tài khoản Giảng viên đã được mở khóa',
+                    'Tài khoản của bạn đã được Quản trị viên mở khóa.',
+                    'instructor_account_unlocked',
+                    route('instructor.dashboard')
+                );
+            } catch (\Throwable $e) {
+                Log::error('Gửi thông báo mở khóa thất bại: '.$e->getMessage());
+            }
+
+            return back()->with('success', 'Đã mở khóa tài khoản cho giảng viên "'.$user->name.'".');
+        }
+
+        $request->validate([
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $reason = $request->input('reason') ?: 'Phát hiện nghi vấn gian lận hồ sơ hoặc vi phạm quy định nền tảng.';
+
+        $user->update([
+            'account_status' => 'locked',
+            'locked_at' => now(),
+            'locked_reason' => $reason,
+            'reactivation_status' => 'none',
+        ]);
+
+        ActivityLogService::log($adminId, 'lock_instructor_account', User::class, $user->id, [
+            'reason' => $reason,
+        ], $request);
+
+        try {
+            app(NotificationService::class)->send(
+                $user,
+                'Tài khoản Giảng viên bị tạm khóa',
+                'Tài khoản giảng viên của bạn đã bị khóa: '.$reason,
+                'instructor_account_locked',
+                route('instructor.profile')
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gửi thông báo khóa tài khoản thất bại: '.$e->getMessage());
+        }
+
+        return back()->with('success', 'Đã khóa tài khoản giảng viên "'.$user->name.'".');
+    }
+
+    public function viewIdentityFile(Request $request, User $user, string $type): BinaryFileResponse
+    {
+        $profile = $user->instructorProfile;
+        abort_unless($profile, 404);
+
+        $path = match ($type) {
+            'front' => $profile->id_card_front_path,
+            'back' => $profile->id_card_back_path,
+            'portrait' => $profile->portrait_image_path,
+            default => null,
+        };
+
+        abort_unless($path && Storage::disk('local')->exists($path), 404, 'Tệp định danh không tồn tại.');
+
+        return response()->file(Storage::disk('local')->path($path));
+    }
+
+    public function viewSupplementaryFile(Request $request, InstructorCertificate $certificate): BinaryFileResponse
+    {
+        $path = $certificate->supplementary_file_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404, 'Tệp minh chứng bổ sung không tồn tại.');
+
+        return response()->file(Storage::disk('local')->path($path));
     }
 }

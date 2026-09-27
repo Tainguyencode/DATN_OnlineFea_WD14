@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Course;
 use App\Models\Discussion;
 use App\Models\DiscussionParticipant;
 use App\Models\DiscussionReply;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 class DiscussionChatService
 {
@@ -91,7 +93,17 @@ class DiscussionChatService
     public function markRead(Discussion $discussion, User $user): void
     {
         $this->ensureParticipants($discussion);
-        DiscussionParticipant::where('discussion_id', $discussion->id)
+        $studentId = $discussion->user_id;
+        $instructorId = $discussion->course?->instructor_id ?: $discussion->lesson?->course?->instructor_id;
+
+        $discussionIds = Discussion::query()
+            ->where('user_id', $studentId)
+            ->when($instructorId, function (Builder $q) use ($instructorId) {
+                $q->whereHas('course', fn (Builder $c) => $c->where('instructor_id', $instructorId));
+            })
+            ->pluck('id');
+
+        DiscussionParticipant::whereIn('discussion_id', $discussionIds)
             ->where('user_id', $user->id)
             ->update(['last_read_at' => now(), 'unread_count' => 0]);
     }
@@ -100,21 +112,47 @@ class DiscussionChatService
     public function messages(Discussion $discussion, User $viewer, ?string $cursor = null): array
     {
         $after = $this->decodeCursor($cursor);
-        $discussion->loadMissing(['user', 'lesson']);
+        $discussion->loadMissing(['user', 'lesson.course', 'course']);
 
-        $messages = collect();
-        if (! $after || $discussion->created_at->gte($after['at'])) {
-            $messages->push($discussion);
+        $studentId = $discussion->user_id;
+        $instructorId = $discussion->course?->instructor_id ?: $discussion->lesson?->course?->instructor_id;
+
+        // Lấy tất cả discussions của cặp Student - Instructor này để tạo 1 luồng chat 1-1 duy nhất
+        $discussions = Discussion::query()
+            ->where('user_id', $studentId)
+            ->when($instructorId, function (Builder $q) use ($instructorId) {
+                $q->whereHas('course', fn (Builder $c) => $c->where('instructor_id', $instructorId));
+            })
+            ->with(['user', 'lesson.course', 'course'])
+            ->get();
+
+        if ($discussions->isEmpty()) {
+            $discussions = collect([$discussion]);
         }
 
-        $replies = $discussion->replies()
-            ->with(['user', 'lesson', 'replyTo.user', 'replyToDiscussion.user'])
+        $messages = collect();
+        foreach ($discussions as $disc) {
+            if (! $after || $disc->created_at->gte($after['at'])) {
+                $disc->setRelation('_parent_discussion', $disc);
+                $messages->push($disc);
+            }
+        }
+
+        $discussionIds = $discussions->pluck('id');
+        $replies = DiscussionReply::query()
+            ->whereIn('discussion_id', $discussionIds)
+            ->with(['user', 'lesson.course', 'replyTo.user', 'replyToDiscussion.user', 'discussion.course'])
             ->when($after, fn (Builder $query) => $query->where('created_at', '>=', $after['at']))
             ->orderBy('created_at')
             ->orderBy('id')
             ->get();
 
-        $messages = $messages->concat($replies)
+        foreach ($replies as $reply) {
+            $reply->setRelation('_parent_discussion', $reply->discussion ?: $discussion);
+            $messages->push($reply);
+        }
+
+        $messages = $messages
             ->sortBy(fn ($message) => $message->created_at->format('Y-m-d H:i:s.u').'|'.$this->messageOrderKey($message))
             ->values();
 
@@ -129,7 +167,10 @@ class DiscussionChatService
             })->values();
         }
 
-        $data = $messages->map(fn ($message) => $this->presentMessage($discussion, $message, $viewer))->all();
+        $data = $messages->map(function ($message) use ($viewer, $discussion) {
+            $parentDisc = $message->relationLoaded('_parent_discussion') ? $message->getRelation('_parent_discussion') : $discussion;
+            return $this->presentMessage($parentDisc, $message, $viewer);
+        })->all();
         $last = $messages->last();
 
         return [
@@ -161,7 +202,9 @@ class DiscussionChatService
         $kind = $message instanceof Discussion ? 'discussion' : 'reply';
         $isOwner = (int) $message->user_id === (int) $viewer->id;
         $isAdmin = $viewer->isAdmin();
-        $course = $discussion->course ?: $discussion->lesson?->course;
+        $course = $message instanceof DiscussionReply && $message->lesson?->course
+            ? $message->lesson->course
+            : ($discussion->course ?: $discussion->lesson?->course);
         $isCourseInstructor = $viewer->isInstructor() && $course && (int) $course->instructor_id === (int) $viewer->id;
         $canRecall = ! $message->is_recalled && ($isAdmin || ($isOwner && $message->created_at->gte(now()->subHours(24))));
         $canDelete = $isAdmin || $isOwner || $isCourseInstructor;
@@ -173,9 +216,25 @@ class DiscussionChatService
             && ! $message->is_recalled;
 
         $replyTo = null;
+        $replyToCourse = null;
         if ($message instanceof DiscussionReply) {
             $target = $message->replyTo ?: $message->replyToDiscussion;
             if ($target) {
+                $targetCourse = null;
+                if ($target instanceof DiscussionReply) {
+                    $targetCourse = $target->lesson?->course ?: $target->discussion?->course;
+                } elseif ($target instanceof Discussion) {
+                    $targetCourse = $target->course;
+                }
+
+                if ($targetCourse) {
+                    $replyToCourse = [
+                        'id' => $targetCourse->id,
+                        'title' => $targetCourse->title,
+                        'tag' => Str::slug($targetCourse->title),
+                    ];
+                }
+
                 $replyTo = [
                     'key' => $this->messageKey($target),
                     'content' => $target->is_recalled ? 'Tin nhắn đã được thu hồi' : $target->content,
@@ -202,6 +261,7 @@ class DiscussionChatService
             ],
             'content' => $message->is_recalled ? null : $message->content,
             'created_at' => $message->created_at?->toISOString(),
+            'course' => $course ? ['id' => $course->id, 'title' => $course->title, 'tag' => Str::slug($course->title)] : null,
             'lesson' => $message->lesson ? ['id' => $message->lesson->id, 'title' => $message->lesson->title] : null,
             'attachment' => ! $message->is_recalled && $message->attachment_path ? [
                 'url' => route('discussion-messages.attachment', ['kind' => $kind, 'message' => $message->id]),
@@ -209,6 +269,7 @@ class DiscussionChatService
                 'type' => $message->attachment_type,
             ] : null,
             'reply_to' => $replyTo,
+            'reply_to_course' => $replyToCourse,
             'is_recalled' => (bool) $message->is_recalled,
             'is_helpful' => (bool) ($message instanceof DiscussionReply && $message->is_helpful),
             'permissions' => [
@@ -239,14 +300,62 @@ class DiscussionChatService
             ->orderByDesc('id');
 
         $this->scopeVisibleConversations($query, $viewer);
-        $paginator = $query->paginate(min(max($perPage, 1), 50));
-        $unread = $this->unreadCounts($paginator->getCollection()->pluck('id'), $viewer);
+        $allDiscussions = $query->get();
+        $unreadMap = $this->unreadCounts($allDiscussions->pluck('id'), $viewer);
 
-        $paginator->setCollection($paginator->getCollection()->map(
-            fn (Discussion $discussion) => $this->presentConversation($discussion, $viewer, $unread[$discussion->id] ?? 0)
-        ));
+        // Gom nhóm theo Đối tác trò chuyện (Partner) để chỉ hiển thị DUY NHẤT 1 DÒNG cho mỗi người
+        $grouped = $allDiscussions->groupBy(function (Discussion $discussion) use ($viewer) {
+            if ($viewer->isInstructor()) {
+                return 'student:'.$discussion->user_id;
+            }
+            return 'instructor:'.($discussion->course?->instructor_id ?? 'unknown');
+        });
 
-        return $paginator;
+        $presented = $grouped->map(function (Collection $group) use ($viewer, $unreadMap) {
+            // Sắp xếp các discussion trong group để lấy cái có tin nhắn mới nhất
+            $sorted = $group->sortByDesc(fn (Discussion $d) => $d->last_message_at ?? $d->created_at);
+            /** @var Discussion $primaryDiscussion */
+            $primaryDiscussion = $sorted->first();
+
+            // Tổng unread của tất cả các discussion trong nhóm này
+            $totalUnread = (int) $group->sum(fn (Discussion $d) => $unreadMap[$d->id] ?? 0);
+
+            // Tìm tin nhắn mới nhất tuyệt đối trong cả nhóm
+            $latestDiscussionWithMessage = $sorted->first(function (Discussion $d) {
+                return $d->lastReply || $d->last_message_at;
+            }) ?: $primaryDiscussion;
+
+            // Lấy danh sách các khóa học mà học viên đã mua của giảng viên này để hiển thị hashtag
+            $courseItems = $group->pluck('course')->filter()->unique('id');
+            $purchasedCourses = $courseItems->map(fn ($c) => [
+                'id' => $c->id,
+                'title' => $c->title,
+                'tag' => Str::slug($c->title),
+            ])->values();
+
+            return $this->presentConversation(
+                $primaryDiscussion,
+                $viewer,
+                $totalUnread,
+                $purchasedCourses,
+                $latestDiscussionWithMessage->lastReply ?: $latestDiscussionWithMessage
+            );
+        })->values();
+
+        // Sắp xếp cuộc trò chuyện nào có tin nhắn mới nhất lên đầu
+        $sortedPresented = $presented->sortByDesc(fn ($item) => $item['last_message']['created_at'] ?? '')->values();
+
+        // Phân trang danh sách hội thoại
+        $currentPage = \Illuminate\Pagination\Paginator::resolveCurrentPage() ?: 1;
+        $itemsForPage = $sortedPresented->forPage($currentPage, $perPage)->values();
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $itemsForPage,
+            $sortedPresented->count(),
+            $perPage,
+            $currentPage,
+            ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
+        );
     }
 
     public function totalUnread(User $viewer): int
@@ -277,10 +386,16 @@ class DiscussionChatService
     }
 
     /** @return array<string, mixed> */
-    private function presentConversation(Discussion $discussion, User $viewer, int $unread): array
-    {
-        $last = $discussion->lastReply ?: $discussion;
+    private function presentConversation(
+        Discussion $discussion,
+        User $viewer,
+        int $unread,
+        ?Collection $purchasedCourses = null,
+        Discussion|DiscussionReply|null $lastMessage = null
+    ): array {
+        $last = $lastMessage ?: ($discussion->lastReply ?: $discussion);
         $other = $viewer->isInstructor() ? $discussion->user : $discussion->course?->instructor;
+        $courses = $purchasedCourses ? $purchasedCourses->values()->all() : [];
 
         return [
             'id' => $discussion->id,
@@ -288,11 +403,12 @@ class DiscussionChatService
             'avatar_url' => $other?->avatarUrl(),
             'role' => $other?->role,
             'course' => $discussion->course ? ['id' => $discussion->course->id, 'title' => $discussion->course->title] : null,
+            'purchased_courses' => $courses,
             'last_message' => [
                 'key' => $this->messageKey($last),
                 'sender_name' => $last->user?->name ?? $discussion->user?->name,
                 'content' => $last->is_recalled ? 'Tin nhắn đã được thu hồi' : ($last->content ?: '[Tệp đính kèm]'),
-                'created_at' => ($discussion->last_message_at ?: $last->created_at)?->toISOString(),
+                'created_at' => ($last->created_at ?: $discussion->last_message_at)?->toISOString(),
             ],
             'unread_count' => $unread,
             'messages_url' => route('discussions.messages', $discussion),

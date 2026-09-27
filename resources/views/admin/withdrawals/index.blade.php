@@ -16,6 +16,9 @@
         transactionRef: '',
         adminNote: '',
         copiedField: null,
+        proofError: '',
+        proofPreview: null,
+        rejectError: '',
 
         openQrModal(id, userId, name, amt, bank, code, acc, owner, qr) {
             this.withdrawalId = id;
@@ -29,7 +32,68 @@
             this.vietQrUrl = qr;
             this.transferContent = 'RUT TIEN MAGV ' + userId + ' REQ' + id;
             this.transactionRef = '';
+            this.proofError = '';
+            this.proofPreview = null;
+            if (this.$refs.proofInput) {
+                this.$refs.proofInput.value = '';
+            }
             this.qrModalOpen = true;
+        },
+
+        handleProofChange(e) {
+            this.proofError = '';
+            this.proofPreview = null;
+            const file = e.target.files && e.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                this.proofError = 'Bill giao dịch chỉ hỗ trợ định dạng JPG, JPEG, PNG hoặc WEBP.';
+                e.target.value = '';
+                return;
+            }
+
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                this.proofError = 'Dung lượng ảnh bill không được vượt quá 5 MB.';
+                e.target.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                this.proofPreview = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        },
+
+        submitApprove(e) {
+            const input = this.$refs.proofInput;
+            const file = input && input.files && input.files[0];
+            if (!file) {
+                e.preventDefault();
+                this.proofError = 'Vui lòng chọn ảnh bill giao dịch sau khi chuyển khoản.';
+                return false;
+            }
+
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                e.preventDefault();
+                this.proofError = 'Bill giao dịch chỉ hỗ trợ định dạng JPG, JPEG, PNG hoặc WEBP.';
+                return false;
+            }
+
+            const maxSize = 5 * 1024 * 1024;
+            if (file.size > maxSize) {
+                e.preventDefault();
+                this.proofError = 'Dung lượng ảnh bill không được vượt quá 5 MB.';
+                return false;
+            }
+
+            this.proofError = '';
+            return true;
         },
 
         openRejectModal(id, name, amt) {
@@ -37,7 +101,18 @@
             this.instructorName = name;
             this.amount = amt;
             this.adminNote = '';
+            this.rejectError = '';
             this.rejectModalOpen = true;
+        },
+
+        submitReject(e) {
+            if (!this.adminNote || !this.adminNote.trim()) {
+                e.preventDefault();
+                this.rejectError = 'Vui lòng nhập lý do từ chối yêu cầu rút tiền.';
+                return false;
+            }
+            this.rejectError = '';
+            return true;
         },
 
         copyText(text, field) {
@@ -368,7 +443,7 @@
                         <span>Mở App Ngân hàng bất kỳ để <strong>quét mã VietQR</strong> hoặc <strong>chuyển khoản</strong> chính xác số tiền, nội dung bên dưới</span>
                     </div>
 
-                    <form :action="'/admin/withdrawals/' + withdrawalId + '/approve'" method="POST" enctype="multipart/form-data" class="flex-1 py-5">
+                    <form :action="'/admin/withdrawals/' + withdrawalId + '/approve'" method="POST" enctype="multipart/form-data" novalidate @submit="submitApprove($event)" class="flex-1 py-5">
                         @csrf
 
                         <div class="mx-auto grid w-full max-w-4xl items-center gap-6 lg:grid-cols-[minmax(260px,340px)_1px_minmax(0,1fr)] lg:gap-8">
@@ -491,10 +566,50 @@
                                     💡 <strong>Lưu ý:</strong> Nhập chính xác số tiền <strong class="text-slate-900 font-bold" x-text="new Intl.NumberFormat('vi-VN').format(amount) + 'đ'"></strong> và nội dung <strong class="text-slate-900 font-bold" x-text="transferContent"></strong> khi thao tác chuyển khoản.
                                 </p>
 
-                                <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                                    <label for="withdrawal-transfer-proof" class="block text-xs font-bold text-amber-900">Ảnh bill giao dịch <span class="text-rose-600">*</span></label>
-                                    <input id="withdrawal-transfer-proof" type="file" name="transfer_proof" accept="image/jpeg,image/png,image/webp" required class="mt-2 block w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-600 file:px-3 file:py-2 file:font-bold file:text-white hover:file:bg-amber-700">
+                                <div class="rounded-2xl border p-3.5 transition-all"
+                                     :class="proofError ? 'border-rose-400 bg-rose-50/60 ring-1 ring-rose-400' : 'border-amber-200 bg-amber-50'">
+                                    <label for="withdrawal-transfer-proof" class="block text-xs font-bold" :class="proofError ? 'text-rose-900' : 'text-amber-900'">Ảnh bill giao dịch <span class="text-rose-600">*</span></label>
+                                    <input
+                                        id="withdrawal-transfer-proof"
+                                        x-ref="proofInput"
+                                        type="file"
+                                        name="transfer_proof"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        @change="handleProofChange($event)"
+                                        class="mt-2 block w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-600 file:px-3 file:py-2 file:font-bold file:text-white hover:file:bg-amber-700 cursor-pointer"
+                                    >
                                     <p class="mt-1.5 text-[11px] text-amber-800">Bắt buộc tải bill sau khi chuyển khoản thành công. Hỗ trợ JPG, PNG, WEBP; tối đa 5 MB.</p>
+
+                                    {{-- Thông báo lỗi text tiếng Việt màu đỏ ngay dưới ô nhập --}}
+                                    <div x-show="proofError" x-cloak class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-rose-600">
+                                        <svg class="h-4 w-4 shrink-0 text-rose-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                        <span x-text="proofError"></span>
+                                    </div>
+
+                                    @error('transfer_proof')
+                                        <div class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-rose-600">
+                                            <svg class="h-4 w-4 shrink-0 text-rose-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span>{{ $message }}</span>
+                                        </div>
+                                    @enderror
+
+                                    {{-- Xem trước ảnh bill khi đã chọn --}}
+                                    <template x-if="proofPreview">
+                                        <div class="mt-3 flex items-center gap-3 rounded-xl border border-emerald-200 bg-white p-2">
+                                            <img :src="proofPreview" alt="Xem trước ảnh bill" class="h-14 w-14 rounded-lg object-cover border border-slate-200 shadow-2xs">
+                                            <div class="text-xs text-slate-700">
+                                                <p class="font-bold text-emerald-700 flex items-center gap-1">
+                                                    <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                                    Đã chọn ảnh bill hợp lệ
+                                                </p>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">Sẵn sàng để xác nhận duyệt đơn.</p>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
 
                                 {{-- Nút Xác Nhận Duyệt Đơn --}}
@@ -562,7 +677,7 @@
                         </button>
                     </div>
 
-                    <form :action="'/admin/withdrawals/' + withdrawalId + '/reject'" method="POST" class="mt-4 space-y-4">
+                    <form :action="'/admin/withdrawals/' + withdrawalId + '/reject'" method="POST" novalidate @submit="submitReject($event)" class="mt-4 space-y-4">
                         @csrf
 
                         <p class="text-xs text-slate-600">
@@ -570,15 +685,28 @@
                         </p>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Lý do từ chối (Gửi tới giảng viên)</label>
+                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Lý do từ chối (Gửi tới giảng viên) <span class="text-rose-600">*</span></label>
                             <textarea
                                 name="admin_note"
                                 x-model="adminNote"
                                 rows="3"
+                                @input="if(adminNote.trim()) rejectError = ''"
                                 placeholder="Ví dụ: Sai số tài khoản ngân hàng hoặc thông tin tên không khớp."
-                                required
                                 class="w-full rounded-xl border-slate-300 py-2 px-3 text-xs text-slate-800 focus:border-rose-500 focus:ring-rose-500"
+                                :class="{'border-rose-400 ring-1 ring-rose-400': rejectError}"
                             ></textarea>
+
+                            {{-- Báo lỗi màu đỏ text tiếng Việt --}}
+                            <div x-show="rejectError" x-cloak class="mt-1.5 flex items-center gap-1 text-xs font-semibold text-rose-600">
+                                <svg class="h-4 w-4 shrink-0 text-rose-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                </svg>
+                                <span x-text="rejectError"></span>
+                            </div>
+
+                            @error('admin_note')
+                                <p class="mt-1 text-xs text-rose-600 font-semibold">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 mt-6">

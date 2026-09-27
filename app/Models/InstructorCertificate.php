@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class InstructorCertificate extends Model
 {
@@ -23,6 +24,13 @@ class InstructorCertificate extends Model
         'file_size',
         'title',
         'document_type',
+        'verification_method',
+        'diploma_number',
+        'book_reg_number',
+        'lookup_url',
+        'supplementary_proof_type',
+        'supplementary_file_path',
+        'credential_url',
         'status',
         'rejection_reason',
         'uploaded_at',
@@ -48,6 +56,70 @@ class InstructorCertificate extends Model
         $types = static::documentTypeLabels();
 
         return $types[$this->document_type] ?? 'Chứng chỉ';
+    }
+
+    public static function supplementaryProofTypeLabels(): array
+    {
+        return [
+            'notarized' => 'Bản sao công chứng (trong 6 tháng)',
+            'transcript' => 'Bảng điểm tốt nghiệp',
+            'student_portal' => 'Ảnh cổng thông tin / App trường',
+            'capstone_project' => 'Dự án tốt nghiệp / Link Github',
+            'center_transcript' => 'Bảng điểm đánh giá của trung tâm',
+            'completion_email_or_receipt' => 'Email tốt nghiệp / Hóa đơn học phí',
+            'contract' => 'Hợp đồng lao động',
+            'appointment' => 'Quyết định bổ nhiệm / tuyển dụng',
+            'vssid' => 'Mã số / Ảnh đóng BHXH (VssID)',
+        ];
+    }
+
+    public function supplementaryProofTypeLabel(): ?string
+    {
+        if (! $this->supplementary_proof_type) {
+            return null;
+        }
+
+        return static::supplementaryProofTypeLabels()[$this->supplementary_proof_type] ?? $this->supplementary_proof_type;
+    }
+
+    public function isDomesticCertificate(): bool
+    {
+        return str_starts_with((string) $this->verification_method, 'domestic_center');
+    }
+
+    public function hasAntiForgeryVerification(): bool
+    {
+        $isDegree = $this->document_type === 'degree';
+        $isCert = $this->document_type === 'certificate';
+
+        if (! $isDegree && ! $isCert) {
+            $reqTitle = $this->relationLoaded('requirement') ? $this->requirement?->document_title : null;
+            $titleToCheck = mb_strtolower(implode(' ', array_filter([$this->title, $this->original_name, $reqTitle])));
+            $isDegree = Str::contains($titleToCheck, ['bằng', 'đại học', 'cao đẳng']);
+            $isCert = ! $isDegree && Str::contains($titleToCheck, ['chứng chỉ']);
+        }
+
+        if ($isDegree) {
+            $hasLookup = filled($this->diploma_number) && filled($this->book_reg_number);
+            $hasSupplementary = filled($this->supplementary_file_path);
+
+            return $hasLookup || $hasSupplementary;
+        }
+
+        if ($isCert) {
+            $hasCredential = filled($this->credential_url);
+            $hasCenterLookup = filled($this->diploma_number) || filled($this->lookup_url);
+            $hasSupplementary = filled($this->supplementary_file_path);
+
+            return $hasCredential || $hasCenterLookup || $hasSupplementary;
+        }
+
+        return true;
+    }
+
+    public function getDisplayTitleAttribute(): string
+    {
+        return $this->title ?: ($this->relationLoaded('requirement') ? $this->requirement?->document_title : null) ?: $this->original_name ?: 'Tài liệu';
     }
 
     public function getNameAttribute(): ?string

@@ -11,7 +11,7 @@
     @if($enrollments->isEmpty())
         <x-student.dashboard.empty-state title="Chưa có khóa học phù hợp" description="Thử bộ lọc khác hoặc khám phá khóa học mới." :action-url="route('courses.index')" action-label="Khám phá khóa học" />
     @else
-        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 sm:gap-5">
             @foreach($enrollments as $enrollment)
                 @continue(! $enrollment->course)
                 @php $completed = $enrollment->completed_at || $enrollment->status === \App\Models\Enrollment::STATUS_COMPLETED; @endphp

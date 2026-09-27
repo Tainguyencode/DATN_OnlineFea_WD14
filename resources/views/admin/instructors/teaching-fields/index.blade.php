@@ -87,22 +87,85 @@
 
                                 <div class="mt-4 space-y-2">
                                     @forelse($item['documents'] as $document)
-                                        <div class="flex flex-col gap-3 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:bg-slate-800/70">
-                                            <div class="min-w-0">
-                                                <p class="break-words text-sm font-bold text-slate-800 dark:text-slate-100">{{ $document->title ?: $document->original_name ?: 'Tài liệu minh chứng' }}</p>
-                                                @if($document->original_name && $document->original_name !== $document->title)
-                                                    <p class="mt-1 break-all text-xs text-slate-600 dark:text-slate-300">Tên tệp: {{ $document->original_name }}</p>
-                                                @endif
-                                                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                                                    <span>Trạng thái: {{ $document->status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt' }}</span>
-                                                    @if($document->uploaded_at)
-                                                        <span>Đã tải lên: {{ $document->uploaded_at->format('d/m/Y H:i') }}</span>
+                                        <div class="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700/60 space-y-2">
+                                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <div class="min-w-0">
+                                                    <p class="break-words text-sm font-bold text-slate-800 dark:text-slate-100">{{ $document->title ?: $document->original_name ?: 'Tài liệu minh chứng' }}</p>
+                                                    @if($document->original_name && $document->original_name !== $document->title)
+                                                        <p class="mt-1 break-all text-xs text-slate-600 dark:text-slate-300">Tên tệp: {{ $document->original_name }}</p>
+                                                    @endif
+                                                    <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                                                        <span>Trạng thái: {{ $document->status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt' }}</span>
+                                                        @if($document->uploaded_at)
+                                                            <span>Đã tải lên: {{ $document->uploaded_at->format('d/m/Y H:i') }}</span>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <a href="{{ route('admin.instructors.applications.certificates.view', $document) }}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-900">
+                                                    {{ $document->isUrlSource() ? 'Xem tài liệu' : ($document->isVideo() ? 'Xem video' : 'Xem tệp') }}
+                                                </a>
+                                            </div>
+
+                                            {{-- THÔNG TIN XÁC THỰC PHÒNG CHỐNG GIẢ MẠO (ANTI-FORGERY) --}}
+                                            @if($document->diploma_number || $document->book_reg_number || $document->lookup_url || $document->credential_url || $document->supplementary_file_path || $document->supplementary_proof_type)
+                                                <div class="mt-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-slate-700 dark:border-blue-900/40 dark:bg-slate-900/60 dark:text-slate-300 space-y-1.5">
+                                                    <div class="flex items-center justify-between flex-wrap gap-2">
+                                                        <div class="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
+                                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                                            <span>Dữ liệu xác thực đối chiếu (Anti-Forgery):</span>
+                                                        </div>
+                                                        @if($document->isDomesticCertificate())
+                                                            <span class="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
+                                                                🏫 Chứng chỉ Trong nước
+                                                            </span>
+                                                        @elseif($document->verification_method === 'credential_url')
+                                                            <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
+                                                                🌐 Chứng chỉ Quốc tế
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                    @if($document->diploma_number || $document->book_reg_number)
+                                                        <div class="flex flex-wrap gap-4 text-[11px]">
+                                                            @if($document->diploma_number)
+                                                                <span><strong>{{ $document->isDomesticCertificate() ? 'Mã chứng chỉ trung tâm' : 'Số hiệu văn bằng' }}:</strong> <code class="rounded bg-white px-1.5 py-0.5 font-mono font-bold text-slate-900 border border-slate-200 dark:bg-slate-800 dark:text-white dark:border-slate-700">{{ $document->diploma_number }}</code></span>
+                                                            @endif
+                                                            @if($document->book_reg_number)
+                                                                <span><strong>Số vào sổ cấp bằng:</strong> <code class="rounded bg-white px-1.5 py-0.5 font-mono font-bold text-slate-900 border border-slate-200 dark:bg-slate-800 dark:text-white dark:border-slate-700">{{ $document->book_reg_number }}</code></span>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+                                                    @if($document->lookup_url)
+                                                        <div class="pt-0.5">
+                                                            <a href="{{ $document->lookup_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold text-[#0056D2] hover:underline dark:text-blue-400">
+                                                                <span>{{ $document->isDomesticCertificate() ? 'Mở cổng tra cứu của trung tâm đào tạo ↗' : 'Mở cổng tra cứu văn bằng của trường ↗' }}</span>
+                                                            </a>
+                                                        </div>
+                                                    @endif
+                                                    @if($document->credential_url)
+                                                        <div class="pt-0.5">
+                                                            <a href="{{ $document->credential_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold {{ str_contains($document->credential_url, 'github.com') ? 'text-slate-800 dark:text-slate-200' : 'text-purple-700 dark:text-purple-400' }} hover:underline">
+                                                                @if(str_contains($document->credential_url, 'github.com'))
+                                                                    <span>📂 Xem sản phẩm / Kho mã nguồn thực tế (Github) ↗</span>
+                                                                @else
+                                                                    <span>Kiểm tra link xác thực chứng chỉ số (Credly / Coursera Verify) ↗</span>
+                                                                @endif
+                                                            </a>
+                                                        </div>
+                                                    @endif
+                                                    @if($document->supplementary_proof_type || $document->supplementary_file_path)
+                                                        <div class="flex items-center gap-2 pt-0.5 text-[11px] flex-wrap">
+                                                            <span class="rounded bg-slate-200 px-2 py-0.5 font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                                                {{ $document->supplementaryProofTypeLabel() ?: 'Minh chứng đính kèm' }}
+                                                            </span>
+                                                            @if($document->supplementary_file_path)
+                                                                <a href="{{ route('admin.instructors.applications.certificates.supplementary', $document) }}" target="_blank" class="font-bold text-emerald-700 dark:text-emerald-400 hover:underline">
+                                                                    [Xem tệp minh chứng phụ ↗]
+                                                                </a>
+                                                            @endif
+                                                        </div>
                                                     @endif
                                                 </div>
-                                            </div>
-                                            <a href="{{ route('admin.instructors.applications.certificates.view', $document) }}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-900">
-                                                {{ $document->isUrlSource() ? 'Xem tài liệu' : ($document->isVideo() ? 'Xem video' : 'Xem tệp') }}
-                                            </a>
+                                            @endif
                                         </div>
                                     @empty
                                         <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">Chưa nộp</div>

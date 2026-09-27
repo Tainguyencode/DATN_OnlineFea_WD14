@@ -9,7 +9,7 @@
                 <button type="submit" :disabled="submitting" class="rounded-xl px-3.5 py-2 text-sm font-bold text-rose-600 transition-all duration-200 hover:bg-rose-50 hover:text-rose-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 dark:text-rose-400 dark:hover:bg-rose-950/40">Xóa lịch sử</button>
             </form>
         </div>
-        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 sm:gap-5">
             @foreach($histories as $history)
                 @php $enrollment = $enrollmentMap->get($history->course_id); @endphp
                 <x-student.dashboard.course-card :course="$history->course" :progress="$enrollment?->progress_percent" :viewed-at="$history->last_viewed_at">

@@ -67,11 +67,27 @@ class InstructorReviewService
             $user->setRelation('instructorProfile', $profile);
             $user->setRelation('instructorCertificates', $certificates);
 
+            if (! $profile->hasUploadedIdentity()) {
+                return [
+                    'submitted' => false,
+                    'error' => 'Vui lòng hoàn thành Xác minh danh tính cá nhân (CCCD & Ảnh chân dung) trước khi gửi xét duyệt.',
+                ];
+            }
+
             $eligibility = $this->requirements->getSubmitEligibility($user);
             if (! $eligibility['can_submit']) {
                 return [
                     'submitted' => false,
                     'error' => $this->eligibilityError($eligibility),
+                ];
+            }
+
+            $unverifiedDoc = $certificates->where('status', 'draft')
+                ->first(fn (InstructorCertificate $c) => ! $c->hasAntiForgeryVerification());
+            if ($unverifiedDoc) {
+                return [
+                    'submitted' => false,
+                    'error' => "Tài liệu '{$unverifiedDoc->display_title}' chưa có thông tin xác thực chống làm giả (Số hiệu/Mã tra cứu/Minh chứng). Vui lòng xóa và tải lại tài liệu trước khi gửi xét duyệt.",
                 ];
             }
 
@@ -163,6 +179,15 @@ class InstructorReviewService
                 ];
             }
 
+            $unverifiedDoc = $certificates->where('status', 'draft')
+                ->first(fn (InstructorCertificate $c) => ! $c->hasAntiForgeryVerification());
+            if ($unverifiedDoc) {
+                return [
+                    'submitted' => false,
+                    'error' => "Tài liệu '{$unverifiedDoc->display_title}' chưa có thông tin xác thực chống làm giả (Số hiệu/Mã tra cứu/Minh chứng). Vui lòng xóa và tải lại tài liệu trước khi gửi xét duyệt.",
+                ];
+            }
+
             $this->requirements->promoteDraftCertificatesForTeachingField($field);
             $field->update([
                 'approval_status' => InstructorTeachingField::STATUS_PENDING,
@@ -171,6 +196,7 @@ class InstructorReviewService
                 'reviewed_by' => null,
                 'rejection_reason' => null,
             ]);
+            $user->update(['needs_admin_review' => true]);
 
             return ['submitted' => true, 'resubmission' => $wasRejected];
         }, 3);
@@ -224,7 +250,16 @@ class InstructorReviewService
                 return ['submitted' => false, 'error' => 'Có tài liệu nháp không còn thuộc yêu cầu hiện hành của ngành.'];
             }
 
+            $unverifiedDoc = $drafts->first(fn (InstructorCertificate $c) => ! $c->hasAntiForgeryVerification());
+            if ($unverifiedDoc) {
+                return [
+                    'submitted' => false,
+                    'error' => "Tài liệu '{$unverifiedDoc->display_title}' chưa có thông tin xác thực chống làm giả (Số hiệu/Mã tra cứu/Minh chứng). Vui lòng xóa và tải lại tài liệu trước khi gửi xét duyệt.",
+                ];
+            }
+
             $count = $this->requirements->promoteDraftCertificatesForTeachingField($field);
+            $user->update(['needs_admin_review' => true]);
 
             return ['submitted' => true, 'certificates_count' => $count];
         }, 3);

@@ -28,6 +28,25 @@
                                 <td class="px-5 py-4">
                                     <div class="font-semibold text-slate-900 dark:text-white">{{ $document->title ?: $document->original_name }}</div>
                                     <div class="text-xs text-slate-500">{{ $document->requirement?->document_title }}</div>
+                                    @if($document->diploma_number || $document->book_reg_number || $document->lookup_url || $document->credential_url || $document->supplementary_file_path)
+                                        <div class="mt-1 text-[11px] text-blue-700 dark:text-blue-300 space-y-0.5">
+                                            @if($document->diploma_number)
+                                                <div>Số hiệu: <strong>{{ $document->diploma_number }}</strong></div>
+                                            @endif
+                                            @if($document->book_reg_number)
+                                                <div>Số vào sổ: <strong>{{ $document->book_reg_number }}</strong></div>
+                                            @endif
+                                            @if($document->lookup_url)
+                                                <div><a href="{{ $document->lookup_url }}" target="_blank" class="font-bold text-[#0056D2] hover:underline">↗ Cổng tra cứu trường / trung tâm</a></div>
+                                            @endif
+                                            @if($document->credential_url)
+                                                <div><a href="{{ $document->credential_url }}" target="_blank" class="font-bold text-purple-700 hover:underline">↗ Link xác thực (Credly / Coursera / Github)</a></div>
+                                            @endif
+                                            @if($document->supplementary_file_path)
+                                                <div><a href="{{ route('admin.instructors.applications.certificates.supplementary', $document) }}" target="_blank" class="font-bold text-emerald-700 hover:underline">↗ Tệp minh chứng phụ đính kèm</a></div>
+                                            @endif
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-5 py-4 text-xs text-slate-500">{{ $document->uploaded_at?->format('d/m/Y H:i') }}</td>
                                 <td class="px-5 py-4">

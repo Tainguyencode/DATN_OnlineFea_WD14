@@ -2,7 +2,12 @@
     <div class="space-y-6" x-data="{ 
         rejectModal: false, 
         rejectUrl: '', 
-        rejectName: ''
+        rejectName: '',
+        lockModal: false,
+        lockUrl: '',
+        lockName: '',
+        isCurrentlyLocked: false,
+        lockReason: ''
     }">
         {{-- ========================================================================= --}}
         {{-- HEADER SECTION WITH CONFIG BUTTON                                         --}}
@@ -314,7 +319,10 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @forelse($applications as $app)
-                            <tr class="transition duration-150 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 {{ $app->needs_admin_review ? 'bg-rose-50/30 dark:bg-rose-950/10' : '' }}">
+                            @php
+                                $hasUpdates = $app->hasInstructorUpdates();
+                            @endphp
+                            <tr class="transition duration-150 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 {{ $hasUpdates ? 'bg-rose-50/30 dark:bg-rose-950/10' : '' }}">
                                 {{-- Giảng viên (Gộp basic info: Avatar, Name, Username, Email, Phone) --}}
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
@@ -322,7 +330,7 @@
                                         <div class="min-w-0">
                                             <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                                                 <span>{{ $app->name }}</span>
-                                                @if($app->needs_admin_review)
+                                                @if($hasUpdates)
                                                     <span class="inline-flex items-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-black text-white leading-none animate-pulse">NEW</span>
                                                 @endif
                                             </div>
@@ -390,30 +398,38 @@
 
                                 {{-- Trạng thái --}}
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    @if($app->needs_admin_review)
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-black text-rose-700 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300">
-                                            <span class="h-2 w-2 rounded-full bg-rose-500 animate-ping"></span>
-                                            Cập nhật mới
-                                        </span>
-                                    @elseif($app->isLocked())
+                                    @if($app->isLocked())
                                         <span class="inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 dark:bg-rose-900/40 dark:text-rose-300">
                                             🔒 Bị khóa
                                         </span>
                                     @elseif($app->instructor_status === 'approved')
-                                        <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                             Đã duyệt
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                ✔ Đã duyệt
+                                            </span>
+                                            @if($hasUpdates)
+                                                <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[11px] font-black text-rose-700 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300" title="Có cập nhật thông tin/tài liệu mới cần xét duyệt">
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                                                    Có cập nhật
+                                                </span>
+                                            @endif
+                                        </div>
+                                    @elseif($hasUpdates)
+                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-black text-rose-700 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300">
+                                            <span class="h-2 w-2 rounded-full bg-rose-500 animate-ping"></span>
+                                            Cập nhật mới
                                         </span>
                                     @elseif($app->instructor_status === 'rejected')
                                         <span class="inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 dark:bg-rose-900/40 dark:text-rose-300">
-                                             Từ chối
+                                            ✖ Từ chối
                                         </span>
                                     @elseif($app->isGlobalReviewPending())
                                         <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                                             Chờ duyệt
+                                            ⏳ Chờ duyệt
                                         </span>
                                     @else
                                         <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                             Chưa gửi xét duyệt
+                                            Chưa gửi xét duyệt
                                         </span>
                                     @endif
                                 </td>
@@ -443,6 +459,33 @@
                                             <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block rounded bg-slate-900 px-2 py-1 text-[10px] font-bold text-white whitespace-nowrap shadow-md z-30">
                                                 Xem chi tiết
                                             </span>
+                                        </div>
+
+                                        {{-- Khóa / Mở khóa tài khoản --}}
+                                        <div class="relative group">
+                                            @if($app->isLocked())
+                                                <button type="button"
+                                                        @click="lockModal = true; lockUrl = '{{ route('admin.instructors.applications.toggle-lock', $app) }}'; lockName = '{{ $app->name }}'; isCurrentlyLocked = true; lockReason = ''"
+                                                        class="cursor-pointer flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-800 shadow-sm transition hover:bg-amber-200 active:scale-95 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/60">
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                                                    </svg>
+                                                </button>
+                                                <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block rounded bg-slate-900 px-2 py-1 text-[10px] font-bold text-white whitespace-nowrap shadow-md z-30">
+                                                    Mở khóa tài khoản
+                                                </span>
+                                            @else
+                                                <button type="button"
+                                                        @click="lockModal = true; lockUrl = '{{ route('admin.instructors.applications.toggle-lock', $app) }}'; lockName = '{{ $app->name }}'; isCurrentlyLocked = false; lockReason = ''"
+                                                        class="cursor-pointer flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 shadow-sm transition hover:bg-rose-100 hover:text-rose-700 active:scale-95 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-rose-950/60 dark:hover:text-rose-300">
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                                    </svg>
+                                                </button>
+                                                <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block rounded bg-slate-900 px-2 py-1 text-[10px] font-bold text-white whitespace-nowrap shadow-md z-30">
+                                                    Khóa tài khoản
+                                                </span>
+                                            @endif
                                         </div>
 
                                         {{-- Duyệt --}}
@@ -527,6 +570,56 @@
                         </button>
                         <button type="submit" class="rounded-xl bg-rose-600 px-5 py-2 text-xs font-bold text-white hover:bg-rose-700">
                             Xác nhận từ chối
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{-- Lock / Unlock Confirmation Modal --}}
+        <div x-show="lockModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+            <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900" @click.away="lockModal = false">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" :class="isCurrentlyLocked ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'">
+                        <template x-if="isCurrentlyLocked">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+                        </template>
+                        <template x-if="!isCurrentlyLocked">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        </template>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-slate-900 dark:text-white" x-text="isCurrentlyLocked ? 'Mở khóa tài khoản Giảng viên' : 'Khóa tài khoản Giảng viên'"></h3>
+                        <p class="text-xs text-slate-500">Giảng viên: <strong x-text="lockName" class="text-slate-800 dark:text-slate-200"></strong></p>
+                    </div>
+                </div>
+
+                <form :action="lockUrl" method="POST" class="mt-4 space-y-4">
+                    @csrf
+                    <template x-if="!isCurrentlyLocked">
+                        <div>
+                            <label for="lock_reason_input" class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                Lý do khóa tài khoản (Tùy chọn)
+                            </label>
+                            <textarea id="lock_reason_input" name="reason" rows="3" placeholder="Ví dụ: Nghi vấn làm giả văn bằng / Sử dụng AI tạo chứng chỉ giả mạo..."
+                                      class="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-sm text-slate-900 focus:border-rose-500 focus:ring-rose-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"></textarea>
+                            <p class="mt-1 text-[11px] text-slate-400">Giảng viên sẽ nhận được thông báo về lý do tạm khóa này.</p>
+                        </div>
+                    </template>
+
+                    <template x-if="isCurrentlyLocked">
+                        <div class="rounded-2xl bg-emerald-50 p-4 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            Bạn có chắc chắn muốn mở khóa cho giảng viên này? Quyền truy cập và trạng thái tài khoản sẽ được khôi phục.
+                        </div>
+                    </template>
+
+                    <div class="flex items-center justify-end gap-3 pt-2">
+                        <button type="button" @click="lockModal = false" class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300">
+                            Hủy
+                        </button>
+                        <button type="submit" class="rounded-xl px-5 py-2 text-xs font-bold text-white shadow-sm transition"
+                                :class="isCurrentlyLocked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">
+                            <span x-text="isCurrentlyLocked ? 'Xác nhận mở khóa' : 'Xác nhận khóa'"></span>
                         </button>
                     </div>
                 </form>

@@ -353,6 +353,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:instructor'])->pre
     Route::delete('/profile/documents/{certificate}', [InstructorProfileController::class, 'deleteDocument'])->name('profile.documents.delete');
     Route::patch('/profile/documents/{certificate}', [InstructorProfileController::class, 'replaceDocument'])->name('profile.documents.replace');
     Route::get('/profile/documents/{certificate}/view', [InstructorProfileController::class, 'viewDocument'])->name('profile.documents.view');
+    Route::get('/profile/documents/{certificate}/supplementary', [InstructorProfileController::class, 'viewSupplementaryDocument'])->name('profile.documents.supplementary');
+    Route::post('/profile/identity', [InstructorProfileController::class, 'updateIdentity'])->name('profile.identity.update');
+    Route::get('/profile/identity/view/{type}', [InstructorProfileController::class, 'viewIdentityFile'])->name('profile.identity.view');
     Route::post('/profile/submit-review', [InstructorProfileController::class, 'submitForReview'])->middleware('throttle:5,1')->name('profile.submit-review');
     Route::post('/profile/teaching-fields/{teachingField}/submit-review', [InstructorProfileController::class, 'submitTeachingFieldForReview'])->middleware('throttle:5,1')->name('profile.teaching-fields.submit-review');
     Route::post('/profile/teaching-fields/{teachingField}/submit-supplement', [InstructorProfileController::class, 'submitTeachingFieldSupplement'])->middleware('throttle:5,1')->name('profile.teaching-fields.submit-supplement');
@@ -503,6 +506,9 @@ Route::middleware(['auth', 'active', 'verified', '2fa', 'role:admin'])->prefix('
         Route::post('/{user}/reactivation/reject', [InstructorApplicationController::class, 'rejectReactivation'])->name('reactivation.reject');
         Route::post('/{user}/approve', [InstructorApplicationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [InstructorApplicationController::class, 'reject'])->name('reject');
+        Route::post('/{user}/toggle-lock', [InstructorApplicationController::class, 'toggleLock'])->name('toggle-lock');
+        Route::get('/{user}/identity/view/{type}', [InstructorApplicationController::class, 'viewIdentityFile'])->name('identity.view');
+        Route::get('/certificates/{certificate}/supplementary', [InstructorApplicationController::class, 'viewSupplementaryFile'])->name('certificates.supplementary');
     });
 
     Route::prefix('instructors/teaching-fields')->name('instructors.teaching-fields.')->group(function () {

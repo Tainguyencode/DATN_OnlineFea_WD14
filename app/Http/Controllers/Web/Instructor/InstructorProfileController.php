@@ -423,6 +423,55 @@ class InstructorProfileController extends Controller
                     }
                 }
 
+                $verificationMethod = $request->input('verification_method');
+                $diplomaNumber = $request->input('center_cert_code') ?: $request->input('diploma_number');
+                $bookRegNumber = $request->input('book_reg_number');
+                $lookupUrl = $request->input('center_lookup_url') ?: $request->input('lookup_url');
+                $supplementaryProofType = $request->input('domestic_proof_type') ?: $request->input('supplementary_proof_type');
+                $credentialUrl = $request->input('capstone_project_url') ?: $request->input('credential_url');
+
+                $storedSupplementaryPath = null;
+                if ($request->hasFile('supplementary_file') && $request->file('supplementary_file')->isValid()) {
+                    $suppFile = $request->file('supplementary_file');
+                    $suppExt = $suppFile->getClientOriginalExtension() ?: 'pdf';
+                    $storedSupplementaryPath = $suppFile->storeAs(
+                        "instructor-certificates/{$lockedUser->id}/supplementary",
+                        Str::uuid().'.'.$suppExt,
+                        'local'
+                    );
+                    if ($storedSupplementaryPath) {
+                        $storedPaths[] = $storedSupplementaryPath;
+                    }
+                }
+
+                // Kiểm tra bắt buộc xác thực chống làm giả (Anti-Forgery Validation)
+                $effectiveTitle = $customTitle ?: $defaultTitle ?: '';
+                $isDegree = $documentType === 'degree';
+                $isCert = $documentType === 'certificate';
+                if (! $isDegree && ! $isCert) {
+                    $isDegree = Str::contains(mb_strtolower($effectiveTitle), ['bằng', 'đại học', 'cao đẳng']);
+                    $isCert = ! $isDegree && Str::contains(mb_strtolower($effectiveTitle), ['chứng chỉ']);
+                }
+
+                if ($isDegree) {
+                    $hasLookup = filled($diplomaNumber) && filled($bookRegNumber);
+                    $hasSupplementary = filled($storedSupplementaryPath);
+                    if (! $hasLookup && ! $hasSupplementary) {
+                        throw ValidationException::withMessages([
+                            'anti_forgery' => 'Đối với Bằng Đại học / Cao đẳng, bạn bắt buộc phải hoàn thành ít nhất 1 phương thức xác thực chống làm giả: Nhập Số hiệu & Số vào sổ HOẶC đính kèm tệp minh chứng phụ.',
+                        ]);
+                    }
+                } elseif ($isCert) {
+                    $hasCredential = filled($credentialUrl);
+                    $hasCenterLookup = filled($diplomaNumber) || filled($lookupUrl);
+                    $hasSupplementary = filled($storedSupplementaryPath);
+                    if (! $hasCredential && ! $hasCenterLookup && ! $hasSupplementary) {
+                        throw ValidationException::withMessages([
+                            'anti_forgery' => 'Đối với Chứng chỉ chuyên môn, bạn bắt buộc phải cung cấp thông tin xác thực chống làm giả: Đường link xác thực công khai (Credly/Coursera) HOẶC Mã/Link tra cứu trung tâm HOẶC Minh chứng sản phẩm thực tế/bảng điểm.',
+                        ]);
+                    }
+                }
+
                 if ($sourceType === 'url') {
                     InstructorCertificate::create([
                         'user_id' => $lockedUser->id,
@@ -432,6 +481,13 @@ class InstructorProfileController extends Controller
                         'document_url' => $request->input('document_url'),
                         'title' => $customTitle ?: $defaultTitle ?: 'Tài liệu liên kết',
                         'document_type' => $documentType,
+                        'verification_method' => $verificationMethod,
+                        'diploma_number' => $diplomaNumber,
+                        'book_reg_number' => $bookRegNumber,
+                        'lookup_url' => $lookupUrl,
+                        'supplementary_proof_type' => $supplementaryProofType,
+                        'supplementary_file_path' => $storedSupplementaryPath,
+                        'credential_url' => $credentialUrl,
                         'status' => 'draft',
                         'uploaded_at' => now(),
                     ]);
@@ -468,6 +524,13 @@ class InstructorProfileController extends Controller
                         'file_size' => $file->getSize(),
                         'title' => $customTitle ?: pathinfo($originalName, PATHINFO_FILENAME),
                         'document_type' => $documentType,
+                        'verification_method' => $verificationMethod,
+                        'diploma_number' => $diplomaNumber,
+                        'book_reg_number' => $bookRegNumber,
+                        'lookup_url' => $lookupUrl,
+                        'supplementary_proof_type' => $supplementaryProofType,
+                        'supplementary_file_path' => $storedSupplementaryPath,
+                        'credential_url' => $credentialUrl,
                         'status' => 'draft',
                         'uploaded_at' => now(),
                     ]);
@@ -699,6 +762,21 @@ class InstructorProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        $request->validate([
+            'commitment_agreed' => ['required', 'accepted'],
+        ], [
+            'commitment_agreed.accepted' => 'Bạn cần tích chọn cam đoan chịu trách nhiệm về tính xác thực của hồ sơ trước khi gửi xét duyệt.',
+        ]);
+
+        if (! $user->instructorProfile?->hasUploadedIdentity()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Vui lòng hoàn thành tải ảnh CCCD (2 mặt) và Ảnh chân dung xác minh danh tính trước khi gửi xét duyệt.');
+        }
+
+        $user->instructorProfile?->update([
+            'commitment_agreed' => true,
+            'commitment_agreed_at' => now(),
+        ]);
+
         $result = $reviewService->submitGlobal($user);
 
         if (! $result['submitted']) {
@@ -710,6 +788,93 @@ class InstructorProfileController extends Controller
         ], $request);
 
         return back()->with('active_tab', 'documents')->with('success', 'Hồ sơ xét duyệt giảng viên đã được gửi thành công! Ban quản trị sẽ tiến hành kiểm tra và phản hồi sớm.');
+    }
+
+    public function updateIdentity(Request $request): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        if ($user->isGlobalReviewPending()) {
+            return back()->with('active_tab', 'documents')->with('error', 'Hồ sơ đang được xét duyệt nên không thể thay đổi thông tin định danh.');
+        }
+
+        $request->validate([
+            'id_card_number' => ['required', 'string', 'max:50'],
+            'id_card_name' => ['required', 'string', 'max:255'],
+            'id_card_front' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+            'id_card_back' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+            'portrait_image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ], [
+            'id_card_number.required' => 'Vui lòng nhập số CCCD.',
+            'id_card_name.required' => 'Vui lòng nhập họ và tên trên CCCD.',
+            'id_card_front.mimes' => 'Ảnh mặt trước CCCD phải là tệp ảnh hoặc PDF.',
+            'id_card_back.mimes' => 'Ảnh mặt sau CCCD phải là tệp ảnh hoặc PDF.',
+            'portrait_image.mimes' => 'Ảnh chân dung selfie phải là tệp ảnh (JPG, PNG, WEBP).',
+        ]);
+
+        $profile = $user->instructorProfile()->firstOrCreate(['user_id' => $user->id]);
+
+        $data = [
+            'id_card_number' => $request->input('id_card_number'),
+            'id_card_name' => $request->input('id_card_name'),
+        ];
+
+        if ($request->hasFile('id_card_front')) {
+            $file = $request->file('id_card_front');
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $data['id_card_front_path'] = $file->storeAs("instructor-identity/{$user->id}", 'cccd_front_'.Str::uuid().'.'.$ext, 'local');
+        }
+
+        if ($request->hasFile('id_card_back')) {
+            $file = $request->file('id_card_back');
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $data['id_card_back_path'] = $file->storeAs("instructor-identity/{$user->id}", 'cccd_back_'.Str::uuid().'.'.$ext, 'local');
+        }
+
+        if ($request->hasFile('portrait_image')) {
+            $file = $request->file('portrait_image');
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $data['portrait_image_path'] = $file->storeAs("instructor-identity/{$user->id}", 'portrait_'.Str::uuid().'.'.$ext, 'local');
+        }
+
+        $data['identity_verified_at'] = now();
+
+        $profile->update($data);
+        $user->markNeedsAdminReview();
+
+        return back()->with('active_tab', 'documents')->with('success', 'Đã lưu thông tin định danh cá nhân (CCCD & Chân dung) thành công!');
+    }
+
+    public function viewIdentityFile(Request $request, string $type): BinaryFileResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $profile = $user->instructorProfile;
+        abort_unless($profile, 404);
+
+        $path = match ($type) {
+            'front' => $profile->id_card_front_path,
+            'back' => $profile->id_card_back_path,
+            'portrait' => $profile->portrait_image_path,
+            default => null,
+        };
+
+        abort_unless($path && Storage::disk('local')->exists($path), 404, 'Tệp định danh không tồn tại.');
+
+        return response()->file(Storage::disk('local')->path($path));
+    }
+
+    public function viewSupplementaryDocument(Request $request, InstructorCertificate $certificate): BinaryFileResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        if ($certificate->user_id !== $user->id) {
+            abort(403);
+        }
+        $path = $certificate->supplementary_file_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404, 'Tệp minh chứng bổ sung không tồn tại.');
+
+        return response()->file(Storage::disk('local')->path($path));
     }
 
     public function submitTeachingFieldForReview(Request $request, InstructorTeachingField $teachingField, InstructorReviewService $reviewService): RedirectResponse

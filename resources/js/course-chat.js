@@ -65,9 +65,14 @@ function messageHtml(root, message) {
     const avatar = message.sender?.avatar_url
         ? `<img src="${escapeChat(message.sender.avatar_url)}" alt="${escapeChat(message.sender.name)}" class="h-9 w-9 rounded-full border border-slate-200 object-cover dark:border-slate-700">`
         : `<span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-white">${escapeChat((message.sender?.name || 'U').charAt(0).toUpperCase())}</span>`;
-    const lesson = message.lesson?.title
-        ? `<span class="max-w-40 truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300" title="${escapeChat(message.lesson.title)}">Bài: ${escapeChat(message.lesson.title)}</span>`
-        : '';
+    
+    let tagBadge = '';
+    if (message.lesson?.title) {
+        tagBadge = `<span class="max-w-44 truncate rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300" title="${escapeChat(message.lesson.title)}">#Bài: ${escapeChat(message.lesson.title)}</span>`;
+    } else if (message.reply_to_course?.title) {
+        tagBadge = `<span class="max-w-44 truncate rounded-md border border-blue-200/80 bg-blue-50/90 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-300" title="${escapeChat(message.reply_to_course.title)}">#${escapeChat(message.reply_to_course.tag || message.reply_to_course.title)}</span>`;
+    }
+
     const reply = message.reply_to
         ? `<button type="button" data-chat-scroll-to="${escapeChat(message.reply_to.key)}" class="mb-2 block w-full cursor-pointer rounded-lg border-l-4 ${mine ? 'border-white/80 bg-white/15 text-white' : 'border-blue-500 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'} px-3 py-2 text-left text-xs transition-opacity hover:opacity-80"><span class="block font-bold">${escapeChat(message.reply_to.sender?.name || 'Người dùng')}</span><span class="block truncate opacity-80">${escapeChat(message.reply_to.content || '[Tệp đính kèm]')}</span></button>`
         : '';
@@ -79,9 +84,14 @@ function messageHtml(root, message) {
     const helpful = message.is_helpful
         ? '<span class="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">Hữu ích</span>'
         : '';
+
+    const formattedContent = message.content
+        ? escapeChat(message.content).replace(/(#[a-zA-Z0-9_\u00C0-\u1EF9\-]+)/g, `<span class="font-extrabold ${mine ? 'text-amber-200 underline' : 'text-blue-600 dark:text-blue-400 underline'}">$1</span>`)
+        : '';
+
     const body = message.is_recalled
         ? `<div class="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm italic text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Tin nhắn đã được thu hồi</div>`
-        : `<div class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${mine ? `${accent} text-white` : peerBubble}">${reply}${message.content ? `<p class="whitespace-pre-wrap break-words">${escapeChat(message.content)}</p>` : ''}${attachmentHtml(message.attachment)}</div>`;
+        : `<div class="rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${mine ? `${accent} text-white` : peerBubble}">${reply}${formattedContent ? `<p class="whitespace-pre-wrap break-words">${formattedContent}</p>` : ''}${attachmentHtml(message.attachment)}</div>`;
 
     return `
         <div class="flex items-end gap-2.5 ${mine ? 'justify-end' : 'justify-start'}">
@@ -90,7 +100,7 @@ function messageHtml(root, message) {
                 <div class="flex flex-wrap items-center gap-1 ${mine ? 'justify-end' : 'justify-start'}">
                     <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200">${mine ? 'Bạn' : escapeChat(message.sender?.name || 'Người dùng')}</span>
                     <span class="rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${roleClass}">${role}</span>
-                    ${lesson}
+                    ${tagBadge}
                     <time class="text-[10px] text-slate-500 dark:text-slate-400" datetime="${escapeChat(message.created_at)}">${formatChatTime(message.created_at)}</time>
                     ${helpful}
                     ${actions.join('')}
@@ -154,6 +164,7 @@ function renderInitialChat(root) {
             console.error('Invalid initial course chat payload', error);
         }
     }
+    setupHashtagAutocomplete(root);
     registerChatRoot(root);
     scheduleChatFallback(root);
     const visibilityObserver = new IntersectionObserver((entries) => {
@@ -365,6 +376,99 @@ async function maybeMarkChatRead(root) {
     }
 }
 
+function setupHashtagAutocomplete(root) {
+    const textarea = root.querySelector('[data-chat-content]');
+    const popup = root.querySelector('[data-chat-hashtag-popup]');
+    const list = root.querySelector('[data-chat-hashtag-list]');
+    if (!textarea || !popup || !list) return;
+
+    if (textarea._hashtagBound) return;
+    textarea._hashtagBound = true;
+
+    const hidePopup = () => {
+        popup.classList.add('hidden');
+    };
+
+    const closeBtn = popup.querySelector('[data-chat-hashtag-close]');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hidePopup();
+        });
+    }
+
+    textarea.addEventListener('input', () => {
+        const pos = textarea.selectionStart;
+        const textBefore = textarea.value.slice(0, pos);
+        const match = textBefore.match(/(?:^|\s)#([a-zA-Z0-9_\u00C0-\u1EF9\-]*)$/);
+
+        if (!match) {
+            hidePopup();
+            return;
+        }
+
+        const query = (match[1] || '').toLowerCase();
+        const courses = root._purchasedCourses || [];
+        if (!courses.length) {
+            hidePopup();
+            return;
+        }
+
+        const filtered = courses.filter((c) => {
+            if (!query) return true;
+            return (c.title && c.title.toLowerCase().includes(query))
+                || (c.tag && c.tag.toLowerCase().includes(query));
+        });
+
+        if (!filtered.length) {
+            hidePopup();
+            return;
+        }
+
+        list.innerHTML = filtered.map((c) => {
+            const tag = escapeChat(c.tag || c.title.replace(/\s+/g, '-'));
+            const title = escapeChat(c.title);
+            return `<button type="button" data-hashtag-val="${tag}" class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs font-semibold text-slate-800 transition-colors hover:bg-blue-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                <span class="font-bold text-blue-600 dark:text-blue-400">#${tag}</span>
+                <span class="max-w-[170px] truncate text-[10px] font-normal text-slate-500 dark:text-slate-400">${title}</span>
+            </button>`;
+        }).join('');
+
+        popup.classList.remove('hidden');
+    });
+
+    list.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-hashtag-val]');
+        if (!btn) return;
+        const tag = btn.dataset.hashtagVal;
+        const pos = textarea.selectionStart;
+        const textBefore = textarea.value.slice(0, pos);
+        const textAfter = textarea.value.slice(pos);
+
+        const newBefore = textBefore.replace(/(?:^|\s)#([a-zA-Z0-9_\u00C0-\u1EF9\-]*)$/, (fullMatch) => {
+            return fullMatch.startsWith(' ') ? ` #${tag} ` : `#${tag} `;
+        });
+
+        textarea.value = newBefore + textAfter;
+        textarea.selectionStart = textarea.selectionEnd = newBefore.length;
+        hidePopup();
+        textarea.focus();
+    });
+
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            hidePopup();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!root.contains(e.target)) {
+            hidePopup();
+        }
+    });
+}
+
 function conversationItemHtml(conversation) {
     const avatar = conversation.avatar_url
         ? `<img src="${escapeChat(conversation.avatar_url)}" alt="${escapeChat(conversation.title)}" class="h-11 w-11 rounded-full object-cover">`
@@ -372,11 +476,25 @@ function conversationItemHtml(conversation) {
     const unread = conversation.unread_count > 0
         ? `<span class="min-w-5 rounded-full bg-blue-600 px-1.5 py-0.5 text-center text-[10px] font-black text-white">${conversation.unread_count > 99 ? '99+' : conversation.unread_count}</span>`
         : '';
+
+    const coursesCount = (conversation.purchased_courses || []).length;
+    let courseSubText = '';
+    if (coursesCount > 1) {
+        courseSubText = `${coursesCount} khóa học đã tham gia`;
+    } else if (coursesCount === 1) {
+        courseSubText = conversation.purchased_courses[0].title;
+    } else {
+        courseSubText = conversation.course?.title || 'Trao đổi';
+    }
+
     return `<button type="button" data-conversation-id="${conversation.id}" class="flex w-full cursor-pointer items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:bg-slate-800">
         ${avatar}
         <span class="min-w-0 flex-1">
-            <span class="flex items-center justify-between gap-2"><strong class="truncate text-sm text-slate-900 dark:text-white">${escapeChat(conversation.title)}</strong><time class="shrink-0 text-[10px] text-slate-500">${formatChatTime(conversation.last_message?.created_at)}</time></span>
-            <span class="block truncate text-[11px] font-semibold text-blue-700 dark:text-blue-300">${escapeChat(conversation.course?.title || '')}</span>
+            <span class="flex items-center justify-between gap-2">
+                <strong class="truncate text-sm text-slate-900 dark:text-white">${escapeChat(conversation.title)}</strong>
+                <time class="shrink-0 text-[10px] text-slate-500">${formatChatTime(conversation.last_message?.created_at)}</time>
+            </span>
+            <span class="block truncate text-[11px] font-semibold text-blue-700 dark:text-blue-300">${escapeChat(courseSubText)}</span>
             <span class="mt-0.5 block truncate text-xs ${conversation.unread_count ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}">${escapeChat(conversation.last_message?.sender_name || '')}: ${escapeChat(conversation.last_message?.content || '')}</span>
         </span>
         ${unread}
@@ -428,14 +546,22 @@ function initFloatingMessenger(widget) {
         listView.classList.remove('flex');
         chatView.classList.remove('hidden');
         chatView.classList.add('flex');
+
+        const coursesCount = (conversation.purchased_courses || []).length;
+        const subTitle = coursesCount > 1
+            ? `${coursesCount} khóa học đã tham gia (Gõ # để chọn khóa)`
+            : (conversation.course?.title || '');
+
         widget.querySelector('[data-messenger-chat-title]').textContent = conversation.title;
-        widget.querySelector('[data-messenger-chat-course]').textContent = conversation.course?.title || '';
+        widget.querySelector('[data-messenger-chat-course]').textContent = subTitle;
         unregisterChatRoot(thread);
         thread.dataset.discussionId = conversation.id;
         thread.dataset.messagesUrl = conversation.messages_url;
         thread.dataset.messageUrlTemplate = conversation.message_url_template;
         thread.dataset.readUrl = conversation.read_url;
         thread.dataset.chatCursor = '';
+        thread._purchasedCourses = conversation.purchased_courses || [];
+        setupHashtagAutocomplete(thread);
         thread.querySelector('[data-course-chat-send]').action = conversation.send_url;
         thread.querySelector('[data-chat-messages]').replaceChildren();
         thread._chatMessages = new Map();

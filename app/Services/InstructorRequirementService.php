@@ -331,8 +331,9 @@ class InstructorRequirementService
 
         foreach ($requirements as $requirement) {
             $documents = $certificates->where('requirement_id', $requirement->id)->values();
-            $status = $documents->contains(fn (InstructorCertificate $certificate) => in_array($certificate->status, ['draft', 'pending', 'approved'], true))
-                ? ($documents->contains('status', 'approved') ? 'approved' : ($documents->contains('status', 'pending') ? 'pending' : 'draft'))
+            $eligibleDocuments = $documents->filter(fn (InstructorCertificate $certificate) => $certificate->hasAntiForgeryVerification());
+            $status = $eligibleDocuments->contains(fn (InstructorCertificate $certificate) => in_array($certificate->status, ['draft', 'pending', 'approved'], true))
+                ? ($eligibleDocuments->contains('status', 'approved') ? 'approved' : ($eligibleDocuments->contains('status', 'pending') ? 'pending' : 'draft'))
                 : ($documents->contains('status', 'rejected') ? 'rejected' : 'missing');
             if ($requirement->is_required) {
                 $requiredCount++;
@@ -605,6 +606,7 @@ class InstructorRequirementService
 
                 $hasEligibleDocument = $item['documents']->contains(
                     fn (InstructorCertificate $certificate) => in_array($certificate->status, $fulfillingStatuses, true)
+                        && $certificate->hasAntiForgeryVerification()
                 );
                 if ($hasEligibleDocument) {
                     $submittedCount++;

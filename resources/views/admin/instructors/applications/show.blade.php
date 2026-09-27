@@ -112,6 +112,20 @@
                         ✖ Từ chối hồ sơ
                     </button>
                 @endif
+
+                {{-- Nút Khóa / Mở khóa tài khoản --}}
+                <form method="POST" action="{{ route('admin.instructors.applications.toggle-lock', $application) }}" class="inline">
+                    @csrf
+                    @if($application->isLocked())
+                        <button type="submit" onclick="return confirm('Bạn chắc chắn muốn mở khóa tài khoản cho giảng viên này?')" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300">
+                            🔓 Mở khóa tài khoản
+                        </button>
+                    @else
+                        <button type="submit" onclick="return confirm('Bạn chắc chắn muốn khóa tài khoản giảng viên này do nghi vấn hồ sơ/vi phạm?')" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm transition hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300">
+                            🔒 Khóa tài khoản
+                        </button>
+                    @endif
+                </form>
             </div>
         </div>
 
@@ -271,6 +285,90 @@
                                     {{ $application->bank_name }} - {{ $application->bank_account_number }} ({{ $application->bank_account_name }})
                                 </div>
                             </div>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- THÔNG TIN ĐỊNH DANH CCCD & CHÂN DUNG --}}
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+                        <h3 class="text-sm font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                            <span class="flex h-5 w-5 items-center justify-center rounded bg-[#0056D2] text-[10px] font-black text-white">ID</span>
+                            <span>Định danh cá nhân (CCCD)</span>
+                        </h3>
+                        @if($profile?->hasUploadedIdentity())
+                            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                ✔ Đã nộp
+                            </span>
+                        @else
+                            <span class="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                Chưa nộp
+                            </span>
+                        @endif
+                    </div>
+
+                    <div class="space-y-2 text-xs">
+                        <div>
+                            <span class="text-slate-400 font-bold uppercase text-[10px]">Họ tên trên CCCD:</span>
+                            <div class="font-black text-slate-900 dark:text-white text-sm uppercase">
+                                {{ $profile?->id_card_name ?: 'Chưa cập nhật' }}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 font-bold uppercase text-[10px]">Số CCCD:</span>
+                            <div class="font-mono font-bold text-slate-800 dark:text-slate-200">
+                                {{ $profile?->id_card_number ?: 'Chưa cập nhật' }}
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Ảnh CCCD & Selfie --}}
+                    <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+                        <div>
+                            <span class="block text-[10px] font-bold text-slate-500 mb-1">Mặt trước</span>
+                            @if($profile?->id_card_front_path)
+                                <a href="{{ route('admin.instructors.applications.identity.view', [$application, 'front']) }}" target="_blank"
+                                   class="inline-block rounded-xl border border-slate-200 bg-slate-50 p-1 hover:border-blue-500 transition">
+                                    <img src="{{ route('admin.instructors.applications.identity.view', [$application, 'front']) }}" alt="CCCD Trước" class="h-16 w-full object-cover rounded-lg">
+                                </a>
+                            @else
+                                <div class="h-16 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">Trống</div>
+                            @endif
+                        </div>
+                        <div>
+                            <span class="block text-[10px] font-bold text-slate-500 mb-1">Mặt sau</span>
+                            @if($profile?->id_card_back_path)
+                                <a href="{{ route('admin.instructors.applications.identity.view', [$application, 'back']) }}" target="_blank"
+                                   class="inline-block rounded-xl border border-slate-200 bg-slate-50 p-1 hover:border-blue-500 transition">
+                                    <img src="{{ route('admin.instructors.applications.identity.view', [$application, 'back']) }}" alt="CCCD Sau" class="h-16 w-full object-cover rounded-lg">
+                                </a>
+                            @else
+                                <div class="h-16 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">Trống</div>
+                            @endif
+                        </div>
+                        <div>
+                            <span class="block text-[10px] font-bold text-slate-500 mb-1">Chân dung</span>
+                            @if($profile?->portrait_image_path)
+                                <a href="{{ route('admin.instructors.applications.identity.view', [$application, 'portrait']) }}" target="_blank"
+                                   class="inline-block rounded-xl border border-slate-200 bg-slate-50 p-1 hover:border-blue-500 transition">
+                                    <img src="{{ route('admin.instructors.applications.identity.view', [$application, 'portrait']) }}" alt="Chân dung" class="h-16 w-full object-cover rounded-lg">
+                                </a>
+                            @else
+                                <div class="h-16 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">Trống</div>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Cam đoan của giảng viên --}}
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] dark:border-slate-800 dark:bg-slate-800/60">
+                        <span class="font-bold text-slate-700 dark:text-slate-300 block">Cam kết tính xác thực:</span>
+                        @if($profile?->commitment_agreed)
+                            <div class="text-emerald-700 dark:text-emerald-300 font-semibold mt-0.5 flex items-center gap-1">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span>Đã cam đoan {{ $profile->commitment_agreed_at ? $profile->commitment_agreed_at->format('d/m/Y H:i') : '' }}</span>
+                            </div>
+                        @else
+                            <div class="text-slate-400 italic mt-0.5">Chưa xác nhận cam đoan</div>
                         @endif
                     </div>
                 </div>
@@ -522,6 +620,67 @@
                                                                     @endif
                                                                 </div>
                                                             </div>
+
+                                                            {{-- THÔNG TIN XÁC THỰC PHÒNG CHỐNG GIẢ MẠO (ANTI-FORGERY) --}}
+                                                            @if($doc->diploma_number || $doc->book_reg_number || $doc->lookup_url || $doc->credential_url || $doc->supplementary_file_path || $doc->supplementary_proof_type)
+                                                                <div class="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-slate-700 dark:border-blue-900/40 dark:bg-slate-900/60 dark:text-slate-300 space-y-1.5">
+                                                                    <div class="flex items-center justify-between flex-wrap gap-2">
+                                                                        <div class="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
+                                                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                                                            <span>Dữ liệu xác thực đối chiếu (Anti-Forgery):</span>
+                                                                        </div>
+                                                                        @if($doc->isDomesticCertificate())
+                                                                            <span class="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
+                                                                                🏫 Chứng chỉ Trong nước
+                                                                            </span>
+                                                                        @elseif($doc->verification_method === 'credential_url')
+                                                                            <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
+                                                                                🌐 Chứng chỉ Quốc tế
+                                                                            </span>
+                                                                        @endif
+                                                                    </div>
+                                                                    @if($doc->diploma_number || $doc->book_reg_number)
+                                                                        <div class="flex flex-wrap gap-4 text-[11px]">
+                                                                            @if($doc->diploma_number)
+                                                                                <span><strong>{{ $doc->isDomesticCertificate() ? 'Mã chứng chỉ trung tâm' : 'Số hiệu văn bằng' }}:</strong> <code class="rounded bg-white px-1.5 py-0.5 font-mono font-bold text-slate-900 border border-slate-200">{{ $doc->diploma_number }}</code></span>
+                                                                            @endif
+                                                                            @if($doc->book_reg_number)
+                                                                                <span><strong>Số vào sổ cấp bằng:</strong> <code class="rounded bg-white px-1.5 py-0.5 font-mono font-bold text-slate-900 border border-slate-200">{{ $doc->book_reg_number }}</code></span>
+                                                                            @endif
+                                                                        </div>
+                                                                    @endif
+                                                                    @if($doc->lookup_url)
+                                                                        <div class="pt-0.5">
+                                                                            <a href="{{ $doc->lookup_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold text-[#0056D2] hover:underline">
+                                                                                <span>{{ $doc->isDomesticCertificate() ? 'Mở cổng tra cứu của trung tâm đào tạo ↗' : 'Mở cổng tra cứu văn bằng của trường ↗' }}</span>
+                                                                            </a>
+                                                                        </div>
+                                                                    @endif
+                                                                    @if($doc->credential_url)
+                                                                        <div class="pt-0.5">
+                                                                            <a href="{{ $doc->credential_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold {{ str_contains($doc->credential_url, 'github.com') ? 'text-slate-800 dark:text-slate-200' : 'text-purple-700 dark:text-purple-400' }} hover:underline">
+                                                                                @if(str_contains($doc->credential_url, 'github.com'))
+                                                                                    <span>📂 Xem sản phẩm / Kho mã nguồn thực tế (Github) ↗</span>
+                                                                                @else
+                                                                                    <span>Kiểm tra link xác thực chứng chỉ số (Credly / Coursera Verify) ↗</span>
+                                                                                @endif
+                                                                            </a>
+                                                                        </div>
+                                                                    @endif
+                                                                    @if($doc->supplementary_proof_type || $doc->supplementary_file_path)
+                                                                        <div class="flex items-center gap-2 pt-0.5 text-[11px] flex-wrap">
+                                                                            <span class="rounded bg-slate-200 px-2 py-0.5 font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                                                                {{ $doc->supplementaryProofTypeLabel() ?: 'Minh chứng đính kèm' }}
+                                                                            </span>
+                                                                            @if($doc->supplementary_file_path)
+                                                                                <a href="{{ route('admin.instructors.applications.certificates.supplementary', $doc) }}" target="_blank" class="font-bold text-emerald-700 dark:text-emerald-400 hover:underline">
+                                                                                    [Xem tệp minh chứng phụ ↗]
+                                                                                </a>
+                                                                            @endif
+                                                                        </div>
+                                                                    @endif
+                                                                </div>
+                                                            @endif
 
                                                             @if($doc->isRejected() && $doc->rejection_reason)
                                                                 <p class="text-[11px] font-semibold text-rose-600">Lý do từ chối trước đó: {{ $doc->rejection_reason }}</p>

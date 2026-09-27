@@ -33,6 +33,10 @@
         : 0;
     $courseHasBeenSubmitted = in_array($course->status, ['pending_review', 'pending_update', 'approved', 'published'], true)
         || $reviewState['hasPendingUpdates'];
+    $canSubmitCourse = $reviewState['canSubmitCourse'] ?? false;
+    $videoReadinessBlockers = $reviewState['videoReadinessBlockers'] ?? [];
+    $hasVideoReadinessBlockers = $videoReadinessBlockers !== [];
+    $videoBlockerTitle = $videoReadinessBlockers[0]['title'] ?? null;
 @endphp
 
 <div class="curriculum-builder space-y-4">

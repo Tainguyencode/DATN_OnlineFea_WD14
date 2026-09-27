@@ -17,6 +17,12 @@ class InstructorProfile extends Model
         'user_id',
         'category_id',
         'phone',
+        'id_card_number',
+        'id_card_name',
+        'id_card_front_path',
+        'id_card_back_path',
+        'portrait_image_path',
+        'identity_verified_at',
         'organization',
         'position',
         'teaching_field',
@@ -29,12 +35,24 @@ class InstructorProfile extends Model
         'cv',
         'agree_information',
         'agree_terms',
+        'commitment_agreed',
+        'commitment_agreed_at',
     ];
 
     protected $casts = [
         'agree_information' => 'boolean',
         'agree_terms' => 'boolean',
+        'commitment_agreed' => 'boolean',
+        'commitment_agreed_at' => 'datetime',
+        'identity_verified_at' => 'datetime',
     ];
+
+    public function hasUploadedIdentity(): bool
+    {
+        return ! empty($this->id_card_front_path)
+            && ! empty($this->id_card_back_path)
+            && ! empty($this->portrait_image_path);
+    }
 
     public function getHeadlineAttribute(): ?string
     {

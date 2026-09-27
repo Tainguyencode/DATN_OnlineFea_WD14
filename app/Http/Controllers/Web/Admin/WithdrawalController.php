@@ -68,6 +68,8 @@ class WithdrawalController extends Controller
             'transfer_proof.image' => 'Bill giao dịch phải là một hình ảnh hợp lệ.',
             'transfer_proof.mimes' => 'Bill giao dịch chỉ hỗ trợ định dạng JPG, JPEG, PNG hoặc WEBP.',
             'transfer_proof.max' => 'Ảnh bill giao dịch không được vượt quá 5 MB.',
+            'transaction_ref.max' => 'Mã giao dịch không được vượt quá 100 ký tự.',
+            'admin_note.max' => 'Ghi chú không được vượt quá 500 ký tự.',
         ]);
 
         $txnRef = trim($validated['transaction_ref'] ?? '') ?: null;
@@ -227,6 +229,7 @@ class WithdrawalController extends Controller
             'admin_note' => ['required', 'string', 'max:500'],
         ], [
             'admin_note.required' => 'Vui lòng nhập lý do từ chối yêu cầu rút tiền.',
+            'admin_note.max' => 'Lý do từ chối không được vượt quá 500 ký tự.',
         ]);
 
         $processed = DB::transaction(function () use ($withdrawal, $validated) {
